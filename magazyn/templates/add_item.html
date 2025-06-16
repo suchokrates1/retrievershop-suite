@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Dodaj nowy przedmiot</h2>
+    <form action="{{ url_for('add_item') }}" method="post">
+        <label for="name">Nazwa produktu:</label>
+        <input type="text" id="name" name="name" required>
+
+        <label for="color">Kolor:</label>
+        <select id="color" name="color" required>
+            <option value="Czerwony">Czerwony</option>
+            <option value="Niebieski">Niebieski</option>
+            <option value="Zielony">Zielony</option>
+            <option value="Czarny">Czarny</option>
+            <option value="Biały">Biały</option>
+        </select>
+
+        <label for="barcode">Kod kreskowy:</label>
+        <input type="text" id="barcode" name="barcode">
+        <button type="button" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
+
+        {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
+            <label for="quantity_{{ size }}">Ilość ({{ size }}):</label>
+            <input type="number" id="quantity_{{ size }}" name="quantity_{{ size }}" min="0" value="0">
+        {% endfor %}
+
+        <button type="submit">Dodaj produkt</button>
+    </form>
+
+    <!-- Kontener skanera kodów kreskowych -->
+    <div id="scanner-container" style="display: none;"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script>
+        function startBarcodeScan() {
+            document.getElementById("scanner-container").style.display = "block"; // Pokazuje kontener skanera
+
+            Quagga.init({
+                inputStream: {
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner-container'),
+                    constraints: {
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: ["code_128_reader", "ean_reader", "ean_8_reader", "upc_reader"]
+                }
+            }, function(err) {
+                if (err) {
+                    console.log(err);
+                    return;
+                }
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(data) {
+                document.getElementById("barcode").value = data.codeResult.code;
+                document.getElementById("scanner-container").style.display = "none"; // Ukrywa kontener po zeskanowaniu
+                Quagga.stop();
+            });
+        }
+    </script>
+{% endblock %}
