@@ -1,0 +1,40 @@
+version: '3'
+
+services:
+  magazyn_app:
+    build:
+      context: ./magazyn
+      dockerfile: Dockerfile
+    volumes:
+      - ./magazyn:/app
+    environment:
+      - FLASK_ENV=development
+    command: ["python", "app.py"]
+    restart: always
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.magazyn.rule=Host(`magazyn.retrievershop.pl`)"
+      - "traefik.http.routers.magazyn.entrypoints=https"
+      - "traefik.http.routers.magazyn.tls=true"
+      - "traefik.http.services.magazyn.loadbalancer.server.port=80"
+      - "traefik.http.services.magazyn.loadbalancer.server.scheme=http"
+
+  printer_agent:
+    build:
+      context: ./printer
+      dockerfile: Dockerfile
+    environment:
+      API_TOKEN: ${API_TOKEN}
+      PAGE_ACCESS_TOKEN: ${PAGE_ACCESS_TOKEN}
+      RECIPIENT_ID: ${RECIPIENT_ID}
+      PRINTER_NAME: ${PRINTER_NAME}
+    command: ["python3", "bl_api_print_agent.py"]
+    restart: always
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
