@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retriever Shop - Magazyn</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <header class="bg-dark text-white text-center py-4">
+    <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" style="height: 80px;">
+    <h2>Witaj w aplikacji magazynowej</h2>
+    <a href="{{ url_for('logout') }}" class="btn btn-danger mt-3">Wyloguj się</a>
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('home') }}">Strona główna</a></li>
+                <li><a href="{{ url_for('add_item') }}">Dodaj przedmiot</a></li>
+                <li><a href="{{ url_for('items') }}">Przedmioty</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+	{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <div class="alert alert-info" role="alert">
+      {% for message in messages %}
+        {{ message }}
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>&copy; 2024 <a href="https://retrievershop.pl/">Retriever Shop</a> - Magazyn</p>
+    </footer>
+</body>
+</html>

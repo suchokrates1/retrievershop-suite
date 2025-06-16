@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container text-center mt-5">
+    <h3>Zalogowany jako {{ username }}</h3>
+    <a href="{{ url_for('add_item') }}" class="btn btn-primary mt-3">Dodaj nowy przedmiot</a>
+    <a href="{{ url_for('items') }}" class="btn btn-primary mt-3">Wyświetl przedmioty</a>
+	<a href="{{ url_for('export_products') }}" class="btn btn-primary mt-3">Eksportuj produkty do Excel</a>
+	<a href="{{ url_for('import_products') }}" class="btn btn-primary mt-3">Importuj produkty z Excel</a>
+</div>
+{% endblock %}
