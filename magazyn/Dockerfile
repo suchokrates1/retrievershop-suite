@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "from app import init_db; init_db()"
 
 # Ustawiamy port, na którym aplikacja będzie dostępna
-EXPOSE 5001
+EXPOSE 80
 
 # Uruchamiamy aplikację
 CMD ["python", "app.py"]
