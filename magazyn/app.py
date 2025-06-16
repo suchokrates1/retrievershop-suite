@@ -355,4 +355,4 @@ if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
     register_default_user()
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(host='0.0.0.0', port=80, debug=os.environ.get('FLASK_ENV') == 'development')
