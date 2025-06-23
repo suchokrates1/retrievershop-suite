@@ -6,7 +6,6 @@ services:
       context: ./magazyn
       dockerfile: Dockerfile
     volumes:
-      - ./magazyn:/app
       - ./magazyn/database.db:/app/database.db
     environment:
       - FLASK_ENV=development
@@ -22,22 +21,6 @@ services:
       - "traefik.http.services.magazyn.loadbalancer.server.port=80"
       - "traefik.http.services.magazyn.loadbalancer.server.scheme=http"
 
-  print_agent:
-    build:
-      context: ./printer
-      dockerfile: Dockerfile
-    volumes:
-      - ./printer:/app
-      - ./printer/data.db:/app/data.db
-    environment:
-      API_TOKEN: ${API_TOKEN}
-      PAGE_ACCESS_TOKEN: ${PAGE_ACCESS_TOKEN}
-      RECIPIENT_ID: ${RECIPIENT_ID}
-      PRINTER_NAME: ${PRINTER_NAME}
-    command: ["python3", "bl_api_print_agent.py"]
-    restart: always
-    networks:
-      - proxy
 
 networks:
   proxy:
