@@ -22,6 +22,8 @@ PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
 RECIPIENT_ID = os.getenv("RECIPIENT_ID")
 STATUS_ID = int(os.getenv("STATUS_ID", "91618"))
 PRINTER_NAME = os.getenv("PRINTER_NAME", "Xprinter")
+CUPS_SERVER = os.getenv("CUPS_SERVER")
+CUPS_PORT = os.getenv("CUPS_PORT")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
 QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "10"))
 QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "22"))
@@ -235,9 +237,15 @@ def print_label(base64_data, extension, order_id):
         pdf_data = base64.b64decode(base64_data)
         with open(file_path, "wb") as f:
             f.write(pdf_data)
-        result = subprocess.run(
-            ["lp", "-d", PRINTER_NAME, file_path], capture_output=True
-        )
+        cmd = ["lp"]
+        host = None
+        if CUPS_SERVER or CUPS_PORT:
+            server = CUPS_SERVER or "localhost"
+            host = f"{server}:{CUPS_PORT}" if CUPS_PORT else server
+        if host:
+            cmd.extend(["-h", host])
+        cmd.extend(["-d", PRINTER_NAME, file_path])
+        result = subprocess.run(cmd, capture_output=True)
         os.remove(file_path)
         if result.returncode != 0:
             logger.error(
