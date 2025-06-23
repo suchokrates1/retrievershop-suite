@@ -23,3 +23,11 @@ Install the dependencies and run the test suite using `pytest`:
 pip install -r magazyn/requirements.txt -r printer/requirements.txt
 PYTHONPATH=. pytest -q
 ```
+
+## Running with Docker Compose
+
+Start the stack using the `docker-compose.yml` file in the repository root:
+
+```bash
+docker compose up
+```
