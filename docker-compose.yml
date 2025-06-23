@@ -5,8 +5,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./magazyn/database.db:/app/database.db
-    environment:
-      - FLASK_ENV=development
+    env_file: .env
     command: ["python", "app.py"]
     restart: always
     networks:
