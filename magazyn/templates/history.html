@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Historia drukowania</h2>
+<table class="table">
+    <thead><tr><th>ID zamówienia</th><th>Czas</th></tr></thead>
+    <tbody>
+    {% for oid, ts in printed.items() %}
+    <tr><td>{{ oid }}</td><td>{{ ts }}</td></tr>
+    {% endfor %}
+    {% for item in queue %}
+    <tr><td>{{ item.order_id }}</td><td>w kolejce</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
