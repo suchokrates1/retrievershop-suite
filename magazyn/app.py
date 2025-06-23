@@ -5,13 +5,12 @@ import pandas as pd
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-from . import print_agent
+from . import print_agent, DB_PATH
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key')
-DB_PATH = 'database.db'
 
 
 @app.before_first_request
@@ -66,6 +65,26 @@ def init_db():
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_product_id ON product_sizes (product_id);
     ''')
+
+    # Tables used by the printing agent
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS printed_orders(
+            order_id TEXT PRIMARY KEY,
+            printed_at TEXT
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS label_queue(
+            order_id TEXT,
+            label_data TEXT,
+            ext TEXT,
+            last_order_data TEXT
+        )
+        """
+    )
 
     conn.commit()
     conn.close()
