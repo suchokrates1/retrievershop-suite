@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./magazyn:/app
-      - ./data/database.db:/app/database.db
+      - ./magazyn/database.db:/app/database.db
     environment:
       - FLASK_ENV=development
     command: ["python", "app.py"]
@@ -28,7 +28,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./printer:/app
-      - ./data/data.db:/app/data.db
+      - ./printer/data.db:/app/data.db
     environment:
       API_TOKEN: ${API_TOKEN}
       PAGE_ACCESS_TOKEN: ${PAGE_ACCESS_TOKEN}
