@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import requests
 
+from . import DB_PATH
+
 load_dotenv()
 
 API_TOKEN = os.getenv("API_TOKEN")
@@ -27,7 +29,12 @@ PRINTED_FILE = os.path.join(os.path.dirname(__file__), "printed_orders.txt")
 PRINTED_EXPIRY_DAYS = int(os.getenv("PRINTED_EXPIRY_DAYS", "5"))
 LABEL_QUEUE = os.path.join(os.path.dirname(__file__), "queued_labels.jsonl")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-DB_FILE = os.getenv("DATA_DB", os.path.join(os.path.dirname(__file__), "data.db"))
+# Use the same database file as the web application
+DB_FILE = DB_PATH
+# Location of the legacy database used by the standalone printer agent
+OLD_DB_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), os.pardir, "printer", "data.db")
+)
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(os.path.dirname(__file__), "agent.log"))
 
 logging.basicConfig(
@@ -105,6 +112,34 @@ def ensure_db():
                     except Exception as e:
                         logger.error(f"Błąd migracji z {LABEL_QUEUE}: {e}")
             conn.commit()
+
+    # migrate data from old standalone database if present and tables are empty
+    if os.path.exists(OLD_DB_FILE):
+        try:
+            old_conn = sqlite3.connect(OLD_DB_FILE)
+            old_cur = old_conn.cursor()
+            for table, cols in (
+                ("printed_orders", 2),
+                ("label_queue", 4),
+            ):
+                old_cur.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                )
+                if not old_cur.fetchone():
+                    continue
+                cur.execute(f"SELECT COUNT(*) FROM {table}")
+                if cur.fetchone()[0] == 0:
+                    placeholders = ",".join(["?"] * cols)
+                    for row in old_cur.execute(f"SELECT * FROM {table}"):
+                        cur.execute(
+                            f"INSERT INTO {table} VALUES ({placeholders})",
+                            row,
+                        )
+            conn.commit()
+            old_conn.close()
+        except Exception as e:
+            logger.error(f"B\u0142\u0105d migracji z {OLD_DB_FILE}: {e}")
     conn.close()
 
 
