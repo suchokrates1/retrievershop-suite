@@ -3,5 +3,6 @@ __pycache__/
 .env
 *.log
 *.sqlite3
+*.db
 .idea/
 .vscode/
