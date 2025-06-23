@@ -1,6 +1,6 @@
 # RetrieverShop Suite
 
-This repository contains the code for the RetrieverShop warehouse and printing utilities.
+This repository contains the code for the RetrieverShop warehouse application and the built-in printing agent.
 
 ## Configuration
 
@@ -20,7 +20,7 @@ This repository contains the code for the RetrieverShop warehouse and printing u
 
 Install the dependencies and run the test suite using `pytest`:
 ```bash
-pip install -r magazyn/requirements.txt -r printer/requirements.txt
+pip install -r magazyn/requirements.txt
 PYTHONPATH=. pytest -q
 ```
 
