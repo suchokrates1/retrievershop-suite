@@ -15,7 +15,7 @@ services:
       - proxy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.magazyn.rule=Host(`magazyn.retrievershop.pl`)"
+      - "traefik.http.routers.magazyn.rule=Host(`magazyn2.retrievershop.pl`)"
       - "traefik.http.routers.magazyn.entrypoints=https"
       - "traefik.http.routers.magazyn.tls=true"
       - "traefik.http.services.magazyn.loadbalancer.server.port=80"
