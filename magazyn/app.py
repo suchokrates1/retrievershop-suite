@@ -5,7 +5,8 @@ import pandas as pd
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-from . import print_agent, DB_PATH
+import print_agent
+from __init__ import DB_PATH
 
 load_dotenv()
 
