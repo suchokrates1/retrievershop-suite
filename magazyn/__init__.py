@@ -8,3 +8,7 @@ import os
 DB_PATH = os.getenv(
     "DB_PATH", os.path.join(os.path.dirname(__file__), "database.db")
 )
+
+# Allow ``from __init__ import DB_PATH`` when running modules as scripts.
+import sys
+sys.modules.setdefault("__init__", sys.modules[__name__])

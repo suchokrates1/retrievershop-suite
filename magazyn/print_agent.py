@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import requests
 
-from . import DB_PATH
+from __init__ import DB_PATH
 
 load_dotenv()
 
