@@ -31,3 +31,6 @@ Start the stack using the `docker-compose.yml` file in the repository root:
 ```bash
 docker compose up
 ```
+
+The application uses a SQLite database stored in `magazyn/database.db`. This
+file is created automatically on first startup if it does not already exist.
