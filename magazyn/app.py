@@ -4,10 +4,24 @@ import os
 import pandas as pd
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
+from . import print_agent
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key')
 DB_PATH = 'database.db'
+
+
+@app.before_first_request
+def _start_agent():
+    try:
+        print_agent.validate_env()
+        print_agent.ensure_db_init()
+        print_agent.start_agent_thread()
+    except Exception as e:
+        app.logger.error(f"Failed to start print agent: {e}")
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -350,6 +364,45 @@ def import_products():
         return redirect(url_for('items'))
 
     return render_template('import_products.html')
+
+
+@app.route('/history')
+@login_required
+def print_history():
+    printed = print_agent.load_printed_orders()
+    queue = print_agent.load_queue()
+    return render_template('history.html', printed=printed, queue=queue)
+
+
+@app.route('/logs')
+@login_required
+def agent_logs():
+    try:
+        with open(print_agent.LOG_FILE, 'r') as f:
+            lines = f.readlines()[-200:]
+        log_text = ''.join(lines)
+    except Exception as e:
+        log_text = f'Błąd czytania logów: {e}'
+    return render_template('logs.html', logs=log_text)
+
+
+@app.route('/testprint')
+@login_required
+def test_print():
+    success = print_agent.print_test_page()
+    message = 'Testowy wydruk wysłany.' if success else 'Błąd testowego wydruku.'
+    return render_template('testprint.html', message=message)
+
+
+@app.route('/test')
+@login_required
+def test_message():
+    if print_agent.last_order_data:
+        print_agent.send_messenger_message(print_agent.last_order_data)
+        msg = 'Testowa wiadomość została wysłana.'
+    else:
+        msg = 'Brak danych ostatniego zamówienia.'
+    return render_template('test.html', message=msg)
 
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):

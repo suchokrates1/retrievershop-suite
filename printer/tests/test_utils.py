@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import json
-import bl_api_print_agent as bl
+import magazyn.print_agent as bl
 
 
 def test_shorten_product_name():
