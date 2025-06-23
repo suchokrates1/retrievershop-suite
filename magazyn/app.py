@@ -14,6 +14,13 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key')
 
 
 @app.before_first_request
+def _init_db_if_missing():
+    if not os.path.exists(DB_PATH):
+        init_db()
+    register_default_user()
+
+
+@app.before_first_request
 def _start_agent():
     try:
         print_agent.validate_env()
