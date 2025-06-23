@@ -12,11 +12,11 @@ services:
       - proxy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.magazyn.rule=Host(`magazyn2.retrievershop.pl`)"
-      - "traefik.http.routers.magazyn.entrypoints=https"
-      - "traefik.http.routers.magazyn.tls=true"
-      - "traefik.http.services.magazyn.loadbalancer.server.port=80"
-      - "traefik.http.services.magazyn.loadbalancer.server.scheme=http"
+      - "traefik.http.routers.magazyn2.rule=Host(`magazyn2.retrievershop.pl`)"
+      - "traefik.http.routers.magazyn2.entrypoints=https"
+      - "traefik.http.routers.magazyn2.tls=true"
+      - "traefik.http.services.magazyn2.loadbalancer.server.port=80"
+      - "traefik.http.services.magazyn2.loadbalancer.server.scheme=http"
 
 
 networks:
