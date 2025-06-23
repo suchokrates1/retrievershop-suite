@@ -17,9 +17,6 @@ COPY . /app
 # Instalujemy wymagane pakiety z requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Tworzymy bazę danych
-RUN python -c "from app import init_db; init_db()"
-
 # Ustawiamy port, na którym aplikacja będzie dostępna
 EXPOSE 80
 
