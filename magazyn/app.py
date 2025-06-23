@@ -405,22 +405,26 @@ def agent_logs():
     return render_template('logs.html', logs=log_text)
 
 
-@app.route('/testprint')
+@app.route('/testprint', methods=['GET', 'POST'])
 @login_required
 def test_print():
-    success = print_agent.print_test_page()
-    message = 'Testowy wydruk wysłany.' if success else 'Błąd testowego wydruku.'
+    message = None
+    if request.method == 'POST':
+        success = print_agent.print_test_page()
+        message = 'Testowy wydruk wysłany.' if success else 'Błąd testowego wydruku.'
     return render_template('testprint.html', message=message)
 
 
-@app.route('/test')
+@app.route('/test', methods=['GET', 'POST'])
 @login_required
 def test_message():
-    if print_agent.last_order_data:
-        print_agent.send_messenger_message(print_agent.last_order_data)
-        msg = 'Testowa wiadomość została wysłana.'
-    else:
-        msg = 'Brak danych ostatniego zamówienia.'
+    msg = None
+    if request.method == 'POST':
+        if print_agent.last_order_data:
+            print_agent.send_messenger_message(print_agent.last_order_data)
+            msg = 'Testowa wiadomość została wysłana.'
+        else:
+            msg = 'Brak danych ostatniego zamówienia.'
     return render_template('test.html', message=msg)
 
 if __name__ == '__main__':
