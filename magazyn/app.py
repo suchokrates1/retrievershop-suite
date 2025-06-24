@@ -4,9 +4,15 @@ import os
 import pandas as pd
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
+from collections import OrderedDict
+from pathlib import Path
 import print_agent
 from __init__ import DB_PATH
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+ENV_PATH = ROOT_DIR / '.env'
+EXAMPLE_PATH = ROOT_DIR / '.env.example'
 
 load_dotenv()
 
@@ -25,6 +31,25 @@ def start_print_agent():
 
 
 start_print_agent()
+
+
+def load_settings():
+    """Return OrderedDict of settings based on .env.example order."""
+    example = dotenv_values(EXAMPLE_PATH)
+    current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    values = OrderedDict()
+    for key in example.keys():
+        values[key] = current.get(key, example[key])
+    return values
+
+
+def write_env(values):
+    """Rewrite .env using provided mapping preserving .env.example order."""
+    order = list(dotenv_values(EXAMPLE_PATH).keys())
+    with ENV_PATH.open("w") as f:
+        for key in order:
+            val = values.get(key, "")
+            f.write(f"{key}={val}\n")
 
 
 @app.before_first_request
@@ -415,6 +440,20 @@ def print_history():
     printed = print_agent.load_printed_orders()
     queue = print_agent.load_queue()
     return render_template('history.html', printed=printed, queue=queue)
+
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    if request.method == 'POST':
+        updated = {key: request.form.get(key, "") for key in dotenv_values(EXAMPLE_PATH).keys()}
+        write_env(updated)
+        load_dotenv(override=True)
+        print_agent.reload_env()
+        flash('Zapisano ustawienia.')
+        return redirect(url_for('settings'))
+    values = load_settings()
+    return render_template('settings.html', settings=values)
 
 
 @app.route('/logs')
