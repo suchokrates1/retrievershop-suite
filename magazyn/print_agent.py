@@ -52,6 +52,29 @@ HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded",
 }
 
+
+def reload_env():
+    """Reload environment variables and update globals."""
+    load_dotenv(override=True)
+    global API_TOKEN, PAGE_ACCESS_TOKEN, RECIPIENT_ID, STATUS_ID, PRINTER_NAME
+    global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START, QUIET_HOURS_END
+    global PRINTED_EXPIRY_DAYS, LOG_LEVEL, LOG_FILE, DB_FILE, HEADERS
+    API_TOKEN = os.getenv("API_TOKEN")
+    PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
+    RECIPIENT_ID = os.getenv("RECIPIENT_ID")
+    STATUS_ID = int(os.getenv("STATUS_ID", "91618"))
+    PRINTER_NAME = os.getenv("PRINTER_NAME", "Xprinter")
+    CUPS_SERVER = os.getenv("CUPS_SERVER")
+    CUPS_PORT = os.getenv("CUPS_PORT")
+    POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
+    QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "10"))
+    QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "22"))
+    PRINTED_EXPIRY_DAYS = int(os.getenv("PRINTED_EXPIRY_DAYS", "5"))
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+    LOG_FILE = os.getenv("LOG_FILE", os.path.join(os.path.dirname(__file__), "agent.log"))
+    DB_FILE = DB_PATH
+    HEADERS["X-BLToken"] = API_TOKEN
+
 last_order_data = {}
 _agent_thread = None
 
