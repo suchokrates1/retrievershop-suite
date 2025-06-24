@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Ustawienia</h2>
+<form method="post">
+    {% for key, value in settings.items() %}
+        <div class="form-group">
+            <label for="{{ key }}">{{ key }}</label>
+            <input type="text" class="form-control" id="{{ key }}" name="{{ key }}" value="{{ value }}">
+        </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Zapisz</button>
+</form>
+{% endblock %}
