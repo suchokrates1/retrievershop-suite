@@ -29,7 +29,12 @@ start_print_agent()
 
 @app.before_first_request
 def _init_db_if_missing():
-    if not os.path.exists(DB_PATH):
+    if os.path.isdir(DB_PATH):
+        app.logger.error(
+            f"Database path {DB_PATH} is a directory. Please fix the mount."
+        )
+        raise SystemExit(1)
+    if not os.path.isfile(DB_PATH):
         init_db()
     register_default_user()
 
@@ -447,7 +452,12 @@ def test_message():
     return render_template('test.html', message=msg)
 
 if __name__ == '__main__':
-    if not os.path.exists(DB_PATH):
+    if os.path.isdir(DB_PATH):
+        app.logger.error(
+            f"Database path {DB_PATH} is a directory. Please fix the mount."
+        )
+        raise SystemExit(1)
+    if not os.path.isfile(DB_PATH):
         init_db()
     register_default_user()
     debug = os.getenv("FLASK_DEBUG") == "1"
