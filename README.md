@@ -34,3 +34,6 @@ docker compose up
 
 The application uses a SQLite database stored in `magazyn/database.db`. This
 file is created automatically on first startup if it does not already exist.
+When running the stack in Docker, this file is mounted inside the container as
+`/app/database.db` and the `DB_PATH` variable in your `.env` file should point
+to that location.
