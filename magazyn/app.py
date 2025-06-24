@@ -100,10 +100,16 @@ def init_db():
 def register_default_user():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM users WHERE username = 'admin'")
-    hashed_password = generate_password_hash('admin123', method='pbkdf2:sha256', salt_length=16)
-    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ('admin', hashed_password))
-    conn.commit()
+    cursor.execute("SELECT 1 FROM users WHERE username = ?", ("admin",))
+    if cursor.fetchone() is None:
+        hashed_password = generate_password_hash(
+            "admin123", method="pbkdf2:sha256", salt_length=16
+        )
+        cursor.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            ("admin", hashed_password),
+        )
+        conn.commit()
     conn.close()
 
 def login_required(f):
