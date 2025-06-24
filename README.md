@@ -18,7 +18,8 @@ This repository contains the code for the RetrieverShop warehouse application an
 
 ## Running Tests
 
-Install the dependencies and run the test suite using `pytest`:
+Install the dependencies and run the test suite using `pytest`. Tests rely on
+modules within this repository, so run them with `PYTHONPATH=.`:
 ```bash
 pip install -r magazyn/requirements.txt
 PYTHONPATH=. pytest -q
