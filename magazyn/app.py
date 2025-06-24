@@ -14,8 +14,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key')
 
 
-def init_print_agent():
-    """Start the background label printing agent."""
+def start_print_agent():
+    """Initialize and start the background label printing agent."""
     try:
         print_agent.validate_env()
         print_agent.ensure_db_init()
@@ -24,7 +24,7 @@ def init_print_agent():
         app.logger.error(f"Failed to start print agent: {e}")
 
 
-init_print_agent()
+start_print_agent()
 
 
 @app.before_first_request
@@ -34,13 +34,6 @@ def _init_db_if_missing():
     register_default_user()
 
 
-@app.before_first_request
-def _start_agent():
-    try:
-        print_agent.validate_env()
-        print_agent.ensure_db_init()
-    except Exception as e:
-        app.logger.error(f"Failed to start print agent: {e}")
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
