@@ -9,12 +9,14 @@ This repository contains the code for the RetrieverShop warehouse application an
    cp .env.example .env
    ```
 2. Edit `.env` and provide your API credentials. The printing agents require values such as `API_TOKEN`, `PAGE_ACCESS_TOKEN` and `RECIPIENT_ID`.
-3. Set the CUPS printing server address. For the provided infrastructure use:
+3. Configure CUPS access. When mounting the host's CUPS socket you should leave
+   the variables empty:
    ```env
-   CUPS_SERVER=192.168.1.107
-   CUPS_PORT=631
+   CUPS_SERVER=
+   CUPS_PORT=
    ```
-   This points the agents at the CUPS server running at `192.168.1.107:631`.
+   If you prefer to connect to a remote CUPS server instead, set `CUPS_SERVER`
+   and `CUPS_PORT` accordingly.
 
 ## Running Tests
 
@@ -32,6 +34,9 @@ Start the stack using the `docker-compose.yml` file in the repository root:
 ```bash
 docker compose up
 ```
+
+The compose configuration mounts the host's `/var/run/cups/cups.sock` so the
+printing agent can communicate with the host CUPS server.
 
 The application uses a SQLite database stored in `magazyn/database.db`. This
 file is created automatically on first startup if it does not already exist.
