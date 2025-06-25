@@ -10,27 +10,14 @@
 <body>
     <nav class="navbar navbar-dark bg-dark fixed-top">
         <div class="container-fluid">
-            <button class="navbar-toggler d-none d-md-block" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
-                <span class="navbar-toggler-icon"></span>
-            </button>
             <button id="mobileMenuBtn" class="navbar-toggler d-md-none" type="button">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <span class="navbar-brand mx-auto d-flex align-items-center">
+            <span class="navbar-brand d-flex align-items-center">
                 <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" style="height: 40px;">
                 <span class="ms-2">Witaj w aplikacji magazynowej</span>
             </span>
-            <a href="{{ url_for('logout') }}" class="btn btn-danger">Wyloguj się</a>
-        </div>
-    </nav>
-
-    <div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="sidebarMenu" aria-labelledby="sidebarLabel">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="sidebarLabel">Menu</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body">
-            <ul class="nav flex-column">
+            <ul class="navbar-nav flex-row ms-auto gap-3 d-none d-md-flex">
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
@@ -40,8 +27,10 @@
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
             </ul>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3">Wyloguj się</a>
         </div>
-    </div>
+    </nav>
+
 
     <div id="mobileMenu" class="mobile-menu d-md-none">
         <ul class="nav flex-column">

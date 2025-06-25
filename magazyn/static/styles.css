@@ -66,25 +66,6 @@ header .logo img {
     vertical-align: middle;
 }
 
-nav ul {
-    list-style: none;
-    padding: 0;
-}
-
-nav ul li {
-    display: inline;
-    margin: 0 15px;
-}
-
-nav ul li a {
-    color: white;
-    text-decoration: none;
-    font-weight: bold;
-}
-
-nav ul li a:hover {
-    text-decoration: underline;
-}
 
 footer {
     margin-top: 30px;
@@ -196,16 +177,8 @@ body {
     padding-top: 70px;
 }
 
-/* Offcanvas sidebar width */
-#sidebarMenu {
-    width: 250px;
-}
-
 /* Mobile slide-in menu */
 @media (max-width: 768px) {
-    #sidebarMenu {
-        display: none;
-    }
     #mobileMenuBtn {
         margin-right: 1rem;
     }
@@ -229,6 +202,17 @@ body {
         text-decoration: none;
         display: block;
         padding: 8px 0;
+    }
+}
+
+@media (min-width: 768px) {
+    .navbar-nav .nav-link {
+        color: #fff;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    .navbar-nav .nav-link:hover {
+        text-decoration: underline;
     }
 }
 
