@@ -1,16 +1,10 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skanowanie kodu kreskowego</title>
+{% extends "base.html" %}
+{% block content %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-</head>
-<body>
     <h2>Skanuj kod kreskowy</h2>
     <div id="scanner-container"></div>
     <p id="barcode-result">Kod kreskowy: </p>
-    
+
     <!-- Element audio do odtworzenia dźwięku -->
     <audio id="beep-sound" src="beep.mp3" preload="auto"></audio>
 
@@ -66,5 +60,4 @@
             });
         });
     </script>
-</body>
-</html>
+{% endblock %}
