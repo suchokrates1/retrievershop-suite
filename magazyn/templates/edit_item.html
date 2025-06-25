@@ -16,10 +16,11 @@
 
         <label for="sizes">Ilości dla rozmiarów:</label>
         <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-            {% for size_info in product['sizes'] %}
-                <div style="display: flex; flex-direction: column; width: 80px;">
-                    <label>{{ size_info['size'] }}:</label>
-                    <input type="number" name="sizes[{{ size_info['size'] }}]" value="{{ size_info['quantity'] }}" min="0" class="form-control">
+            {% for size, info in product_sizes.items() %}
+                <div style="display: flex; flex-direction: column; width: 120px;">
+                    <label>{{ size }}:</label>
+                    <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
+                    <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control mt-1">
                 </div>
             {% endfor %}
         </div>
