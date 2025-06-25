@@ -51,10 +51,18 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ barcode: data.codeResult.code })
-            }).then(response => {
-                if (response.ok) {
-                    window.location.href = "/items";  // Przekierowanie po zakończeniu skanowania
+            })
+            .then(res => res.json().catch(() => null))
+            .then(result => {
+                if (result && result.name) {
+                    const parts = result.name.trim().split(/\s+/);
+                    let toSpeak = result.name;
+                    if (parts.length >= 3) {
+                        toSpeak = `${parts[0]} ${parts.slice(-2).join(' ')}`;
+                    }
+                    speechSynthesis.speak(new SpeechSynthesisUtterance(toSpeak));
                 }
+                window.location.href = "/items";
             });
         });
     </script>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
 import sqlite3
 import os
 import pandas as pd
@@ -369,6 +369,7 @@ def barcode_scan():
 
         if product:
             flash(f'Znaleziono produkt: {product["name"]}')
+            return jsonify({'name': product['name']})
         else:
             flash('Nie znaleziono produktu o podanym kodzie kreskowym')
 
