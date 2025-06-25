@@ -35,7 +35,7 @@
             <td>{{ product['color'] }}</td>
             {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
             <td>
-                <form method="POST" action="{{ url_for('update_quantity', product_id=product['id'], size=size) }}" class="form-inline quantity-form">
+                <form method="POST" action="{{ url_for('products.update_quantity', product_id=product['id'], size=size) }}" class="form-inline quantity-form">
                     <button type="submit" name="action" value="decrease" class="btn btn-danger btn-sm btn-quantity">-</button>
                     <span class="quantity-value">{{ product['sizes'][size] }}</span>
                     <button type="submit" name="action" value="increase" class="btn btn-success btn-sm btn-quantity">+</button>
@@ -43,8 +43,8 @@
             </td>
             {% endfor %}
             <td>
-                <a href="{{ url_for('edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm">Edytuj</a>
-                <form action="{{ url_for('delete_item', item_id=product['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten przedmiot?');">
+                <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm">Edytuj</a>
+                <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten przedmiot?');">
                     <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
                 </form>
             </td>
@@ -55,7 +55,7 @@
 
 </div>
 </div>
-<a href="{{ url_for('barcode_scan_page') }}" class="btn btn-primary">Skanuj kod kreskowy</a>
+<a href="{{ url_for('products.barcode_scan_page') }}" class="btn btn-primary">Skanuj kod kreskowy</a>
 
 <footer>
     <a href="{{ url_for('home') }}">Powrót do strony głównej</a>
