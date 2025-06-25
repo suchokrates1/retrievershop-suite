@@ -3,29 +3,39 @@
 {% block content %}
 <div class="container mt-4">
     <h3 class="text-center">Edytuj przedmiot</h3>
-    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}">
-        <label for="name">Nazwa:</label>
-        <input type="text" id="name" name="name" value="{{ product['name'] }}" class="form-control" required>
-
-        <label for="color">Kolor:</label>
-        <input type="text" id="color" name="color" value="{{ product['color'] }}" class="form-control" required>
-
-        <label for="barcode">Kod kreskowy:</label>
-        <input type="text" id="barcode" name="barcode" value="{{ product['barcode'] }}" class="form-control">
-        <button type="button" class="btn btn-secondary mt-2" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
-
-        <label for="sizes">Ilości dla rozmiarów:</label>
-        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-            {% for size, info in product_sizes.items() %}
-                <div style="display: flex; flex-direction: column; width: 120px;">
-                    <label>{{ size }}:</label>
-                    <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
-                    <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control mt-1">
-                </div>
-            {% endfor %}
+    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="row g-3">
+        <div class="col-md-6">
+            <label for="name" class="form-label">Nazwa:</label>
+            <input type="text" id="name" name="name" value="{{ product['name'] }}" class="form-control" required>
         </div>
 
-        <button type="submit" class="btn btn-primary mt-3">Zapisz zmiany</button>
+        <div class="col-md-6">
+            <label for="color" class="form-label">Kolor:</label>
+            <input type="text" id="color" name="color" value="{{ product['color'] }}" class="form-control" required>
+        </div>
+
+        <div class="col-md-6">
+            <label for="barcode" class="form-label">Kod kreskowy:</label>
+            <input type="text" id="barcode" name="barcode" value="{{ product['barcode'] }}" class="form-control">
+            <button type="button" class="btn btn-secondary mt-2" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
+        </div>
+
+        <div class="col-12">
+            <label for="sizes" class="form-label">Ilości dla rozmiarów:</label>
+            <div class="row g-2">
+                {% for size, info in product_sizes.items() %}
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <label class="form-label">{{ size }}:</label>
+                        <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
+                        <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control mt-1">
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary mt-3">Zapisz zmiany</button>
+        </div>
     </form>
 </div>
 
