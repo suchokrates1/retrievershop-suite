@@ -5,7 +5,13 @@ from dotenv import load_dotenv, dotenv_values
 from collections import OrderedDict
 from pathlib import Path
 
-from .db import get_db_connection, init_db, register_default_user
+from .db import (
+    get_db_connection,
+    init_db,
+    register_default_user,
+    record_purchase,
+    consume_stock,
+)
 from .products import (
     bp as products_bp,
     add_item,
@@ -17,6 +23,7 @@ from .products import (
     barcode_scan_page,
     export_products,
     import_products,
+    add_delivery,
 )
 from .history import bp as history_bp, print_history
 from .auth import login_required
