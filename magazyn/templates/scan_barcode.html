@@ -48,13 +48,11 @@
             })
             .then(res => res.json().catch(() => null))
             .then(result => {
-                if (result && result.name) {
-                    const parts = result.name.trim().split(/\s+/);
-                    let toSpeak = result.name;
-                    if (parts.length >= 3) {
-                        toSpeak = `${parts[0]} ${parts.slice(-2).join(' ')}`;
-                    }
-                    speechSynthesis.speak(new SpeechSynthesisUtterance(toSpeak));
+                if (result) {
+                    const text =
+                        `${result.name}, kolor ${result.color}, rozmiar ` +
+                        result.sizes.join(" ");
+                    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
                 }
                 window.location.href = "/items";
             });
