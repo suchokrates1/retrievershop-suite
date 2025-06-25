@@ -7,6 +7,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from .models import User, Settings, Product
+from .forms import LoginForm
 
 from .db import (
     get_session,
@@ -105,9 +106,10 @@ def home():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+    form = LoginForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
 
         with get_session() as db:
             user = db.query(User).filter_by(username=username).first()
@@ -119,7 +121,7 @@ def login():
             flash("Niepoprawna nazwa użytkownika lub hasło")
         return redirect(url_for("login"))
 
-    return render_template("login.html")
+    return render_template("login.html", form=form)
 
 
 @app.route("/logout")

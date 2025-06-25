@@ -6,6 +6,7 @@ import pandas as pd
 
 from .db import get_session, record_purchase, consume_stock
 from .models import Product, ProductSize
+from .forms import AddItemForm
 from .auth import login_required
 from . import print_agent
 
@@ -16,13 +17,14 @@ bp = Blueprint('products', __name__)
 @bp.route('/add_item', methods=['GET', 'POST'])
 @login_required
 def add_item():
-    if request.method == 'POST':
-        name = request.form['name']
-        color = request.form['color']
-        barcode = request.form.get('barcode')
+    form = AddItemForm()
+    if form.validate_on_submit():
+        name = form.name.data
+        color = form.color.data
+        barcode = form.barcode.data
         sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
-        quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
-        barcodes = {size: request.form.get(f'barcode_{size}') for size in sizes}
+        quantities = {size: int(getattr(form, f'quantity_{size}').data or 0) for size in sizes}
+        barcodes = {size: getattr(form, f'barcode_{size}').data for size in sizes}
 
         try:
             with get_session() as db:
@@ -42,7 +44,7 @@ def add_item():
             flash(f'B\u0142\u0105d podczas dodawania przedmiotu: {e}')
         return redirect(url_for('products.items'))
 
-    return render_template('add_item.html')
+    return render_template('add_item.html', form=form)
 
 
 @bp.route('/update_quantity/<int:product_id>/<size>', methods=['POST'])
