@@ -20,6 +20,8 @@
         <button type="button" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
 
         {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
+            <label for="barcode_{{ size }}">Kod kreskowy ({{ size }}):</label>
+            <input type="text" id="barcode_{{ size }}" name="barcode_{{ size }}">
             <label for="quantity_{{ size }}">Ilość ({{ size }}):</label>
             <input type="number" id="quantity_{{ size }}" name="quantity_{{ size }}" min="0" value="0">
         {% endfor %}
