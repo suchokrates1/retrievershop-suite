@@ -3,6 +3,7 @@
 {% block content %}
 <h2 class="mb-3">Logowanie</h2>
 <form action="{{ url_for('login') }}" method="POST" class="row g-3">
+    {{ form.csrf_token }}
     <div class="col-12">
         <label for="username" class="form-label">Nazwa użytkownika:</label>
         <input type="text" name="username" required class="form-control">
