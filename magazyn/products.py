@@ -7,7 +7,7 @@ import pandas as pd
 
 from .db import get_db_connection
 from .auth import login_required
-import print_agent
+from . import print_agent
 
 bp = Blueprint('products', __name__)
 
