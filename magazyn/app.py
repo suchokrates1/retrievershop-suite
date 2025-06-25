@@ -132,6 +132,15 @@ def init_db():
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings(
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """
+        )
+
         conn.commit()
 
 def register_default_user():
@@ -474,15 +483,33 @@ def print_history():
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
+    keys = ["PRINTER_NAME", "CUPS_SERVER", "CUPS_PORT"]
     if request.method == 'POST':
-        updated = {key: request.form.get(key, "") for key in dotenv_values(EXAMPLE_PATH).keys()}
-        write_env(updated)
-        load_dotenv(override=True)
-        print_agent.reload_config()
-        flash('Zapisano ustawienia.')
-        return redirect(url_for('settings'))
-    values = load_settings()
-    return render_template('settings.html', settings=values)
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            for key in keys:
+                value = request.form.get(key, "")
+                cur.execute(
+                    """
+                    INSERT INTO settings(key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                    """,
+                    (key, value),
+                )
+            conn.commit()
+        flash("Zapisano ustawienia.")
+        return redirect(url_for("settings"))
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
+            keys,
+        )
+        rows = cur.fetchall()
+    values = {key: "" for key in keys}
+    for row in rows:
+        values[row["key"]] = row["value"]
+    return render_template("settings.html", settings=values)
 
 
 @app.route('/logs')
