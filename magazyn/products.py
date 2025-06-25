@@ -163,11 +163,24 @@ def barcode_scan():
     if barcode:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM products WHERE barcode = ?", (barcode,))
-            product = cursor.fetchone()
-        if product:
-            flash(f'Znaleziono produkt: {product["name"]}')
-            return jsonify({'name': product['name']})
+            cursor.execute(
+                """
+        SELECT products.name, products.color, product_sizes.size
+        FROM products
+        LEFT JOIN product_sizes ON products.id = product_sizes.product_id
+        WHERE products.barcode = ?
+    """,
+                (barcode,),
+            )
+            rows = cursor.fetchall()
+        if rows:
+            result = {
+                "name": rows[0]["name"],
+                "color": rows[0]["color"],
+                "sizes": [r["size"] for r in rows],
+            }
+            flash(f'Znaleziono produkt: {result["name"]}')
+            return jsonify(result)
         else:
             flash('Nie znaleziono produktu o podanym kodzie kreskowym')
     return ('', 204)
