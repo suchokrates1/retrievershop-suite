@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask_wtf import CSRFProtect
 import os
 from datetime import datetime
 from werkzeug.security import check_password_hash
@@ -45,6 +46,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
+CSRFProtect(app)
 
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)

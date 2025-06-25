@@ -85,3 +85,25 @@ def test_product_crud_and_barcode_scan(tmp_path, monkeypatch):
     with app_mod.get_session() as db:
         assert db.get(Product, prod_id) is None
         assert not db.query(ProductSize).filter_by(product_id=prod_id).first()
+
+
+def test_items_forms_include_csrf_token(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    login(client)
+
+    with app_mod.get_session() as db:
+        prod = Product(name="P", color="C")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=1))
+
+    resp = client.get("/items")
+    html = resp.get_data(as_text=True)
+    from flask import session as flask_session
+    with client.session_transaction() as sess:
+        with app_mod.app.test_request_context():
+            for k, v in sess.items():
+                flask_session[k] = v
+            token = app_mod.app.jinja_env.globals["csrf_token"]()
+    assert html.count(token) >= 7
