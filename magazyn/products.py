@@ -167,19 +167,19 @@ def barcode_scan():
             cursor = conn.cursor()
             cursor.execute(
                 """
-        SELECT products.name, products.color, product_sizes.size
-        FROM products
-        LEFT JOIN product_sizes ON products.id = product_sizes.product_id
-        WHERE products.barcode = ?
+        SELECT p.name, p.color, ps.size
+        FROM product_sizes ps
+        JOIN products p ON p.id = ps.product_id
+        WHERE ps.barcode = ?
     """,
                 (barcode,),
             )
-            rows = cursor.fetchall()
-        if rows:
+            row = cursor.fetchone()
+        if row:
             result = {
-                "name": rows[0]["name"],
-                "color": rows[0]["color"],
-                "sizes": [r["size"] for r in rows],
+                "name": row["name"],
+                "color": row["color"],
+                "size": row["size"],
             }
             flash(f'Znaleziono produkt: {result["name"]}')
             return jsonify(result)
