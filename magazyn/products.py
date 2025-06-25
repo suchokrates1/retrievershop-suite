@@ -5,7 +5,7 @@ from flask import (
 import sqlite3
 import pandas as pd
 
-from .db import get_db_connection
+from .db import get_db_connection, record_purchase, consume_stock
 from .auth import login_required
 from . import print_agent
 
@@ -61,17 +61,15 @@ def update_quantity(product_id, size):
                 current_quantity = result['quantity']
                 if action == 'increase':
                     new_quantity = current_quantity + 1
+                    cursor.execute(
+                        '''
+                        UPDATE product_sizes
+                        SET quantity = ?
+                        WHERE product_id = ? AND size = ?
+                    ''', (new_quantity, product_id, size))
+                    conn.commit()
                 elif action == 'decrease' and current_quantity > 0:
-                    new_quantity = current_quantity - 1
-                else:
-                    new_quantity = current_quantity
-                cursor.execute(
-                    '''
-                    UPDATE product_sizes
-                    SET quantity = ?
-                    WHERE product_id = ? AND size = ?
-                ''', (new_quantity, product_id, size))
-                conn.commit()
+                    consume_stock(product_id, size, 1)
     except sqlite3.Error as e:
         flash(f'B\u0142\u0105d podczas aktualizacji ilo\u015bci: {e}')
     return redirect(url_for('products.items'))
@@ -255,4 +253,20 @@ def import_products():
                 flash(f'B\u0142\u0105d podczas importowania produkt\u00f3w: {e}')
         return redirect(url_for('products.items'))
     return render_template('import_products.html')
+
+
+@bp.route('/deliveries', methods=['GET', 'POST'])
+@login_required
+def add_delivery():
+    if request.method == 'POST':
+        product_id = int(request.form['product_id'])
+        size = request.form['size']
+        quantity = int(request.form['quantity'])
+        price = float(request.form['price'])
+        record_purchase(product_id, size, quantity, price)
+        flash('Dodano dostawę')
+        return redirect(url_for('products.items'))
+    with get_db_connection() as conn:
+        products = conn.execute('SELECT id, name FROM products').fetchall()
+    return render_template('add_delivery.html', products=products)
 
