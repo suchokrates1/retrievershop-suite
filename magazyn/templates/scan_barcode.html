@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-    <h2>Skanuj kod kreskowy</h2>
-    <div id="scanner-container"></div>
-    <p id="barcode-result">Kod kreskowy: </p>
+    <div class="container text-center">
+        <h2 class="mb-3">Skanuj kod kreskowy</h2>
+        <div id="scanner-container"></div>
+        <p id="barcode-result" class="mt-2">Kod kreskowy: </p>
+    </div>
 
     <!-- Element audio do odtworzenia dźwięku -->
     <audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>

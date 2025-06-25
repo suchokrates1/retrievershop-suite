@@ -3,9 +3,9 @@
 {% block content %}
 
 <div class="container text-center mt-5">
-<div class="table-container">
-    
- <table>
+<div class="table-responsive">
+
+ <table class="table table-striped align-middle">
     <thead>
         <tr>
             <th>Nazwa produktu</th>
@@ -46,7 +46,7 @@
 
 </div>
 </div>
-<a href="{{ url_for('products.barcode_scan_page') }}" class="btn btn-primary">Skanuj kod kreskowy</a>
+<a href="{{ url_for('products.barcode_scan_page') }}" class="btn btn-primary mt-3">Skanuj kod kreskowy</a>
 
 <footer>
     <a href="{{ url_for('home') }}">Powrót do strony głównej</a>

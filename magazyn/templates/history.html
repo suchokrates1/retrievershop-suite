@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Historia drukowania</h2>
-<table class="table">
+<div class="table-responsive">
+<table class="table table-striped">
     <thead><tr><th>ID zamówienia</th><th>Czas</th></tr></thead>
     <tbody>
     {% for oid, ts in printed.items() %}
@@ -12,4 +13,5 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 {% endblock %}
