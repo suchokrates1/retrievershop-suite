@@ -52,3 +52,18 @@ file is created automatically on first startup if it does not already exist.
 When running the stack in Docker, this file is mounted inside the container as
 `/app/database.db` and the `DB_PATH` variable in your `.env` file should point
 to that location.
+
+## Database migration
+
+The project now uses SQLAlchemy for all database interactions. Existing
+SQLite databases remain compatible with the new ORM models. When upgrading,
+install the updated requirements and run `init_db` once to create any missing
+tables:
+
+```bash
+pip install -r magazyn/requirements.txt
+python -m magazyn.app init_db
+```
+
+No data is removed during this step. The application can then be started as
+before using the same database file.
