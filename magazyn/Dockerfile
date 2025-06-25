@@ -11,14 +11,14 @@ RUN apt-get update && apt-get install -y \
     cups-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Kopiujemy pliki aplikacji do kontenera
-COPY . /app
+# Kopiujemy pliki aplikacji do kontenera w podkatalogu
+COPY . /app/magazyn
 
 # Instalujemy wymagane pakiety z requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /app/magazyn/requirements.txt
 
 # Ustawiamy port, na którym aplikacja będzie dostępna
 EXPOSE 80
 
 # Uruchamiamy aplikację
-CMD ["python", "app.py"]
+CMD ["python", "-m", "magazyn.app"]
