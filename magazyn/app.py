@@ -460,12 +460,12 @@ def settings():
 @login_required
 def agent_logs():
     try:
-        with open(print_agent.LOG_FILE, 'r') as f:
+        with open(print_agent.LOG_FILE, "r") as f:
             lines = f.readlines()[-200:]
-        log_text = ''.join(lines)
+        log_text = "<br>".join(line.rstrip() for line in lines[::-1])
     except Exception as e:
-        log_text = f'Błąd czytania logów: {e}'
-    return render_template('logs.html', logs=log_text)
+        log_text = f"Błąd czytania logów: {e}"
+    return render_template("logs.html", logs=log_text)
 
 
 @app.route('/testprint', methods=['GET', 'POST'])
