@@ -77,3 +77,38 @@ def test_import_products_reads_barcode(tmp_path, monkeypatch):
             ("Prod", "Red"),
         ).fetchone()
         assert row["barcode"] == "999"
+
+
+def test_consume_stock_multiple_batches(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    with app_mod.get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO products (name, color) VALUES (?, ?)", ("Prod", "Red"))
+        pid = cur.lastrowid
+        cur.execute(
+            "INSERT INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)",
+            (pid, "M", 0),
+        )
+        conn.commit()
+
+    # record purchases in non-sorted order by price
+    app_mod.record_purchase(pid, "M", 1, 7.0)
+    app_mod.record_purchase(pid, "M", 1, 5.0)
+    app_mod.record_purchase(pid, "M", 1, 6.0)
+
+    consumed = app_mod.consume_stock(pid, "M", 2)
+
+    with app_mod.get_db_connection() as conn:
+        qty = conn.execute(
+            "SELECT quantity FROM product_sizes WHERE product_id=? AND size=?",
+            (pid, "M"),
+        ).fetchone()["quantity"]
+        batches = conn.execute(
+            "SELECT price, quantity FROM purchase_batches WHERE product_id=? AND size=? ORDER BY price",
+            (pid, "M"),
+        ).fetchall()
+    assert consumed == 2
+    assert qty == 1
+    assert len(batches) == 1
+    assert batches[0]["price"] == 7.0
+    assert batches[0]["quantity"] == 1
