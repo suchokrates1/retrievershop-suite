@@ -17,12 +17,12 @@ h2, h3 {
     text-align: center;
 }
 
-form {
-    display: flex;
-    flex-direction: column;
-    width: 300px;
+/* Centered layout for the login page form */
+.login-form {
+    max-width: 300px;
     margin: auto;
 }
+
 
 label, input, button {
     margin: 5px 0;
