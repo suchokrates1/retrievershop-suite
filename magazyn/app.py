@@ -12,6 +12,7 @@ from .forms import LoginForm
 from .db import (
     get_session,
     init_db,
+    ensure_schema,
     register_default_user,
     record_purchase,
     consume_stock,
@@ -94,6 +95,7 @@ def _init_db_if_missing():
         raise SystemExit(1)
     if not os.path.isfile(DB_PATH):
         init_db()
+    ensure_schema()
     register_default_user()
 
 
@@ -197,6 +199,7 @@ if __name__ == "__main__":
         raise SystemExit(1)
     if not os.path.isfile(DB_PATH):
         init_db()
+    ensure_schema()
     register_default_user()
     debug = os.getenv("FLASK_DEBUG") == "1"
     app.run(host="0.0.0.0", port=80, debug=debug)
