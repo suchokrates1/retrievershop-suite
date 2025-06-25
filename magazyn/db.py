@@ -1,4 +1,5 @@
 import sqlite3
+import datetime
 from contextlib import contextmanager
 from werkzeug.security import generate_password_hash
 
@@ -25,6 +26,7 @@ def init_db():
             DROP TABLE IF EXISTS printed_orders;
             DROP TABLE IF EXISTS label_queue;
             DROP TABLE IF EXISTS settings;
+            DROP TABLE IF EXISTS purchase_batches;
             """
         )
 
@@ -96,6 +98,20 @@ def init_db():
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS purchase_batches(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                size TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                price REAL NOT NULL,
+                purchase_date TEXT NOT NULL,
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            )
+            """
+        )
+
         conn.commit()
 
 
@@ -113,5 +129,73 @@ def register_default_user():
                 ("admin", hashed_password),
             )
             conn.commit()
+
+
+def record_purchase(product_id, size, quantity, price, purchase_date=None):
+    """Insert a purchase batch and increase stock quantity."""
+    purchase_date = purchase_date or datetime.datetime.now().isoformat()
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO purchase_batches (
+                product_id, size, quantity, price, purchase_date
+            ) VALUES (?, ?, ?, ?, ?)""",
+            (product_id, size, quantity, price, purchase_date),
+        )
+        cur.execute(
+            "UPDATE product_sizes SET quantity = quantity + ? "
+            "WHERE product_id = ? AND size = ?",
+            (quantity, product_id, size),
+        )
+        conn.commit()
+
+
+def consume_stock(product_id, size, quantity):
+    """Remove quantity from stock using cheapest purchase batches first."""
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT quantity FROM product_sizes WHERE product_id=? AND size=?",
+            (product_id, size),
+        ).fetchone()
+        available = row["quantity"] if row else 0
+        to_consume = min(available, quantity)
+
+        batches = cur.execute(
+            """
+            SELECT id, quantity FROM purchase_batches
+            WHERE product_id=? AND size=?
+            ORDER BY price ASC, purchase_date ASC
+            """,
+            (product_id, size),
+        ).fetchall()
+
+        remaining = to_consume
+        for batch in batches:
+            if remaining <= 0:
+                break
+            use = remaining if batch["quantity"] >= remaining else batch["quantity"]
+            new_q = batch["quantity"] - use
+            if new_q == 0:
+                cur.execute(
+                    "DELETE FROM purchase_batches WHERE id=?",
+                    (batch["id"],),
+                )
+            else:
+                cur.execute(
+                    "UPDATE purchase_batches SET quantity=? WHERE id=?",
+                    (new_q, batch["id"]),
+                )
+            remaining -= use
+
+        if to_consume > 0:
+            cur.execute(
+                "UPDATE product_sizes SET quantity = quantity - ? "
+                "WHERE product_id=? AND size=?",
+                (to_consume - remaining, product_id, size),
+            )
+        conn.commit()
+    return to_consume - remaining
 
 
