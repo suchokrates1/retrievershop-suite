@@ -1,10 +1,12 @@
 import importlib
 import pandas as pd
 import sys
+from sqlalchemy import text
+from magazyn.models import Product, ProductSize
 
 
 def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", str(tmp_path / "db.sqlite"))
+    monkeypatch.setenv("DB_PATH", ":memory:")
     init = importlib.import_module("magazyn.__init__")
     importlib.reload(init)
     monkeypatch.setitem(sys.modules, "__init__", init)
@@ -21,18 +23,12 @@ def setup_app(tmp_path, monkeypatch):
 
 def test_export_products_includes_barcode(tmp_path, monkeypatch):
     app_mod = setup_app(tmp_path, monkeypatch)
-    with app_mod.get_db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO products (name, color) VALUES (?, ?)",
-            ("Prod", "Red"),
-        )
-        pid = cur.lastrowid
-        cur.execute(
-            "INSERT INTO product_sizes (product_id, size, quantity, barcode) VALUES (?, ?, ?, ?)",
-            (pid, "M", 5, "123"),
-        )
-        conn.commit()
+    with app_mod.get_session() as db:
+        prod = Product(name="Prod", color="Red")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=5, barcode="123"))
+        pid = prod.id
 
     with app_mod.app.test_request_context():
         from flask import session
@@ -72,29 +68,24 @@ def test_import_products_reads_barcode(tmp_path, monkeypatch):
             session["username"] = "x"
             app_mod.import_products.__wrapped__()
 
-    with app_mod.get_db_connection() as conn:
-        row = conn.execute(
-            """
-            SELECT ps.barcode FROM product_sizes ps
-            JOIN products p ON ps.product_id = p.id
-            WHERE p.name=? AND p.color=? AND ps.size='M'
-            """,
-            ("Prod", "Red"),
+    with app_mod.get_session() as db:
+        row = db.execute(
+            text(
+                "SELECT ps.barcode FROM product_sizes ps JOIN products p ON ps.product_id = p.id WHERE p.name=:name AND p.color=:color AND ps.size='M'"
+            ),
+            {"name": "Prod", "color": "Red"},
         ).fetchone()
-        assert row["barcode"] == "999"
+        assert row[0] == "999"
 
 
 def test_consume_stock_multiple_batches(tmp_path, monkeypatch):
     app_mod = setup_app(tmp_path, monkeypatch)
-    with app_mod.get_db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute("INSERT INTO products (name, color) VALUES (?, ?)", ("Prod", "Red"))
-        pid = cur.lastrowid
-        cur.execute(
-            "INSERT INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)",
-            (pid, "M", 0),
-        )
-        conn.commit()
+    with app_mod.get_session() as db:
+        prod = Product(name="Prod", color="Red")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=0))
+        pid = prod.id
 
     # record purchases in non-sorted order by price
     app_mod.record_purchase(pid, "M", 1, 7.0)
@@ -103,17 +94,17 @@ def test_consume_stock_multiple_batches(tmp_path, monkeypatch):
 
     consumed = app_mod.consume_stock(pid, "M", 2)
 
-    with app_mod.get_db_connection() as conn:
-        qty = conn.execute(
-            "SELECT quantity FROM product_sizes WHERE product_id=? AND size=?",
-            (pid, "M"),
-        ).fetchone()["quantity"]
-        batches = conn.execute(
-            "SELECT price, quantity FROM purchase_batches WHERE product_id=? AND size=? ORDER BY price",
-            (pid, "M"),
+    with app_mod.get_session() as db:
+        qty = db.execute(
+            text("SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"),
+            {"pid": pid, "size": "M"},
+        ).fetchone()[0]
+        batches = db.execute(
+            text("SELECT price, quantity FROM purchase_batches WHERE product_id=:pid AND size=:size ORDER BY price"),
+            {"pid": pid, "size": "M"},
         ).fetchall()
     assert consumed == 2
     assert qty == 1
     assert len(batches) == 1
-    assert batches[0]["price"] == 7.0
-    assert batches[0]["quantity"] == 1
+    assert batches[0][0] == 7.0
+    assert batches[0][1] == 1
