@@ -3,18 +3,12 @@
 {% block content %}
 <h2 class="mb-3">Ustawienia drukarki</h2>
 <form method="post" class="row g-3">
+    {% for key, value in settings.items() %}
     <div class="col-md-6">
-        <label for="PRINTER_NAME">PRINTER_NAME</label>
-        <input type="text" class="form-control" id="PRINTER_NAME" name="PRINTER_NAME" value="{{ settings.PRINTER_NAME }}">
+        <label for="{{ key }}">{{ key }}</label>
+        <input type="text" class="form-control" id="{{ key }}" name="{{ key }}" value="{{ value }}">
     </div>
-    <div class="col-md-6">
-        <label for="CUPS_SERVER">CUPS_SERVER</label>
-        <input type="text" class="form-control" id="CUPS_SERVER" name="CUPS_SERVER" value="{{ settings.CUPS_SERVER }}">
-    </div>
-    <div class="col-md-6">
-        <label for="CUPS_PORT">CUPS_PORT</label>
-        <input type="text" class="form-control" id="CUPS_PORT" name="CUPS_PORT" value="{{ settings.CUPS_PORT }}">
-    </div>
+    {% endfor %}
     <div class="col-12">
         <button type="submit" class="btn btn-primary">Zapisz</button>
     </div>

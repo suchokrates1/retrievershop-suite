@@ -1,13 +1,11 @@
 import importlib
 import sys
-from sqlalchemy import text
 
 import magazyn.db as db_mod
 
 
 def setup_app(tmp_path, monkeypatch):
-    db_file = tmp_path / "settings.db"
-    monkeypatch.setenv("DB_PATH", str(db_file))
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "settings.db"))
     import werkzeug
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")
@@ -21,10 +19,10 @@ def setup_app(tmp_path, monkeypatch):
     import magazyn.app as app_mod
     importlib.reload(app_mod)
     from sqlalchemy.orm import sessionmaker
-    db_mod.SessionLocal = sessionmaker(
-        bind=db_mod.engine, autoflush=False, expire_on_commit=False
-    )
+    db_mod.SessionLocal = sessionmaker(bind=db_mod.engine, autoflush=False, expire_on_commit=False)
     app_mod.app.config["WTF_CSRF_ENABLED"] = False
+    # use temp env file
+    app_mod.ENV_PATH = tmp_path / ".env"
     return app_mod
 
 
@@ -33,15 +31,27 @@ def login(client):
         sess["username"] = "tester"
 
 
-def test_settings_route_creates_table(tmp_path, monkeypatch):
+def test_settings_list_all_keys(tmp_path, monkeypatch):
     app_mod = setup_app(tmp_path, monkeypatch)
     client = app_mod.app.test_client()
     login(client)
     resp = client.get("/settings")
     assert resp.status_code == 200
-    with db_mod.get_db_connection() as db:
-        row = db.execute(
-            text("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
-        ).fetchone()
-        assert row is not None
+    text = resp.get_data(as_text=True)
+    for key in app_mod.load_settings().keys():
+        assert key in text
+
+
+def test_settings_post_saves_and_reloads(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    reloaded = {"called": False}
+    monkeypatch.setattr(app_mod.print_agent, "reload_config", lambda: reloaded.update(called=True))
+    client = app_mod.app.test_client()
+    login(client)
+    values = {k: f"val{i}" for i, k in enumerate(app_mod.load_settings().keys())}
+    resp = client.post("/settings", data=values)
+    assert resp.status_code == 302
+    env_text = app_mod.ENV_PATH.read_text()
+    assert "API_TOKEN=val0" in env_text
+    assert reloaded["called"] is True
 
