@@ -22,10 +22,11 @@ This repository contains the code for the RetrieverShop warehouse application an
 
 After starting the application you can edit the values in your `.env` file
 without touching the filesystem. Log in to the web interface and open the
-**Ustawienia** tab from the navigation bar. The form lists all configurable
-variables. Update the desired entries and click **Zapisz**. The application
-writes the new values to `.env` and automatically reloads the configuration so
-changes take effect immediately.
+**Ustawienia** tab from the navigation bar. The form now lists all variables
+defined in `.env.example` so newly introduced options automatically appear on
+the page. Update the desired entries and click **Zapisz**. The application
+writes the new values to `.env`, reloads the configuration and the printing
+agent picks up the changes immediately.
 
 ## Running Tests
 
