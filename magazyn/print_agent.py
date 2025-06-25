@@ -75,6 +75,11 @@ def reload_env():
     DB_FILE = DB_PATH
     HEADERS["X-BLToken"] = API_TOKEN
 
+
+def reload_config():
+    """Reload configuration from .env and update globals."""
+    reload_env()
+
 last_order_data = {}
 _agent_thread = None
 
