@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container mt-4">
     <h3 class="text-center">Edytuj przedmiot</h3>
-    <form method="POST" action="{{ url_for('edit_item', product_id=product['id']) }}">
+    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}">
         <label for="name">Nazwa:</label>
         <input type="text" id="name" name="name" value="{{ product['name'] }}" class="form-control" required>
 
