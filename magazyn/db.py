@@ -1,7 +1,7 @@
 import datetime
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
@@ -32,6 +32,17 @@ def init_db():
     """Initialize the SQLite database and create required tables."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+
+
+def ensure_schema():
+    """Add missing columns to existing tables if necessary."""
+    with engine.begin() as conn:
+        result = conn.execute(text("PRAGMA table_info('product_sizes')"))
+        cols = [row[1] for row in result.fetchall()]
+        if "barcode" not in cols:
+            conn.execute(
+                text("ALTER TABLE product_sizes ADD COLUMN barcode TEXT UNIQUE")
+            )
 
 
 def register_default_user():
