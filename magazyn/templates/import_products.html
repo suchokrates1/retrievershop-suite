@@ -1,19 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <title>Import produktów</title>
-</head>
-<body>
-    <h2>Import produktów z pliku Excel</h2>
-    <form action="{{ url_for('products.import_products') }}" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" required>
-        <button type="submit">Zaimportuj</button>
+    <h2 class="mb-3">Import produktów z pliku Excel</h2>
+    <form action="{{ url_for('products.import_products') }}" method="POST" enctype="multipart/form-data" class="row g-3">
+        <div class="col-auto">
+            <input type="file" name="file" required class="form-control">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Zaimportuj</button>
+        </div>
     </form>
-    <a href="{{ url_for('home') }}">Powrót do strony głównej</a>
-</body>
-</html>
+    <a href="{{ url_for('home') }}" class="btn btn-link mt-3">Powrót do strony głównej</a>
 {% endblock %}
