@@ -36,13 +36,18 @@ def init_db():
 
 def ensure_schema():
     """Add missing columns to existing tables if necessary."""
-    with engine.begin() as conn:
-        result = conn.execute(text("PRAGMA table_info('product_sizes')"))
-        cols = [row[1] for row in result.fetchall()]
-        if "barcode" not in cols:
+    conn = engine.raw_connection()
+    try:
+        cur = conn.execute("PRAGMA table_info(product_sizes)")
+        if "barcode" not in [row[1] for row in cur.fetchall()]:
+            conn.execute("ALTER TABLE product_sizes ADD COLUMN barcode TEXT")
             conn.execute(
-                text("ALTER TABLE product_sizes ADD COLUMN barcode TEXT UNIQUE")
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_sizes_barcode "
+                "ON product_sizes(barcode)"
             )
+            conn.commit()
+    finally:
+        conn.close()
 
 
 def register_default_user():
