@@ -119,7 +119,7 @@ def login():
         with get_session() as db:
             user = db.query(User).filter_by(username=username).first()
 
-        if user and check_password_hash(user["password"], password):
+        if user and check_password_hash(user.password, password):
             session["username"] = username
             return redirect(url_for("home"))
         else:
