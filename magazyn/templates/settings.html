@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Ustawienia</h2>
+<h2>Ustawienia drukarki</h2>
 <form method="post">
-    {% for key, value in settings.items() %}
-        <div class="form-group">
-            <label for="{{ key }}">{{ key }}</label>
-            <input type="text" class="form-control" id="{{ key }}" name="{{ key }}" value="{{ value }}">
-        </div>
-    {% endfor %}
+    <div class="form-group">
+        <label for="PRINTER_NAME">PRINTER_NAME</label>
+        <input type="text" class="form-control" id="PRINTER_NAME" name="PRINTER_NAME" value="{{ settings.PRINTER_NAME }}">
+    </div>
+    <div class="form-group">
+        <label for="CUPS_SERVER">CUPS_SERVER</label>
+        <input type="text" class="form-control" id="CUPS_SERVER" name="CUPS_SERVER" value="{{ settings.CUPS_SERVER }}">
+    </div>
+    <div class="form-group">
+        <label for="CUPS_PORT">CUPS_PORT</label>
+        <input type="text" class="form-control" id="CUPS_PORT" name="CUPS_PORT" value="{{ settings.CUPS_PORT }}">
+    </div>
     <button type="submit" class="btn btn-primary">Zapisz</button>
 </form>
 {% endblock %}
