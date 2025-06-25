@@ -160,6 +160,7 @@ th {
 
 .log-content {
     font-family: monospace;
+    text-align: left;
     white-space: pre-wrap;
 }
 
