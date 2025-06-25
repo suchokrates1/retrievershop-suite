@@ -2,9 +2,12 @@ html, body {
     height: 100%;
 }
 body {
+    margin: 0;
+}
+.page-wrapper {
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    margin: 0;
 }
 main {
     flex: 1;
@@ -68,7 +71,7 @@ header .logo img {
 
 
 footer {
-    margin-top: 30px;
+    margin-top: auto;
     text-align: center;
 }
 
