@@ -1,15 +1,6 @@
-<!DOCTYPE html>
 {% extends "base.html" %}
 
 {% block content %}
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Przedmioty w magazynie</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-</head>
-<body>
 
 <div class="container text-center mt-5">
 <div class="table-container">
@@ -60,6 +51,4 @@
 <footer>
     <a href="{{ url_for('home') }}">Powrót do strony głównej</a>
 </footer>
-</body>
-</html>
 {% endblock %}
