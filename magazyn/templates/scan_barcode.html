@@ -6,7 +6,7 @@
     <p id="barcode-result">Kod kreskowy: </p>
 
     <!-- Element audio do odtworzenia dźwięku -->
-    <audio id="beep-sound" src="beep.mp3" preload="auto"></audio>
+    <audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
 
     <script>
         Quagga.init({
