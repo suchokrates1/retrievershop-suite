@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Logowanie</h2>
-<form action="{{ url_for('login') }}" method="POST">
-    <label for="username">Nazwa użytkownika:</label>
-    <input type="text" name="username" required>
-    
-    <label for="password">Hasło:</label>
-    <input type="password" name="password" required>
-    
-    <input type="submit" value="Zaloguj się">
+<h2 class="mb-3">Logowanie</h2>
+<form action="{{ url_for('login') }}" method="POST" class="row g-3">
+    <div class="col-12">
+        <label for="username" class="form-label">Nazwa użytkownika:</label>
+        <input type="text" name="username" required class="form-control">
+    </div>
+
+    <div class="col-12">
+        <label for="password" class="form-label">Hasło:</label>
+        <input type="password" name="password" required class="form-control">
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">Zaloguj się</button>
+    </div>
 </form>
 {% endblock %}

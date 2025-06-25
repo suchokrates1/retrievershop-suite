@@ -1,32 +1,42 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Dodaj nowy przedmiot</h2>
-    <form action="{{ url_for('products.add_item') }}" method="post">
-        <label for="name">Nazwa produktu:</label>
-        <input type="text" id="name" name="name" required>
+<h2 class="mb-3">Dodaj nowy przedmiot</h2>
+    <form action="{{ url_for('products.add_item') }}" method="post" class="row g-3">
+        <div class="col-md-6">
+            <label for="name" class="form-label">Nazwa produktu:</label>
+            <input type="text" id="name" name="name" required class="form-control">
+        </div>
 
-        <label for="color">Kolor:</label>
-        <select id="color" name="color" required>
-            <option value="Czerwony">Czerwony</option>
-            <option value="Niebieski">Niebieski</option>
-            <option value="Zielony">Zielony</option>
-            <option value="Czarny">Czarny</option>
-            <option value="Biały">Biały</option>
-        </select>
+        <div class="col-md-6">
+            <label for="color" class="form-label">Kolor:</label>
+            <select id="color" name="color" required class="form-select">
+                <option value="Czerwony">Czerwony</option>
+                <option value="Niebieski">Niebieski</option>
+                <option value="Zielony">Zielony</option>
+                <option value="Czarny">Czarny</option>
+                <option value="Biały">Biały</option>
+            </select>
+        </div>
 
-        <label for="barcode">Kod kreskowy:</label>
-        <input type="text" id="barcode" name="barcode">
-        <button type="button" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
+        <div class="col-md-6">
+            <label for="barcode" class="form-label">Kod kreskowy:</label>
+            <input type="text" id="barcode" name="barcode" class="form-control">
+            <button type="button" class="btn btn-secondary mt-2" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
+        </div>
 
         {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
-            <label for="barcode_{{ size }}">Kod kreskowy ({{ size }}):</label>
-            <input type="text" id="barcode_{{ size }}" name="barcode_{{ size }}">
-            <label for="quantity_{{ size }}">Ilość ({{ size }}):</label>
-            <input type="number" id="quantity_{{ size }}" name="quantity_{{ size }}" min="0" value="0">
+            <div class="col-md-6">
+                <label for="barcode_{{ size }}" class="form-label">Kod kreskowy ({{ size }}):</label>
+                <input type="text" id="barcode_{{ size }}" name="barcode_{{ size }}" class="form-control">
+                <label for="quantity_{{ size }}" class="form-label mt-1">Ilość ({{ size }}):</label>
+                <input type="number" id="quantity_{{ size }}" name="quantity_{{ size }}" min="0" value="0" class="form-control">
+            </div>
         {% endfor %}
 
-        <button type="submit">Dodaj produkt</button>
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">Dodaj produkt</button>
+        </div>
     </form>
 
     <!-- Kontener skanera kodów kreskowych -->
