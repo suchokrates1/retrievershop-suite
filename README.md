@@ -68,6 +68,10 @@ python -m magazyn.app init_db
 No data is removed during this step. The application can then be started as
 before using the same database file.
 
+Running a newer version of the application on an older database file will
+automatically add missing columns (for example the `barcode` column in the
+`product_sizes` table) during startup.
+
 ## License
 
 This project is licensed under the terms of the [MIT License](LICENSE).
