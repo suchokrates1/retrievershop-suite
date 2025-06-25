@@ -1,5 +1,6 @@
 import importlib
 import sys
+from dotenv import load_dotenv
 
 import magazyn.db as db_mod
 
@@ -54,4 +55,30 @@ def test_settings_post_saves_and_reloads(tmp_path, monkeypatch):
     env_text = app_mod.ENV_PATH.read_text()
     assert "API_TOKEN=val0" in env_text
     assert reloaded["called"] is True
+
+
+def test_env_updates_persist_and_reload(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    login(client)
+
+    monkeypatch.setattr(
+        app_mod.print_agent,
+        "load_dotenv",
+        lambda override=True: load_dotenv(app_mod.ENV_PATH, override=override),
+    )
+
+    values = app_mod.load_settings()
+    values["API_TOKEN"] = "v0"
+    client.post("/settings", data=values)
+    assert "API_TOKEN=v0" in app_mod.ENV_PATH.read_text()
+    assert app_mod.print_agent.API_TOKEN == "v0"
+
+    new_text = app_mod.ENV_PATH.read_text().replace("API_TOKEN=v0", "API_TOKEN=new0")
+    app_mod.ENV_PATH.write_text(new_text)
+    app_mod.print_agent.reload_config()
+    assert app_mod.print_agent.API_TOKEN == "new0"
+
+    pa = importlib.reload(app_mod.print_agent)
+    assert pa.API_TOKEN == "new0"
 
