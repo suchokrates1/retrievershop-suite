@@ -7,7 +7,7 @@ services:
       - ./magazyn/database.db:/app/database.db
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     env_file: .env
-    command: ["python", "app.py"]
+    command: ["python", "-m", "magazyn.app"]
     restart: always
     networks:
       - proxy
