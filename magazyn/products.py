@@ -227,6 +227,6 @@ def add_delivery():
         flash('Dodano dostawę')
         return redirect(url_for('products.items'))
     with get_session() as db:
-        products = db.query(Product.id, Product.name).all()
+        products = db.query(Product.id, Product.name, Product.color).all()
     return render_template('add_delivery.html', products=products)
 

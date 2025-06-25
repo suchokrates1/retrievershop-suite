@@ -20,6 +20,11 @@ def setup_app(tmp_path, monkeypatch):
     return app_mod
 
 
+def login(client):
+    with client.session_transaction() as sess:
+        sess["username"] = "tester"
+
+
 def test_record_delivery(tmp_path, monkeypatch):
     app_mod = setup_app(tmp_path, monkeypatch)
     with app_mod.get_session() as db:
@@ -81,3 +86,18 @@ def test_consume_stock_cheapest(tmp_path, monkeypatch):
     assert len(batches) == 1
     assert batches[0][0] == 5.0
     assert batches[0][1] == 1
+
+
+def test_deliveries_page_shows_color(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    with app_mod.get_session() as db:
+        prod = Product(name="Prod", color="Blue")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=1))
+
+    with app_mod.app.test_request_context("/deliveries"):
+        from flask import session
+        session["username"] = "tester"
+        html = app_mod.add_delivery.__wrapped__()
+    assert "Prod (Blue)" in html
