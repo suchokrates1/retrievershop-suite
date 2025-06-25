@@ -12,6 +12,18 @@ engine = create_engine(f"sqlite:///{DB_PATH}", future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
 
+def ensure_settings_table():
+    """Create the settings table if it does not already exist."""
+    conn = engine.raw_connection()
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 @contextmanager
 def get_session():
     session = SessionLocal()
