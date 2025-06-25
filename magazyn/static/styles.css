@@ -177,4 +177,16 @@ th {
     white-space: pre-wrap;
 }
 
+#scanner-container {
+    width: 100%;
+    height: 60vh;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    #scanner-container {
+        height: 80vh;
+    }
+}
+
 
