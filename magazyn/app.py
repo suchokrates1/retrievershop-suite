@@ -67,9 +67,6 @@ def start_print_agent():
         app.logger.error(f"Failed to start print agent: {e}")
 
 
-start_print_agent()
-
-
 def load_settings():
     """Return OrderedDict of settings based on .env.example order."""
     example = dotenv_values(EXAMPLE_PATH)
@@ -89,8 +86,7 @@ def write_env(values):
             f.write(f"{key}={val}\n")
 
 
-@app.before_first_request
-def _init_db_if_missing():
+def ensure_db_initialized():
     if os.path.isdir(DB_PATH):
         app.logger.error(
             f"Database path {DB_PATH} is a directory. Please fix the mount."
@@ -100,6 +96,10 @@ def _init_db_if_missing():
         init_db()
     ensure_schema()
     register_default_user()
+
+start_print_agent()
+
+ensure_db_initialized()
 
 
 @app.route("/")
@@ -195,15 +195,6 @@ def test_message():
 
 
 if __name__ == "__main__":
-    if os.path.isdir(DB_PATH):
-        app.logger.error(
-            f"Database path {DB_PATH} is a directory. Please fix the mount."
-        )
-        raise SystemExit(1)
-    if not os.path.isfile(DB_PATH):
-        init_db()
-    ensure_settings_table()
-    ensure_schema()
-    register_default_user()
+    ensure_db_initialized()
     debug = os.getenv("FLASK_DEBUG") == "1"
     app.run(host="0.0.0.0", port=80, debug=debug)
