@@ -162,4 +162,19 @@ th {
     }
 }
 
+.log-container {
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #ccc;
+    background-color: #f8f8f8;
+    margin: 20px auto;
+    width: 90%;
+}
+
+.log-content {
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
 
