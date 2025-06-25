@@ -1,28 +1,38 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Dodaj dostawę</h2>
-<form action="{{ url_for('products.add_delivery') }}" method="post">
-    <label for="product_id">Produkt:</label>
-    <select name="product_id" id="product_id">
-        {% for p in products %}
-        <option value="{{ p['id'] }}">{{ p['name'] }}</option>
-        {% endfor %}
-    </select>
+<h2 class="mb-3">Dodaj dostawę</h2>
+<form action="{{ url_for('products.add_delivery') }}" method="post" class="row g-3">
+    <div class="col-md-6">
+        <label for="product_id" class="form-label">Produkt:</label>
+        <select name="product_id" id="product_id" class="form-select">
+            {% for p in products %}
+            <option value="{{ p['id'] }}">{{ p['name'] }}</option>
+            {% endfor %}
+        </select>
+    </div>
 
-    <label for="size">Rozmiar:</label>
-    <select name="size" id="size">
-        {% for s in ['XS','S','M','L','XL','Uniwersalny'] %}
-        <option value="{{ s }}">{{ s }}</option>
-        {% endfor %}
-    </select>
+    <div class="col-md-6">
+        <label for="size" class="form-label">Rozmiar:</label>
+        <select name="size" id="size" class="form-select">
+            {% for s in ['XS','S','M','L','XL','Uniwersalny'] %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
 
-    <label for="quantity">Ilość:</label>
-    <input type="number" name="quantity" id="quantity" value="1" min="1">
+    <div class="col-md-6">
+        <label for="quantity" class="form-label">Ilość:</label>
+        <input type="number" name="quantity" id="quantity" value="1" min="1" class="form-control">
+    </div>
 
-    <label for="price">Cena:</label>
-    <input type="number" step="0.01" name="price" id="price" value="0">
+    <div class="col-md-6">
+        <label for="price" class="form-label">Cena:</label>
+        <input type="number" step="0.01" name="price" id="price" value="0" class="form-control">
+    </div>
 
-    <button type="submit">Dodaj</button>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">Dodaj</button>
+    </div>
 </form>
 {% endblock %}
