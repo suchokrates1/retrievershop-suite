@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import os
+from datetime import datetime
 from werkzeug.security import check_password_hash
 from dotenv import load_dotenv, dotenv_values
 from collections import OrderedDict
@@ -42,6 +43,11 @@ app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
 
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)
+
+
+@app.context_processor
+def inject_current_year():
+    return {"current_year": datetime.now().year}
 
 
 def start_print_agent():
