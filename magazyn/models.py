@@ -39,11 +39,6 @@ class LabelQueue(Base):
     ext = Column(String)
     last_order_data = Column(Text)
 
-class Settings(Base):
-    __tablename__ = 'settings'
-    key = Column(String, primary_key=True)
-    value = Column(String)
-
 class PurchaseBatch(Base):
     __tablename__ = 'purchase_batches'
     id = Column(Integer, primary_key=True)

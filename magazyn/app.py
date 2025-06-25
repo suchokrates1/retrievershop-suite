@@ -6,14 +6,13 @@ from dotenv import load_dotenv, dotenv_values
 from collections import OrderedDict
 from pathlib import Path
 
-from .models import User, Settings, Product
+from .models import User
 from .forms import LoginForm
 
 from .db import (
     get_session,
     init_db,
     ensure_schema,
-    ensure_settings_table,
     register_default_user,
     record_purchase,
     consume_stock,
@@ -43,7 +42,6 @@ EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 
 load_dotenv()
-ensure_settings_table()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
@@ -139,23 +137,14 @@ def logout():
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
-    keys = ["PRINTER_NAME", "CUPS_SERVER", "CUPS_PORT"]
+    values = load_settings()
     if request.method == "POST":
-        with get_session() as db:
-            for key in keys:
-                value = request.form.get(key, "")
-                obj = db.get(Settings, key)
-                if not obj:
-                    obj = Settings(key=key)
-                obj.value = value
-                db.add(obj)
+        for key in list(values.keys()):
+            values[key] = request.form.get(key, "")
+        write_env(values)
+        print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("settings"))
-    with get_session() as db:
-        values = {key: "" for key in keys}
-        rows = db.query(Settings).filter(Settings.key.in_(keys)).all()
-        for row in rows:
-            values[row.key] = row.value
     return render_template("settings.html", settings=values)
 
 
