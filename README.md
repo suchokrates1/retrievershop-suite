@@ -67,3 +67,8 @@ python -m magazyn.app init_db
 
 No data is removed during this step. The application can then be started as
 before using the same database file.
+
+## License
+
+This project is licensed under the terms of the [MIT License](LICENSE).
+
