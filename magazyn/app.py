@@ -6,8 +6,10 @@ from dotenv import load_dotenv, dotenv_values
 from collections import OrderedDict
 from pathlib import Path
 
+from .models import User, Settings, Product
+
 from .db import (
-    get_db_connection,
+    get_session,
     init_db,
     register_default_user,
     record_purchase,
@@ -107,10 +109,8 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
 
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-            user = cursor.fetchone()
+        with get_session() as db:
+            user = db.query(User).filter_by(username=username).first()
 
         if user and check_password_hash(user["password"], password):
             session["username"] = username
@@ -134,42 +134,21 @@ def logout():
 def settings():
     keys = ["PRINTER_NAME", "CUPS_SERVER", "CUPS_PORT"]
     if request.method == "POST":
-        with get_db_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                """CREATE TABLE IF NOT EXISTS settings(
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )"""
-            )
+        with get_session() as db:
             for key in keys:
                 value = request.form.get(key, "")
-                cur.execute(
-                    """
-                    INSERT INTO settings(key, value) VALUES (?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
-                    """,
-                    (key, value),
-                )
-            conn.commit()
+                obj = db.get(Settings, key)
+                if not obj:
+                    obj = Settings(key=key)
+                obj.value = value
+                db.add(obj)
         flash("Zapisano ustawienia.")
         return redirect(url_for("settings"))
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """CREATE TABLE IF NOT EXISTS settings(
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )"""
-        )
-        cur.execute(
-            "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
-            keys,
-        )
-        rows = cur.fetchall()
+    with get_session() as db:
         values = {key: "" for key in keys}
+        rows = db.query(Settings).filter(Settings.key.in_(keys)).all()
         for row in rows:
-            values[row["key"]] = row["value"]
+            values[row.key] = row.value
     return render_template("settings.html", settings=values)
 
 

@@ -2,10 +2,10 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for, flash,
     send_file, jsonify, session
 )
-import sqlite3
 import pandas as pd
 
-from .db import get_db_connection, record_purchase, consume_stock
+from .db import get_session, record_purchase, consume_stock
+from .models import Product, ProductSize
 from .auth import login_required
 from . import print_agent
 
@@ -25,20 +25,20 @@ def add_item():
         barcodes = {size: request.form.get(f'barcode_{size}') for size in sizes}
 
         try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO products (name, color, barcode) VALUES (?, ?, ?)",
-                    (name, color, barcode),
-                )
-                product_id = cursor.lastrowid
+            with get_session() as db:
+                product = Product(name=name, color=color, barcode=barcode)
+                db.add(product)
+                db.flush()
                 for size, quantity in quantities.items():
-                    cursor.execute(
-                        "INSERT INTO product_sizes (product_id, size, quantity, barcode) VALUES (?, ?, ?, ?)",
-                        (product_id, size, quantity, barcodes[size]),
+                    db.add(
+                        ProductSize(
+                            product_id=product.id,
+                            size=size,
+                            quantity=quantity,
+                            barcode=barcodes[size],
+                        )
                     )
-                conn.commit()
-        except sqlite3.Error as e:
+        except Exception as e:
             flash(f'B\u0142\u0105d podczas dodawania przedmiotu: {e}')
         return redirect(url_for('products.items'))
 
@@ -50,28 +50,14 @@ def add_item():
 def update_quantity(product_id, size):
     action = request.form['action']
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                '''
-            SELECT quantity FROM product_sizes
-            WHERE product_id = ? AND size = ?
-        ''', (product_id, size))
-            result = cursor.fetchone()
-            if result:
-                current_quantity = result['quantity']
+        with get_session() as db:
+            ps = db.query(ProductSize).filter_by(product_id=product_id, size=size).first()
+            if ps:
                 if action == 'increase':
-                    new_quantity = current_quantity + 1
-                    cursor.execute(
-                        '''
-                        UPDATE product_sizes
-                        SET quantity = ?
-                        WHERE product_id = ? AND size = ?
-                    ''', (new_quantity, product_id, size))
-                    conn.commit()
-                elif action == 'decrease' and current_quantity > 0:
+                    ps.quantity += 1
+                elif action == 'decrease' and ps.quantity > 0:
                     consume_stock(product_id, size, 1)
-    except sqlite3.Error as e:
+    except Exception as e:
         flash(f'B\u0142\u0105d podczas aktualizacji ilo\u015bci: {e}')
     return redirect(url_for('products.items'))
 
@@ -80,13 +66,11 @@ def update_quantity(product_id, size):
 @login_required
 def delete_item(item_id):
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM product_sizes WHERE product_id = ?", (item_id,))
-            cursor.execute("DELETE FROM products WHERE id = ?", (item_id,))
-            conn.commit()
-            flash('Przedmiot zosta\u0142 usuni\u0119ty')
-    except sqlite3.Error as e:
+        with get_session() as db:
+            db.query(ProductSize).filter_by(product_id=item_id).delete()
+            db.query(Product).filter_by(id=item_id).delete()
+        flash('Przedmiot został usunięty')
+    except Exception as e:
         flash(f'B\u0142\u0105d podczas usuwania przedmiotu: {e}')
     return redirect(url_for('products.items'))
 
@@ -94,8 +78,7 @@ def delete_item(item_id):
 @bp.route('/edit_item/<int:product_id>', methods=['GET', 'POST'])
 @login_required
 def edit_item(product_id):
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+    with get_session() as db:
         if request.method == 'POST':
             name = request.form['name']
             color = request.form['color']
@@ -104,57 +87,38 @@ def edit_item(product_id):
             quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
             barcodes = {size: request.form.get(f'barcode_{size}') for size in sizes}
             try:
-                cursor.execute(
-                    "UPDATE products SET name = ?, color = ?, barcode = ? WHERE id = ?",
-                    (name, color, barcode, product_id),
-                )
+                product = db.query(Product).filter_by(id=product_id).first()
+                if product:
+                    product.name = name
+                    product.color = color
+                    product.barcode = barcode
                 for size, quantity in quantities.items():
-                    cursor.execute(
-                        "UPDATE product_sizes SET quantity = ?, barcode = ? WHERE product_id = ? AND size = ?",
-                        (quantity, barcodes[size], product_id, size),
-                    )
-                conn.commit()
-                flash('Przedmiot zosta\u0142 zaktualizowany')
-            except sqlite3.Error as e:
+                    ps = db.query(ProductSize).filter_by(product_id=product_id, size=size).first()
+                    if ps:
+                        ps.quantity = quantity
+                        ps.barcode = barcodes[size]
+                    else:
+                        db.add(ProductSize(product_id=product_id, size=size, quantity=quantity, barcode=barcodes[size]))
+                flash('Przedmiot został zaktualizowany')
+            except Exception as e:
                 flash(f'B\u0142\u0105d podczas aktualizacji przedmiotu: {e}')
             return redirect(url_for('products.items'))
-        cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
-        product = cursor.fetchone()
-        cursor.execute(
-            "SELECT size, quantity, barcode FROM product_sizes WHERE product_id = ?",
-            (product_id,),
-        )
-        sizes = cursor.fetchall()
-        product_sizes = {s['size']: {'quantity': s['quantity'], 'barcode': s['barcode']} for s in sizes}
+        product = db.query(Product).filter_by(id=product_id).first()
+        sizes = db.query(ProductSize).filter_by(product_id=product_id).all()
+        product_sizes = {s.size: {'quantity': s.quantity, 'barcode': s.barcode} for s in sizes}
     return render_template('edit_item.html', product=product, product_sizes=product_sizes)
 
 
 @bp.route('/items')
 @login_required
 def items():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-        SELECT products.id, products.name, products.color, products.barcode, product_sizes.size, product_sizes.quantity
-        FROM products
-        LEFT JOIN product_sizes ON products.id = product_sizes.product_id
-    '''
-        )
-        rows = cursor.fetchall()
-    products_data = {}
-    for row in rows:
-        product_id = row['id']
-        if product_id not in products_data:
-            products_data[product_id] = {
-                'id': product_id,
-                'name': row['name'],
-                'color': row['color'],
-                'barcode': row['barcode'],
-                'sizes': {}
-            }
-        products_data[product_id]['sizes'][row['size']] = row['quantity']
-    return render_template('items.html', products=products_data.values())
+    with get_session() as db:
+        products = db.query(Product).all()
+        result = []
+        for p in products:
+            sizes = {s.size: s.quantity for s in p.sizes}
+            result.append({'id': p.id, 'name': p.name, 'color': p.color, 'barcode': p.barcode, 'sizes': sizes})
+    return render_template('items.html', products=result)
 
 
 @bp.route('/barcode_scan', methods=['POST'])
@@ -163,23 +127,19 @@ def barcode_scan():
     data = request.get_json()
     barcode = data.get('barcode')
     if barcode:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-        SELECT p.name, p.color, ps.size
-        FROM product_sizes ps
-        JOIN products p ON p.id = ps.product_id
-        WHERE ps.barcode = ?
-    """,
-                (barcode,),
+        with get_session() as db:
+            row = (
+                db.query(Product, ProductSize)
+                .join(ProductSize)
+                .filter(ProductSize.barcode == barcode)
+                .first()
             )
-            row = cursor.fetchone()
         if row:
+            product, ps = row
             result = {
-                "name": row["name"],
-                "color": row["color"],
-                "size": row["size"],
+                "name": product.name,
+                "color": product.color,
+                "size": ps.size,
             }
             flash(f'Znaleziono produkt: {result["name"]}')
             return jsonify(result)
@@ -197,26 +157,20 @@ def barcode_scan_page():
 @bp.route('/export_products')
 @login_required
 def export_products():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-        SELECT products.name, products.color,
-               product_sizes.barcode AS size_barcode,
-               product_sizes.size, product_sizes.quantity
-        FROM products
-        LEFT JOIN product_sizes ON products.id = product_sizes.product_id
-    '''
+    with get_session() as db:
+        rows = (
+            db.query(Product.name, Product.color, ProductSize.barcode, ProductSize.size, ProductSize.quantity)
+            .join(ProductSize, Product.id == ProductSize.product_id, isouter=True)
+            .all()
         )
-        rows = cursor.fetchall()
     data = []
     for row in rows:
         data.append({
-            'Nazwa': row['name'],
-            'Kolor': row['color'],
-            'Barcode': row['size_barcode'],
-            'Rozmiar': row['size'],
-            'Ilo\u015b\u0107': row['quantity']
+            'Nazwa': row[0],
+            'Kolor': row[1],
+            'Barcode': row[2],
+            'Rozmiar': row[3],
+            'Ilo\u015b\u0107': row[4],
         })
     df = pd.DataFrame(data)
     file_path = '/tmp/products_export.xlsx'
@@ -232,41 +186,27 @@ def import_products():
         if file:
             try:
                 df = pd.read_excel(file)
-                with get_db_connection() as conn:
-                    cursor = conn.cursor()
+                with get_session() as db:
                     for _, row in df.iterrows():
                         name = row['Nazwa']
                         color = row['Kolor']
                         barcode = row.get('Barcode')
-                        cursor.execute(
-                            "INSERT OR IGNORE INTO products (name, color, barcode) VALUES (?, ?, ?)",
-                            (name, color, barcode),
-                        )
-                        product_id = (
-                            cursor.lastrowid
-                            if cursor.lastrowid
-                            else cursor.execute(
-                                "SELECT id FROM products WHERE name = ? AND color = ?",
-                                (name, color),
-                            ).fetchone()['id']
-                        )
-                        if not cursor.lastrowid:
-                            cursor.execute(
-                                "UPDATE products SET barcode = ? WHERE id = ?",
-                                (barcode, product_id),
-                            )
+                        product = db.query(Product).filter_by(name=name, color=color).first()
+                        if not product:
+                            product = Product(name=name, color=color, barcode=barcode)
+                            db.add(product)
+                            db.flush()
+                        else:
+                            product.barcode = barcode
                         for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']:
                             quantity = row.get(f'Ilo\u015b\u0107 ({size})', 0)
                             size_barcode = row.get(f'Barcode ({size})')
-                            cursor.execute(
-                                "INSERT OR IGNORE INTO product_sizes (product_id, size, quantity, barcode) VALUES (?, ?, ?, ?)",
-                                (product_id, size, quantity, size_barcode),
-                            )
-                            cursor.execute(
-                                "UPDATE product_sizes SET quantity = ?, barcode = ? WHERE product_id = ? AND size = ?",
-                                (quantity, size_barcode, product_id, size),
-                            )
-                    conn.commit()
+                            ps = db.query(ProductSize).filter_by(product_id=product.id, size=size).first()
+                            if not ps:
+                                db.add(ProductSize(product_id=product.id, size=size, quantity=quantity, barcode=size_barcode))
+                            else:
+                                ps.quantity = quantity
+                                ps.barcode = size_barcode
             except Exception as e:
                 flash(f'B\u0142\u0105d podczas importowania produkt\u00f3w: {e}')
         return redirect(url_for('products.items'))
@@ -284,7 +224,7 @@ def add_delivery():
         record_purchase(product_id, size, quantity, price)
         flash('Dodano dostawę')
         return redirect(url_for('products.items'))
-    with get_db_connection() as conn:
-        products = conn.execute('SELECT id, name FROM products').fetchall()
+    with get_session() as db:
+        products = db.query(Product.id, Product.name).all()
     return render_template('add_delivery.html', products=products)
 
