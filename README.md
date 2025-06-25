@@ -20,13 +20,8 @@ This repository contains the code for the RetrieverShop warehouse application an
 
 ## Modifying settings via the web interface
 
-After starting the application you can edit the values in your `.env` file
-without touching the filesystem. Log in to the web interface and open the
-**Ustawienia** tab from the navigation bar. The form now lists all variables
-defined in `.env.example` so newly introduced options automatically appear on
-the page. Update the desired entries and click **Zapisz**. The application
-writes the new values to `.env`, reloads the configuration and the printing
-agent picks up the changes immediately.
+After starting the application you can modify the values stored in your `.env` file without touching the filesystem. Log in to the web interface and open the **Ustawienia** tab from the navigation bar.
+The form lists all variables defined in `.env.example` so new options appear automatically. When you click **Zapisz** the application rewrites `.env` in the same order as `.env.example` and calls `print_agent.reload_config()` so the running printing agent immediately uses the updated environment.
 
 ## Running Tests
 
