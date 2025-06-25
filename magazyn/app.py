@@ -13,6 +13,7 @@ from .db import (
     get_session,
     init_db,
     ensure_schema,
+    ensure_settings_table,
     register_default_user,
     record_purchase,
     consume_stock,
@@ -40,7 +41,9 @@ ENV_PATH = ROOT_DIR / ".env"
 EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 
+
 load_dotenv()
+ensure_settings_table()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
@@ -199,6 +202,7 @@ if __name__ == "__main__":
         raise SystemExit(1)
     if not os.path.isfile(DB_PATH):
         init_db()
+    ensure_settings_table()
     ensure_schema()
     register_default_user()
     debug = os.getenv("FLASK_DEBUG") == "1"
