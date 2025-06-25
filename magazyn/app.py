@@ -9,7 +9,7 @@ from .db import get_db_connection, init_db, register_default_user
 from .products import bp as products_bp, add_item, update_quantity, delete_item, edit_item, items, barcode_scan, barcode_scan_page, export_products, import_products
 from .history import bp as history_bp, print_history
 from .auth import login_required
-import print_agent
+from . import print_agent
 from __init__ import DB_PATH
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / '.env'
