@@ -18,6 +18,15 @@ This repository contains the code for the RetrieverShop warehouse application an
    If you prefer to connect to a remote CUPS server instead, set `CUPS_SERVER`
    and `CUPS_PORT` accordingly.
 
+## Modifying settings via the web interface
+
+After starting the application you can edit the values in your `.env` file
+without touching the filesystem. Log in to the web interface and open the
+**Ustawienia** tab from the navigation bar. The form lists all configurable
+variables. Update the desired entries and click **Zapisz**. The application
+writes the new values to `.env` and automatically reloads the configuration so
+changes take effect immediately.
+
 ## Running Tests
 
 Install the dependencies and run the test suite using `pytest`. Tests rely on
