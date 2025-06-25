@@ -27,6 +27,7 @@
             {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
             <td>
                 <form method="POST" action="{{ url_for('products.update_quantity', product_id=product['id'], size=size) }}" class="form-inline quantity-form">
+                    {{ csrf_token() }}
                     <button type="submit" name="action" value="decrease" class="btn btn-danger btn-sm btn-quantity">-</button>
                     <span class="quantity-value">{{ product['sizes'][size] }}</span>
                     <button type="submit" name="action" value="increase" class="btn btn-success btn-sm btn-quantity">+</button>
@@ -36,6 +37,7 @@
             <td>
                 <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm">Edytuj</a>
                 <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten przedmiot?');">
+                    {{ csrf_token() }}
                     <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
                 </form>
             </td>
