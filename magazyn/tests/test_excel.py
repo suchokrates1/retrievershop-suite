@@ -24,13 +24,13 @@ def test_export_products_includes_barcode(tmp_path, monkeypatch):
     with app_mod.get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO products (name, color, barcode) VALUES (?, ?, ?)",
-            ("Prod", "Red", "123"),
+            "INSERT INTO products (name, color) VALUES (?, ?)",
+            ("Prod", "Red"),
         )
         pid = cur.lastrowid
         cur.execute(
-            "INSERT INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)",
-            (pid, "M", 5),
+            "INSERT INTO product_sizes (product_id, size, quantity, barcode) VALUES (?, ?, ?, ?)",
+            (pid, "M", 5, "123"),
         )
         conn.commit()
 
@@ -50,7 +50,8 @@ def test_import_products_reads_barcode(tmp_path, monkeypatch):
         {
             "Nazwa": "Prod",
             "Kolor": "Red",
-            "Barcode": "999",
+            "Barcode (XS)": "111",
+            "Barcode (M)": "999",
             "Ilość (XS)": 1,
             "Ilość (S)": 0,
             "Ilość (M)": 2,
@@ -73,7 +74,11 @@ def test_import_products_reads_barcode(tmp_path, monkeypatch):
 
     with app_mod.get_db_connection() as conn:
         row = conn.execute(
-            "SELECT barcode FROM products WHERE name=? AND color=?",
+            """
+            SELECT ps.barcode FROM product_sizes ps
+            JOIN products p ON ps.product_id = p.id
+            WHERE p.name=? AND p.color=? AND ps.size='M'
+            """,
             ("Prod", "Red"),
         ).fetchone()
         assert row["barcode"] == "999"
