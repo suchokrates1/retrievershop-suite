@@ -189,4 +189,15 @@ th {
     }
 }
 
+/* Adjust layout for fixed navbar */
+body {
+    padding-top: 70px;
+}
+
+/* Offcanvas sidebar width */
+#sidebarMenu {
+    width: 250px;
+}
+
+
 
