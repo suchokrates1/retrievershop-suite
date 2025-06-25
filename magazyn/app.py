@@ -470,7 +470,7 @@ def settings():
         updated = {key: request.form.get(key, "") for key in dotenv_values(EXAMPLE_PATH).keys()}
         write_env(updated)
         load_dotenv(override=True)
-        print_agent.reload_env()
+        print_agent.reload_config()
         flash('Zapisano ustawienia.')
         return redirect(url_for('settings'))
     values = load_settings()
