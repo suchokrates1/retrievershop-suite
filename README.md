@@ -30,10 +30,16 @@ agent picks up the changes immediately.
 
 ## Running Tests
 
-Install the dependencies and run the test suite using `pytest`. Tests rely on
-modules within this repository, so run them with `PYTHONPATH=.`:
+Before running the tests you must install the required dependencies:
+
 ```bash
 pip install -r magazyn/requirements.txt
+```
+
+Tests rely on modules within this repository, so execute `pytest` with the
+repository root on `PYTHONPATH`:
+
+```bash
 PYTHONPATH=. pytest -q
 ```
 
