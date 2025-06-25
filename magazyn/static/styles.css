@@ -103,12 +103,13 @@ footer a:hover {
     display: flex;
     justify-content: center;
     width: 100%;
+    overflow-x: auto;
 }
 
 /* Ustawienie szerokości tabeli */
 table {
-    width: 100%; /* Zmniejsz szerokość, aby tabela była bardziej kompaktowa */
-    max-width: 1200px;
+    width: auto;
+    max-width: none;
     border-collapse: collapse;
     margin-top: 5px;
     background-color: #fff;

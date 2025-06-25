@@ -6,20 +6,32 @@ from collections import OrderedDict
 from pathlib import Path
 
 from .db import get_db_connection, init_db, register_default_user
-from .products import bp as products_bp, add_item, update_quantity, delete_item, edit_item, items, barcode_scan, barcode_scan_page, export_products, import_products
+from .products import (
+    bp as products_bp,
+    add_item,
+    update_quantity,
+    delete_item,
+    edit_item,
+    items,
+    barcode_scan,
+    barcode_scan_page,
+    export_products,
+    import_products,
+)
 from .history import bp as history_bp, print_history
 from .auth import login_required
 from . import print_agent
 from __init__ import DB_PATH
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
-ENV_PATH = ROOT_DIR / '.env'
-EXAMPLE_PATH = ROOT_DIR / '.env.example'
+ENV_PATH = ROOT_DIR / ".env"
+EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key')
+app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
 
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)
@@ -69,75 +81,59 @@ def _init_db_if_missing():
     register_default_user()
 
 
-
-
-@app.route('/')
+@app.route("/")
 @login_required
 def home():
-    username = session['username']
-    return render_template('home.html', username=username)
+    username = session["username"]
+    return render_template("home.html", username=username)
 
-@app.route('/login', methods=['GET', 'POST'])
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
             user = cursor.fetchone()
-        
-        if user and check_password_hash(user['password'], password):
-            session['username'] = username
-            return redirect(url_for('home'))
+
+        if user and check_password_hash(user["password"], password):
+            session["username"] = username
+            return redirect(url_for("home"))
         else:
             flash("Niepoprawna nazwa użytkownika lub hasło")
-        return redirect(url_for('login'))
-    
-    return render_template('login.html')
+        return redirect(url_for("login"))
 
-@app.route('/logout')
+    return render_template("login.html")
+
+
+@app.route("/logout")
 @login_required
 def logout():
-    session.pop('username', None)
-    return redirect(url_for('login'))
+    session.pop("username", None)
+    return redirect(url_for("login"))
 
 
-
-@app.route('/settings', methods=['GET', 'POST'])
+@app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
-    keys = ["PRINTER_NAME", "CUPS_SERVER", "CUPS_PORT"]
-    if request.method == 'POST':
-        with get_db_connection() as conn:
-            cur = conn.cursor()
-            for key in keys:
-                value = request.form.get(key, "")
-                cur.execute(
-                    """
-                    INSERT INTO settings(key, value) VALUES (?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
-                    """,
-                    (key, value),
-                )
-            conn.commit()
+    if request.method == "POST":
+        updated = {
+            key: request.form.get(key, "")
+            for key in dotenv_values(EXAMPLE_PATH).keys()
+        }
+        write_env(updated)
+        load_dotenv(override=True)
+        print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("settings"))
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT key, value FROM settings WHERE key IN (?, ?, ?)",
-            keys,
-        )
-        rows = cur.fetchall()
-    values = {key: "" for key in keys}
-    for row in rows:
-        values[row["key"]] = row["value"]
+    values = load_settings()
     return render_template("settings.html", settings=values)
 
 
-@app.route('/logs')
+@app.route("/logs")
 @login_required
 def agent_logs():
     try:
@@ -149,29 +145,30 @@ def agent_logs():
     return render_template("logs.html", logs=log_text)
 
 
-@app.route('/testprint', methods=['GET', 'POST'])
+@app.route("/testprint", methods=["GET", "POST"])
 @login_required
 def test_print():
     message = None
-    if request.method == 'POST':
+    if request.method == "POST":
         success = print_agent.print_test_page()
-        message = 'Testowy wydruk wysłany.' if success else 'Błąd testowego wydruku.'
-    return render_template('testprint.html', message=message)
+        message = "Testowy wydruk wysłany." if success else "Błąd testowego wydruku."
+    return render_template("testprint.html", message=message)
 
 
-@app.route('/test', methods=['GET', 'POST'])
+@app.route("/test", methods=["GET", "POST"])
 @login_required
 def test_message():
     msg = None
-    if request.method == 'POST':
+    if request.method == "POST":
         if print_agent.last_order_data:
             print_agent.send_messenger_message(print_agent.last_order_data)
-            msg = 'Testowa wiadomość została wysłana.'
+            msg = "Testowa wiadomość została wysłana."
         else:
-            msg = 'Brak danych ostatniego zamówienia.'
-    return render_template('test.html', message=msg)
+            msg = "Brak danych ostatniego zamówienia."
+    return render_template("test.html", message=msg)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     if os.path.isdir(DB_PATH):
         app.logger.error(
             f"Database path {DB_PATH} is a directory. Please fix the mount."
