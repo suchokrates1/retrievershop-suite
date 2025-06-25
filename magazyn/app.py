@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv, dotenv_values
 from collections import OrderedDict
 from pathlib import Path
+from contextlib import contextmanager
 import print_agent
 from __init__ import DB_PATH
 
@@ -65,87 +66,87 @@ def _init_db_if_missing():
 
 
 
+@contextmanager
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Yield a database connection using a context manager."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        yield conn
 
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Tworzenie tabeli użytkowników
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    ''')
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
 
-    # Tworzenie tabeli produktów z kolumną barcode
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            color TEXT,
-            barcode TEXT UNIQUE  -- Dodano kolumnę kodu kreskowego
-        )
-    ''')
+        # Tworzenie tabeli użytkowników
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+        ''')
 
-    # Tworzenie tabeli rozmiarów produktów
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS product_sizes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER,
-            size TEXT CHECK(size IN ('XS', 'S', 'M', 'L', 'XL', 'Uniwersalny')) NOT NULL,
-            quantity INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (product_id) REFERENCES products (id),
-            UNIQUE(product_id, size)
-        )
-    ''')
+        # Tworzenie tabeli produktów z kolumną barcode
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                color TEXT,
+                barcode TEXT UNIQUE  -- Dodano kolumnę kodu kreskowego
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_product_id ON product_sizes (product_id);
-    ''')
+        # Tworzenie tabeli rozmiarów produktów
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS product_sizes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER,
+                size TEXT CHECK(size IN ('XS', 'S', 'M', 'L', 'XL', 'Uniwersalny')) NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (product_id) REFERENCES products (id),
+                UNIQUE(product_id, size)
+            )
+        ''')
 
-    # Tables used by the printing agent
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS printed_orders(
-            order_id TEXT PRIMARY KEY,
-            printed_at TEXT
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS label_queue(
-            order_id TEXT,
-            label_data TEXT,
-            ext TEXT,
-            last_order_data TEXT
-        )
-        """
-    )
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_product_id ON product_sizes (product_id);
+        ''')
 
-    conn.commit()
-    conn.close()
-
-def register_default_user():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE username='admin'")
-    if cursor.fetchone() is None:
-        hashed_password = generate_password_hash(
-            "admin123", method="pbkdf2:sha256", salt_length=16
+        # Tables used by the printing agent
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS printed_orders(
+                order_id TEXT PRIMARY KEY,
+                printed_at TEXT
+            )
+            """
         )
         cursor.execute(
-            "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("admin", hashed_password),
+            """
+            CREATE TABLE IF NOT EXISTS label_queue(
+                order_id TEXT,
+                label_data TEXT,
+                ext TEXT,
+                last_order_data TEXT
+            )
+            """
         )
+
         conn.commit()
-    conn.close()
+
+def register_default_user():
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE username='admin'")
+        if cursor.fetchone() is None:
+            hashed_password = generate_password_hash(
+                "admin123", method="pbkdf2:sha256", salt_length=16
+            )
+            cursor.execute(
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                ("admin", hashed_password),
+            )
+            conn.commit()
 
 def login_required(f):
     @wraps(f)
@@ -167,11 +168,10 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = cursor.fetchone()
-        conn.close()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+            user = cursor.fetchone()
         
         if user and check_password_hash(user['password'], password):
             session['username'] = username
@@ -199,20 +199,24 @@ def add_item():
         quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
         
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("INSERT INTO products (name, color, barcode) VALUES (?, ?, ?)", (name, color, barcode))
-            product_id = cursor.lastrowid
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
 
-            for size, quantity in quantities.items():
-                cursor.execute("INSERT INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)", (product_id, size, quantity))
+                cursor.execute(
+                    "INSERT INTO products (name, color, barcode) VALUES (?, ?, ?)",
+                    (name, color, barcode),
+                )
+                product_id = cursor.lastrowid
 
-            conn.commit()
+                for size, quantity in quantities.items():
+                    cursor.execute(
+                        "INSERT INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)",
+                        (product_id, size, quantity),
+                    )
+
+                conn.commit()
         except sqlite3.Error as e:
             flash(f'Błąd podczas dodawania przedmiotu: {e}')
-        finally:
-            conn.close()
 
         return redirect(url_for('items'))
 
@@ -222,116 +226,119 @@ def add_item():
 @login_required
 def update_quantity(product_id, size):
     action = request.form['action']
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
     try:
-        # Pobranie obecnej ilości dla danego rozmiaru
-        cursor.execute('''
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Pobranie obecnej ilości dla danego rozmiaru
+            cursor.execute('''
             SELECT quantity FROM product_sizes
             WHERE product_id = ? AND size = ?
         ''', (product_id, size))
-        
-        result = cursor.fetchone()
-        
-        if result:
-            current_quantity = result['quantity']
-            
-            # Zwiększenie lub zmniejszenie ilości
-            if action == 'increase':
-                new_quantity = current_quantity + 1
-            elif action == 'decrease' and current_quantity > 0:
-                new_quantity = current_quantity - 1
-            else:
-                new_quantity = current_quantity
-            
-            # Aktualizacja ilości w tabeli
-            cursor.execute('''
-                UPDATE product_sizes
-                SET quantity = ?
-                WHERE product_id = ? AND size = ?
-            ''', (new_quantity, product_id, size))
-            conn.commit()
+
+            result = cursor.fetchone()
+
+            if result:
+                current_quantity = result['quantity']
+
+                # Zwiększenie lub zmniejszenie ilości
+                if action == 'increase':
+                    new_quantity = current_quantity + 1
+                elif action == 'decrease' and current_quantity > 0:
+                    new_quantity = current_quantity - 1
+                else:
+                    new_quantity = current_quantity
+
+                # Aktualizacja ilości w tabeli
+                cursor.execute('''
+                    UPDATE product_sizes
+                    SET quantity = ?
+                    WHERE product_id = ? AND size = ?
+                ''', (new_quantity, product_id, size))
+                conn.commit()
     except sqlite3.Error as e:
         flash(f'Błąd podczas aktualizacji ilości: {e}')
-    finally:
-        conn.close()
-    
+
     return redirect(url_for('items'))  # Powrót do widoku produktów
 
 @app.route('/delete_item/<int:item_id>', methods=['POST'])
 @login_required
 def delete_item(item_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
     try:
-        # Usuń wszystkie rozmiary powiązane z produktem w tabeli product_sizes
-        cursor.execute("DELETE FROM product_sizes WHERE product_id = ?", (item_id,))
-        
-        # Usuń produkt z tabeli products
-        cursor.execute("DELETE FROM products WHERE id = ?", (item_id,))
-        
-        conn.commit()
-        flash('Przedmiot został usunięty')
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Usuń wszystkie rozmiary powiązane z produktem w tabeli product_sizes
+            cursor.execute("DELETE FROM product_sizes WHERE product_id = ?", (item_id,))
+
+            # Usuń produkt z tabeli products
+            cursor.execute("DELETE FROM products WHERE id = ?", (item_id,))
+
+            conn.commit()
+            flash('Przedmiot został usunięty')
     except sqlite3.Error as e:
         flash(f'Błąd podczas usuwania przedmiotu: {e}')
-    finally:
-        conn.close()
 
     return redirect(url_for('items'))
 
 @app.route('/edit_item/<int:product_id>', methods=['GET', 'POST'])
 @login_required
 def edit_item(product_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
 
-    if request.method == 'POST':
-        name = request.form['name']
-        color = request.form['color']
-        barcode = request.form.get('barcode')  # Pobranie kodu kreskowego z formularza
-        sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
-        quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
+        if request.method == 'POST':
+            name = request.form['name']
+            color = request.form['color']
+            barcode = request.form.get('barcode')  # Pobranie kodu kreskowego z formularza
+            sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+            quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
 
-        try:
-            cursor.execute("UPDATE products SET name = ?, color = ?, barcode = ? WHERE id = ?", (name, color, barcode, product_id))
-            
-            for size, quantity in quantities.items():
-                cursor.execute("UPDATE product_sizes SET quantity = ? WHERE product_id = ? AND size = ?", (quantity, product_id, size))
+            try:
+                cursor.execute(
+                    "UPDATE products SET name = ?, color = ?, barcode = ? WHERE id = ?",
+                    (name, color, barcode, product_id),
+                )
 
-            conn.commit()
-            flash('Przedmiot został zaktualizowany')
-        except sqlite3.Error as e:
-            flash(f'Błąd podczas aktualizacji przedmiotu: {e}')
-        finally:
-            conn.close()
+                for size, quantity in quantities.items():
+                    cursor.execute(
+                        "UPDATE product_sizes SET quantity = ? WHERE product_id = ? AND size = ?",
+                        (quantity, product_id, size),
+                    )
 
-        return redirect(url_for('items'))
+                conn.commit()
+                flash('Przedmiot został zaktualizowany')
+            except sqlite3.Error as e:
+                flash(f'Błąd podczas aktualizacji przedmiotu: {e}')
 
-    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
-    product = cursor.fetchone()
-    
-    cursor.execute("SELECT size, quantity FROM product_sizes WHERE product_id = ?", (product_id,))
-    sizes = cursor.fetchall()
-    product_sizes = {size['size']: size['quantity'] for size in sizes}
+            return redirect(url_for('items'))
 
-    conn.close()
+        cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+        product = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT size, quantity FROM product_sizes WHERE product_id = ?",
+            (product_id,),
+        )
+        sizes = cursor.fetchall()
+        product_sizes = {size['size']: size['quantity'] for size in sizes}
+
     return render_template('edit_item.html', product=product, product_sizes=product_sizes)
 
 @app.route('/items')
 @login_required
 def items():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            '''
         SELECT products.id, products.name, products.color, products.barcode, product_sizes.size, product_sizes.quantity
         FROM products
         LEFT JOIN product_sizes ON products.id = product_sizes.product_id
-    ''')
-    rows = cursor.fetchall()
-    conn.close()
+    '''
+        )
+        rows = cursor.fetchall()
     
     products_data = {}
     for row in rows:
@@ -355,11 +362,10 @@ def barcode_scan():
     barcode = data.get('barcode')
 
     if barcode:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM products WHERE barcode = ?", (barcode,))
-        product = cursor.fetchone()
-        conn.close()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM products WHERE barcode = ?", (barcode,))
+            product = cursor.fetchone()
 
         if product:
             flash(f'Znaleziono produkt: {product["name"]}')
@@ -376,15 +382,16 @@ def barcode_scan_page():
 @app.route('/export_products')
 @login_required
 def export_products():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
         SELECT products.name, products.color, product_sizes.size, product_sizes.quantity
         FROM products
         LEFT JOIN product_sizes ON products.id = product_sizes.product_id
-    ''')
-    rows = cursor.fetchall()
-    conn.close()
+    '''
+        )
+        rows = cursor.fetchall()
 
     data = []
     for row in rows:
@@ -409,25 +416,39 @@ def import_products():
         if file:
             try:
                 df = pd.read_excel(file)
-                conn = get_db_connection()
-                cursor = conn.cursor()
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
 
-                for _, row in df.iterrows():
-                    name = row['Nazwa']
-                    color = row['Kolor']
-                    cursor.execute("INSERT OR IGNORE INTO products (name, color) VALUES (?, ?)", (name, color))
-                    product_id = cursor.lastrowid if cursor.lastrowid else cursor.execute("SELECT id FROM products WHERE name = ? AND color = ?", (name, color)).fetchone()['id']
+                    for _, row in df.iterrows():
+                        name = row['Nazwa']
+                        color = row['Kolor']
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO products (name, color) VALUES (?, ?)",
+                            (name, color),
+                        )
+                        product_id = (
+                            cursor.lastrowid
+                            if cursor.lastrowid
+                            else cursor.execute(
+                                "SELECT id FROM products WHERE name = ? AND color = ?",
+                                (name, color),
+                            ).fetchone()['id']
+                        )
 
-                    for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']:
-                        quantity = row.get(f'Ilość ({size})', 0)
-                        cursor.execute("INSERT OR IGNORE INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)", (product_id, size, quantity))
-                        cursor.execute("UPDATE product_sizes SET quantity = ? WHERE product_id = ? AND size = ?", (quantity, product_id, size))
+                        for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']:
+                            quantity = row.get(f'Ilość ({size})', 0)
+                            cursor.execute(
+                                "INSERT OR IGNORE INTO product_sizes (product_id, size, quantity) VALUES (?, ?, ?)",
+                                (product_id, size, quantity),
+                            )
+                            cursor.execute(
+                                "UPDATE product_sizes SET quantity = ? WHERE product_id = ? AND size = ?",
+                                (quantity, product_id, size),
+                            )
 
-                conn.commit()
+                    conn.commit()
             except Exception as e:
                 flash(f'Błąd podczas importowania produktów: {e}')
-            finally:
-                conn.close()
 
         return redirect(url_for('items'))
 
