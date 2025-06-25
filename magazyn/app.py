@@ -387,7 +387,7 @@ def export_products():
         cursor = conn.cursor()
         cursor.execute(
             '''
-        SELECT products.name, products.color, product_sizes.size, product_sizes.quantity
+        SELECT products.name, products.color, products.barcode, product_sizes.size, product_sizes.quantity
         FROM products
         LEFT JOIN product_sizes ON products.id = product_sizes.product_id
     '''
@@ -399,6 +399,7 @@ def export_products():
         data.append({
             'Nazwa': row['name'],
             'Kolor': row['color'],
+            'Barcode': row['barcode'],
             'Rozmiar': row['size'],
             'Ilość': row['quantity']
         })
@@ -423,9 +424,10 @@ def import_products():
                     for _, row in df.iterrows():
                         name = row['Nazwa']
                         color = row['Kolor']
+                        barcode = row.get('Barcode')
                         cursor.execute(
-                            "INSERT OR IGNORE INTO products (name, color) VALUES (?, ?)",
-                            (name, color),
+                            "INSERT OR IGNORE INTO products (name, color, barcode) VALUES (?, ?, ?)",
+                            (name, color, barcode),
                         )
                         product_id = (
                             cursor.lastrowid
@@ -435,6 +437,11 @@ def import_products():
                                 (name, color),
                             ).fetchone()['id']
                         )
+                        if not cursor.lastrowid:
+                            cursor.execute(
+                                "UPDATE products SET barcode = ? WHERE id = ?",
+                                (barcode, product_id),
+                            )
 
                         for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']:
                             quantity = row.get(f'Ilość ({size})', 0)
