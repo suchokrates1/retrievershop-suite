@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, session, redirect, url_for
-import print_agent
+from . import print_agent
 
 from .auth import login_required
 bp = Blueprint('history', __name__)
