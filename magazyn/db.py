@@ -58,6 +58,7 @@ def init_db():
                 product_id INTEGER,
                 size TEXT CHECK(size IN ('XS', 'S', 'M', 'L', 'XL', 'Uniwersalny')) NOT NULL,
                 quantity INTEGER NOT NULL DEFAULT 0,
+                barcode TEXT UNIQUE,
                 FOREIGN KEY (product_id) REFERENCES products (id),
                 UNIQUE(product_id, size)
             )
