@@ -11,14 +11,13 @@
     <div class="page-wrapper">
     <nav class="navbar navbar-dark bg-dark fixed-top">
         <div class="container">
-            <button id="mobileMenuBtn" class="navbar-toggler d-md-none" type="button">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <span class="navbar-brand d-flex align-items-center">
+            <div class="d-flex align-items-center justify-content-between">
+            <span class="navbar-brand d-flex align-items-center mb-0">
                 <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" style="height: 40px;">
                 <span class="ms-2">Witaj w aplikacji magazynowej</span>
             </span>
-            <ul class="navbar-nav flex-row ms-auto gap-3 d-none d-md-flex">
+            <div class="d-flex align-items-center">
+                <ul class="navbar-nav flex-row gap-3 d-none d-md-flex">
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
@@ -27,14 +26,18 @@
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
-            </ul>
-            <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3">Wyloguj się</a>
+                </ul>
+                <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3 d-none d-md-inline-block">Wyloguj się</a>
+                <button id="mobileMenuBtn" class="navbar-toggler d-md-none ms-2" type="button">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+            </div>
         </div>
     </nav>
 
 
     <div id="mobileMenu" class="mobile-menu d-md-none">
-        <ul class="nav flex-column">
+        <ul class="nav flex-column h-100">
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
@@ -43,6 +46,7 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+            <li class="nav-item mt-auto"><a class="nav-link text-white" href="{{ url_for('logout') }}">Wyloguj się</a></li>
         </ul>
     </div>
 
