@@ -158,3 +158,22 @@ def test_scan_barcode_page_contains_csrf(tmp_path, monkeypatch):
                 flask_session[k] = v
             token = app_mod.app.jinja_env.globals["csrf_token"]()
     assert token in html
+
+
+def test_add_item_rejects_negative_quantity(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    login(client)
+
+    data = {
+        "name": "NegProd",
+        "color": "Czerwony",
+        "quantity_M": "-1",
+    }
+    resp = client.post("/add_item", data=data)
+    # Form should re-render when validation fails
+    assert resp.status_code == 200
+
+    with app_mod.get_session() as db:
+        assert db.query(Product).filter_by(name="NegProd").first() is None
+
