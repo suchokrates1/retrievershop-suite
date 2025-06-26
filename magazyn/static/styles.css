@@ -212,6 +212,11 @@ body {
         transform: translateX(100%);
         transition: transform 0.3s ease;
         z-index: 1050;
+        display: flex;
+        flex-direction: column;
+    }
+    .mobile-menu ul {
+        flex-grow: 1;
     }
     .mobile-menu.open {
         transform: translateX(0);
