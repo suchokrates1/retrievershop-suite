@@ -23,7 +23,7 @@ def add_item():
         color = form.color.data
         sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
         quantities = {size: int(getattr(form, f'quantity_{size}').data or 0) for size in sizes}
-        barcodes = {size: getattr(form, f'barcode_{size}').data for size in sizes}
+        barcodes = {size: getattr(form, f'barcode_{size}').data or None for size in sizes}
 
         try:
             with get_session() as db:
@@ -85,7 +85,7 @@ def edit_item(product_id):
             color = request.form['color']
             sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
             quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
-            barcodes = {size: request.form.get(f'barcode_{size}') for size in sizes}
+            barcodes = {size: request.form.get(f'barcode_{size}') or None for size in sizes}
             try:
                 product = db.query(Product).filter_by(id=product_id).first()
                 if product:
@@ -114,7 +114,10 @@ def edit_item(product_id):
         all_sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
         product_sizes = {size: {'quantity': 0, 'barcode': ''} for size in all_sizes}
         for s in sizes_rows:
-            product_sizes[s.size] = {'quantity': s.quantity, 'barcode': s.barcode}
+            product_sizes[s.size] = {
+                'quantity': s.quantity,
+                'barcode': s.barcode or ''
+            }
     return render_template('edit_item.html', product=product, product_sizes=product_sizes)
 
 
@@ -125,16 +128,8 @@ def items():
         products = db.query(Product).all()
         result = []
         for p in products:
-            all_sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
-            sizes = {size: {'quantity': 0, 'barcode': ''} for size in all_sizes}
-            for s in p.sizes:
-                sizes[s.size] = {'quantity': s.quantity, 'barcode': s.barcode}
-            result.append({
-                'id': p.id,
-                'name': p.name,
-                'color': p.color,
-                'sizes': sizes,
-            })
+            sizes = {s.size: s.quantity for s in p.sizes}
+            result.append({'id': p.id, 'name': p.name, 'color': p.color, 'sizes': sizes})
     return render_template('items.html', products=result)
 
 
