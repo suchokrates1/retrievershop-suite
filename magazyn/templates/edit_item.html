@@ -19,7 +19,7 @@
         <div class="col-12">
             <label for="sizes" class="form-label">Ilości dla rozmiarów:</label>
             <div class="row g-2">
-                {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
+                {% for size in ALL_SIZES %}
                     {% set info = product_sizes[size] %}
                     <div class="col-sm-6 col-md-4 col-lg-3">
                         <label class="form-label">{{ size }}:</label>
