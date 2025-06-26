@@ -15,7 +15,6 @@ class AddItemForm(FlaskForm):
         ('Czarny', 'Czarny'),
         ('Biały', 'Biały'),
     ], validators=[DataRequired()])
-    barcode = StringField('barcode')
     # Fields for each size
     quantity_XS = IntegerField('quantity_XS', default=0)
     barcode_XS = StringField('barcode_XS')
