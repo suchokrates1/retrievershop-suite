@@ -15,7 +15,7 @@
     <div class="col-md-6">
         <label for="size" class="form-label">Rozmiar:</label>
         <select name="size" id="size" class="form-select">
-            {% for s in ['XS','S','M','L','XL','Uniwersalny'] %}
+            {% for s in ALL_SIZES %}
             <option value="{{ s }}">{{ s }}</option>
             {% endfor %}
         </select>
