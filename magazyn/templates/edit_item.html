@@ -14,11 +14,6 @@
             <input type="text" id="color" name="color" value="{{ product['color'] }}" class="form-control" required>
         </div>
 
-        <div class="col-md-6">
-            <label for="barcode" class="form-label">Kod kreskowy:</label>
-            <input type="text" id="barcode" name="barcode" value="{{ product['barcode'] }}" class="form-control">
-            <button type="button" class="btn btn-secondary mt-2" onclick="startBarcodeScan()">Skanuj kod kreskowy</button>
-        </div>
 
         <div class="col-12">
             <label for="sizes" class="form-label">Ilości dla rozmiarów:</label>
@@ -39,38 +34,5 @@
     </form>
 </div>
 
-<!-- Kontener skanera kodów kreskowych -->
-<div id="scanner-container" style="display: none;"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-<script>
-    function startBarcodeScan() {
-        document.getElementById("scanner-container").style.display = "block";
-
-        Quagga.init({
-            inputStream: {
-                type: "LiveStream",
-                target: document.querySelector('#scanner-container'),
-                constraints: {
-                    facingMode: "environment"
-                }
-            },
-            decoder: {
-                readers: ["code_128_reader", "ean_reader", "ean_8_reader", "upc_reader"]
-            }
-        }, function(err) {
-            if (err) {
-                console.log(err);
-                return;
-            }
-            Quagga.start();
-        });
-
-        Quagga.onDetected(function(data) {
-            document.getElementById("barcode").value = data.codeResult.code;
-            document.getElementById("scanner-container").style.display = "none";
-            Quagga.stop();
-        });
-    }
-</script>
 {% endblock %}
