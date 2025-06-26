@@ -23,7 +23,7 @@ def setup_app(tmp_path, monkeypatch):
         bind=db_mod.engine, autoflush=False, expire_on_commit=False
     )
     app_mod.app.config["WTF_CSRF_ENABLED"] = False
-    app_mod.init_db()
+    app_mod.reset_db()
     return app_mod
 
 
