@@ -30,10 +30,8 @@
                 <form method="POST" action="{{ url_for('products.update_quantity', product_id=product['id'], size=size) }}" class="form-inline quantity-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" name="action" value="decrease" class="btn btn-danger btn-sm btn-quantity">-</button>
-                    <span class="quantity-value">{{ product['sizes'][size]['quantity'] }}</span>
+                    <span class="quantity-value">{{ product['sizes'][size] }}</span>
                     <button type="submit" name="action" value="increase" class="btn btn-success btn-sm btn-quantity">+</button>
-                    <br>
-                    <small>{{ product['sizes'][size]['barcode'] }}</small>
                 </form>
             </td>
             {% endfor %}

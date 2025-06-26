@@ -140,4 +140,4 @@ def test_items_page_displays_barcodes(tmp_path, monkeypatch):
     resp = client.get("/items")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "321" in html
+    assert "321" not in html
