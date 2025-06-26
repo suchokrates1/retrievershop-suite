@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="{{ url_for('static', filename='quagga.min.js') }}"></script>
     <div class="container text-center">
         <h2 class="mb-3">Skanuj kod kreskowy</h2>
         <div id="scanner-container"></div>
