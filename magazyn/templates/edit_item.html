@@ -4,6 +4,7 @@
 <div class="container mt-4">
     <h3 class="text-center">Edytuj przedmiot</h3>
     <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="row row-cols-1 row-cols-md-2 g-3 center-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-6">
             <label for="name" class="form-label">Nazwa:</label>
             <input type="text" id="name" name="name" value="{{ product['name'] }}" class="form-control" required>
