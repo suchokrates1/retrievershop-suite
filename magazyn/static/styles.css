@@ -100,8 +100,8 @@ table {
 /* Ustawienie węższej szerokości dla kolumn rozmiarów */
 th:nth-child(n+3):nth-child(-n+8),
 td:nth-child(n+3):nth-child(-n+8) {
-    width: 100px; /* Stała szerokość umożliwia przewijanie na małych ekranach */
-    max-width: 100px;
+    width: 80px; /* Stała szerokość umożliwia przewijanie na małych ekranach */
+    max-width: 80px;
     text-align: center;
     padding: 0; /* Usuń nadmiarowe odstępy */
 }
