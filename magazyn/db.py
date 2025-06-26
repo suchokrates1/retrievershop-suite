@@ -31,6 +31,15 @@ get_db_connection = get_session
 
 def init_db():
     """Initialize the SQLite database and create required tables."""
+    Base.metadata.create_all(engine)
+
+
+def reset_db():
+    """Drop all tables and recreate them.
+
+    This is useful for testing scenarios that require a completely clean
+    database state without losing the ability of :func:`init_db` to preserve
+    existing data."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
