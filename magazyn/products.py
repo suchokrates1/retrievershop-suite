@@ -1,8 +1,18 @@
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash,
-    send_file, jsonify, session
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    send_file,
+    jsonify,
+    session,
+    after_this_request,
 )
 import pandas as pd
+import tempfile
+import os
 
 from .db import get_session, record_purchase, consume_stock
 from .models import Product, ProductSize
@@ -184,9 +194,18 @@ def export_products():
             'Ilo\u015b\u0107': row[4],
         })
     df = pd.DataFrame(data)
-    file_path = '/tmp/products_export.xlsx'
-    df.to_excel(file_path, index=False)
-    return send_file(file_path, as_attachment=True, download_name='products_export.xlsx')
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    df.to_excel(tmp.name, index=False)
+
+    @after_this_request
+    def remove_tmp(response):
+        try:
+            os.remove(tmp.name)
+        except OSError:
+            pass
+        return response
+
+    return send_file(tmp.name, as_attachment=True, download_name='products_export.xlsx')
 
 
 @bp.route('/import_products', methods=['GET', 'POST'])
