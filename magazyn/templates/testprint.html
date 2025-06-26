@@ -2,6 +2,7 @@
 {% block content %}
 <h2 class="mb-3">Test wydruku</h2>
 <form method="post" class="mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary">Wydrukuj stronę testową</button>
 </form>
 {% if message %}
