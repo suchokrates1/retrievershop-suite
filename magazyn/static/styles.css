@@ -3,6 +3,8 @@ html, body {
 }
 body {
     margin: 0;
+    background-color: #121212;
+    color: #f0f0f0;
 }
 .page-wrapper {
     min-height: 100vh;
@@ -194,6 +196,8 @@ th {
 /* Adjust layout for fixed navbar */
 body {
     padding-top: 70px;
+    background-color: #121212;
+    color: #f0f0f0;
 }
 
 /* Mobile slide-in menu */
