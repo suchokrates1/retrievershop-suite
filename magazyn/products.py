@@ -21,14 +21,13 @@ def add_item():
     if form.validate_on_submit():
         name = form.name.data
         color = form.color.data
-        barcode = form.barcode.data
         sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
         quantities = {size: int(getattr(form, f'quantity_{size}').data or 0) for size in sizes}
         barcodes = {size: getattr(form, f'barcode_{size}').data for size in sizes}
 
         try:
             with get_session() as db:
-                product = Product(name=name, color=color, barcode=barcode)
+                product = Product(name=name, color=color)
                 db.add(product)
                 db.flush()
                 for size, quantity in quantities.items():
@@ -84,7 +83,6 @@ def edit_item(product_id):
         if request.method == 'POST':
             name = request.form['name']
             color = request.form['color']
-            barcode = request.form.get('barcode')
             sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
             quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
             barcodes = {size: request.form.get(f'barcode_{size}') for size in sizes}
@@ -93,7 +91,6 @@ def edit_item(product_id):
                 if product:
                     product.name = name
                     product.color = color
-                    product.barcode = barcode
                 for size, quantity in quantities.items():
                     ps = db.query(ProductSize).filter_by(product_id=product_id, size=size).first()
                     if ps:
@@ -112,7 +109,6 @@ def edit_item(product_id):
                 'id': row.id,
                 'name': row.name,
                 'color': row.color,
-                'barcode': row.barcode,
             }
         sizes = db.query(ProductSize).filter_by(product_id=product_id).all()
         product_sizes = {
@@ -130,7 +126,7 @@ def items():
         result = []
         for p in products:
             sizes = {s.size: s.quantity for s in p.sizes}
-            result.append({'id': p.id, 'name': p.name, 'color': p.color, 'barcode': p.barcode, 'sizes': sizes})
+            result.append({'id': p.id, 'name': p.name, 'color': p.color, 'sizes': sizes})
     return render_template('items.html', products=result)
 
 
@@ -203,14 +199,11 @@ def import_products():
                     for _, row in df.iterrows():
                         name = row['Nazwa']
                         color = row['Kolor']
-                        barcode = row.get('Barcode')
                         product = db.query(Product).filter_by(name=name, color=color).first()
                         if not product:
-                            product = Product(name=name, color=color, barcode=barcode)
+                            product = Product(name=name, color=color)
                             db.add(product)
                             db.flush()
-                        else:
-                            product.barcode = barcode
                         for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']:
                             quantity = row.get(f'Ilo\u015b\u0107 ({size})', 0)
                             size_barcode = row.get(f'Barcode ({size})')

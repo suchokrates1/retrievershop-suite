@@ -41,7 +41,6 @@ def test_product_crud_and_barcode_scan(tmp_path, monkeypatch):
     data_add = {
         "name": "Prod",
         "color": "Czerwony",
-        "barcode": "",
         "quantity_M": "2",
         "barcode_M": "111",
     }
@@ -60,7 +59,6 @@ def test_product_crud_and_barcode_scan(tmp_path, monkeypatch):
     data_edit = {
         "name": "Prod2",
         "color": "Zielony",
-        "barcode": "",
         "quantity_M": "5",
         "barcode_M": "111",
     }
