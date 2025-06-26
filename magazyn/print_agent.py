@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import requests
 
@@ -24,6 +25,7 @@ CUPS_PORT = os.getenv("CUPS_PORT")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
 QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "10"))
 QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "22"))
+TIMEZONE = os.getenv("TIMEZONE", "Europe/Warsaw")
 BASE_URL = "https://api.baselinker.com/connector.php"
 PRINTED_FILE = os.path.join(os.path.dirname(__file__), "printed_orders.txt")
 PRINTED_EXPIRY_DAYS = int(os.getenv("PRINTED_EXPIRY_DAYS", "5"))
@@ -58,7 +60,7 @@ def reload_env():
     load_dotenv(override=True)
     global API_TOKEN, PAGE_ACCESS_TOKEN, RECIPIENT_ID, STATUS_ID, PRINTER_NAME
     global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START, QUIET_HOURS_END
-    global PRINTED_EXPIRY_DAYS, LOG_LEVEL, LOG_FILE, DB_FILE, HEADERS
+    global TIMEZONE, PRINTED_EXPIRY_DAYS, LOG_LEVEL, LOG_FILE, DB_FILE, HEADERS
     API_TOKEN = os.getenv("API_TOKEN")
     PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
     RECIPIENT_ID = os.getenv("RECIPIENT_ID")
@@ -69,6 +71,7 @@ def reload_env():
     POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
     QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "10"))
     QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "22"))
+    TIMEZONE = os.getenv("TIMEZONE", "Europe/Warsaw")
     PRINTED_EXPIRY_DAYS = int(os.getenv("PRINTED_EXPIRY_DAYS", "5"))
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
     LOG_FILE = os.getenv("LOG_FILE", os.path.join(os.path.dirname(__file__), "agent.log"))
@@ -347,7 +350,7 @@ def send_messenger_message(data):
 
 
 def is_quiet_time():
-    now = datetime.now().hour
+    now = datetime.now(ZoneInfo(TIMEZONE)).hour
     if QUIET_HOURS_START < QUIET_HOURS_END:
         return QUIET_HOURS_START <= now < QUIET_HOURS_END
     else:
