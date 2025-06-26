@@ -18,6 +18,7 @@ from .db import get_session, record_purchase, consume_stock
 from .models import Product, ProductSize
 from .forms import AddItemForm
 from .auth import login_required
+from .constants import ALL_SIZES
 from . import print_agent
 
 bp = Blueprint('products', __name__)
@@ -31,7 +32,7 @@ def add_item():
     if form.validate_on_submit():
         name = form.name.data
         color = form.color.data
-        sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+        sizes = ALL_SIZES
         quantities = {size: int(getattr(form, f'quantity_{size}').data or 0) for size in sizes}
         barcodes = {size: getattr(form, f'barcode_{size}').data or None for size in sizes}
 
@@ -93,7 +94,7 @@ def edit_item(product_id):
         if request.method == 'POST':
             name = request.form['name']
             color = request.form['color']
-            sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+            sizes = ALL_SIZES
             quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
             barcodes = {size: request.form.get(f'barcode_{size}') or None for size in sizes}
             try:
@@ -121,7 +122,7 @@ def edit_item(product_id):
                 'color': row.color,
             }
         sizes_rows = db.query(ProductSize).filter_by(product_id=product_id).all()
-        all_sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+        all_sizes = ALL_SIZES
         product_sizes = {size: {'quantity': 0, 'barcode': ''} for size in all_sizes}
         for s in sizes_rows:
             product_sizes[s.size] = {
@@ -225,7 +226,7 @@ def import_products():
                             product = Product(name=name, color=color)
                             db.add(product)
                             db.flush()
-                        for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']:
+                        for size in ALL_SIZES:
                             quantity = row.get(f'Ilo\u015b\u0107 ({size})', 0)
                             size_barcode = row.get(f'Barcode ({size})')
                             ps = db.query(ProductSize).filter_by(product_id=product.id, size=size).first()
