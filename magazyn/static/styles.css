@@ -32,6 +32,12 @@ h2, h3 {
     margin: auto;
 }
 
+@media (max-width: 768px) {
+    .center-form {
+        width: 100%;
+    }
+}
+
 
 label, input, button {
     margin: 5px 0;
