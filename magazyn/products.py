@@ -110,11 +110,11 @@ def edit_item(product_id):
                 'name': row.name,
                 'color': row.color,
             }
-        sizes = db.query(ProductSize).filter_by(product_id=product_id).all()
-        product_sizes = {
-            s.size: {'quantity': s.quantity, 'barcode': s.barcode}
-            for s in sizes
-        }
+        sizes_rows = db.query(ProductSize).filter_by(product_id=product_id).all()
+        all_sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+        product_sizes = {size: {'quantity': 0, 'barcode': ''} for size in all_sizes}
+        for s in sizes_rows:
+            product_sizes[s.size] = {'quantity': s.quantity, 'barcode': s.barcode}
     return render_template('edit_item.html', product=product, product_sizes=product_sizes)
 
 
