@@ -1,12 +1,15 @@
 import importlib
 import pandas as pd
 import sys
+from io import BytesIO
 from sqlalchemy import text
 from magazyn.models import Product, ProductSize
 
 
 def setup_app(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", ":memory:")
+    import werkzeug
+    monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")
     importlib.reload(init)
     monkeypatch.setitem(sys.modules, "__init__", init)
@@ -28,14 +31,14 @@ def test_export_products_includes_barcode(tmp_path, monkeypatch):
         db.add(prod)
         db.flush()
         db.add(ProductSize(product_id=prod.id, size="M", quantity=5, barcode="123"))
-        pid = prod.id
 
-    with app_mod.app.test_request_context():
-        from flask import session
-        session['username'] = 'x'
-        app_mod.export_products.__wrapped__()
+    client = app_mod.app.test_client()
+    with client.session_transaction() as sess:
+        sess["username"] = "x"
 
-    df = pd.read_excel("/tmp/products_export.xlsx")
+    resp = client.get("/export_products")
+
+    df = pd.read_excel(BytesIO(resp.data))
     assert "Barcode" in df.columns
     assert str(df.loc[0, "Barcode"]) == "123"
 
