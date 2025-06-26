@@ -108,14 +108,15 @@ table {
 /* Ustawienie węższej szerokości dla kolumn rozmiarów */
 th:nth-child(n+3):nth-child(-n+8),
 td:nth-child(n+3):nth-child(-n+8) {
-    width: 120px; /* Dostosuj szerokość kolumn według potrzeb */
-    max-width: 120px;
+    width: 100px; /* Stała szerokość umożliwia przewijanie na małych ekranach */
+    max-width: 100px;
     text-align: center;
     padding: 0; /* Usuń nadmiarowe odstępy */
 }
 
 /* Ensure long tables remain usable on small screens */
 .table-responsive {
+    width: 100%;
     overflow-x: auto;
 }
 

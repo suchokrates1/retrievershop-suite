@@ -2,7 +2,8 @@
 {% block content %}
 <h2>Historia drukowania</h2>
 <div class="table-responsive">
-<table class="table table-striped">
+    {# .table-responsive ensures horizontal scrolling when needed #}
+<table class="table table-striped table-sm">
     <thead><tr><th>ID zamówienia</th><th>Czas</th></tr></thead>
     <tbody>
     {% for oid, ts in printed.items() %}
