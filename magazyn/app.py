@@ -116,10 +116,13 @@ def login():
         username = form.username.data
         password = form.password.data
 
+        valid = False
         with get_session() as db:
             user = db.query(User).filter_by(username=username).first()
+            if user and check_password_hash(user.password, password):
+                valid = True
 
-        if user and check_password_hash(user.password, password):
+        if valid:
             session["username"] = username
             return redirect(url_for("home"))
         else:
