@@ -13,6 +13,7 @@ from .forms import LoginForm
 from .db import (
     get_session,
     init_db,
+    reset_db,
     ensure_schema,
     register_default_user,
     record_purchase,
