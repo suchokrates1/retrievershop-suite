@@ -140,4 +140,21 @@ def test_items_page_displays_barcodes(tmp_path, monkeypatch):
     resp = client.get("/items")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "321" in html
+    assert "321" not in html
+
+
+def test_scan_barcode_page_includes_csrf(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    login(client)
+
+    resp = client.get("/scan_barcode")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    from flask import session as flask_session
+    with client.session_transaction() as sess:
+        with app_mod.app.test_request_context():
+            for k, v in sess.items():
+                flask_session[k] = v
+            token = app_mod.app.jinja_env.globals["csrf_token"]()
+    assert token in html

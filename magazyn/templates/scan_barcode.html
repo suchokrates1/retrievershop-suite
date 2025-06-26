@@ -5,6 +5,7 @@
         <h2 class="mb-3">Skanuj kod kreskowy</h2>
         <div id="scanner-container"></div>
         <p id="barcode-result" class="mt-2">Kod kreskowy: </p>
+        <input type="hidden" id="csrf" value="{{ csrf_token() }}">
     </div>
 
     <!-- Element audio do odtworzenia dźwięku -->
@@ -41,10 +42,12 @@
             Quagga.stop();
 
             // Przekierowanie lub wysłanie kodu kreskowego do backendu (np. do Flask)
+            const csrf = document.getElementById('csrf').value;
             fetch('/barcode_scan', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrf
                 },
                 body: JSON.stringify({ barcode: data.codeResult.code })
             })
