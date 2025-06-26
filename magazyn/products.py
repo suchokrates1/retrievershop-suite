@@ -105,9 +105,20 @@ def edit_item(product_id):
             except Exception as e:
                 flash(f'B\u0142\u0105d podczas aktualizacji przedmiotu: {e}')
             return redirect(url_for('products.items'))
-        product = db.query(Product).filter_by(id=product_id).first()
+        row = db.query(Product).filter_by(id=product_id).first()
+        product = None
+        if row:
+            product = {
+                'id': row.id,
+                'name': row.name,
+                'color': row.color,
+                'barcode': row.barcode,
+            }
         sizes = db.query(ProductSize).filter_by(product_id=product_id).all()
-        product_sizes = {s.size: {'quantity': s.quantity, 'barcode': s.barcode} for s in sizes}
+        product_sizes = {
+            s.size: {'quantity': s.quantity, 'barcode': s.barcode}
+            for s in sizes
+        }
     return render_template('edit_item.html', product=product, product_sizes=product_sizes)
 
 
