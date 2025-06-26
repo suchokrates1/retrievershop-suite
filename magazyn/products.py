@@ -125,8 +125,16 @@ def items():
         products = db.query(Product).all()
         result = []
         for p in products:
-            sizes = {s.size: s.quantity for s in p.sizes}
-            result.append({'id': p.id, 'name': p.name, 'color': p.color, 'sizes': sizes})
+            all_sizes = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+            sizes = {size: {'quantity': 0, 'barcode': ''} for size in all_sizes}
+            for s in p.sizes:
+                sizes[s.size] = {'quantity': s.quantity, 'barcode': s.barcode}
+            result.append({
+                'id': p.id,
+                'name': p.name,
+                'color': p.color,
+                'sizes': sizes,
+            })
     return render_template('items.html', products=result)
 
 

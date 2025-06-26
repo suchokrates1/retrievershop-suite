@@ -124,3 +124,20 @@ def test_edit_item_get_shows_product_details(tmp_path, monkeypatch):
     html = resp.get_data(as_text=True)
     assert "Prod" in html
     assert "Blue" in html
+
+
+def test_items_page_displays_barcodes(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    login(client)
+
+    with app_mod.get_session() as db:
+        prod = Product(name="P", color="C")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=2, barcode="321"))
+
+    resp = client.get("/items")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "321" in html
