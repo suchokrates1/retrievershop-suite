@@ -14,7 +14,6 @@ class Product(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     color = Column(String)
-    barcode = Column(String, unique=True)
     sizes = relationship('ProductSize', back_populates='product', cascade='all, delete-orphan')
 
 class ProductSize(Base):
