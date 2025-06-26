@@ -107,3 +107,22 @@ def test_items_forms_include_csrf_token(tmp_path, monkeypatch):
                 flask_session[k] = v
             token = app_mod.app.jinja_env.globals["csrf_token"]()
     assert html.count(token) >= 7
+
+
+def test_edit_item_get_shows_product_details(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    login(client)
+
+    with app_mod.get_session() as db:
+        prod = Product(name="Prod", color="Blue")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=4, barcode="123"))
+        pid = prod.id
+
+    resp = client.get(f"/edit_item/{pid}")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Prod" in html
+    assert "Blue" in html
