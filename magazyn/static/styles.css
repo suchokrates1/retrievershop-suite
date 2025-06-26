@@ -23,6 +23,12 @@ h2, h3 {
     margin: auto;
 }
 
+/* Centered layout shared by item forms */
+.center-form {
+    max-width: 600px;
+    margin: auto;
+}
+
 
 label, input, button {
     margin: 5px 0;
