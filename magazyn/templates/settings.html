@@ -2,15 +2,19 @@
 
 {% block content %}
 <h2 class="mb-3">Ustawienia drukarki</h2>
-<form method="post" class="row g-3">
-    {% for key, value in settings.items() %}
-    <div class="col-md-6">
-        <label for="{{ key }}">{{ key }}</label>
-        <input type="text" class="form-control" id="{{ key }}" name="{{ key }}" value="{{ value }}">
-    </div>
-    {% endfor %}
-    <div class="col-12">
-        <button type="submit" class="btn btn-primary">Zapisz</button>
-    </div>
+<form method="post">
+    <table class="table">
+        <tbody>
+        {% for key, value in settings.items() %}
+        <tr>
+            <th scope="row">{{ key }}</th>
+            <td>
+                <input type="text" class="form-control" id="{{ key }}" name="{{ key }}" value="{{ value }}">
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Zapisz</button>
 </form>
 {% endblock %}
