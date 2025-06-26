@@ -2,6 +2,7 @@
 
 {% block content %}
 <form action="{{ url_for('products.import_products') }}" method="POST" enctype="multipart/form-data" class="row row-cols-1 row-cols-md-2 g-3 center-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-auto">
         <input type="file" name="file" required class="form-control">
     </div>
