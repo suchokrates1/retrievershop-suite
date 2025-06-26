@@ -72,6 +72,11 @@ def start_print_agent():
 
 def load_settings():
     """Return OrderedDict combining keys from the example and current .env."""
+    if not EXAMPLE_PATH.exists():
+        app.logger.error(f"Settings template missing: {EXAMPLE_PATH}")
+        flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.")
+        return OrderedDict()
+
     example = dotenv_values(EXAMPLE_PATH)
     current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
     values = OrderedDict()
