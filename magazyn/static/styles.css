@@ -23,6 +23,12 @@ h2, h3 {
     margin: auto;
 }
 
+.center-form {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 
 label, input, button {
     margin: 5px 0;
