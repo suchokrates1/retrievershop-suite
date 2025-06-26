@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SelectField, IntegerField
-from wtforms.validators import DataRequired
+from wtforms.validators import DataRequired, NumberRange
 
 from .constants import ALL_SIZES
 
@@ -25,5 +25,13 @@ class AddItemForm(FlaskForm):
 
 # Dynamically add quantity and barcode fields for each size
 for _size in ALL_SIZES:
-    setattr(AddItemForm, f'quantity_{_size}', IntegerField(f'quantity_{_size}', default=0))
-    setattr(AddItemForm, f'barcode_{_size}', StringField(f'barcode_{_size}'))
+    setattr(
+        AddItemForm,
+        f"quantity_{_size}",
+        IntegerField(
+            f"quantity_{_size}",
+            default=0,
+            validators=[NumberRange(min=0)],
+        ),
+    )
+    setattr(AddItemForm, f"barcode_{_size}", StringField(f"barcode_{_size}"))
