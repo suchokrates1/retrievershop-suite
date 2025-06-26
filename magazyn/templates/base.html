@@ -11,30 +11,32 @@
     <div class="page-wrapper">
     <nav class="navbar navbar-dark bg-dark fixed-top">
         <div class="container" style="max-width: 75%">
-            <button id="mobileMenuBtn" class="navbar-toggler d-md-none" type="button">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <span class="navbar-brand d-flex align-items-center">
-                <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" style="height: 40px;">
-                <span class="ms-2">Witaj w aplikacji magazynowej</span>
-            </span>
-            <ul class="navbar-nav flex-row ms-auto gap-3 d-none d-md-flex">
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
-                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
-            </ul>
-            <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3">Wyloguj się</a>
+            <div class="d-flex align-items-center justify-content-between w-100">
+                <span class="d-flex align-items-center">
+                    <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" style="height: 40px;">
+                </span>
+                <span class="navbar-brand flex-grow-1 text-center">Witaj w aplikacji magazynowej</span>
+                <button id="mobileMenuBtn" class="navbar-toggler d-md-none" type="button">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <ul class="navbar-nav flex-row ms-md-auto gap-3 d-none d-md-flex">
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('logout') }}">Wyloguj się</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
 
-    <div id="mobileMenu" class="mobile-menu d-md-none">
-        <ul class="nav flex-column">
+    <div id="mobileMenu" class="mobile-menu d-md-none d-flex flex-column">
+        <ul class="nav flex-column flex-grow-1">
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
@@ -44,6 +46,7 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
         </ul>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger mt-auto">Wyloguj się</a>
     </div>
 
     <main class="container-fluid mt-5 pt-4">
