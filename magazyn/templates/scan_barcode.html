@@ -9,6 +9,7 @@
 
     <!-- Element audio do odtworzenia dźwięku -->
     <audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
+    <input type="hidden" id="csrf" value="{{ csrf_token() }}">
 
     <script>
         Quagga.init({
@@ -44,7 +45,8 @@
             fetch('/barcode_scan', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.getElementById('csrf').value
                 },
                 body: JSON.stringify({ barcode: data.codeResult.code })
             })
