@@ -109,6 +109,11 @@ horizontally when it grows wider than the screen. Size columns use a fixed
 width of 100&nbsp;px (see `static/styles.css`) to keep the quantity buttons
 visible without cutting off content.
 
+## Frontend assets
+
+The barcode scanner uses Quagga 0.12.1 bundled as `static/quagga.min.js` so the
+page works even without internet access.
+
 ## License
 
 This project is licensed under the terms of the [MIT License](LICENSE).
