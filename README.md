@@ -74,6 +74,14 @@ Running a newer version of the application on an older database file will
 automatically add missing columns (for example the `barcode` column in the
 `product_sizes` table) during startup.
 
+## Responsive tables
+
+Product lists are displayed inside Bootstrap's `.table-responsive` wrapper.
+This element sets `overflow-x: auto` so the table can be scrolled
+horizontally when it grows wider than the screen. Size columns use a fixed
+width of 100&nbsp;px (see `static/styles.css`) to keep the quantity buttons
+visible without cutting off content.
+
 ## License
 
 This project is licensed under the terms of the [MIT License](LICENSE).
