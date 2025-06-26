@@ -23,17 +23,10 @@ h2, h3 {
     margin: auto;
 }
 
-<<<<<<< codex/update-templates-with-new-styling-and-grid
 /* Centered layout shared by item forms */
 .center-form {
     max-width: 600px;
     margin: auto;
-=======
-.center-form {
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
->>>>>>> main
 }
 
 
