@@ -82,3 +82,25 @@ def test_env_updates_persist_and_reload(tmp_path, monkeypatch):
     pa = importlib.reload(app_mod.print_agent)
     assert pa.API_TOKEN == "new0"
 
+
+def test_extra_keys_display_and_save(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    # create env file with an additional key
+    app_mod.ENV_PATH.write_text("EXTRA_KEY=foo\n")
+
+    client = app_mod.app.test_client()
+    login(client)
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "EXTRA_KEY" in html
+
+    values = app_mod.load_settings()
+    assert values.get("EXTRA_KEY") == "foo"
+    values["EXTRA_KEY"] = "bar"
+    client.post("/settings", data=values)
+    env_lines = app_mod.ENV_PATH.read_text().strip().splitlines()
+    assert env_lines[-1] == "EXTRA_KEY=bar"
+    assert "EXTRA_KEY" in app_mod.load_settings()
+
