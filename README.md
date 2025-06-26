@@ -34,12 +34,16 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `POLL_INTERVAL` | Seconds between polling for orders |
 | `QUIET_HOURS_START` | Start hour for muting printing (24h format) |
 | `QUIET_HOURS_END` | End hour for muting printing (24h format) |
+| `TIMEZONE` | IANA timezone used for quiet hour checks |
 | `PRINTED_EXPIRY_DAYS` | Days to keep printed order IDs in the database |
 | `LOG_LEVEL` | Logging level for the printing agent |
 | `LOG_FILE` | Path to the agent log file |
 | `DB_PATH` | Path to the SQLite database file |
 | `SECRET_KEY` | Secret key for Flask sessions |
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
+| `FLASK_ENV` | Flask configuration environment |
+| `ENABLE_HTTP_SERVER` | Set to `1` to start the HTTP server |
+| `HTTP_PORT` | Port used by the HTTP server |
 
 ## Modifying settings via the web interface
 
