@@ -10,16 +10,23 @@ def test_shorten_product_name():
 def test_is_quiet_time(monkeypatch):
     class DummyDateTime:
         hour = 0
+        seen_tz = None
+
         @classmethod
-        def now(cls):
+        def now(cls, tz=None):
+            cls.seen_tz = tz
             return type("obj", (), {"hour": cls.hour})()
+
+    monkeypatch.setattr(bl, "ZoneInfo", lambda tz: f"zone-{tz}")
 
     monkeypatch.setattr(bl, "datetime", DummyDateTime)
     monkeypatch.setattr(bl, "QUIET_HOURS_START", 10)
     monkeypatch.setattr(bl, "QUIET_HOURS_END", 22)
+    monkeypatch.setattr(bl, "TIMEZONE", "Test/Zone")
 
     DummyDateTime.hour = 11
     assert bl.is_quiet_time() is True
+    assert DummyDateTime.seen_tz == "zone-Test/Zone"
 
     DummyDateTime.hour = 23
     assert bl.is_quiet_time() is False
