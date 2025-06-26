@@ -5,6 +5,7 @@
         <h2 class="mb-3">Skanuj kod kreskowy</h2>
         <div id="scanner-container"></div>
         <p id="barcode-result" class="mt-2">Kod kreskowy: </p>
+        <button id="torch-toggle" class="btn btn-secondary d-none mt-2">Włącz latarkę</button>
     </div>
 
     <!-- Element audio do odtworzenia dźwięku -->
@@ -13,6 +14,7 @@
 
     <script>
         let torchEnabled = false;
+        const torchBtn = document.getElementById('torch-toggle');
 
         Quagga.init({
             inputStream: {
@@ -23,7 +25,16 @@
                 }
             },
             decoder: {
-                readers: ["code_128_reader", "ean_reader", "ean_8_reader", "upc_reader"] // Lista obsługiwanych typów kodów kreskowych
+                // rozszerzona lista obsługiwanych typów kodów
+                readers: [
+                    "code_128_reader",
+                    "ean_reader",
+                    "ean_8_reader",
+                    "upc_reader",
+                    "ean_13_reader",
+                    "code_39_reader",
+                    "codabar_reader"
+                ]
             }
         }, function (err) {
             if (err) {
@@ -32,6 +43,16 @@
             }
             console.log("Inicjalizacja zakończona");
             Quagga.start();
+
+            const track = Quagga.CameraAccess.getActiveTrack();
+            if (track && track.getCapabilities().torch && torchBtn) {
+                torchBtn.classList.remove('d-none');
+                torchBtn.addEventListener('click', () => {
+                    torchEnabled = !torchEnabled;
+                    track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
+                    torchBtn.textContent = torchEnabled ? 'Wyłącz latarkę' : 'Włącz latarkę';
+                });
+            }
 
             Quagga.onProcessed(function () {
                 const overlay = Quagga.canvas.ctx.overlay;
@@ -69,6 +90,9 @@
             if (activeTrack && torchEnabled && activeTrack.getCapabilities().torch) {
                 activeTrack.applyConstraints({ advanced: [{ torch: false }] });
                 torchEnabled = false;
+                if (torchBtn) {
+                    torchBtn.textContent = 'Włącz latarkę';
+                }
             }
 
             // Przekierowanie lub wysłanie kodu kreskowego do backendu (np. do Flask)
