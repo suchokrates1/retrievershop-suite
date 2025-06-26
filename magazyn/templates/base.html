@@ -37,6 +37,7 @@
 
 
     <div id="mobileMenu" class="mobile-menu d-md-none">
+        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
         <ul class="nav flex-column h-100">
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
@@ -46,7 +47,9 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings') }}">Ustawienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
-            <li class="nav-item mt-auto"><a class="nav-link text-white" href="{{ url_for('logout') }}">Wyloguj się</a></li>
+            <li class="nav-item mt-auto text-center">
+                <a class="btn btn-danger w-100" href="{{ url_for('logout') }}">Wyloguj się</a>
+            </li>
         </ul>
     </div>
 
