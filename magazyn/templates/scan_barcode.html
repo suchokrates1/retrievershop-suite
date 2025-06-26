@@ -12,6 +12,8 @@
     <input type="hidden" id="csrf" value="{{ csrf_token() }}">
 
     <script>
+        let torchEnabled = false;
+
         Quagga.init({
             inputStream: {
                 type: "LiveStream",
@@ -30,6 +32,28 @@
             }
             console.log("Inicjalizacja zakończona");
             Quagga.start();
+
+            Quagga.onProcessed(function () {
+                const overlay = Quagga.canvas.ctx.overlay;
+                const dom = Quagga.canvas.dom.overlay;
+                if (!overlay || !dom) {
+                    return;
+                }
+                const { width, height } = dom;
+                const imageData = overlay.getImageData(0, 0, width, height).data;
+                let sum = 0;
+                for (let i = 0; i < imageData.length; i += 4) {
+                    sum += imageData[i] + imageData[i + 1] + imageData[i + 2];
+                }
+                const brightness = sum / (imageData.length / 4) / 3;
+                if (brightness < 60 && !torchEnabled) {
+                    const track = Quagga.CameraAccess.getActiveTrack();
+                    if (track && track.getCapabilities().torch) {
+                        track.applyConstraints({ advanced: [{ torch: true }] });
+                        torchEnabled = true;
+                    }
+                }
+            });
         });
 
         Quagga.onDetected(function (data) {
@@ -40,6 +64,12 @@
             beepSound.play();
             
             Quagga.stop();
+
+            const activeTrack = Quagga.CameraAccess.getActiveTrack();
+            if (activeTrack && torchEnabled && activeTrack.getCapabilities().torch) {
+                activeTrack.applyConstraints({ advanced: [{ torch: false }] });
+                torchEnabled = false;
+            }
 
             // Przekierowanie lub wysłanie kodu kreskowego do backendu (np. do Flask)
             fetch('/barcode_scan', {
