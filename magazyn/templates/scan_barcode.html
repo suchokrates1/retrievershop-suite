@@ -39,6 +39,10 @@
         }, function (err) {
             if (err) {
                 console.log(err);
+                const el = document.getElementById('barcode-result');
+                if (el) {
+                    el.innerText = 'B\u0142\u0105d uruchomienia skanera. Sprawd\u017a, czy przegl\u0105darka ma dost\u0119p do kamery.';
+                }
                 return;
             }
             console.log("Inicjalizacja zakończona");
