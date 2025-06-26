@@ -68,20 +68,29 @@ def start_print_agent():
 
 
 def load_settings():
-    """Return OrderedDict of settings based on .env.example order."""
+    """Return OrderedDict combining keys from the example and current .env."""
     example = dotenv_values(EXAMPLE_PATH)
     current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
     values = OrderedDict()
+
+    # first preserve ordering from .env.example
     for key in example.keys():
         values[key] = current.get(key, example[key])
+
+    # append any additional keys from the existing .env
+    for key, val in current.items():
+        if key not in values:
+            values[key] = val
+
     return values
 
 
 def write_env(values):
-    """Rewrite .env using provided mapping preserving .env.example order."""
-    order = list(dotenv_values(EXAMPLE_PATH).keys())
+    """Rewrite .env preserving example order and keeping unknown keys."""
+    example_keys = list(dotenv_values(EXAMPLE_PATH).keys())
+    ordered = example_keys + [k for k in values.keys() if k not in example_keys]
     with ENV_PATH.open("w") as f:
-        for key in order:
+        for key in ordered:
             val = values.get(key, "")
             f.write(f"{key}={val}\n")
 
