@@ -50,7 +50,13 @@
                 },
                 body: JSON.stringify({ barcode: data.codeResult.code })
             })
-            .then(res => res.json().catch(() => null))
+            .then(res => {
+                if (res.status === 204) {
+                    speechSynthesis.speak(new SpeechSynthesisUtterance('Nie znaleziono produktu o podanym kodzie kreskowym'));
+                    return null;
+                }
+                return res.json().catch(() => null);
+            })
             .then(result => {
                 if (result) {
                     const text = `${result.name}, kolor ${result.color}, rozmiar ${result.size}`;
