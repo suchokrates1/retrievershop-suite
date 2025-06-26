@@ -141,18 +141,17 @@ def barcode_scan():
     if barcode:
         with get_session() as db:
             row = (
-                db.query(Product, ProductSize)
+                db.query(Product.name, Product.color, ProductSize.size)
                 .join(ProductSize)
                 .filter(ProductSize.barcode == barcode)
                 .first()
             )
-        if row:
-            product, ps = row
-            result = {
-                "name": product.name,
-                "color": product.color,
-                "size": ps.size,
-            }
+            if row:
+                name, color, size = row
+                result = {"name": name, "color": color, "size": size}
+            else:
+                result = None
+        if result:
             flash(f'Znaleziono produkt: {result["name"]}')
             return jsonify(result)
         else:
