@@ -1,5 +1,6 @@
 import importlib
 import sys
+from collections import OrderedDict
 from dotenv import load_dotenv
 
 import magazyn.db as db_mod
@@ -103,4 +104,20 @@ def test_extra_keys_display_and_save(tmp_path, monkeypatch):
     env_lines = app_mod.ENV_PATH.read_text().strip().splitlines()
     assert env_lines[-1] == "EXTRA_KEY=bar"
     assert "EXTRA_KEY" in app_mod.load_settings()
+
+
+def test_missing_example_file(tmp_path, monkeypatch):
+    app_mod = setup_app(tmp_path, monkeypatch)
+    app_mod.EXAMPLE_PATH = tmp_path / "no.env.example"
+
+    client = app_mod.app.test_client()
+    login(client)
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "plik .env.example" in html.lower()
+
+    with app_mod.app.test_request_context():
+        assert app_mod.load_settings() == OrderedDict()
 
