@@ -18,6 +18,29 @@ This repository contains the code for the RetrieverShop warehouse application an
    If you prefer to connect to a remote CUPS server instead, set `CUPS_SERVER`
    and `CUPS_PORT` accordingly.
 
+### Environment variables
+
+`.env.example` lists all recognised settings:
+
+| Key | Purpose |
+| --- | --- |
+| `API_TOKEN` | BaseLinker API token used to fetch new orders |
+| `PAGE_ACCESS_TOKEN` | Messenger page token for sending notifications |
+| `RECIPIENT_ID` | Messenger recipient ID that receives alerts |
+| `STATUS_ID` | Order status ID to filter orders for printing |
+| `PRINTER_NAME` | Name of the CUPS printer to use |
+| `CUPS_SERVER` | Hostname of a remote CUPS server |
+| `CUPS_PORT` | Port of the remote CUPS server |
+| `POLL_INTERVAL` | Seconds between polling for orders |
+| `QUIET_HOURS_START` | Start hour for muting printing (24h format) |
+| `QUIET_HOURS_END` | End hour for muting printing (24h format) |
+| `PRINTED_EXPIRY_DAYS` | Days to keep printed order IDs in the database |
+| `LOG_LEVEL` | Logging level for the printing agent |
+| `LOG_FILE` | Path to the agent log file |
+| `DB_PATH` | Path to the SQLite database file |
+| `SECRET_KEY` | Secret key for Flask sessions |
+| `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
+
 ## Modifying settings via the web interface
 
 After starting the application you can modify the values stored in your `.env` file without touching the filesystem. Log in to the web interface and open the **Ustawienia** tab from the navigation bar.
