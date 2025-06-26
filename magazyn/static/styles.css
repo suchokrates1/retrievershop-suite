@@ -88,17 +88,9 @@ footer a:hover {
     text-decoration: underline;
 }
 
-/* Wyśrodkowanie kontenera tabeli */
-.table-container {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-}
-
 /* Ustawienie szerokości tabeli */
 table {
     width: 100%; /* Zmniejsz szerokość, aby tabela była bardziej kompaktowa */
-    max-width: 1200px;
     border-collapse: collapse;
     margin-top: 5px;
     background-color: #fff;
