@@ -20,7 +20,7 @@ def setup_app(tmp_path, monkeypatch):
     monkeypatch.setattr(pa, "validate_env", lambda: None)
     import magazyn.app as app_mod
     importlib.reload(app_mod)
-    app_mod.init_db()
+    app_mod.reset_db()
     return app_mod
 
 
