@@ -35,6 +35,7 @@ from .history import bp as history_bp, print_history
 from .auth import login_required
 from . import print_agent
 from __init__ import DB_PATH
+from .constants import ALL_SIZES
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / ".env"
@@ -47,6 +48,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
 CSRFProtect(app)
+app.jinja_env.globals['ALL_SIZES'] = ALL_SIZES
 
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)

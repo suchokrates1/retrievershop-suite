@@ -11,12 +11,9 @@
         <tr>
             <th>Nazwa produktu</th>
             <th>Kolor</th>
-            <th>XS</th>
-            <th>S</th>
-            <th>M</th>
-            <th>L</th>
-            <th>XL</th>
-            <th>Uniwersalny</th>
+            {% for size in ALL_SIZES %}
+            <th>{{ size }}</th>
+            {% endfor %}
             <th>Akcje</th>
         </tr>
     </thead>
@@ -25,7 +22,7 @@
         <tr>
             <td>{{ product['name'] }}</td>
             <td>{{ product['color'] }}</td>
-            {% for size in ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny'] %}
+            {% for size in ALL_SIZES %}
             <td>
                 <form method="POST" action="{{ url_for('products.update_quantity', product_id=product['id'], size=size) }}" class="form-inline quantity-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
