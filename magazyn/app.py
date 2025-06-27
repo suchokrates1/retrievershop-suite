@@ -205,6 +205,18 @@ def test_message():
     return render_template("test.html", message=msg)
 
 
+@app.errorhandler(404)
+def handle_404(error):
+    """Render custom page for 404 errors."""
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def handle_500(error):
+    """Render custom page for internal server errors."""
+    return render_template("500.html"), 500
+
+
 if __name__ == "__main__":
     ensure_db_initialized()
     debug = os.getenv("FLASK_DEBUG") == "1"
