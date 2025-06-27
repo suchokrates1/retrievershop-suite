@@ -1,5 +1,6 @@
 import datetime
 from contextlib import contextmanager
+import logging
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +11,7 @@ from .models import Base, User, ProductSize, PurchaseBatch
 
 engine = create_engine(f"sqlite:///{DB_PATH}", future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
+logger = logging.getLogger(__name__)
 
 
 
@@ -19,8 +21,9 @@ def get_session():
     try:
         yield session
         session.commit()
-    except Exception:
+    except Exception as e:
         session.rollback()
+        logger.exception("Database session error: %s", e)
         raise
     finally:
         session.close()
