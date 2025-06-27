@@ -8,36 +8,34 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from dotenv import load_dotenv
 import requests
 
+from .config import settings, load_config
 from __init__ import DB_PATH
 
-load_dotenv()
-
-API_TOKEN = os.getenv("API_TOKEN")
-PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
-RECIPIENT_ID = os.getenv("RECIPIENT_ID")
-STATUS_ID = int(os.getenv("STATUS_ID", "91618"))
-PRINTER_NAME = os.getenv("PRINTER_NAME", "Xprinter")
-CUPS_SERVER = os.getenv("CUPS_SERVER")
-CUPS_PORT = os.getenv("CUPS_PORT")
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
-QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "10"))
-QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "22"))
-TIMEZONE = os.getenv("TIMEZONE", "Europe/Warsaw")
+API_TOKEN = settings.API_TOKEN
+PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
+RECIPIENT_ID = settings.RECIPIENT_ID
+STATUS_ID = settings.STATUS_ID
+PRINTER_NAME = settings.PRINTER_NAME
+CUPS_SERVER = settings.CUPS_SERVER
+CUPS_PORT = settings.CUPS_PORT
+POLL_INTERVAL = settings.POLL_INTERVAL
+QUIET_HOURS_START = settings.QUIET_HOURS_START
+QUIET_HOURS_END = settings.QUIET_HOURS_END
+TIMEZONE = settings.TIMEZONE
 BASE_URL = "https://api.baselinker.com/connector.php"
 PRINTED_FILE = os.path.join(os.path.dirname(__file__), "printed_orders.txt")
-PRINTED_EXPIRY_DAYS = int(os.getenv("PRINTED_EXPIRY_DAYS", "5"))
+PRINTED_EXPIRY_DAYS = settings.PRINTED_EXPIRY_DAYS
 LABEL_QUEUE = os.path.join(os.path.dirname(__file__), "queued_labels.jsonl")
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_LEVEL = settings.LOG_LEVEL
 # Use the same database file as the web application
 DB_FILE = DB_PATH
 # Location of the legacy database used by the standalone printer agent
 OLD_DB_FILE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), os.pardir, "printer", "data.db")
 )
-LOG_FILE = os.getenv("LOG_FILE", os.path.join(os.path.dirname(__file__), "agent.log"))
+LOG_FILE = settings.LOG_FILE
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -57,25 +55,26 @@ HEADERS = {
 
 def reload_env():
     """Reload environment variables and update globals."""
-    load_dotenv(override=True)
+    global settings
+    settings = load_config()
     global API_TOKEN, PAGE_ACCESS_TOKEN, RECIPIENT_ID, STATUS_ID, PRINTER_NAME
     global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START, QUIET_HOURS_END
     global TIMEZONE, PRINTED_EXPIRY_DAYS, LOG_LEVEL, LOG_FILE, DB_FILE, HEADERS
-    API_TOKEN = os.getenv("API_TOKEN")
-    PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
-    RECIPIENT_ID = os.getenv("RECIPIENT_ID")
-    STATUS_ID = int(os.getenv("STATUS_ID", "91618"))
-    PRINTER_NAME = os.getenv("PRINTER_NAME", "Xprinter")
-    CUPS_SERVER = os.getenv("CUPS_SERVER")
-    CUPS_PORT = os.getenv("CUPS_PORT")
-    POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
-    QUIET_HOURS_START = int(os.getenv("QUIET_HOURS_START", "10"))
-    QUIET_HOURS_END = int(os.getenv("QUIET_HOURS_END", "22"))
-    TIMEZONE = os.getenv("TIMEZONE", "Europe/Warsaw")
-    PRINTED_EXPIRY_DAYS = int(os.getenv("PRINTED_EXPIRY_DAYS", "5"))
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-    LOG_FILE = os.getenv("LOG_FILE", os.path.join(os.path.dirname(__file__), "agent.log"))
-    DB_FILE = DB_PATH
+    API_TOKEN = settings.API_TOKEN
+    PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
+    RECIPIENT_ID = settings.RECIPIENT_ID
+    STATUS_ID = settings.STATUS_ID
+    PRINTER_NAME = settings.PRINTER_NAME
+    CUPS_SERVER = settings.CUPS_SERVER
+    CUPS_PORT = settings.CUPS_PORT
+    POLL_INTERVAL = settings.POLL_INTERVAL
+    QUIET_HOURS_START = settings.QUIET_HOURS_START
+    QUIET_HOURS_END = settings.QUIET_HOURS_END
+    TIMEZONE = settings.TIMEZONE
+    PRINTED_EXPIRY_DAYS = settings.PRINTED_EXPIRY_DAYS
+    LOG_LEVEL = settings.LOG_LEVEL
+    LOG_FILE = settings.LOG_FILE
+    DB_FILE = settings.DB_PATH
     HEADERS["X-BLToken"] = API_TOKEN
 
 
