@@ -4,10 +4,11 @@ from collections import OrderedDict
 from dotenv import load_dotenv
 
 import magazyn.db as db_mod
+import magazyn.config as cfg
 
 
 def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cfg.settings, "DB_PATH", str(tmp_path / "settings.db"))
     import werkzeug
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")
@@ -63,11 +64,14 @@ def test_env_updates_persist_and_reload(tmp_path, monkeypatch):
     client = app_mod.app.test_client()
     login(client)
 
-    monkeypatch.setattr(
-        app_mod.print_agent,
-        "load_dotenv",
-        lambda override=True: load_dotenv(app_mod.ENV_PATH, override=override),
-    )
+    original_load = cfg.load_config
+
+    def reload_cfg():
+        load_dotenv(app_mod.ENV_PATH, override=True)
+        return original_load()
+
+    monkeypatch.setattr(cfg, "load_config", reload_cfg)
+    monkeypatch.setattr(app_mod.print_agent, "load_config", reload_cfg)
 
     values = app_mod.load_settings()
     values["API_TOKEN"] = "v0"
@@ -79,6 +83,7 @@ def test_env_updates_persist_and_reload(tmp_path, monkeypatch):
     app_mod.ENV_PATH.write_text(new_text)
     app_mod.print_agent.reload_config()
     assert app_mod.print_agent.API_TOKEN == "new0"
+    cfg.settings = app_mod.print_agent.settings
 
     pa = importlib.reload(app_mod.print_agent)
     assert pa.API_TOKEN == "new0"
