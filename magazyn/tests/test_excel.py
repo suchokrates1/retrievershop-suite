@@ -4,10 +4,11 @@ import sys
 from io import BytesIO
 from sqlalchemy import text
 from magazyn.models import Product, ProductSize
+import magazyn.config as cfg
 
 
 def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", ":memory:")
+    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
     import werkzeug
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")
