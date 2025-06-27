@@ -3,6 +3,7 @@
 {% block content %}
 <h2 class="mb-3 text-center">Dodaj dostawę</h2>
 <form action="{{ url_for('products.add_delivery') }}" method="post" class="row row-cols-1 row-cols-md-2 g-3 center-form mx-auto">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-6">
         <label for="product_id" class="form-label">Produkt:</label>
         <select name="product_id" id="product_id" class="form-select">
