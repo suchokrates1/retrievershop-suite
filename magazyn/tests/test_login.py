@@ -3,10 +3,11 @@ import sys
 
 from werkzeug.security import generate_password_hash
 from magazyn.models import User
+import magazyn.config as cfg
 
 
 def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", ":memory:")
+    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
     import werkzeug
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")
@@ -28,7 +29,7 @@ def setup_app(tmp_path, monkeypatch):
 
 
 def setup_app_default_session(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", ":memory:")
+    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
     import werkzeug
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")

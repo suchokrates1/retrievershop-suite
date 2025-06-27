@@ -2,10 +2,11 @@ import importlib
 import sys
 from sqlalchemy import text
 from magazyn.models import Product, ProductSize
+import magazyn.config as cfg
 
 
 def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", ":memory:")
+    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
     init = importlib.import_module("magazyn.__init__")
     importlib.reload(init)
     monkeypatch.setitem(sys.modules, "__init__", init)
