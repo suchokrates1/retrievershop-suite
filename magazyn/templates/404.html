@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container text-center mt-5">
+    <h2>Nie znaleziono strony</h2>
+    <p>Przepraszamy, ale żądana strona nie istnieje.</p>
+    <a href="{{ url_for('home') }}" class="btn btn-primary mt-3">Powrót do strony głównej</a>
+</div>
+{% endblock %}
