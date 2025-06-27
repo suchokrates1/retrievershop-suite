@@ -73,6 +73,12 @@ Start the stack using the `docker-compose.yml` file in the repository root:
 docker compose up
 ```
 
+The compose configuration mounts the environment files so updates made through
+the application persist on the host:
+
+- `./.env:/app/.env`
+- `./.env.example:/app/.env.example:ro`
+
 The compose configuration mounts the host's `/var/run/cups/cups.sock` so the
 printing agent can communicate with the host CUPS server.
 
