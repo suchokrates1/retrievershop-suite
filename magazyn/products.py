@@ -173,7 +173,8 @@ def barcode_scan():
 @bp.route('/scan_barcode')
 @login_required
 def barcode_scan_page():
-    return render_template('scan_barcode.html')
+    next_url = request.args.get('next', url_for('products.items'))
+    return render_template('scan_barcode.html', next=next_url)
 
 
 @bp.route('/export_products')

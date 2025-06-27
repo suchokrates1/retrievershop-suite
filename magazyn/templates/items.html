@@ -46,6 +46,6 @@
 
 </div>
 </div>
-<a href="{{ url_for('products.barcode_scan_page') }}" class="btn btn-primary mt-3">Skanuj kod kreskowy</a>
+<a href="{{ url_for('products.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary mt-3">Skanuj kod kreskowy</a>
 
 {% endblock %}

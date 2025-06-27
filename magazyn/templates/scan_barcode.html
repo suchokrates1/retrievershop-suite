@@ -11,6 +11,7 @@
     <!-- Element audio do odtworzenia dźwięku -->
     <audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
     <input type="hidden" id="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" id="next-url" value="{{ next }}">
 
     <script>
         let torchEnabled = false;
@@ -120,7 +121,9 @@
                     const text = `${result.name}, kolor ${result.color}, rozmiar ${result.size}`;
                     speechSynthesis.speak(new SpeechSynthesisUtterance(text));
                 }
-                window.location.href = "/items";
+                const nextUrlInput = document.getElementById('next-url');
+                const nextUrl = nextUrlInput ? nextUrlInput.value : '/items';
+                window.location.href = nextUrl;
             });
         });
     </script>
