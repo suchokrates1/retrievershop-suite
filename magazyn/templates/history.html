@@ -11,9 +11,9 @@
         <td>{{ oid }}</td>
         <td>{{ ts }}</td>
         <td>
-            <form method="post" action="{{ url_for('history.reprint_label', order_id=oid) }}">
+            <form class="d-inline" method="post" action="{{ url_for('history.reprint_label', order_id=oid) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-primary">Drukuj ponownie</button>
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-printer"></i></button>
             </form>
         </td>
     </tr>
