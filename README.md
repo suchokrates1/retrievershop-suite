@@ -88,6 +88,9 @@ When running the stack in Docker, this file is mounted inside the container as
 `/app/database.db` and the `DB_PATH` variable in your `.env` file should point
 to that location.
 
+Printed order IDs appear on the **Historia drukowania** page. Each row offers a
+**Drukuj ponownie** button to reprint a label if necessary.
+
 ## Database migration
 
 The project now uses SQLAlchemy for all database interactions. Existing
