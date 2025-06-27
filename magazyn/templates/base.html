@@ -37,6 +37,7 @@
 
 
     <div id="mobileMenu" class="mobile-menu d-md-none">
+        <button id="mobileMenuClose" class="mobile-close btn btn-link text-white" type="button" aria-label="Close">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
         <ul class="nav flex-column h-100">
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
@@ -73,8 +74,12 @@
     <script>
         const btn = document.getElementById('mobileMenuBtn');
         const menu = document.getElementById('mobileMenu');
+        const closeBtn = document.getElementById('mobileMenuClose');
         if (btn && menu) {
             btn.addEventListener('click', () => menu.classList.toggle('open'));
+        }
+        if (closeBtn && menu) {
+            closeBtn.addEventListener('click', () => menu.classList.remove('open'));
         }
     </script>
     </div>

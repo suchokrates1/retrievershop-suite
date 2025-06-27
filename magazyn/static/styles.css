@@ -281,4 +281,9 @@ body {
         margin-right: auto;
         display: block;
     }
+    .mobile-close {
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
 }
