@@ -27,8 +27,8 @@ h2, h3 {
 
 /* Centered layout shared by item forms */
 .center-form {
-    width: 75%;
-    max-width: none;
+    width: 60%;
+    max-width: 650px;
     margin: auto;
 }
 
