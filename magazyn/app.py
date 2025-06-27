@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_wtf import CSRFProtect
-import os
 from datetime import datetime
+import os
 from werkzeug.security import check_password_hash
-from dotenv import load_dotenv, dotenv_values
+from dotenv import dotenv_values
 from collections import OrderedDict
 from pathlib import Path
 
@@ -34,6 +34,7 @@ from .products import (
 )
 from .history import bp as history_bp, print_history
 from .auth import login_required
+from .config import settings
 from . import print_agent
 from __init__ import DB_PATH
 from .constants import ALL_SIZES
@@ -44,10 +45,8 @@ EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 
 
-load_dotenv()
-
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
+app.secret_key = settings.SECRET_KEY
 CSRFProtect(app)
 app.jinja_env.globals['ALL_SIZES'] = ALL_SIZES
 
@@ -219,5 +218,4 @@ def handle_500(error):
 
 if __name__ == "__main__":
     ensure_db_initialized()
-    debug = os.getenv("FLASK_DEBUG") == "1"
-    app.run(host="0.0.0.0", port=80, debug=debug)
+    app.run(host="0.0.0.0", port=80, debug=settings.FLASK_DEBUG)
