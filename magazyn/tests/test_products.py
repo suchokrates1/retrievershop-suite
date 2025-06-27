@@ -48,6 +48,19 @@ def test_barcode_scan(app_mod, client, login):
     assert resp.get_json() == {"name": "Prod2", "color": "Zielony", "size": "M"}
 
 
+def test_barcode_scan_invalid(app_mod, client, login):
+    resp = client.post("/barcode_scan", json={"barcode": "999"})
+    assert resp.status_code == 400
+    with client.session_transaction() as sess:
+        msgs = sess.get("_flashes")
+    assert any("Nie znaleziono" in m for _, m in msgs)
+
+
+def test_barcode_scan_empty(app_mod, client, login):
+    resp = client.post("/barcode_scan", json={"barcode": ""})
+    assert resp.status_code == 400
+
+
 def test_delete_item(app_mod, client, login):
     with app_mod.get_session() as db:
         prod = Product(name="Del", color="Green")
@@ -124,6 +137,16 @@ def test_scan_barcode_page_contains_csrf(app_mod, client, login):
                 flask_session[k] = v
             token = app_mod.app.jinja_env.globals["csrf_token"]()
     assert token in html
+
+
+def test_edit_nonexistent_product_returns_404(app_mod, client, login):
+    resp = client.get("/edit_item/999")
+    assert resp.status_code == 404
+
+
+def test_delete_nonexistent_product_returns_404(app_mod, client, login):
+    resp = client.post("/delete_item/999")
+    assert resp.status_code == 404
 
 
 def test_add_item_rejects_negative_quantity(app_mod, client, login):
