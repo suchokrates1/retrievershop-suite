@@ -7,7 +7,8 @@ body {
     color: #f0f0f0;
 }
 .page-wrapper {
-    min-height: 100vh;
+    /* Subtract navbar height so short pages avoid unnecessary scrolling */
+    min-height: calc(100vh - 70px);
     display: flex;
     flex-direction: column;
 }
