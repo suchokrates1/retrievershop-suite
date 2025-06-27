@@ -1,4 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    session,
+    flash,
+    has_request_context,
+)
 from flask_wtf import CSRFProtect
 from datetime import datetime
 import os
@@ -75,9 +84,14 @@ def load_settings():
         app.logger.error(f"Settings template missing: {EXAMPLE_PATH}")
         flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.")
         return OrderedDict()
-
-    example = dotenv_values(EXAMPLE_PATH)
-    current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    try:
+        example = dotenv_values(EXAMPLE_PATH)
+        current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    except Exception as e:
+        app.logger.exception("Failed to load .env files: %s", e)
+        if has_request_context():
+            flash(f"Błąd czytania plików .env: {e}")
+        return OrderedDict()
     values = OrderedDict()
 
     # first preserve ordering from .env.example
@@ -94,24 +108,42 @@ def load_settings():
 
 def write_env(values):
     """Rewrite .env preserving example order and keeping unknown keys."""
-    example_keys = list(dotenv_values(EXAMPLE_PATH).keys())
-    ordered = example_keys + [k for k in values.keys() if k not in example_keys]
-    with ENV_PATH.open("w") as f:
-        for key in ordered:
-            val = values.get(key, "")
-            f.write(f"{key}={val}\n")
+    try:
+        example_keys = list(dotenv_values(EXAMPLE_PATH).keys())
+        ordered = example_keys + [k for k in values.keys() if k not in example_keys]
+    except Exception as e:
+        app.logger.exception("Failed to read env template: %s", e)
+        if has_request_context():
+            flash(f"Błąd odczytu {EXAMPLE_PATH}: {e}")
+        return
+    try:
+        with ENV_PATH.open("w") as f:
+            for key in ordered:
+                val = values.get(key, "")
+                f.write(f"{key}={val}\n")
+    except Exception as e:
+        app.logger.exception("Failed to write .env file: %s", e)
+        if has_request_context():
+            flash(f"Błąd zapisu pliku .env: {e}")
 
 
 def ensure_db_initialized():
-    if os.path.isdir(DB_PATH):
-        app.logger.error(
-            f"Database path {DB_PATH} is a directory. Please fix the mount."
-        )
-        raise SystemExit(1)
-    if not os.path.isfile(DB_PATH):
-        init_db()
-    ensure_schema()
-    register_default_user()
+    try:
+        if os.path.isdir(DB_PATH):
+            app.logger.error(
+                f"Database path {DB_PATH} is a directory. Please fix the mount."
+            )
+            if has_request_context():
+                flash("Błąd konfiguracji bazy danych.")
+            raise SystemExit(1)
+        if not os.path.isfile(DB_PATH):
+            init_db()
+        ensure_schema()
+        register_default_user()
+    except Exception as e:
+        app.logger.exception("Database initialization failed: %s", e)
+        if has_request_context():
+            flash(f"Błąd inicjalizacji bazy danych: {e}")
 
 start_print_agent()
 
