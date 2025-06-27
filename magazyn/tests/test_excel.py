@@ -1,41 +1,17 @@
-import importlib
 import pandas as pd
-import sys
 from io import BytesIO
 from sqlalchemy import text
 from magazyn.models import Product, ProductSize
-import magazyn.config as cfg
 
 
-def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
-    import werkzeug
-    monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
-    init = importlib.import_module("magazyn.__init__")
-    importlib.reload(init)
-    monkeypatch.setitem(sys.modules, "__init__", init)
-    pa = importlib.import_module("magazyn.print_agent")
-    monkeypatch.setitem(sys.modules, "print_agent", pa)
-    monkeypatch.setattr(pa, "start_agent_thread", lambda: None)
-    monkeypatch.setattr(pa, "ensure_db_init", lambda: None)
-    monkeypatch.setattr(pa, "validate_env", lambda: None)
-    import magazyn.app as app_mod
-    importlib.reload(app_mod)
-    app_mod.reset_db()
-    return app_mod
 
 
-def test_export_products_includes_barcode(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
+def test_export_products_includes_barcode(app_mod, client, login):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Red")
         db.add(prod)
         db.flush()
         db.add(ProductSize(product_id=prod.id, size="M", quantity=5, barcode="123"))
-
-    client = app_mod.app.test_client()
-    with client.session_transaction() as sess:
-        sess["username"] = "x"
 
     resp = client.get("/export_products")
 
@@ -44,8 +20,7 @@ def test_export_products_includes_barcode(tmp_path, monkeypatch):
     assert str(df.loc[0, "Barcode"]) == "123"
 
 
-def test_import_products_reads_barcode(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
+def test_import_products_reads_barcode(app_mod, tmp_path):
     df = pd.DataFrame([
         {
             "Nazwa": "Prod",
@@ -82,8 +57,7 @@ def test_import_products_reads_barcode(tmp_path, monkeypatch):
         assert row[0] == "999"
 
 
-def test_consume_stock_multiple_batches(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
+def test_consume_stock_multiple_batches(app_mod):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Red")
         db.add(prod)

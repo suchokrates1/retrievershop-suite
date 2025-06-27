@@ -1,33 +1,8 @@
-import importlib
-import sys
 from sqlalchemy import text
 from magazyn.models import Product, ProductSize
-import magazyn.config as cfg
 
 
-def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
-    init = importlib.import_module("magazyn.__init__")
-    importlib.reload(init)
-    monkeypatch.setitem(sys.modules, "__init__", init)
-    pa = importlib.import_module("magazyn.print_agent")
-    monkeypatch.setitem(sys.modules, "print_agent", pa)
-    monkeypatch.setattr(pa, "start_agent_thread", lambda: None)
-    monkeypatch.setattr(pa, "ensure_db_init", lambda: None)
-    monkeypatch.setattr(pa, "validate_env", lambda: None)
-    import magazyn.app as app_mod
-    importlib.reload(app_mod)
-    app_mod.reset_db()
-    return app_mod
-
-
-def login(client):
-    with client.session_transaction() as sess:
-        sess["username"] = "tester"
-
-
-def test_record_delivery(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
+def test_record_delivery(app_mod):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Red")
         db.add(prod)
@@ -60,8 +35,7 @@ def test_record_delivery(tmp_path, monkeypatch):
     assert qty[0] == 3
 
 
-def test_consume_stock_cheapest(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
+def test_consume_stock_cheapest(app_mod):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Red")
         db.add(prod)
@@ -89,8 +63,7 @@ def test_consume_stock_cheapest(tmp_path, monkeypatch):
     assert batches[0][1] == 1
 
 
-def test_deliveries_page_shows_color(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
+def test_deliveries_page_shows_color(app_mod):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Blue")
         db.add(prod)

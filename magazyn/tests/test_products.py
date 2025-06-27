@@ -1,42 +1,7 @@
-import importlib
-import sys
 from magazyn.models import Product, ProductSize
-import magazyn.config as cfg
 
 
-def setup_app(tmp_path, monkeypatch):
-    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
-    import werkzeug
-    monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
-    init = importlib.import_module("magazyn.__init__")
-    importlib.reload(init)
-    monkeypatch.setitem(sys.modules, "__init__", init)
-    pa = importlib.import_module("magazyn.print_agent")
-    monkeypatch.setitem(sys.modules, "print_agent", pa)
-    monkeypatch.setattr(pa, "start_agent_thread", lambda: None)
-    monkeypatch.setattr(pa, "ensure_db_init", lambda: None)
-    monkeypatch.setattr(pa, "validate_env", lambda: None)
-    import magazyn.app as app_mod
-    importlib.reload(app_mod)
-    import magazyn.db as db_mod
-    from sqlalchemy.orm import sessionmaker
-    db_mod.SessionLocal = sessionmaker(
-        bind=db_mod.engine, autoflush=False, expire_on_commit=False
-    )
-    app_mod.app.config["WTF_CSRF_ENABLED"] = False
-    app_mod.reset_db()
-    return app_mod
-
-
-def login(client):
-    with client.session_transaction() as sess:
-        sess["username"] = "tester"
-
-
-def test_product_crud_and_barcode_scan(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
-    login(client)
+def test_product_crud_and_barcode_scan(app_mod, client, login):
 
     # add product
     data_add = {
@@ -86,10 +51,7 @@ def test_product_crud_and_barcode_scan(tmp_path, monkeypatch):
         assert not db.query(ProductSize).filter_by(product_id=prod_id).first()
 
 
-def test_items_forms_include_csrf_token(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
-    login(client)
+def test_items_forms_include_csrf_token(app_mod, client, login):
 
     with app_mod.get_session() as db:
         prod = Product(name="P", color="C")
@@ -108,10 +70,7 @@ def test_items_forms_include_csrf_token(tmp_path, monkeypatch):
     assert html.count(token) >= 7
 
 
-def test_edit_item_get_shows_product_details(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
-    login(client)
+def test_edit_item_get_shows_product_details(app_mod, client, login):
 
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Blue")
@@ -127,10 +86,7 @@ def test_edit_item_get_shows_product_details(tmp_path, monkeypatch):
     assert "Blue" in html
 
 
-def test_items_page_displays_barcodes(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
-    login(client)
+def test_items_page_displays_barcodes(app_mod, client, login):
 
     with app_mod.get_session() as db:
         prod = Product(name="P", color="C")
@@ -144,10 +100,7 @@ def test_items_page_displays_barcodes(tmp_path, monkeypatch):
     assert "321" not in html
 
 
-def test_scan_barcode_page_contains_csrf(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
-    login(client)
+def test_scan_barcode_page_contains_csrf(app_mod, client, login):
 
     resp = client.get("/scan_barcode")
     assert resp.status_code == 200
@@ -161,10 +114,7 @@ def test_scan_barcode_page_contains_csrf(tmp_path, monkeypatch):
     assert token in html
 
 
-def test_add_item_rejects_negative_quantity(tmp_path, monkeypatch):
-    app_mod = setup_app(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
-    login(client)
+def test_add_item_rejects_negative_quantity(app_mod, client, login):
 
     data = {
         "name": "NegProd",
