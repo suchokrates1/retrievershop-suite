@@ -8,6 +8,7 @@ from flask import (
     send_file,
     jsonify,
     after_this_request,
+    abort,
 )
 import pandas as pd
 import tempfile
@@ -57,10 +58,14 @@ def update_quantity(product_id, size):
 @login_required
 def delete_item(item_id):
     try:
-        services.delete_product(item_id)
-        flash('Przedmiot został usunięty')
+        deleted = services.delete_product(item_id)
     except Exception as e:
-        flash(f'B\u0142\u0105d podczas usuwania przedmiotu: {e}')
+        flash(f'B\u0142ąd podczas usuwania przedmiotu: {e}')
+        return redirect(url_for('products.items'))
+    if not deleted:
+        flash('Nie znaleziono produktu o podanym identyfikatorze')
+        abort(404)
+    flash('Przedmiot został usunięty')
     return redirect(url_for('products.items'))
 
 
@@ -74,13 +79,20 @@ def edit_item(product_id):
         quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
         barcodes = {size: request.form.get(f'barcode_{size}') or None for size in sizes}
         try:
-            services.update_product(product_id, name, color, quantities, barcodes)
-            flash('Przedmiot został zaktualizowany')
+            updated = services.update_product(product_id, name, color, quantities, barcodes)
         except Exception as e:
-            flash(f'B\u0142\u0105d podczas aktualizacji przedmiotu: {e}')
+            flash(f'B\u0142ąd podczas aktualizacji przedmiotu: {e}')
+            return redirect(url_for('products.items'))
+        if not updated:
+            flash('Nie znaleziono produktu o podanym identyfikatorze')
+            abort(404)
+        flash('Przedmiot został zaktualizowany')
         return redirect(url_for('products.items'))
 
     product, product_sizes = services.get_product_details(product_id)
+    if not product:
+        flash('Nie znaleziono produktu o podanym identyfikatorze')
+        abort(404)
     return render_template('edit_item.html', product=product, product_sizes=product_sizes)
 
 
@@ -94,16 +106,16 @@ def items():
 @bp.route('/barcode_scan', methods=['POST'])
 @login_required
 def barcode_scan():
-    data = request.get_json()
-    barcode = data.get('barcode')
-    if barcode:
-        result = services.find_by_barcode(barcode)
-        if result:
-            flash(f'Znaleziono produkt: {result["name"]}')
-            return jsonify(result)
-        else:
-            flash('Nie znaleziono produktu o podanym kodzie kreskowym')
-    return ('', 204)
+    data = request.get_json(silent=True) or {}
+    barcode = (data.get('barcode') or '').strip()
+    if not barcode:
+        return ('', 400)
+    result = services.find_by_barcode(barcode)
+    if result:
+        flash(f'Znaleziono produkt: {result["name"]}')
+        return jsonify(result)
+    flash('Nie znaleziono produktu o podanym kodzie kreskowym')
+    return ('', 400)
 
 
 @bp.route('/scan_barcode')

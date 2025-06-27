@@ -1,4 +1,6 @@
 import json
+import sqlite3
+import pytest
 import magazyn.print_agent as bl
 
 
@@ -96,3 +98,27 @@ def test_queue_roundtrip(tmp_path, monkeypatch):
     assert loaded[0]["label_data"] == item["label_data"]
     assert loaded[0]["ext"] == item["ext"]
     assert loaded[0]["last_order_data"] == item["last_order_data"]
+
+
+def test_validate_env_missing_api_token(monkeypatch):
+    monkeypatch.setattr(bl, "API_TOKEN", "")
+    monkeypatch.setattr(bl, "PAGE_ACCESS_TOKEN", "x")
+    monkeypatch.setattr(bl, "RECIPIENT_ID", "x")
+    with pytest.raises(SystemExit):
+        bl.validate_env()
+
+
+def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
+    db = tmp_path / "queue_bad.db"
+    monkeypatch.setattr(bl, "DB_FILE", str(db))
+    bl.ensure_db()
+    conn = sqlite3.connect(db)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO label_queue(order_id, label_data, ext, last_order_data) VALUES (?,?,?,?)",
+        ("1", "xxx", "pdf", "{bad json"),
+    )
+    conn.commit()
+    conn.close()
+    items = bl.load_queue()
+    assert items[0]["last_order_data"] == {}
