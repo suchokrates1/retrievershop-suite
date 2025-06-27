@@ -321,6 +321,31 @@ def print_test_page():
         return False
 
 
+def reprint_order(order_id):
+    """Fetch and print labels for a previously printed order."""
+    try:
+        packages = get_order_packages(order_id)
+        printed_any = False
+        for pkg in packages:
+            package_id = pkg.get("package_id")
+            courier_code = pkg.get("courier_code")
+            if not package_id or not courier_code:
+                logger.warning(
+                    "Brak danych do ponownego druku: %s", pkg
+                )
+                continue
+            label_data, ext = get_label(courier_code, package_id)
+            if label_data:
+                print_label(label_data, ext, order_id)
+                printed_any = True
+        if printed_any:
+            logger.info("🔁 Ponownie wydrukowano etykietę %s", order_id)
+            return True
+    except Exception as e:
+        logger.error("Błąd ponownego wydruku %s: %s", order_id, e)
+    return False
+
+
 def shorten_product_name(full_name):
     words = full_name.strip().split()
     if len(words) >= 3:

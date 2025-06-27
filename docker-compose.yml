@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./magazyn/database.db:/app/database.db
+      - ./.env:/app/.env
+      - ./.env.example:/app/.env.example:ro
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     env_file: .env
     command: ["python", "-m", "magazyn.app"]
