@@ -1,9 +1,7 @@
 from magazyn.models import Product, ProductSize
 
 
-def test_product_crud_and_barcode_scan(app_mod, client, login):
-
-    # add product
+def test_add_and_edit_item(app_mod, client, login):
     data_add = {
         "name": "Prod",
         "color": "Czerwony",
@@ -21,7 +19,6 @@ def test_product_crud_and_barcode_scan(app_mod, client, login):
         assert ps.quantity == 2
         assert ps.barcode == "111"
 
-    # edit product
     data_edit = {
         "name": "Prod2",
         "color": "Zielony",
@@ -38,12 +35,27 @@ def test_product_crud_and_barcode_scan(app_mod, client, login):
         ps = db.query(ProductSize).filter_by(product_id=prod_id, size="M").first()
         assert ps.quantity == 5
 
-    # barcode scan
+
+def test_barcode_scan(app_mod, client, login):
+    with app_mod.get_session() as db:
+        prod = Product(name="Prod2", color="Zielony")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=1, barcode="111"))
+
     resp = client.post("/barcode_scan", json={"barcode": "111"})
     assert resp.status_code == 200
     assert resp.get_json() == {"name": "Prod2", "color": "Zielony", "size": "M"}
 
-    # delete product
+
+def test_delete_item(app_mod, client, login):
+    with app_mod.get_session() as db:
+        prod = Product(name="Del", color="Green")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=2))
+        prod_id = prod.id
+
     resp = client.post(f"/delete_item/{prod_id}")
     assert resp.status_code == 302
     with app_mod.get_session() as db:
