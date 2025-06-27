@@ -75,12 +75,23 @@
         const btn = document.getElementById('mobileMenuBtn');
         const menu = document.getElementById('mobileMenu');
         const closeBtn = document.getElementById('mobileMenuClose');
+        const links = document.querySelectorAll('#mobileMenu a');
+
+        function closeMenu() {
+            if (menu) {
+                menu.classList.remove('open');
+            }
+        }
+
         if (btn && menu) {
             btn.addEventListener('click', () => menu.classList.toggle('open'));
         }
-        if (closeBtn && menu) {
-            closeBtn.addEventListener('click', () => menu.classList.remove('open'));
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeMenu);
         }
+        links.forEach(link => {
+            link.addEventListener('click', closeMenu);
+        });
     </script>
     </div>
 </body>
