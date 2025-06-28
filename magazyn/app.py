@@ -46,6 +46,7 @@ from .history import bp as history_bp, print_history
 from .auth import login_required
 from .config import settings
 from . import print_agent
+from .env_info import ENV_INFO
 from __init__ import DB_PATH
 from .constants import ALL_SIZES
 
@@ -199,7 +200,11 @@ def settings():
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("settings"))
-    return render_template("settings.html", settings=values)
+    settings_list = []
+    for key, val in values.items():
+        label, desc = ENV_INFO.get(key, (key, None))
+        settings_list.append({"key": key, "label": label, "desc": desc, "value": val})
+    return render_template("settings.html", settings=settings_list)
 
 
 @app.route("/logs")
