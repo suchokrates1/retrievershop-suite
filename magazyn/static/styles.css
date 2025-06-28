@@ -252,8 +252,8 @@ body {
     }
 
     .mobile-menu a:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #ddd;
+        background-color: rgba(255, 255, 255, 0.25);
+        color: #fff;
     }
 }
 
@@ -265,9 +265,13 @@ body {
         transition: background-color 0.2s ease, color 0.2s ease;
     }
     .navbar-nav .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #ddd;
+        background-color: rgba(255, 255, 255, 0.25);
+        color: #fff;
         text-decoration: none;
+    }
+
+    .navbar-brand img {
+        height: 70px;
     }
 
     .navbar-nav .dropdown-menu {
@@ -296,7 +300,7 @@ body {
 }
 
 .dropdown-menu .dropdown-item:hover {
-    background-color: #145360;
+    background-color: #1e6a82;
     color: #fff;
 }
 
