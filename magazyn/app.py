@@ -12,6 +12,7 @@ from flask_wtf import CSRFProtect
 from datetime import datetime
 import os
 import sys
+import atexit
 from werkzeug.security import check_password_hash
 from dotenv import dotenv_values
 from collections import OrderedDict
@@ -155,6 +156,7 @@ def ensure_db_initialized():
 
 
 start_print_agent()
+atexit.register(print_agent.stop_agent_thread)
 
 ensure_db_initialized()
 
