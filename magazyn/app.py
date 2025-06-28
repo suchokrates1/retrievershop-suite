@@ -190,7 +190,7 @@ def login():
             flash("Niepoprawna nazwa użytkownika lub hasło")
         return redirect(url_for("login"))
 
-    return render_template("login.html", form=form)
+    return render_template("login.html", form=form, show_menu=False)
 
 
 @app.route("/logout")

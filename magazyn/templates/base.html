@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    {% if show_menu is not defined %}
+        {% set show_menu = True %}
+    {% endif %}
     <div class="page-wrapper">
     <nav class="navbar navbar-dark bg-dark fixed-top">
         <div class="container">
@@ -17,6 +20,7 @@
                 <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" style="height: 55px;">
                 <span class="ms-2">Witaj w aplikacji magazynowej</span>
             </span>
+            {% if show_menu %}
             <div class="d-flex align-items-center">
                 <ul class="navbar-nav flex-row flex-nowrap gap-3 d-none d-md-flex">
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
@@ -42,10 +46,12 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
             </div>
+            {% endif %}
         </div>
     </nav>
 
 
+    {% if show_menu %}
     <div id="mobileMenu" class="mobile-menu d-md-none">
         <button id="mobileMenuClose" class="mobile-close btn btn-link text-white" type="button" aria-label="Close">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
@@ -68,6 +74,7 @@
             </li>
         </ul>
     </div>
+    {% endif %}
 
     <main class="container-fluid mt-5 pt-4">
 	{% with messages = get_flashed_messages() %}
