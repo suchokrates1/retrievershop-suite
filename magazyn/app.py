@@ -55,11 +55,10 @@ ENV_PATH = ROOT_DIR / ".env"
 EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 
-
 app = Flask(__name__)
 app.secret_key = settings.SECRET_KEY
 CSRFProtect(app)
-app.jinja_env.globals['ALL_SIZES'] = ALL_SIZES
+app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
 
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)
@@ -147,6 +146,7 @@ def ensure_db_initialized():
         if has_request_context():
             flash(f"Błąd inicjalizacji bazy danych: {e}")
 
+
 start_print_agent()
 
 ensure_db_initialized()
@@ -196,6 +196,12 @@ def settings():
     if request.method == "POST":
         for key in list(values.keys()):
             values[key] = request.form.get(key, "")
+        for tkey in ("QUIET_HOURS_START", "QUIET_HOURS_END"):
+            try:
+                print_agent.parse_time_str(values.get(tkey, ""))
+            except ValueError:
+                flash("Niepoprawny format godziny (hh:mm)")
+                return redirect(url_for("settings"))
         write_env(values)
         print_agent.reload_config()
         flash("Zapisano ustawienia.")

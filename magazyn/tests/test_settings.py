@@ -17,8 +17,12 @@ def test_settings_list_all_keys(app_mod, client, login, tmp_path):
 def test_settings_post_saves_and_reloads(app_mod, client, login, tmp_path, monkeypatch):
     app_mod.ENV_PATH = tmp_path / ".env"
     reloaded = {"called": False}
-    monkeypatch.setattr(app_mod.print_agent, "reload_config", lambda: reloaded.update(called=True))
+    monkeypatch.setattr(
+        app_mod.print_agent, "reload_config", lambda: reloaded.update(called=True)
+    )
     values = {k: f"val{i}" for i, k in enumerate(app_mod.load_settings().keys())}
+    values["QUIET_HOURS_START"] = "10:00"
+    values["QUIET_HOURS_END"] = "22:00"
     resp = client.post("/settings", data=values)
     assert resp.status_code == 302
     env_text = app_mod.ENV_PATH.read_text()
@@ -59,7 +63,6 @@ def test_extra_keys_display_and_save(app_mod, client, login, tmp_path, monkeypat
     # create env file with an additional key
     app_mod.ENV_PATH.write_text("EXTRA_KEY=foo\n")
 
-
     resp = client.get("/settings")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
@@ -85,4 +88,3 @@ def test_missing_example_file(app_mod, client, login, tmp_path, monkeypatch):
 
     with app_mod.app.test_request_context():
         assert app_mod.load_settings() == OrderedDict()
-
