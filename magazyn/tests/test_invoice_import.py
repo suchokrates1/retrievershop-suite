@@ -132,3 +132,50 @@ def test_import_invoice_pdf_skips_invalid_size(app_mod, client, login):
         assert prod is not None
         ps = db.query(ProductSize).filter_by(product_id=prod.id, size='M').first()
         assert ps.quantity == 1
+
+
+def test_confirm_invoice_updates_existing(app_mod, client, login, tmp_path):
+    with app_mod.get_session() as db:
+        prod = Product(name='Existing', color='Red')
+        db.add(prod)
+        db.flush()
+        ps = ProductSize(product_id=prod.id, size='M', quantity=1)
+        db.add(ps)
+        db.flush()
+        ps_id = ps.id
+
+    df = pd.DataFrame([
+        {'Nazwa': 'Other', 'Kolor': 'Blue', 'Rozmiar': 'L', 'Ilość': 2, 'Cena': 3.0, 'Barcode': ''}
+    ])
+    file_path = tmp_path / 'inv.xlsx'
+    df.to_excel(file_path, index=False)
+
+    with open(file_path, 'rb') as f:
+        data = {'file': (f, 'inv.xlsx')}
+        resp = client.post('/import_invoice', data=data, content_type='multipart/form-data')
+    assert resp.status_code == 200
+
+    confirm = {
+        'name_0': 'Other',
+        'color_0': 'Blue',
+        'size_0': 'L',
+        'quantity_0': '2',
+        'price_0': '3.0',
+        'barcode_0': '',
+        'ps_id_0': str(ps_id),
+        'accept_0': 'y',
+    }
+    resp = client.post('/confirm_invoice', data=confirm)
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        assert db.query(Product).filter_by(name='Other').first() is None
+        ps = db.query(ProductSize).filter_by(id=ps_id).first()
+        assert ps.quantity == 3
+        batch = db.execute(
+            text(
+                "SELECT quantity FROM purchase_batches WHERE product_id=:pid AND size='M'"
+            ),
+            {'pid': prod.id},
+        ).fetchone()
+        assert batch[0] == 2

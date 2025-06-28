@@ -17,6 +17,7 @@
                 <th>Ilość</th>
                 <th>Cena</th>
                 <th>Barcode</th>
+                <th>Produkt z bazy</th>
             </tr>
         </thead>
         <tbody>
@@ -29,6 +30,14 @@
                 <td><input type="text" name="quantity_{{ loop.index0 }}" value="{{ row['Ilość'] }}" class="form-control"></td>
                 <td><input type="text" name="price_{{ loop.index0 }}" value="{{ row['Cena'] }}" class="form-control"></td>
                 <td><input type="text" name="barcode_{{ loop.index0 }}" value="{{ row['Barcode'] or '' }}" class="form-control"></td>
+                <td>
+                    <select name="ps_id_{{ loop.index0 }}" class="form-select">
+                        <option value=""></option>
+                        {% for ps in product_sizes %}
+                        <option value="{{ ps['ps_id'] }}">{{ ps['name'] }} ({{ ps['color'] }}) {{ ps['size'] }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
