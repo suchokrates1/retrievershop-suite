@@ -49,7 +49,7 @@ restarting the server.
 ## Modifying settings via the web interface
 
 After starting the application you can modify the values stored in your `.env` file without touching the filesystem. Log in to the web interface and open the **Ustawienia** tab from the navigation bar.
-The form lists all variables defined in `.env.example` so new options appear automatically. When you click **Zapisz** the application rewrites `.env` in the same order as `.env.example` and calls `print_agent.reload_config()` so the running printing agent immediately uses the updated environment.
+The form lists all variables defined in `.env.example` so new options appear automatically. When you click **Zapisz** the application rewrites `.env` in the same order as `.env.example` and calls `print_agent.reload_config()` so the running printing agent immediately uses the updated environment. Log-related options like `LOG_LEVEL` and `LOG_FILE` therefore take effect as soon as you save the form.
 Variables that are only read when the application starts, such as `DB_PATH`, do
 not appear on this page.
 
