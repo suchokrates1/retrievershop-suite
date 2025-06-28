@@ -191,7 +191,7 @@ def logout():
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
-def settings():
+def settings_page():
     values = load_settings()
     if request.method == "POST":
         for key in list(values.keys()):
@@ -201,11 +201,11 @@ def settings():
                 print_agent.parse_time_str(values.get(tkey, ""))
             except ValueError:
                 flash("Niepoprawny format godziny (hh:mm)")
-                return redirect(url_for("settings"))
+                return redirect(url_for("settings_page"))
         write_env(values)
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
-        return redirect(url_for("settings"))
+        return redirect(url_for("settings_page"))
     settings_list = []
     for key, val in values.items():
         label, desc = ENV_INFO.get(key, (key, None))
