@@ -9,8 +9,18 @@ from werkzeug.security import generate_password_hash
 from . import DB_PATH
 from .models import Base, User, ProductSize, PurchaseBatch
 
-engine = create_engine(f"sqlite:///{DB_PATH}", future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False)
+engine = None
+SessionLocal = None
+
+
+def configure_engine(db_path):
+    """Create SQLAlchemy engine and session factory for ``db_path``."""
+    global engine, SessionLocal
+    engine = create_engine(f"sqlite:///{db_path}", future=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False)
+
+
+configure_engine(DB_PATH)
 logger = logging.getLogger(__name__)
 
 
