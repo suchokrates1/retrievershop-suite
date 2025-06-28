@@ -25,7 +25,7 @@
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle text-white" href="#" id="navbarSettings" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle text-white" href="#" id="navbarSettings" role="button" aria-expanded="false">
                         Ustawienia
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark">
@@ -56,7 +56,7 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle text-white" href="#" id="mobileSettingsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Ustawienia</a>
+                <a class="nav-link dropdown-toggle text-white" href="#" id="mobileSettingsDropdown" role="button" aria-expanded="false">Ustawienia</a>
                 <ul class="dropdown-menu dropdown-menu-dark">
                     <li><a class="dropdown-item" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('agent_logs') }}">Logi</a></li>
@@ -106,6 +106,29 @@
         }
         links.forEach(link => {
             link.addEventListener('click', closeMenu);
+        });
+
+        // Show dropdown menus on hover for desktop and allow toggle on mobile
+        document.querySelectorAll('.nav-item.dropdown').forEach(item => {
+            const toggle = item.querySelector('.nav-link');
+            const menu = item.querySelector('.dropdown-menu');
+            if (!menu || !toggle) return;
+            item.addEventListener('mouseenter', () => {
+                if (window.innerWidth >= 768) {
+                    menu.classList.add('show');
+                }
+            });
+            item.addEventListener('mouseleave', () => {
+                if (window.innerWidth >= 768) {
+                    menu.classList.remove('show');
+                }
+            });
+            toggle.addEventListener('click', (e) => {
+                if (window.innerWidth < 768) {
+                    e.preventDefault();
+                    menu.classList.toggle('show');
+                }
+            });
         });
     </script>
     </div>
