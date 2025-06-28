@@ -107,6 +107,8 @@ def reload_config():
 
 last_order_data = {}
 _agent_thread = None
+# Event used to signal the agent loop to exit
+_stop_event = threading.Event()
 
 
 def validate_env():
@@ -441,7 +443,7 @@ def is_quiet_time():
 
 
 def _agent_loop():
-    while True:
+    while not _stop_event.is_set():
         clean_old_printed_orders()
         printed_entries = load_printed_orders()
         printed = {e["order_id"]: e["printed_at"] for e in printed_entries}
@@ -532,12 +534,22 @@ def _agent_loop():
             logger.error(f"[BŁĄD GŁÓWNY] {e}")
 
         save_queue(queue)
-        time.sleep(POLL_INTERVAL)
+        _stop_event.wait(POLL_INTERVAL)
 
 
 def start_agent_thread():
-    global _agent_thread
+    global _agent_thread, _stop_event
     if _agent_thread and _agent_thread.is_alive():
         return
+    _stop_event = threading.Event()
     _agent_thread = threading.Thread(target=_agent_loop, daemon=True)
     _agent_thread.start()
+
+
+def stop_agent_thread():
+    """Signal the agent loop to stop and wait for it to finish."""
+    global _agent_thread
+    if _agent_thread and _agent_thread.is_alive():
+        _stop_event.set()
+        _agent_thread.join()
+        _agent_thread = None
