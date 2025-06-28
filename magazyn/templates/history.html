@@ -9,7 +9,7 @@
     {% for oid, ts in printed.items() %}
     <tr>
         <td>{{ oid }}</td>
-        <td>{{ ts }}</td>
+        <td>{{ ts.strftime('%Y-%m-%d %H:%M') }}</td>
         <td>
             <form class="d-inline" method="post" action="{{ url_for('history.reprint_label', order_id=oid) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
