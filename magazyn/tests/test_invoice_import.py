@@ -1,4 +1,5 @@
 import pandas as pd
+from pathlib import Path
 from io import BytesIO
 from sqlalchemy.sql import text
 from magazyn.models import Product, ProductSize
@@ -44,4 +45,43 @@ def test_import_invoice_creates_products(app_mod, tmp_path):
             {"pid": prod.id},
         ).fetchone()
         assert batch[0] == 2
-        assert abs(batch[1] - 5.5) < 0.001
+    assert abs(batch[1] - 5.5) < 0.001
+
+
+def test_import_invoice_pdf(app_mod):
+    pdf_path = Path('magazyn/tests/data/sample_invoice.pdf')
+    with pdf_path.open('rb') as f:
+        data = {'file': (f, 'inv.pdf')}
+        with app_mod.app.test_request_context(
+            '/import_invoice', method='POST', data=data, content_type='multipart/form-data'
+        ):
+            from flask import session
+
+            session['username'] = 'x'
+            app_mod.import_invoice.__wrapped__()
+
+    with app_mod.get_session() as db:
+        prod = db.query(Product).filter_by(name='Rain Coat').first()
+        assert prod is not None
+        ps = db.query(ProductSize).filter_by(product_id=prod.id, size='XL').first()
+        assert ps.quantity == 2
+
+
+def test_import_invoice_pdf_skips_invalid_size(app_mod):
+    pdf_path = Path('magazyn/tests/data/sample_invalid.pdf')
+    with pdf_path.open('rb') as f:
+        data = {'file': (f, 'inv.pdf')}
+        with app_mod.app.test_request_context(
+            '/import_invoice', method='POST', data=data, content_type='multipart/form-data'
+        ):
+            from flask import session
+
+            session['username'] = 'x'
+            app_mod.import_invoice.__wrapped__()
+
+    with app_mod.get_session() as db:
+        assert db.query(Product).filter_by(name='Test Product').first() is None
+        prod = db.query(Product).filter_by(name='Another').first()
+        assert prod is not None
+        ps = db.query(ProductSize).filter_by(product_id=prod.id, size='M').first()
+        assert ps.quantity == 1
