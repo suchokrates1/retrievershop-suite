@@ -3,7 +3,8 @@ from datetime import datetime
 
 def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
     ts = datetime(2023, 1, 2, 3, 4)
-    monkeypatch.setattr(app_mod.print_agent, "load_printed_orders", lambda: {"1": ts})
+    item = {"order_id": "1", "printed_at": ts, "last_order_data": {"name": "N", "color": "C", "size": "S"}}
+    monkeypatch.setattr(app_mod.print_agent, "load_printed_orders", lambda: [item])
     monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [])
     resp = client.get("/history")
     assert resp.status_code == 200
@@ -17,6 +18,9 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
             token = app_mod.app.jinja_env.globals["csrf_token"]()
     assert token in html
     assert ts.strftime('%Y-%m-%d %H:%M') in html
+    assert "N" in html
+    assert "C" in html
+    assert "S" in html
 
 
 def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
@@ -35,7 +39,7 @@ def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
     assert mprinted["n"] == 1
 
 def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
-    monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [{"order_id": "2", "label_data": "x", "ext": "pdf"}])
+    monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [{"order_id": "2", "label_data": "x", "ext": "pdf", "last_order_data": {}}])
     called = {"n": 0}
     monkeypatch.setattr(app_mod.print_agent, "print_label", lambda d, e, o: called.update(n=called["n"] + 1))
     saved = {"n": 0}

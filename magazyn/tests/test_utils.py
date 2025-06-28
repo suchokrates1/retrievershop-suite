@@ -50,9 +50,10 @@ def test_mark_and_load_printed(tmp_path, monkeypatch):
     db = tmp_path / "test.db"
     monkeypatch.setattr(bl, "DB_FILE", str(db))
     bl.ensure_db()
-    bl.mark_as_printed("abc")
+    bl.mark_as_printed("abc", {"name": "P", "color": "C", "size": "S"})
     orders = bl.load_printed_orders()
-    assert "abc" in orders
+    assert any(o["order_id"] == "abc" for o in orders)
+    assert orders[0]["last_order_data"]["name"] == "P"
 
 
 def test_mark_as_printed_deduplicates(tmp_path, monkeypatch):
@@ -72,13 +73,38 @@ def test_mark_as_printed_deduplicates(tmp_path, monkeypatch):
     monkeypatch.setattr(bl, "datetime", DummyDateTime)
 
     bl.mark_as_printed("xyz")
-    first = bl.load_printed_orders()["xyz"]
+    first = {o["order_id"]: o["printed_at"] for o in bl.load_printed_orders()}["xyz"]
 
     DummyDateTime.ts = dt.datetime.fromisoformat("2024-02-02T00:00:00")
     bl.mark_as_printed("xyz")
-    second = bl.load_printed_orders()["xyz"]
+    second = {o["order_id"]: o["printed_at"] for o in bl.load_printed_orders()}["xyz"]
 
     assert first == second
+
+
+def test_load_printed_orders_sorted(tmp_path, monkeypatch):
+    db = tmp_path / "sorted.db"
+    monkeypatch.setattr(bl, "DB_FILE", str(db))
+    bl.ensure_db()
+
+    import datetime as dt
+
+    class DummyDateTime(dt.datetime):
+        ts = dt.datetime.fromisoformat("2023-01-01T00:00:00")
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.ts
+
+    monkeypatch.setattr(bl, "datetime", DummyDateTime)
+
+    bl.mark_as_printed("1")
+    DummyDateTime.ts = dt.datetime.fromisoformat("2023-01-02T00:00:00")
+    bl.mark_as_printed("2")
+
+    orders = bl.load_printed_orders()
+    ids = [o["order_id"] for o in orders]
+    assert ids == ["2", "1"]
 
 
 def test_queue_roundtrip(tmp_path, monkeypatch):
