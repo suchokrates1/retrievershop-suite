@@ -2,7 +2,8 @@ from datetime import datetime
 
 
 def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
-    monkeypatch.setattr(app_mod.print_agent, "load_printed_orders", lambda: {"1": datetime.now()})
+    ts = datetime(2023, 1, 2, 3, 4)
+    monkeypatch.setattr(app_mod.print_agent, "load_printed_orders", lambda: {"1": ts})
     monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [])
     resp = client.get("/history")
     assert resp.status_code == 200
@@ -15,6 +16,7 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
                 flask_session[k] = v
             token = app_mod.app.jinja_env.globals["csrf_token"]()
     assert token in html
+    assert ts.strftime('%Y-%m-%d %H:%M') in html
 
 
 def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
