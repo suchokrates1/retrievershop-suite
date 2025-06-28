@@ -351,17 +351,8 @@ def _parse_pdf(file) -> pd.DataFrame:
     return _parse_simple_pdf(file_obj)
 
 
-def import_invoice_file(file):
-    """Parse uploaded invoice (Excel or PDF) and record purchases."""
-    filename = file.filename or ""
-    ext = filename.rsplit(".", 1)[-1].lower()
-    if ext in {"xlsx", "xls"}:
-        df = pd.read_excel(file)
-    elif ext == "pdf":
-        df = _parse_pdf(file)
-    else:
-        raise ValueError("Nieobsługiwany format pliku")
-
+def _import_invoice_df(df: pd.DataFrame):
+    """Record purchases using rows from a DataFrame."""
     for _, row in df.iterrows():
         name = row.get("Nazwa")
         color = row.get("Kolor", "")
@@ -405,4 +396,24 @@ def import_invoice_file(file):
                 )
             )
             ps.quantity += quantity
+
+
+def import_invoice_rows(rows: List[Dict]):
+    """Record purchases from a list of row dictionaries."""
+    df = pd.DataFrame(rows)
+    _import_invoice_df(df)
+
+
+def import_invoice_file(file):
+    """Parse uploaded invoice (Excel or PDF) and record purchases."""
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower()
+    if ext in {"xlsx", "xls"}:
+        df = pd.read_excel(file)
+    elif ext == "pdf":
+        df = _parse_pdf(file)
+    else:
+        raise ValueError("Nieobsługiwany format pliku")
+
+    _import_invoice_df(df)
 

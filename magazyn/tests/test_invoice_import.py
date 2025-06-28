@@ -1,11 +1,10 @@
 import pandas as pd
 from pathlib import Path
-from io import BytesIO
 from sqlalchemy.sql import text
 from magazyn.models import Product, ProductSize
 
 
-def test_import_invoice_creates_products(app_mod, tmp_path):
+def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
     df = pd.DataFrame([
         {
             "Nazwa": "ProdInv",
@@ -21,16 +20,21 @@ def test_import_invoice_creates_products(app_mod, tmp_path):
 
     with open(file_path, "rb") as f:
         data = {"file": (f, "inv.xlsx")}
-        with app_mod.app.test_request_context(
-            "/import_invoice",
-            method="POST",
-            data=data,
-            content_type="multipart/form-data",
-        ):
-            from flask import session
+        resp = client.post("/import_invoice", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    assert "ProdInv" in resp.get_data(as_text=True)
 
-            session["username"] = "x"
-            app_mod.import_invoice.__wrapped__()
+    confirm = {
+        "name_0": "ProdInv",
+        "color_0": "Blue",
+        "size_0": "M",
+        "quantity_0": "2",
+        "price_0": "5.5",
+        "barcode_0": "inv-123",
+        "accept_0": "y",
+    }
+    resp = client.post("/confirm_invoice", data=confirm)
+    assert resp.status_code == 302
 
     with app_mod.get_session() as db:
         prod = db.query(Product).filter_by(name="ProdInv", color="Blue").first()
@@ -48,7 +52,7 @@ def test_import_invoice_creates_products(app_mod, tmp_path):
     assert abs(batch[1] - 5.5) < 0.001
 
 
-def test_import_invoice_with_spaces(app_mod, tmp_path):
+def test_import_invoice_with_spaces(app_mod, client, login, tmp_path):
     df = pd.DataFrame([
         {
             "Nazwa": "ProdSpace",
@@ -64,16 +68,20 @@ def test_import_invoice_with_spaces(app_mod, tmp_path):
 
     with open(file_path, "rb") as f:
         data = {"file": (f, "inv.xlsx")}
-        with app_mod.app.test_request_context(
-            "/import_invoice",
-            method="POST",
-            data=data,
-            content_type="multipart/form-data",
-        ):
-            from flask import session
+        resp = client.post("/import_invoice", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
 
-            session["username"] = "x"
-            app_mod.import_invoice.__wrapped__()
+    confirm = {
+        "name_0": "ProdSpace",
+        "color_0": "Green",
+        "size_0": "L",
+        "quantity_0": "1 234",
+        "price_0": "2 345,67",
+        "barcode_0": "sp-456",
+        "accept_0": "y",
+    }
+    resp = client.post("/confirm_invoice", data=confirm)
+    assert resp.status_code == 302
 
     with app_mod.get_session() as db:
         prod = db.query(Product).filter_by(name="ProdSpace", color="Green").first()
@@ -89,17 +97,16 @@ def test_import_invoice_with_spaces(app_mod, tmp_path):
         assert abs(batch[0] - 2345.67) < 0.001
 
 
-def test_import_invoice_pdf(app_mod):
+def test_import_invoice_pdf(app_mod, client, login):
     pdf_path = Path('magazyn/tests/data/sample_invoice.pdf')
     with pdf_path.open('rb') as f:
         data = {'file': (f, 'inv.pdf')}
-        with app_mod.app.test_request_context(
-            '/import_invoice', method='POST', data=data, content_type='multipart/form-data'
-        ):
-            from flask import session
+        resp = client.post('/import_invoice', data=data, content_type='multipart/form-data')
+    assert resp.status_code == 200
 
-            session['username'] = 'x'
-            app_mod.import_invoice.__wrapped__()
+    confirm = {"name_0": "Rain Coat", "color_0": "", "size_0": "XL", "quantity_0": "2", "price_0": "0", "barcode_0": "", "accept_0": "y"}
+    resp = client.post('/confirm_invoice', data=confirm)
+    assert resp.status_code == 302
 
     with app_mod.get_session() as db:
         prod = db.query(Product).filter_by(name='Rain Coat').first()
@@ -108,17 +115,16 @@ def test_import_invoice_pdf(app_mod):
         assert ps.quantity == 2
 
 
-def test_import_invoice_pdf_skips_invalid_size(app_mod):
+def test_import_invoice_pdf_skips_invalid_size(app_mod, client, login):
     pdf_path = Path('magazyn/tests/data/sample_invalid.pdf')
     with pdf_path.open('rb') as f:
         data = {'file': (f, 'inv.pdf')}
-        with app_mod.app.test_request_context(
-            '/import_invoice', method='POST', data=data, content_type='multipart/form-data'
-        ):
-            from flask import session
+        resp = client.post('/import_invoice', data=data, content_type='multipart/form-data')
+    assert resp.status_code == 200
 
-            session['username'] = 'x'
-            app_mod.import_invoice.__wrapped__()
+    confirm = {"accept_0": "y"}
+    resp = client.post('/confirm_invoice', data=confirm)
+    assert resp.status_code == 302
 
     with app_mod.get_session() as db:
         assert db.query(Product).filter_by(name='Test Product').first() is None
