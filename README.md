@@ -107,6 +107,14 @@ Running a newer version of the application on an older database file will
 automatically add missing columns (for example the `barcode` column in the
 `product_sizes` table) during startup.
 
+## Importing invoices
+
+The **Import faktury** page accepts Excel or PDF invoices. PDF files produced
+by the Tip-Top accounting software are recognised automatically. The parser
+handles values written with spaces as thousand separators and extracts product
+barcodes from lines containing "Kod kreskowy". When a barcode is found, it is
+used to match existing items during import.
+
 ## Responsive tables
 
 Product lists are displayed inside Bootstrap's `.table-responsive` wrapper.
