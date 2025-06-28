@@ -20,6 +20,7 @@ def app_mod(tmp_path, monkeypatch):
     import magazyn.app as app_mod
     importlib.reload(app_mod)
     import magazyn.db as db_mod
+    db_mod.configure_engine(cfg.settings.DB_PATH)
     from sqlalchemy.orm import sessionmaker
     db_mod.SessionLocal = sessionmaker(bind=db_mod.engine, autoflush=False, expire_on_commit=False)
     app_mod.app.config["WTF_CSRF_ENABLED"] = False
