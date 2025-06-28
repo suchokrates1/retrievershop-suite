@@ -32,8 +32,8 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `CUPS_SERVER` | Hostname of a remote CUPS server |
 | `CUPS_PORT` | Port of the remote CUPS server |
 | `POLL_INTERVAL` | Seconds between polling for orders |
-| `QUIET_HOURS_START` | Start hour for muting printing (24h format) |
-| `QUIET_HOURS_END` | End hour for muting printing (24h format) |
+| `QUIET_HOURS_START` | Start time for muting printing (`hh:mm` 24h) |
+| `QUIET_HOURS_END` | End time for muting printing (`hh:mm` 24h) |
 | `TIMEZONE` | IANA timezone used for quiet hour checks |
 | `PRINTED_EXPIRY_DAYS` | Days to keep printed order IDs in the database |
 | `LOG_LEVEL` | Logging level for the printing agent |

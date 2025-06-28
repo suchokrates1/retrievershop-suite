@@ -6,9 +6,18 @@ import subprocess
 import logging
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
 import requests
+
+
+def parse_time_str(value: str) -> dt_time:
+    """Return a ``datetime.time`` from ``HH:MM`` string or raise ``ValueError``."""
+    try:
+        return dt_time.fromisoformat(value)
+    except ValueError as e:
+        raise ValueError(f"Invalid time value: {value}") from e
+
 
 from .config import settings, load_config
 from __init__ import DB_PATH
@@ -21,8 +30,8 @@ PRINTER_NAME = settings.PRINTER_NAME
 CUPS_SERVER = settings.CUPS_SERVER
 CUPS_PORT = settings.CUPS_PORT
 POLL_INTERVAL = settings.POLL_INTERVAL
-QUIET_HOURS_START = settings.QUIET_HOURS_START
-QUIET_HOURS_END = settings.QUIET_HOURS_END
+QUIET_HOURS_START = parse_time_str(settings.QUIET_HOURS_START)
+QUIET_HOURS_END = parse_time_str(settings.QUIET_HOURS_END)
 TIMEZONE = settings.TIMEZONE
 BASE_URL = "https://api.baselinker.com/connector.php"
 PRINTED_FILE = os.path.join(os.path.dirname(__file__), "printed_orders.txt")
@@ -68,8 +77,8 @@ def reload_env():
     CUPS_SERVER = settings.CUPS_SERVER
     CUPS_PORT = settings.CUPS_PORT
     POLL_INTERVAL = settings.POLL_INTERVAL
-    QUIET_HOURS_START = settings.QUIET_HOURS_START
-    QUIET_HOURS_END = settings.QUIET_HOURS_END
+    QUIET_HOURS_START = parse_time_str(settings.QUIET_HOURS_START)
+    QUIET_HOURS_END = parse_time_str(settings.QUIET_HOURS_END)
     TIMEZONE = settings.TIMEZONE
     PRINTED_EXPIRY_DAYS = settings.PRINTED_EXPIRY_DAYS
     LOG_LEVEL = settings.LOG_LEVEL
@@ -82,8 +91,10 @@ def reload_config():
     """Reload configuration from .env and update globals."""
     reload_env()
 
+
 last_order_data = {}
 _agent_thread = None
+
 
 def validate_env():
     required = {
@@ -198,11 +209,13 @@ def load_printed_orders():
             data = json.loads(data_json) if data_json else {}
         except Exception:
             data = {}
-        items.append({
-            "order_id": oid,
-            "printed_at": datetime.fromisoformat(ts),
-            "last_order_data": data,
-        })
+        items.append(
+            {
+                "order_id": oid,
+                "printed_at": datetime.fromisoformat(ts),
+                "last_order_data": data,
+            }
+        )
     return items
 
 
@@ -227,7 +240,9 @@ def clean_old_printed_orders():
     threshold = datetime.now() - timedelta(days=PRINTED_EXPIRY_DAYS)
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-    cur.execute("DELETE FROM printed_orders WHERE printed_at < ?", (threshold.isoformat(),))
+    cur.execute(
+        "DELETE FROM printed_orders WHERE printed_at < ?", (threshold.isoformat(),)
+    )
     conn.commit()
     conn.close()
 
@@ -245,12 +260,14 @@ def load_queue():
             last_data = json.loads(last_order_json) if last_order_json else {}
         except Exception:
             last_data = {}
-        items.append({
-            "order_id": order_id,
-            "label_data": label_data,
-            "ext": ext,
-            "last_order_data": last_data,
-        })
+        items.append(
+            {
+                "order_id": order_id,
+                "label_data": label_data,
+                "ext": ext,
+                "last_order_data": last_data,
+            }
+        )
     return items
 
 
@@ -288,7 +305,9 @@ def call_api(method, parameters=None):
 
 def get_orders():
     response = call_api("getOrders", {"status_id": STATUS_ID})
-    logger.info("🔁 Surowa odpowiedź:\n%s", json.dumps(response, indent=2, ensure_ascii=False))
+    logger.info(
+        "🔁 Surowa odpowiedź:\n%s", json.dumps(response, indent=2, ensure_ascii=False)
+    )
     orders = response.get("orders", [])
     logger.info(f"🔍 Zamówień znalezionych: {len(orders)}")
     return orders
@@ -300,7 +319,9 @@ def get_order_packages(order_id):
 
 
 def get_label(courier_code, package_id):
-    response = call_api("getLabel", {"courier_code": courier_code, "package_id": package_id})
+    response = call_api(
+        "getLabel", {"courier_code": courier_code, "package_id": package_id}
+    )
     return response.get("label"), response.get("extension", "pdf")
 
 
@@ -321,7 +342,11 @@ def print_label(base64_data, extension, order_id):
         result = subprocess.run(cmd, capture_output=True)
         os.remove(file_path)
         if result.returncode != 0:
-            logger.error("Błąd drukowania (kod %s): %s", result.returncode, result.stderr.decode().strip())
+            logger.error(
+                "Błąd drukowania (kod %s): %s",
+                result.returncode,
+                result.stderr.decode().strip(),
+            )
         else:
             logger.info(f"📨 Etykieta wydrukowana dla zamówienia {order_id}")
     except Exception as e:
@@ -333,10 +358,16 @@ def print_test_page():
         file_path = "/tmp/print_test.txt"
         with open(file_path, "w") as f:
             f.write("=== TEST PRINT ===\n")
-        result = subprocess.run(["lp", "-d", PRINTER_NAME, file_path], capture_output=True)
+        result = subprocess.run(
+            ["lp", "-d", PRINTER_NAME, file_path], capture_output=True
+        )
         os.remove(file_path)
         if result.returncode != 0:
-            logger.error("Błąd testowego druku (kod %s): %s", result.returncode, result.stderr.decode().strip())
+            logger.error(
+                "Błąd testowego druku (kod %s): %s",
+                result.returncode,
+                result.stderr.decode().strip(),
+            )
             return False
         logger.info("🔧 Testowa strona została wysłana do drukarki.")
         return True
@@ -356,15 +387,25 @@ def send_messenger_message(data):
     try:
         message = (
             f"📦 Nowe zamówienie od: {data.get('name', '-')}\n"
-            f"🛒 Produkty:\n" + ''.join(f"- {shorten_product_name(p['name'])} (x{p['quantity']})\n" for p in data.get('products', [])) +
-            f"🚚 Wysyłka: {data.get('shipping', '-')}\n"
+            f"🛒 Produkty:\n"
+            + "".join(
+                f"- {shorten_product_name(p['name'])} (x{p['quantity']})\n"
+                for p in data.get("products", [])
+            )
+            + f"🚚 Wysyłka: {data.get('shipping', '-')}\n"
             f"🌐 Platforma: {data.get('platform', '-')}\n"
-            f"📎 ID: {data.get('order_id', '-')}")
+            f"📎 ID: {data.get('order_id', '-')}"
+        )
 
         response = requests.post(
             "https://graph.facebook.com/v17.0/me/messages",
-            headers={"Authorization": f"Bearer {PAGE_ACCESS_TOKEN}", "Content-Type": "application/json"},
-            data=json.dumps({"recipient": {"id": RECIPIENT_ID}, "message": {"text": message}}),
+            headers={
+                "Authorization": f"Bearer {PAGE_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(
+                {"recipient": {"id": RECIPIENT_ID}, "message": {"text": message}}
+            ),
         )
         logger.info("📬 Messenger response: %s %s", response.status_code, response.text)
         response.raise_for_status()
@@ -374,11 +415,13 @@ def send_messenger_message(data):
 
 
 def is_quiet_time():
-    now = datetime.now(ZoneInfo(TIMEZONE)).hour
-    if QUIET_HOURS_START < QUIET_HOURS_END:
-        return QUIET_HOURS_START <= now < QUIET_HOURS_END
+    now = datetime.now(ZoneInfo(TIMEZONE)).time()
+    start = QUIET_HOURS_START
+    end = QUIET_HOURS_END
+    if start <= end:
+        return start <= now < end
     else:
-        return now >= QUIET_HOURS_START or now < QUIET_HOURS_END
+        return now >= start or now < end
 
 
 def _agent_loop():
@@ -397,7 +440,9 @@ def _agent_loop():
             for oid, items in grouped.items():
                 try:
                     for it in items:
-                        print_label(it["label_data"], it.get("ext", "pdf"), it["order_id"])
+                        print_label(
+                            it["label_data"], it.get("ext", "pdf"), it["order_id"]
+                        )
                     mark_as_printed(oid, items[0].get("last_order_data"))
                     printed[oid] = datetime.now()
                 except Exception as e:
@@ -445,14 +490,18 @@ def _agent_loop():
 
                 if labels:
                     if is_quiet_time():
-                        logger.info("🕒 Cisza nocna — etykiety nie zostaną wydrukowane teraz.")
+                        logger.info(
+                            "🕒 Cisza nocna — etykiety nie zostaną wydrukowane teraz."
+                        )
                         for label_data, ext in labels:
-                            queue.append({
-                                "order_id": order_id,
-                                "label_data": label_data,
-                                "ext": ext,
-                                "last_order_data": last_order_data,
-                            })
+                            queue.append(
+                                {
+                                    "order_id": order_id,
+                                    "label_data": label_data,
+                                    "ext": ext,
+                                    "last_order_data": last_order_data,
+                                }
+                            )
                         send_messenger_message(last_order_data)
                         mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()
