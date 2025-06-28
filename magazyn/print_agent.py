@@ -294,8 +294,11 @@ def call_api(method, parameters=None):
     try:
         payload = {"method": method, "parameters": json.dumps(parameters)}
         response = requests.post(BASE_URL, headers=HEADERS, data=payload, timeout=10)
+        response.raise_for_status()
         logger.info(f"[{method}] {response.status_code}")
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP error in call_api({method}): {e}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error in call_api({method}): {e}")
     except Exception as e:
