@@ -172,11 +172,15 @@ def import_products():
 @login_required
 def add_delivery():
     if request.method == 'POST':
-        product_id = int(request.form['product_id'])
-        size = request.form['size']
-        quantity = int(request.form['quantity'])
-        price = float(request.form['price'])
-        services.record_delivery(product_id, size, quantity, price)
+        ids = request.form.getlist('product_id')
+        sizes = request.form.getlist('size')
+        quantities = request.form.getlist('quantity')
+        prices = request.form.getlist('price')
+        for pid, sz, qty, pr in zip(ids, sizes, quantities, prices):
+            try:
+                services.record_delivery(int(pid), sz, int(qty), float(pr))
+            except Exception as e:
+                flash(f'Błąd podczas dodawania dostawy: {e}')
         flash('Dodano dostawę')
         return redirect(url_for('products.items'))
     products = services.get_products_for_delivery()
