@@ -11,6 +11,11 @@ from zoneinfo import ZoneInfo
 import requests
 
 
+class ConfigError(Exception):
+    """Raised when required configuration is missing."""
+
+
+
 def parse_time_str(value: str) -> dt_time:
     """Return a ``datetime.time`` from ``HH:MM`` string or raise ``ValueError``."""
     try:
@@ -122,8 +127,12 @@ def validate_env():
     }
     missing = [name for name, value in required.items() if not value]
     if missing:
-        logger.error("Brak wymaganych zmiennych środowiskowych: %s", ", ".join(missing))
-        raise SystemExit(1)
+        logger.error(
+            "Brak wymaganych zmiennych środowiskowych: %s", ", ".join(missing)
+        )
+        raise ConfigError(
+            "Missing environment variables: " + ", ".join(missing)
+        )
 
 
 def ensure_db():
