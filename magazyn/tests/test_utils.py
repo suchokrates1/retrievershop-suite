@@ -10,39 +10,41 @@ def test_shorten_product_name():
 
 
 def test_is_quiet_time(monkeypatch):
+    import datetime as dt
+
     class DummyDateTime:
-        hour = 0
+        current = dt.datetime(2023, 1, 1, 0, 0)
         seen_tz = None
 
         @classmethod
         def now(cls, tz=None):
             cls.seen_tz = tz
-            return type("obj", (), {"hour": cls.hour})()
+            return cls.current
 
     monkeypatch.setattr(bl, "ZoneInfo", lambda tz: f"zone-{tz}")
 
     monkeypatch.setattr(bl, "datetime", DummyDateTime)
-    monkeypatch.setattr(bl, "QUIET_HOURS_START", 10)
-    monkeypatch.setattr(bl, "QUIET_HOURS_END", 22)
+    monkeypatch.setattr(bl, "QUIET_HOURS_START", bl.parse_time_str("10:00"))
+    monkeypatch.setattr(bl, "QUIET_HOURS_END", bl.parse_time_str("22:00"))
     monkeypatch.setattr(bl, "TIMEZONE", "Test/Zone")
 
-    DummyDateTime.hour = 11
+    DummyDateTime.current = dt.datetime(2023, 1, 1, 11, 0)
     assert bl.is_quiet_time() is True
     assert DummyDateTime.seen_tz == "zone-Test/Zone"
 
-    DummyDateTime.hour = 23
+    DummyDateTime.current = dt.datetime(2023, 1, 1, 23, 0)
     assert bl.is_quiet_time() is False
 
-    monkeypatch.setattr(bl, "QUIET_HOURS_START", 22)
-    monkeypatch.setattr(bl, "QUIET_HOURS_END", 8)
+    monkeypatch.setattr(bl, "QUIET_HOURS_START", bl.parse_time_str("22:00"))
+    monkeypatch.setattr(bl, "QUIET_HOURS_END", bl.parse_time_str("08:00"))
 
-    DummyDateTime.hour = 23
+    DummyDateTime.current = dt.datetime(2023, 1, 1, 23, 0)
     assert bl.is_quiet_time() is True
 
-    DummyDateTime.hour = 7
+    DummyDateTime.current = dt.datetime(2023, 1, 1, 7, 0)
     assert bl.is_quiet_time() is True
 
-    DummyDateTime.hour = 12
+    DummyDateTime.current = dt.datetime(2023, 1, 1, 12, 0)
     assert bl.is_quiet_time() is False
 
 
