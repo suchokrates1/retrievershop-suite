@@ -87,6 +87,9 @@ def reload_env():
     DB_FILE = settings.DB_PATH
     HEADERS["X-BLToken"] = API_TOKEN
 
+    from . import db
+    db.configure_engine(DB_FILE)
+
     logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
     if old_log_file != LOG_FILE:
         root_logger = logging.getLogger()
