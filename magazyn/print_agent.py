@@ -101,8 +101,13 @@ def ensure_db():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS printed_orders(order_id TEXT PRIMARY KEY, printed_at TEXT)"
+        "CREATE TABLE IF NOT EXISTS printed_orders(order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
     )
+    cur.execute("PRAGMA table_info(printed_orders)")
+    cols = [row[1] for row in cur.fetchall()]
+    if "last_order_data" not in cols:
+        cur.execute("ALTER TABLE printed_orders ADD COLUMN last_order_data TEXT")
+        conn.commit()
     cur.execute(
         "CREATE TABLE IF NOT EXISTS label_queue(order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT)"
     )
@@ -149,7 +154,7 @@ def ensure_db():
             old_conn = sqlite3.connect(OLD_DB_FILE)
             old_cur = old_conn.cursor()
             for table, cols in (
-                ("printed_orders", 2),
+                ("printed_orders", 3),
                 ("label_queue", 4),
             ):
                 old_cur.execute(
@@ -178,21 +183,41 @@ def ensure_db_init():
 
 
 def load_printed_orders():
+    """Return printed orders sorted by newest first."""
     ensure_db()
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-    cur.execute("SELECT order_id, printed_at FROM printed_orders")
+    cur.execute(
+        "SELECT order_id, printed_at, last_order_data FROM printed_orders ORDER BY printed_at DESC"
+    )
     rows = cur.fetchall()
     conn.close()
-    return {oid: datetime.fromisoformat(ts) for oid, ts in rows}
+    items = []
+    for oid, ts, data_json in rows:
+        try:
+            data = json.loads(data_json) if data_json else {}
+        except Exception:
+            data = {}
+        items.append({
+            "order_id": oid,
+            "printed_at": datetime.fromisoformat(ts),
+            "last_order_data": data,
+        })
+    return items
 
 
-def mark_as_printed(order_id):
+def mark_as_printed(order_id, last_order_data=None):
+    """Record that an order's labels were printed."""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
+    data_json = json.dumps(last_order_data or {})
     cur.execute(
-        "INSERT OR IGNORE INTO printed_orders(order_id, printed_at) VALUES (?, ?)",
-        (order_id, datetime.now().isoformat()),
+        "INSERT OR IGNORE INTO printed_orders(order_id, printed_at, last_order_data) VALUES (?, ?, ?)",
+        (order_id, datetime.now().isoformat(), data_json),
+    )
+    cur.execute(
+        "UPDATE printed_orders SET last_order_data=? WHERE order_id=?",
+        (data_json, order_id),
     )
     conn.commit()
     conn.close()
@@ -359,7 +384,8 @@ def is_quiet_time():
 def _agent_loop():
     while True:
         clean_old_printed_orders()
-        printed = load_printed_orders()
+        printed_entries = load_printed_orders()
+        printed = {e["order_id"]: e["printed_at"] for e in printed_entries}
         queue = load_queue()
 
         if not is_quiet_time():
@@ -372,7 +398,7 @@ def _agent_loop():
                 try:
                     for it in items:
                         print_label(it["label_data"], it.get("ext", "pdf"), it["order_id"])
-                    mark_as_printed(oid)
+                    mark_as_printed(oid, items[0].get("last_order_data"))
                     printed[oid] = datetime.now()
                 except Exception as e:
                     logger.error(f"Błąd przetwarzania z kolejki: {e}")
@@ -428,13 +454,13 @@ def _agent_loop():
                                 "last_order_data": last_order_data,
                             })
                         send_messenger_message(last_order_data)
-                        mark_as_printed(order_id)
+                        mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()
                     else:
                         for label_data, ext in labels:
                             print_label(label_data, ext, order_id)
                         send_messenger_message(last_order_data)
-                        mark_as_printed(order_id)
+                        mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()
 
         except Exception as e:
