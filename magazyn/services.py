@@ -7,7 +7,10 @@ from .models import Product, ProductSize, PurchaseBatch
 from .constants import ALL_SIZES
 from datetime import datetime
 from PyPDF2 import PdfReader
+import logging
 import io
+
+logger = logging.getLogger(__name__)
 
 
 def create_product(name: str, color: str, quantities: Dict[str, int], barcodes: Dict[str, Optional[str]]):
@@ -172,23 +175,73 @@ def import_from_dataframe(df: pd.DataFrame):
 
 
 def _parse_pdf(file) -> pd.DataFrame:
-    """Extract a table from a PDF invoice using a simple heuristic."""
+    """Extract a table from a PDF invoice by analysing text coordinates."""
     reader = PdfReader(file)
-    text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    items = []
+    for page in reader.pages:
+        page_items = []
+
+        def visitor(text, cm, tm, font_dict, font_size):
+            txt = text.strip()
+            if not txt:
+                return
+            x, y = tm[4], tm[5]
+            page_items.append((x, y, txt))
+
+        page.extract_text(visitor_text=visitor)
+        items.extend(page_items)
+
+    # group by y coordinate to lines
+    lines_map: List[Tuple[float, List[Tuple[float, str]]]] = []
+    for x, y, text in items:
+        placed = False
+        for idx, (ly, lst) in enumerate(lines_map):
+            if abs(ly - y) < 5:
+                lst.append((x, text))
+                placed = True
+                break
+        if not placed:
+            lines_map.append((y, [(x, text)]))
+
+    # sort lines by y desc and text in each line by x
+    sorted_lines = []
+    for y, line in lines_map:
+        line_sorted = sorted(line, key=lambda t: t[0])
+        sorted_lines.append((y, line_sorted))
+    sorted_lines.sort(key=lambda t: -t[0])
+
+    # determine column x positions from first line with 4 items
+    column_pos = None
+    for _, line in sorted_lines:
+        if len(line) >= 4:
+            column_pos = [t[0] for t in line[:4]]
+            break
+    if not column_pos:
+        # fallback to sorted unique x positions
+        column_pos = sorted({t[0] for _, line in sorted_lines for t in line})[:4]
+
     rows = []
-    for line in lines:
-        parts = [p.strip() for p in line.split()]  # naive whitespace split
-        if len(parts) < 4:
+    for _, line in sorted_lines:
+        cols: List[str] = ["", "", "", ""]
+        for x, text in line:
+            idx = min(range(len(column_pos)), key=lambda i: abs(column_pos[i] - x))
+            if cols[idx]:
+                cols[idx] += f" {text}"
+            else:
+                cols[idx] = text
+        if len(cols) < 4:
             continue
         try:
-            qty = int(parts[-2])
-            price = float(parts[-1].replace(",", "."))
+            qty = int(cols[2])
+            price = float(cols[3].replace(",", "."))
         except ValueError:
             continue
-        name = " ".join(parts[:-3])
-        size = parts[-3]
-        rows.append({"Nazwa": name, "Kolor": "", "Rozmiar": size, "Ilość": qty, "Cena": price})
+        size = cols[1]
+        if size not in ALL_SIZES:
+            logger.warning("Unexpected size '%s' in PDF row, skipping", size)
+            continue
+        rows.append({"Nazwa": cols[0], "Kolor": "", "Rozmiar": size, "Ilość": qty, "Cena": price})
+
     return pd.DataFrame(rows)
 
 
