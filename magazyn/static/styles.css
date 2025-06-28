@@ -70,6 +70,11 @@ label, input, button {
     margin-top: 20px;
 }
 
+/* Optional wrapper for centering form buttons */
+.form-actions {
+    text-align: center;
+}
+
 .btn {
     display: inline-block;
     margin: 10px;
