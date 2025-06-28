@@ -92,15 +92,16 @@ to that location.
 
 The project now uses SQLAlchemy for all database interactions. Existing
 SQLite databases remain compatible with the new ORM models. When upgrading,
-install the updated requirements and run `init_db` once to create any missing
-tables:
+install the updated requirements and initialise the database once using the
+new command:
 
 ```bash
 pip install -r magazyn/requirements.txt
 python -m magazyn.app init_db
 ```
 
-No data is removed during this step. The application can then be started as
+The `init_db` argument runs the database initialisation and exits without
+starting the server. No data is removed during this step. The application can then be started as
 before using the same database file.
 
 Running a newer version of the application on an older database file will
