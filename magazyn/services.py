@@ -11,6 +11,18 @@ import logging
 import io
 import re
 
+
+def _to_int(value) -> int:
+    if isinstance(value, str):
+        value = value.replace(" ", "").replace(",", "")
+    return int(value)
+
+
+def _to_float(value) -> float:
+    if isinstance(value, str):
+        value = value.replace(" ", "").replace(",", ".")
+    return float(value)
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +33,7 @@ def create_product(name: str, color: str, quantities: Dict[str, int], barcodes: 
         db.add(product)
         db.flush()
         for size in ALL_SIZES:
-            qty = int(quantities.get(size, 0))
+            qty = _to_int(quantities.get(size, 0))
             db.add(
                 ProductSize(
                     product_id=product.id,
@@ -42,7 +54,7 @@ def update_product(product_id: int, name: str, color: str, quantities: Dict[str,
         product.name = name
         product.color = color
         for size in ALL_SIZES:
-            qty = int(quantities.get(size, 0))
+            qty = _to_int(quantities.get(size, 0))
             barcode = barcodes.get(size)
             ps = db.query(ProductSize).filter_by(product_id=product_id, size=size).first()
             if ps:
@@ -233,8 +245,8 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
         if len(cols) < 4:
             continue
         try:
-            qty = int(cols[2])
-            price = float(cols[3].replace(",", "."))
+            qty = _to_int(cols[2])
+            price = _to_float(cols[3])
         except ValueError:
             continue
         size = cols[1]
@@ -263,7 +275,7 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
             lines.extend(t.strip() for t in txt.splitlines())
 
     def _num(val: str) -> float:
-        return float(val.replace(" ", "").replace(",", "."))
+        return _to_float(val)
 
     rows = []
     i = 0
@@ -354,8 +366,8 @@ def import_invoice_file(file):
         name = row.get("Nazwa")
         color = row.get("Kolor", "")
         size = row.get("Rozmiar")
-        quantity = int(row.get("Ilość", 0))
-        price = float(row.get("Cena", 0))
+        quantity = _to_int(row.get("Ilość", 0))
+        price = _to_float(row.get("Cena", 0))
         barcode = row.get("Barcode")
         if pd.isna(barcode):
             barcode = None
