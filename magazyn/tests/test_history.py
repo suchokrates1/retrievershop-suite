@@ -1,4 +1,3 @@
-import importlib
 from datetime import datetime
 
 
@@ -61,6 +60,7 @@ def test_reprint_logs_exception(app_mod, client, login, monkeypatch):
             logged["msg"] = msg
             logged["order_id"] = order_id
 
+    import importlib
     hist_mod = importlib.import_module("magazyn.history")
     monkeypatch.setattr(hist_mod, "logger", DummyLogger())
 
