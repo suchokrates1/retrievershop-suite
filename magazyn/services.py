@@ -158,6 +158,22 @@ def export_rows():
     return rows
 
 
+def get_product_sizes():
+    """Return all product sizes joined with product information."""
+    with get_session() as db:
+        return (
+            db.query(
+                ProductSize.id.label("ps_id"),
+                Product.id.label("product_id"),
+                Product.name,
+                Product.color,
+                ProductSize.size,
+            )
+            .join(Product, ProductSize.product_id == Product.id)
+            .all()
+        )
+
+
 def import_from_dataframe(df: pd.DataFrame):
     """Import products from a pandas DataFrame."""
     with get_session() as db:
