@@ -6,3 +6,4 @@ requests
 python-dotenv
 SQLAlchemy
 Flask-WTF
+PyPDF2

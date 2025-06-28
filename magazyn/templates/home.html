@@ -9,6 +9,7 @@
         <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
         <a href="{{ url_for('products.export_products') }}" class="btn btn-primary">Eksportuj produkty do Excel</a>
         <a href="{{ url_for('products.import_products') }}" class="btn btn-primary">Importuj produkty z Excel</a>
+        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-primary">Importuj fakturę</a>
     </div>
 </div>
 {% endblock %}
