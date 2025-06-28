@@ -44,9 +44,4 @@ ENV_INFO = {
         "Ustaw 1 aby włączyć tryb debugowania Flask",
     ),
     "FLASK_ENV": ("Środowisko Flask", "Konfiguracja środowiska Flask"),
-    "ENABLE_HTTP_SERVER": (
-        "Włącz serwer HTTP",
-        "Ustaw 1 aby uruchomić serwer HTTP",
-    ),
-    "HTTP_PORT": ("Port HTTP", "Port używany przez serwer HTTP"),
 }
