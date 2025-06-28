@@ -198,7 +198,13 @@ def import_invoice():
                     session['invoice_pdf'] = pdf_path
                 else:
                     session.pop('invoice_pdf', None)
-                return render_template('review_invoice.html', rows=rows, pdf_url=url_for('products.invoice_pdf') if pdf_path else None)
+                ps_list = services.get_product_sizes()
+                return render_template(
+                    'review_invoice.html',
+                    rows=rows,
+                    pdf_url=url_for('products.invoice_pdf') if pdf_path else None,
+                    product_sizes=ps_list,
+                )
             except Exception as e:
                 flash(f'Błąd podczas importu faktury: {e}')
                 return redirect(url_for('products.items'))
@@ -223,12 +229,26 @@ def confirm_invoice():
     for idx, base in enumerate(rows):
         if not request.form.get(f'accept_{idx}'):
             continue
+        ps_id = request.form.get(f'ps_id_{idx}')
+        qty_val = request.form.get(f'quantity_{idx}', base.get('Ilość'))
+        price_val = request.form.get(f'price_{idx}', base.get('Cena'))
+        if ps_id:
+            with services.get_session() as db:
+                ps = db.query(services.ProductSize).filter_by(id=int(ps_id)).first()
+                if ps:
+                    services.record_purchase(
+                        ps.product_id,
+                        ps.size,
+                        services._to_int(qty_val),
+                        services._to_float(price_val),
+                    )
+            continue
         confirmed.append({
             'Nazwa': request.form.get(f'name_{idx}', base.get('Nazwa')),
             'Kolor': request.form.get(f'color_{idx}', base.get('Kolor')),
             'Rozmiar': request.form.get(f'size_{idx}', base.get('Rozmiar')),
-            'Ilość': request.form.get(f'quantity_{idx}', base.get('Ilość')),
-            'Cena': request.form.get(f'price_{idx}', base.get('Cena')),
+            'Ilość': qty_val,
+            'Cena': price_val,
             'Barcode': request.form.get(f'barcode_{idx}', base.get('Barcode')),
         })
     if confirmed:
