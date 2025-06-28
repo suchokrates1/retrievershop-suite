@@ -150,3 +150,19 @@ def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
     conn.close()
     items = bl.load_queue()
     assert items[0]["last_order_data"] == {}
+
+
+def test_call_api_handles_http_error(monkeypatch):
+    class DummyResp:
+        status_code = 500
+
+        def json(self):
+            return {"error": "x"}
+
+        def raise_for_status(self):
+            raise bl.requests.HTTPError("500")
+
+    monkeypatch.setattr(bl.requests, "post", lambda *a, **k: DummyResp())
+
+    result = bl.call_api("dummy")
+    assert result == {}
