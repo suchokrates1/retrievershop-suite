@@ -43,10 +43,15 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
 | `FLASK_ENV` | Flask configuration environment |
 
+`DB_PATH` is read only during application startup, so changing it requires
+restarting the server.
+
 ## Modifying settings via the web interface
 
 After starting the application you can modify the values stored in your `.env` file without touching the filesystem. Log in to the web interface and open the **Ustawienia** tab from the navigation bar.
 The form lists all variables defined in `.env.example` so new options appear automatically. When you click **Zapisz** the application rewrites `.env` in the same order as `.env.example` and calls `print_agent.reload_config()` so the running printing agent immediately uses the updated environment.
+Variables that are only read when the application starts, such as `DB_PATH`, do
+not appear on this page.
 
 ## Running Tests
 
@@ -84,7 +89,8 @@ The application uses a SQLite database stored in `magazyn/database.db`. This
 file is created automatically on first startup if it does not already exist.
 When running the stack in Docker, this file is mounted inside the container as
 `/app/database.db` and the `DB_PATH` variable in your `.env` file should point
-to that location.
+to that location. The value is read only during startup so any changes require
+restarting the application.
 
 ## Database migration
 
