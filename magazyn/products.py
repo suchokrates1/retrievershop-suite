@@ -31,7 +31,7 @@ def add_item():
         name = form.name.data
         color = form.color.data
         sizes = ALL_SIZES
-        quantities = {size: int(getattr(form, f'quantity_{size}').data or 0) for size in sizes}
+        quantities = {size: services._to_int(getattr(form, f'quantity_{size}').data or 0) for size in sizes}
         barcodes = {size: getattr(form, f'barcode_{size}').data or None for size in sizes}
 
         try:
@@ -76,7 +76,7 @@ def edit_item(product_id):
         name = request.form['name']
         color = request.form['color']
         sizes = ALL_SIZES
-        quantities = {size: int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
+        quantities = {size: services._to_int(request.form.get(f'quantity_{size}', 0)) for size in sizes}
         barcodes = {size: request.form.get(f'barcode_{size}') or None for size in sizes}
         try:
             updated = services.update_product(product_id, name, color, quantities, barcodes)
@@ -193,7 +193,9 @@ def add_delivery():
         prices = request.form.getlist('price')
         for pid, sz, qty, pr in zip(ids, sizes, quantities, prices):
             try:
-                services.record_delivery(int(pid), sz, int(qty), float(pr))
+                services.record_delivery(
+                    int(pid), sz, services._to_int(qty), services._to_float(pr)
+                )
             except Exception as e:
                 flash(f'Błąd podczas dodawania dostawy: {e}')
         flash('Dodano dostawę')
