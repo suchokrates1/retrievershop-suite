@@ -77,6 +77,8 @@ def start_print_agent():
         print_agent.validate_env()
         print_agent.ensure_db_init()
         print_agent.start_agent_thread()
+    except print_agent.ConfigError as e:
+        app.logger.error(f"Failed to start print agent: {e}")
     except Exception as e:
         app.logger.error(f"Failed to start print agent: {e}")
 
