@@ -81,10 +81,23 @@ def reload_env():
     QUIET_HOURS_END = parse_time_str(settings.QUIET_HOURS_END)
     TIMEZONE = settings.TIMEZONE
     PRINTED_EXPIRY_DAYS = settings.PRINTED_EXPIRY_DAYS
+    old_log_file = LOG_FILE
     LOG_LEVEL = settings.LOG_LEVEL
     LOG_FILE = settings.LOG_FILE
     DB_FILE = settings.DB_PATH
     HEADERS["X-BLToken"] = API_TOKEN
+
+    logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+    if old_log_file != LOG_FILE:
+        root_logger = logging.getLogger()
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        for h in list(root_logger.handlers):
+            if isinstance(h, logging.FileHandler):
+                root_logger.removeHandler(h)
+                h.close()
+        file_handler = logging.FileHandler(LOG_FILE)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
 
 
 def reload_config():
