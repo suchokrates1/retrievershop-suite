@@ -11,6 +11,7 @@ from flask import (
 from flask_wtf import CSRFProtect
 from datetime import datetime
 import os
+import sys
 from werkzeug.security import check_password_hash
 from dotenv import dotenv_values
 from collections import OrderedDict
@@ -261,5 +262,8 @@ def handle_500(error):
 
 
 if __name__ == "__main__":
-    ensure_db_initialized()
-    app.run(host="0.0.0.0", port=80, debug=settings.FLASK_DEBUG)
+    if len(sys.argv) > 1 and sys.argv[1] == "init_db":
+        init_db()
+    else:
+        ensure_db_initialized()
+        app.run(host="0.0.0.0", port=80, debug=settings.FLASK_DEBUG)
