@@ -42,8 +42,6 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `SECRET_KEY` | Secret key for Flask sessions |
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
 | `FLASK_ENV` | Flask configuration environment |
-| `ENABLE_HTTP_SERVER` | Set to `1` to start the HTTP server |
-| `HTTP_PORT` | Port used by the HTTP server |
 
 ## Modifying settings via the web interface
 
