@@ -132,7 +132,7 @@ def test_validate_env_missing_api_token(monkeypatch):
     monkeypatch.setattr(bl, "API_TOKEN", "")
     monkeypatch.setattr(bl, "PAGE_ACCESS_TOKEN", "x")
     monkeypatch.setattr(bl, "RECIPIENT_ID", "x")
-    with pytest.raises(SystemExit):
+    with pytest.raises(bl.ConfigError):
         bl.validate_env()
 
 
