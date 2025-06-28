@@ -46,3 +46,27 @@ def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
     assert called["n"] == 1
     assert saved["n"] == 1
     assert marked["n"] == 1
+
+
+def test_reprint_logs_exception(app_mod, client, login, monkeypatch):
+    def raise_error():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(app_mod.print_agent, "load_queue", raise_error)
+
+    logged = {}
+
+    class DummyLogger:
+        def exception(self, msg, order_id):
+            logged["msg"] = msg
+            logged["order_id"] = order_id
+
+    hist_mod = importlib.import_module("magazyn.history")
+    monkeypatch.setattr(hist_mod, "logger", DummyLogger())
+
+    resp = client.post("/history/reprint/9")
+    assert resp.status_code == 302
+    assert logged == {"msg": "Reprint failed for %s", "order_id": "9"}
+    with client.session_transaction() as sess:
+        msgs = sess.get("_flashes")
+    assert any("Błąd ponownego drukowania" in m for _, m in msgs)
