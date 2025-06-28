@@ -37,7 +37,6 @@ ENV_INFO = {
     ),
     "LOG_LEVEL": ("Poziom logów", "Poziom logowania agenta drukującego"),
     "LOG_FILE": ("Plik logu", "Ścieżka do pliku logu agenta"),
-    "DB_PATH": ("Ścieżka bazy danych", "Ścieżka do pliku bazy SQLite"),
     "SECRET_KEY": ("Tajny klucz", "Tajny klucz sesji Flask"),
     "FLASK_DEBUG": (
         "Debug Flask",
