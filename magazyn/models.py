@@ -29,6 +29,7 @@ class PrintedOrder(Base):
     __tablename__ = 'printed_orders'
     order_id = Column(String, primary_key=True)
     printed_at = Column(String)
+    last_order_data = Column(Text)
 
 class LabelQueue(Base):
     __tablename__ = 'label_queue'
