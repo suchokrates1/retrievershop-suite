@@ -105,6 +105,10 @@ def load_settings():
         if key not in values:
             values[key] = val
 
+    # remove deprecated/unused keys
+    for hidden in ("ENABLE_HTTP_SERVER", "HTTP_PORT"):
+        values.pop(hidden, None)
+
     return values
 
 
