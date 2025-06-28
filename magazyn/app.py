@@ -106,7 +106,7 @@ def load_settings():
             values[key] = val
 
     # remove deprecated/unused keys
-    for hidden in ("ENABLE_HTTP_SERVER", "HTTP_PORT"):
+    for hidden in ("ENABLE_HTTP_SERVER", "HTTP_PORT", "DB_PATH"):
         values.pop(hidden, None)
 
     return values
@@ -115,7 +115,9 @@ def load_settings():
 def write_env(values):
     """Rewrite .env preserving example order and keeping unknown keys."""
     try:
-        example_keys = list(dotenv_values(EXAMPLE_PATH).keys())
+        example = dotenv_values(EXAMPLE_PATH)
+        example_keys = list(example.keys())
+        current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
         ordered = example_keys + [k for k in values.keys() if k not in example_keys]
     except Exception as e:
         app.logger.exception("Failed to read env template: %s", e)
@@ -125,7 +127,7 @@ def write_env(values):
     try:
         with ENV_PATH.open("w") as f:
             for key in ordered:
-                val = values.get(key, "")
+                val = values.get(key, current.get(key, example.get(key, "")))
                 f.write(f"{key}={val}\n")
     except Exception as e:
         app.logger.exception("Failed to write .env file: %s", e)
@@ -198,6 +200,8 @@ def logout():
 @login_required
 def settings_page():
     values = load_settings()
+    db_vals = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    db_path_notice = "DB_PATH" in db_vals
     if request.method == "POST":
         for key in list(values.keys()):
             values[key] = request.form.get(key, "")
@@ -215,7 +219,7 @@ def settings_page():
     for key, val in values.items():
         label, desc = ENV_INFO.get(key, (key, None))
         settings_list.append({"key": key, "label": label, "desc": desc, "value": val})
-    return render_template("settings.html", settings=settings_list)
+    return render_template("settings.html", settings=settings_list, db_path_notice=db_path_notice)
 
 
 @app.route("/logs")
