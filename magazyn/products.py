@@ -168,6 +168,21 @@ def import_products():
     return render_template('import_products.html')
 
 
+@bp.route('/import_invoice', methods=['GET', 'POST'])
+@login_required
+def import_invoice():
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if file:
+            try:
+                services.import_invoice_file(file)
+                flash('Zaimportowano fakturę')
+            except Exception as e:
+                flash(f'Błąd podczas importu faktury: {e}')
+        return redirect(url_for('products.items'))
+    return render_template('import_invoice.html')
+
+
 @bp.route('/deliveries', methods=['GET', 'POST'])
 @login_required
 def add_delivery():

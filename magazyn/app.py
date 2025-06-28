@@ -39,6 +39,7 @@ from .products import (
     barcode_scan_page,
     export_products,
     import_products,
+    import_invoice,
     add_delivery,
 )
 from .history import bp as history_bp, print_history
