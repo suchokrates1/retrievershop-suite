@@ -9,10 +9,12 @@ from flask import (
     jsonify,
     after_this_request,
     abort,
+    session,
 )
 import pandas as pd
 import tempfile
 import os
+import io
 
 from . import services
 from .forms import AddItemForm
@@ -175,12 +177,74 @@ def import_invoice():
         file = request.files.get('file')
         if file:
             try:
-                services.import_invoice_file(file)
-                flash('Zaimportowano fakturę')
+                data = file.read()
+                filename = file.filename or ''
+                ext = filename.rsplit('.', 1)[-1].lower()
+                pdf_path = None
+                if ext in {'xlsx', 'xls'}:
+                    df = pd.read_excel(io.BytesIO(data))
+                elif ext == 'pdf':
+                    df = services._parse_pdf(io.BytesIO(data))
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+                    tmp.write(data)
+                    tmp.close()
+                    pdf_path = tmp.name
+                else:
+                    raise ValueError('Nieobsługiwany format pliku')
+
+                rows = df.to_dict(orient='records')
+                session['invoice_rows'] = rows
+                if pdf_path:
+                    session['invoice_pdf'] = pdf_path
+                else:
+                    session.pop('invoice_pdf', None)
+                return render_template('review_invoice.html', rows=rows, pdf_url=url_for('products.invoice_pdf') if pdf_path else None)
             except Exception as e:
                 flash(f'Błąd podczas importu faktury: {e}')
+                return redirect(url_for('products.items'))
         return redirect(url_for('products.items'))
     return render_template('import_invoice.html')
+
+
+@bp.route('/invoice_pdf')
+@login_required
+def invoice_pdf():
+    path = session.get('invoice_pdf')
+    if path and os.path.exists(path):
+        return send_file(path)
+    abort(404)
+
+
+@bp.route('/confirm_invoice', methods=['POST'])
+@login_required
+def confirm_invoice():
+    rows = session.get('invoice_rows') or []
+    confirmed = []
+    for idx, base in enumerate(rows):
+        if not request.form.get(f'accept_{idx}'):
+            continue
+        confirmed.append({
+            'Nazwa': request.form.get(f'name_{idx}', base.get('Nazwa')),
+            'Kolor': request.form.get(f'color_{idx}', base.get('Kolor')),
+            'Rozmiar': request.form.get(f'size_{idx}', base.get('Rozmiar')),
+            'Ilość': request.form.get(f'quantity_{idx}', base.get('Ilość')),
+            'Cena': request.form.get(f'price_{idx}', base.get('Cena')),
+            'Barcode': request.form.get(f'barcode_{idx}', base.get('Barcode')),
+        })
+    if confirmed:
+        try:
+            services.import_invoice_rows(confirmed)
+            flash('Zaimportowano fakturę')
+        except Exception as e:
+            flash(f'Błąd podczas importu faktury: {e}')
+    pdf_path = session.pop('invoice_pdf', None)
+    if pdf_path:
+        try:
+            os.remove(pdf_path)
+        except OSError:
+            pass
+    session.pop('invoice_rows', None)
+    return redirect(url_for('products.items'))
 
 
 @bp.route('/deliveries', methods=['GET', 'POST'])

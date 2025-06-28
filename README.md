@@ -115,6 +115,10 @@ handles values written with spaces as thousand separators and extracts product
 barcodes from lines containing "Kod kreskowy". When a barcode is found, it is
 used to match existing items during import.
 
+After uploading a file the application shows a preview of the parsed rows.
+You can adjust quantities or other fields and deselect unwanted entries
+before confirming the import.
+
 ## Responsive tables
 
 Product lists are displayed inside Bootstrap's `.table-responsive` wrapper.
