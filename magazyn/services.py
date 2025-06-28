@@ -9,6 +9,7 @@ from datetime import datetime
 from PyPDF2 import PdfReader
 import logging
 import io
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -174,9 +175,9 @@ def import_from_dataframe(df: pd.DataFrame):
                     ps.barcode = size_barcode
 
 
-def _parse_pdf(file) -> pd.DataFrame:
-    """Extract a table from a PDF invoice by analysing text coordinates."""
-    reader = PdfReader(file)
+def _parse_simple_pdf(fh) -> pd.DataFrame:
+    """Extract a simple table from a PDF invoice by analysing text coordinates."""
+    reader = PdfReader(fh)
     items = []
     for page in reader.pages:
         page_items = []
@@ -240,9 +241,102 @@ def _parse_pdf(file) -> pd.DataFrame:
         if size not in ALL_SIZES:
             logger.warning("Unexpected size '%s' in PDF row, skipping", size)
             continue
-        rows.append({"Nazwa": cols[0], "Kolor": "", "Rozmiar": size, "Ilość": qty, "Cena": price})
+        rows.append({
+            "Nazwa": cols[0],
+            "Kolor": "",
+            "Rozmiar": size,
+            "Ilość": qty,
+            "Cena": price,
+            "Barcode": None,
+        })
 
     return pd.DataFrame(rows)
+
+
+def _parse_tiptop_invoice(fh) -> pd.DataFrame:
+    """Parse invoices produced by the Tip-Top accounting software."""
+    reader = PdfReader(fh)
+    lines: List[str] = []
+    for page in reader.pages:
+        txt = page.extract_text()
+        if txt:
+            lines.extend(t.strip() for t in txt.splitlines())
+
+    def _num(val: str) -> float:
+        return float(val.replace(" ", "").replace(",", "."))
+
+    rows = []
+    i = 0
+    while i < len(lines):
+        m = re.match(r"(\d{1,2})([A-Za-z].*)", lines[i])
+        if not m:
+            i += 1
+            continue
+        name = m.group(2).strip()
+        if i + 1 >= len(lines):
+            break
+        info = lines[i + 1]
+        num_match = re.search(r"\d", info)
+        if not num_match:
+            i += 1
+            continue
+        prefix = info[:num_match.start()].strip()
+        rest = info[num_match.start():]
+        tokens = (
+            rest.replace("szt.", "")
+            .replace("szt", "")
+            .replace("%", "")
+            .split()
+        )
+        if len(tokens) < 4:
+            i += 1
+            continue
+        quantity = int(round(_num(tokens[0])))
+        price = _num(tokens[3])
+        color_parts = prefix.split()
+        color = color_parts[-1] if color_parts else ""
+        if len(color_parts) > 1:
+            name = f"{name} {' '.join(color_parts[:-1])}".strip()
+
+        size = ""
+        barcode = ""
+        if i + 2 < len(lines):
+            line3 = lines[i + 2]
+            m_size = re.search(r"Wariant:\s*([A-Za-z0-9]+)", line3)
+            if m_size:
+                size = m_size.group(1)
+            m_bc = re.search(r"Kod kreskowy:\s*([0-9]+)", line3)
+            if m_bc:
+                barcode = m_bc.group(1)
+        if i + 3 < len(lines):
+            # skip repeated quantity line
+            i += 4
+        else:
+            i += 3
+
+        rows.append({
+            "Nazwa": name,
+            "Kolor": color,
+            "Rozmiar": size,
+            "Ilość": quantity,
+            "Cena": price,
+            "Barcode": barcode,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _parse_pdf(file) -> pd.DataFrame:
+    """Parse PDF invoices in various formats."""
+    data = file.read()
+    file_obj = io.BytesIO(data)
+    reader = PdfReader(io.BytesIO(data))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    file_obj.seek(0)
+    if "Kod kreskowy" in text:
+        return _parse_tiptop_invoice(file_obj)
+    file_obj.seek(0)
+    return _parse_simple_pdf(file_obj)
 
 
 def import_invoice_file(file):
@@ -263,6 +357,8 @@ def import_invoice_file(file):
         quantity = int(row.get("Ilość", 0))
         price = float(row.get("Cena", 0))
         barcode = row.get("Barcode")
+        if pd.isna(barcode):
+            barcode = None
 
         with get_session() as db:
             ps = None
