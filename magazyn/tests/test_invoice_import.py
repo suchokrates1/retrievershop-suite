@@ -48,6 +48,47 @@ def test_import_invoice_creates_products(app_mod, tmp_path):
     assert abs(batch[1] - 5.5) < 0.001
 
 
+def test_import_invoice_with_spaces(app_mod, tmp_path):
+    df = pd.DataFrame([
+        {
+            "Nazwa": "ProdSpace",
+            "Kolor": "Green",
+            "Rozmiar": "L",
+            "Ilość": "1 234",
+            "Cena": "2 345,67",
+            "Barcode": "sp-456",
+        }
+    ])
+    file_path = tmp_path / "inv2.xlsx"
+    df.to_excel(file_path, index=False)
+
+    with open(file_path, "rb") as f:
+        data = {"file": (f, "inv.xlsx")}
+        with app_mod.app.test_request_context(
+            "/import_invoice",
+            method="POST",
+            data=data,
+            content_type="multipart/form-data",
+        ):
+            from flask import session
+
+            session["username"] = "x"
+            app_mod.import_invoice.__wrapped__()
+
+    with app_mod.get_session() as db:
+        prod = db.query(Product).filter_by(name="ProdSpace", color="Green").first()
+        assert prod is not None
+        ps = db.query(ProductSize).filter_by(product_id=prod.id, size="L").first()
+        assert ps.quantity == 1234
+        batch = db.execute(
+            text(
+                "SELECT price FROM purchase_batches WHERE product_id=:pid AND size='L'"
+            ),
+            {"pid": prod.id},
+        ).fetchone()
+        assert abs(batch[0] - 2345.67) < 0.001
+
+
 def test_import_invoice_pdf(app_mod):
     pdf_path = Path('magazyn/tests/data/sample_invoice.pdf')
     with pdf_path.open('rb') as f:
