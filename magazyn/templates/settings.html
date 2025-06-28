@@ -6,11 +6,15 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <table class="table">
         <tbody>
-        {% for key, value in settings.items() %}
+        {% for item in settings %}
         <tr>
-            <th scope="row">{{ key }}</th>
+            <th scope="row">
+                {{ item.label }}
+                {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
+                {% if item.label != item.key %}<br><small class="text-muted">{{ item.key }}</small>{% endif %}
+            </th>
             <td>
-                <input type="text" class="form-control" id="{{ key }}" name="{{ key }}" value="{{ value }}">
+                <input type="text" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
             </td>
         </tr>
         {% endfor %}
