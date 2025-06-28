@@ -18,10 +18,14 @@ def print_history():
 def reprint_label(order_id):
     """Reprint shipping labels for the given order."""
     try:
-        queue = [q for q in print_agent.load_queue() if str(q.get('order_id')) == str(order_id)]
+        all_items = print_agent.load_queue()
+        queue = [q for q in all_items if str(q.get('order_id')) == str(order_id)]
         if queue:
+            remaining = [q for q in all_items if str(q.get('order_id')) != str(order_id)]
             for item in queue:
                 print_agent.print_label(item.get('label_data'), item.get('ext', 'pdf'), order_id)
+            print_agent.save_queue(remaining)
+            print_agent.mark_as_printed(order_id)
         else:
             packages = print_agent.get_order_packages(order_id)
             for p in packages:
@@ -32,6 +36,7 @@ def reprint_label(order_id):
                 label_data, ext = print_agent.get_label(code, pid)
                 if label_data:
                     print_agent.print_label(label_data, ext, order_id)
+            print_agent.mark_as_printed(order_id)
         flash('Etykieta została ponownie wysłana do drukarki.')
     except Exception as exc:
         flash(f'Błąd ponownego drukowania: {exc}')

@@ -26,14 +26,23 @@ def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
     def fake_print(data, ext, oid):
         called["n"] += 1
     monkeypatch.setattr(app_mod.print_agent, "print_label", fake_print)
+    mprinted = {"n": 0}
+    monkeypatch.setattr(app_mod.print_agent, "mark_as_printed", lambda oid: mprinted.update(n=mprinted["n"] + 1))
     resp = client.post("/history/reprint/1")
     assert resp.status_code == 302
     assert called["n"] == 1
+    assert mprinted["n"] == 1
 
 def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
     monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [{"order_id": "2", "label_data": "x", "ext": "pdf"}])
     called = {"n": 0}
     monkeypatch.setattr(app_mod.print_agent, "print_label", lambda d, e, o: called.update(n=called["n"] + 1))
+    saved = {"n": 0}
+    monkeypatch.setattr(app_mod.print_agent, "save_queue", lambda items: saved.update(n=saved["n"] + 1))
+    marked = {"n": 0}
+    monkeypatch.setattr(app_mod.print_agent, "mark_as_printed", lambda oid: marked.update(n=marked["n"] + 1))
     resp = client.post("/history/reprint/2")
     assert resp.status_code == 302
     assert called["n"] == 1
+    assert saved["n"] == 1
+    assert marked["n"] == 1
