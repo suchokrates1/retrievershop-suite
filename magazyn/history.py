@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash
 from . import print_agent
 
+logger = print_agent.logger
+
 from .auth import login_required
 bp = Blueprint('history', __name__)
 
@@ -39,6 +41,7 @@ def reprint_label(order_id):
             print_agent.mark_as_printed(order_id)
         flash('Etykieta została ponownie wysłana do drukarki.')
     except Exception as exc:
+        logger.exception("Reprint failed for %s", order_id)
         flash(f'Błąd ponownego drukowania: {exc}')
     return redirect(url_for('.print_history'))
 
