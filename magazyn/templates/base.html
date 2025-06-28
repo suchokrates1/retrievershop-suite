@@ -18,7 +18,7 @@
                 <span class="ms-2">Witaj w aplikacji magazynowej</span>
             </span>
             <div class="d-flex align-items-center">
-                <ul class="navbar-nav flex-row flex-wrap gap-3 d-none d-md-flex">
+                <ul class="navbar-nav flex-row flex-nowrap gap-3 d-none d-md-flex">
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
                 <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
@@ -34,8 +34,10 @@
                         <li><a class="dropdown-item" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
                     </ul>
                 </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3 d-none d-md-inline-block">Wyloguj się</a>
+                    </li>
                 </ul>
-                <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3 d-none d-md-inline-block">Wyloguj się</a>
                 <button id="mobileMenuBtn" class="navbar-toggler d-md-none ms-2" type="button">
                     <span class="navbar-toggler-icon"></span>
                 </button>
