@@ -67,14 +67,9 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('sales.list_sales') }}">Sprzedaż</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle text-white" href="#" id="mobileSettingsDropdown" role="button" aria-expanded="false">Ustawienia</a>
-                <ul class="dropdown-menu dropdown-menu-dark">
-                    <li><a class="dropdown-item" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('agent_logs') }}">Logi</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
-                </ul>
-            </li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
             <li class="nav-item mt-auto text-center">
                 <a class="btn btn-danger w-100" href="{{ url_for('logout') }}">Wyloguj się</a>
             </li>
