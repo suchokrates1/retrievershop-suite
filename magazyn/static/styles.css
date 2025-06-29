@@ -142,6 +142,7 @@ td:nth-child(n+3):nth-child(-n+8) {
 .table-responsive {
     width: 100%;
     overflow-x: auto;
+    display: block;
 }
 
 /* Nagłówki tabeli */
