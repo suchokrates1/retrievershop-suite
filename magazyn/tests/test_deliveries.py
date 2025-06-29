@@ -17,19 +17,27 @@ def test_record_delivery(app_mod):
         "quantity": "3",
         "price": "4.5",
     }
-    with app_mod.app.test_request_context("/deliveries", method="POST", data=data):
+    with app_mod.app.test_request_context(
+        "/deliveries", method="POST", data=data
+    ):
         from flask import session
+
         session["username"] = "x"
         from magazyn import products
+
         products.add_delivery.__wrapped__()
 
     with app_mod.get_session() as db:
         batch = db.execute(
-            text("SELECT quantity, price FROM purchase_batches WHERE product_id=:pid AND size=:size"),
+            text(
+                "SELECT quantity, price FROM purchase_batches WHERE product_id=:pid AND size=:size"
+            ),
             {"pid": pid, "size": "M"},
         ).fetchone()
         qty = db.execute(
-            text("SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"),
+            text(
+                "SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"
+            ),
             {"pid": pid, "size": "M"},
         ).fetchone()
     assert batch[0] == 3
@@ -42,26 +50,34 @@ def test_record_multiple_deliveries(app_mod):
         prod = Product(name="Prod", color="Red")
         db.add(prod)
         db.flush()
-        db.add_all([
-            ProductSize(product_id=prod.id, size="M", quantity=0),
-            ProductSize(product_id=prod.id, size="L", quantity=0),
-        ])
+        db.add_all(
+            [
+                ProductSize(product_id=prod.id, size="M", quantity=0),
+                ProductSize(product_id=prod.id, size="L", quantity=0),
+            ]
+        )
         pid = prod.id
 
-    data = MultiDict([
-        ("product_id", str(pid)),
-        ("size", "M"),
-        ("quantity", "2"),
-        ("price", "1.5"),
-        ("product_id", str(pid)),
-        ("size", "L"),
-        ("quantity", "1"),
-        ("price", "2.0"),
-    ])
-    with app_mod.app.test_request_context("/deliveries", method="POST", data=data):
+    data = MultiDict(
+        [
+            ("product_id", str(pid)),
+            ("size", "M"),
+            ("quantity", "2"),
+            ("price", "1.5"),
+            ("product_id", str(pid)),
+            ("size", "L"),
+            ("quantity", "1"),
+            ("price", "2.0"),
+        ]
+    )
+    with app_mod.app.test_request_context(
+        "/deliveries", method="POST", data=data
+    ):
         from flask import session
+
         session["username"] = "x"
         from magazyn import products
+
         products.add_delivery.__wrapped__()
 
     with app_mod.get_session() as db:
@@ -109,11 +125,15 @@ def test_consume_stock_cheapest(app_mod):
 
     with app_mod.get_session() as db:
         qty = db.execute(
-            text("SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"),
+            text(
+                "SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"
+            ),
             {"pid": pid, "size": "M"},
         ).fetchone()[0]
         batches = db.execute(
-            text("SELECT price, quantity FROM purchase_batches WHERE product_id=:pid AND size=:size ORDER BY price"),
+            text(
+                "SELECT price, quantity FROM purchase_batches WHERE product_id=:pid AND size=:size ORDER BY price"
+            ),
             {"pid": pid, "size": "M"},
         ).fetchall()
     assert consumed == 2
@@ -132,7 +152,9 @@ def test_deliveries_page_shows_color(app_mod):
 
     with app_mod.app.test_request_context("/deliveries"):
         from flask import session
+
         session["username"] = "tester"
         from magazyn import products
+
         html = products.add_delivery.__wrapped__()
     assert "Prod (Blue)" in html

@@ -24,10 +24,16 @@ def _to_float(value) -> float:
         value = value.replace(" ", "").replace(",", ".")
     return float(value)
 
+
 logger = logging.getLogger(__name__)
 
 
-def create_product(name: str, color: str, quantities: Dict[str, int], barcodes: Dict[str, Optional[str]]):
+def create_product(
+    name: str,
+    color: str,
+    quantities: Dict[str, int],
+    barcodes: Dict[str, Optional[str]],
+):
     """Create a product with sizes and return the Product instance."""
     with get_session() as db:
         product = Product(name=name, color=color)
@@ -46,7 +52,13 @@ def create_product(name: str, color: str, quantities: Dict[str, int], barcodes: 
     return product
 
 
-def update_product(product_id: int, name: str, color: str, quantities: Dict[str, int], barcodes: Dict[str, Optional[str]]):
+def update_product(
+    product_id: int,
+    name: str,
+    color: str,
+    quantities: Dict[str, int],
+    barcodes: Dict[str, Optional[str]],
+):
     """Update product details and size information."""
     with get_session() as db:
         product = db.query(Product).filter_by(id=product_id).first()
@@ -57,7 +69,11 @@ def update_product(product_id: int, name: str, color: str, quantities: Dict[str,
         for size in ALL_SIZES:
             qty = _to_int(quantities.get(size, 0))
             barcode = barcodes.get(size)
-            ps = db.query(ProductSize).filter_by(product_id=product_id, size=size).first()
+            ps = (
+                db.query(ProductSize)
+                .filter_by(product_id=product_id, size=size)
+                .first()
+            )
             if ps:
                 ps.quantity = qty
                 ps.barcode = barcode
@@ -87,28 +103,43 @@ def list_products() -> List[dict]:
         result = []
         for p in products:
             sizes = {s.size: s.quantity for s in p.sizes}
-            result.append({"id": p.id, "name": p.name, "color": p.color, "sizes": sizes})
+            result.append(
+                {"id": p.id, "name": p.name, "color": p.color, "sizes": sizes}
+            )
     return result
 
 
-def get_product_details(product_id: int) -> Tuple[Optional[dict], Dict[str, dict]]:
+def get_product_details(
+    product_id: int,
+) -> Tuple[Optional[dict], Dict[str, dict]]:
     """Return product basic info and size details."""
     with get_session() as db:
         row = db.query(Product).filter_by(id=product_id).first()
         product = None
         if row:
             product = {"id": row.id, "name": row.name, "color": row.color}
-        sizes_rows = db.query(ProductSize).filter_by(product_id=product_id).all()
-        product_sizes = {size: {"quantity": 0, "barcode": ""} for size in ALL_SIZES}
+        sizes_rows = (
+            db.query(ProductSize).filter_by(product_id=product_id).all()
+        )
+        product_sizes = {
+            size: {"quantity": 0, "barcode": ""} for size in ALL_SIZES
+        }
         for s in sizes_rows:
-            product_sizes[s.size] = {"quantity": s.quantity, "barcode": s.barcode or ""}
+            product_sizes[s.size] = {
+                "quantity": s.quantity,
+                "barcode": s.barcode or "",
+            }
     return product, product_sizes
 
 
 def update_quantity(product_id: int, size: str, action: str):
     """Increase or decrease stock quantity for a specific size."""
     with get_session() as db:
-        ps = db.query(ProductSize).filter_by(product_id=product_id, size=size).first()
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=product_id, size=size)
+            .first()
+        )
         if ps:
             if action == "increase":
                 ps.quantity += 1
@@ -153,7 +184,9 @@ def export_rows():
                 ProductSize.size,
                 ProductSize.quantity,
             )
-            .join(ProductSize, Product.id == ProductSize.product_id, isouter=True)
+            .join(
+                ProductSize, Product.id == ProductSize.product_id, isouter=True
+            )
             .all()
         )
     return rows
@@ -181,7 +214,9 @@ def import_from_dataframe(df: pd.DataFrame):
         for _, row in df.iterrows():
             name = row["Nazwa"]
             color = row["Kolor"]
-            product = db.query(Product).filter_by(name=name, color=color).first()
+            product = (
+                db.query(Product).filter_by(name=name, color=color).first()
+            )
             if not product:
                 product = Product(name=name, color=color)
                 db.add(product)
@@ -189,7 +224,11 @@ def import_from_dataframe(df: pd.DataFrame):
             for size in ALL_SIZES:
                 quantity = row.get(f"Ilość ({size})", 0)
                 size_barcode = row.get(f"Barcode ({size})")
-                ps = db.query(ProductSize).filter_by(product_id=product.id, size=size).first()
+                ps = (
+                    db.query(ProductSize)
+                    .filter_by(product_id=product.id, size=size)
+                    .first()
+                )
                 if not ps:
                     db.add(
                         ProductSize(
@@ -205,7 +244,10 @@ def import_from_dataframe(df: pd.DataFrame):
 
 
 def _parse_simple_pdf(fh) -> pd.DataFrame:
-    """Extract a simple table from a PDF invoice by analysing text coordinates."""
+    """Extract a simple table from a PDF invoice.
+
+    The algorithm works by analysing text coordinates.
+    """
     reader = PdfReader(fh)
     items = []
     for page in reader.pages:
@@ -248,13 +290,17 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
             break
     if not column_pos:
         # fallback to sorted unique x positions
-        column_pos = sorted({t[0] for _, line in sorted_lines for t in line})[:4]
+        column_pos = sorted({t[0] for _, line in sorted_lines for t in line})[
+            :4
+        ]
 
     rows = []
     for _, line in sorted_lines:
         cols: List[str] = ["", "", "", ""]
         for x, text in line:
-            idx = min(range(len(column_pos)), key=lambda i: abs(column_pos[i] - x))
+            idx = min(
+                range(len(column_pos)), key=lambda i: abs(column_pos[i] - x)
+            )
             if cols[idx]:
                 cols[idx] += f" {text}"
             else:
@@ -270,14 +316,16 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
         if size not in ALL_SIZES:
             logger.warning("Unexpected size '%s' in PDF row, skipping", size)
             continue
-        rows.append({
-            "Nazwa": cols[0],
-            "Kolor": "",
-            "Rozmiar": size,
-            "Ilość": qty,
-            "Cena": price,
-            "Barcode": None,
-        })
+        rows.append(
+            {
+                "Nazwa": cols[0],
+                "Kolor": "",
+                "Rozmiar": size,
+                "Ilość": qty,
+                "Cena": price,
+                "Barcode": None,
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -309,8 +357,8 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         if not num_match:
             i += 1
             continue
-        prefix = info[:num_match.start()].strip()
-        rest = info[num_match.start():]
+        prefix = info[: num_match.start()].strip()
+        rest = info[num_match.start() :]
         tokens = (
             rest.replace("szt.", "")
             .replace("szt", "")
@@ -343,14 +391,16 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         else:
             i += 3
 
-        rows.append({
-            "Nazwa": name,
-            "Kolor": color,
-            "Rozmiar": size,
-            "Ilość": quantity,
-            "Cena": price,
-            "Barcode": barcode,
-        })
+        rows.append(
+            {
+                "Nazwa": name,
+                "Kolor": color,
+                "Rozmiar": size,
+                "Ilość": quantity,
+                "Cena": price,
+                "Barcode": barcode,
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -384,21 +434,36 @@ def _import_invoice_df(df: pd.DataFrame):
             ps = None
             product = None
             if barcode:
-                ps = db.query(ProductSize).filter_by(barcode=str(barcode)).first()
+                ps = (
+                    db.query(ProductSize)
+                    .filter_by(barcode=str(barcode))
+                    .first()
+                )
                 if ps:
                     product = ps.product
                     size = ps.size
 
             if not product:
-                product = db.query(Product).filter_by(name=name, color=color).first()
+                product = (
+                    db.query(Product).filter_by(name=name, color=color).first()
+                )
                 if not product:
                     product = Product(name=name, color=color)
                     db.add(product)
                     db.flush()
 
-            ps = db.query(ProductSize).filter_by(product_id=product.id, size=size).first()
+            ps = (
+                db.query(ProductSize)
+                .filter_by(product_id=product.id, size=size)
+                .first()
+            )
             if not ps:
-                ps = ProductSize(product_id=product.id, size=size, quantity=0, barcode=barcode)
+                ps = ProductSize(
+                    product_id=product.id,
+                    size=size,
+                    quantity=0,
+                    barcode=barcode,
+                )
                 db.add(ps)
             elif barcode and not ps.barcode:
                 ps.barcode = barcode
@@ -444,7 +509,9 @@ def consume_order_stock(products: List[dict]):
             qty = 0
         if qty <= 0:
             continue
-        barcode = str(item.get("ean") or item.get("barcode") or item.get("sku") or "").strip()
+        barcode = str(
+            item.get("ean") or item.get("barcode") or item.get("sku") or ""
+        ).strip()
         name = item.get("name")
         size = None
         color = None
@@ -474,7 +541,9 @@ def consume_order_stock(products: List[dict]):
             if ps:
                 consume_stock(ps.product_id, ps.size, qty)
             else:
-                logger.warning("Unable to match product for order item: %s", item)
+                logger.warning(
+                    "Unable to match product for order item: %s", item
+                )
 
 
 def get_sales_summary(days: int = 7) -> List[dict]:
@@ -500,16 +569,20 @@ def get_sales_summary(days: int = 7) -> List[dict]:
 
     summary = []
     for name, color, size, qty in rows:
-        remaining = stock.get((
-            db.query(Product).filter_by(name=name, color=color).first().id,
-            size,
-        ), 0)
-        summary.append({
-            "name": name,
-            "color": color,
-            "size": size,
-            "sold": int(qty or 0),
-            "remaining": remaining,
-        })
+        remaining = stock.get(
+            (
+                db.query(Product).filter_by(name=name, color=color).first().id,
+                size,
+            ),
+            0,
+        )
+        summary.append(
+            {
+                "name": name,
+                "color": color,
+                "size": size,
+                "sold": int(qty or 0),
+                "remaining": remaining,
+            }
+        )
     return summary
-

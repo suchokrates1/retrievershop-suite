@@ -17,25 +17,105 @@ def test_import_invoice_file_real(app_mod):
         services.import_invoice_file(f)
 
     expected = [
-        {"name": "Szelki dla psa Truelove Front Line Premium", "color": "różowe", "size": "XL", "qty": 5, "price": 134.33, "barcode": "6971818794853"},
-        {"name": "Szelki dla psa Truelove Front Line Premium", "color": "niebieskie", "size": "XL", "qty": 5, "price": 134.33, "barcode": "6971818794808"},
-        {"name": "Szelki dla psa Truelove Front Line Premium", "color": "niebieskie", "size": "L", "qty": 5, "price": 134.33, "barcode": "6971818794792"},
-        {"name": "Profesjonalne szelki dla psa Truelove Front Line Premium", "color": "czerwone", "size": "XL", "qty": 5, "price": 134.33, "barcode": "6971818795157"},
-        {"name": "Profesjonalne szelki dla psa Truelove Front Line Premium", "color": "czerwone", "size": "L", "qty": 10, "price": 134.33, "barcode": "6971818795140"},
-        {"name": "Szelki dla psa Truelove Front Line Premium", "color": "fioletowe", "size": "XL", "qty": 5, "price": 134.33, "barcode": "6971818795058"},
-        {"name": "Szelki z odpinanym przodem dla psa Truelove Front Line Premium", "color": "czarne", "size": "M", "qty": 5, "price": 134.33, "barcode": "6971818794686"},
-        {"name": "Szelki z odpinanym przodem dla psa Truelove Front Line Premium", "color": "czarne", "size": "S", "qty": 6, "price": 134.33, "barcode": "6971818794679"},
-        {"name": "Pas samochodowy dla psa Truelove Premium", "color": "srebrny", "size": "", "qty": 10, "price": 53.33, "barcode": "6976128181720"},
-        {"name": "Szelki dla psa Truelove Front Line Premium", "color": "brązowe", "size": "XL", "qty": 5, "price": 134.33, "barcode": "6971818795102"},
+        {
+            "name": "Szelki dla psa Truelove Front Line Premium",
+            "color": "różowe",
+            "size": "XL",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818794853",
+        },
+        {
+            "name": "Szelki dla psa Truelove Front Line Premium",
+            "color": "niebieskie",
+            "size": "XL",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818794808",
+        },
+        {
+            "name": "Szelki dla psa Truelove Front Line Premium",
+            "color": "niebieskie",
+            "size": "L",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818794792",
+        },
+        {
+            "name": "Profesjonalne szelki dla psa Truelove Front Line Premium",
+            "color": "czerwone",
+            "size": "XL",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818795157",
+        },
+        {
+            "name": "Profesjonalne szelki dla psa Truelove Front Line Premium",
+            "color": "czerwone",
+            "size": "L",
+            "qty": 10,
+            "price": 134.33,
+            "barcode": "6971818795140",
+        },
+        {
+            "name": "Szelki dla psa Truelove Front Line Premium",
+            "color": "fioletowe",
+            "size": "XL",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818795058",
+        },
+        {
+            "name": "Szelki z odpinanym przodem dla psa Truelove Front Line Premium",
+            "color": "czarne",
+            "size": "M",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818794686",
+        },
+        {
+            "name": "Szelki z odpinanym przodem dla psa Truelove Front Line Premium",
+            "color": "czarne",
+            "size": "S",
+            "qty": 6,
+            "price": 134.33,
+            "barcode": "6971818794679",
+        },
+        {
+            "name": "Pas samochodowy dla psa Truelove Premium",
+            "color": "srebrny",
+            "size": "",
+            "qty": 10,
+            "price": 53.33,
+            "barcode": "6976128181720",
+        },
+        {
+            "name": "Szelki dla psa Truelove Front Line Premium",
+            "color": "brązowe",
+            "size": "XL",
+            "qty": 5,
+            "price": 134.33,
+            "barcode": "6971818795102",
+        },
     ]
 
     with app_mod.get_session() as db:
-        count = db.execute(text("SELECT COUNT(*) FROM purchase_batches")).scalar()
+        count = db.execute(
+            text("SELECT COUNT(*) FROM purchase_batches")
+        ).scalar()
         assert count == len(expected)
         for item in expected:
-            prod = db.query(Product).filter_by(name=item["name"], color=item["color"]).first()
+            prod = (
+                db.query(Product)
+                .filter_by(name=item["name"], color=item["color"])
+                .first()
+            )
             assert prod is not None
-            ps = db.query(ProductSize).filter_by(product_id=prod.id, size=item["size"]).first()
+            ps = (
+                db.query(ProductSize)
+                .filter_by(product_id=prod.id, size=item["size"])
+                .first()
+            )
             assert ps is not None
             assert ps.quantity == item["qty"]
             assert ps.barcode == item["barcode"]
@@ -48,4 +128,3 @@ def test_import_invoice_file_real(app_mod):
             assert batch is not None
             assert batch[0] == item["qty"]
             assert abs(batch[1] - item["price"]) < 0.001
-

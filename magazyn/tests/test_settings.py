@@ -14,13 +14,19 @@ def test_settings_list_all_keys(app_mod, client, login, tmp_path):
         assert key in text
 
 
-def test_settings_post_saves_and_reloads(app_mod, client, login, tmp_path, monkeypatch):
+def test_settings_post_saves_and_reloads(
+    app_mod, client, login, tmp_path, monkeypatch
+):
     app_mod.ENV_PATH = tmp_path / ".env"
     reloaded = {"called": False}
     monkeypatch.setattr(
-        app_mod.print_agent, "reload_config", lambda: reloaded.update(called=True)
+        app_mod.print_agent,
+        "reload_config",
+        lambda: reloaded.update(called=True),
     )
-    values = {k: f"val{i}" for i, k in enumerate(app_mod.load_settings().keys())}
+    values = {
+        k: f"val{i}" for i, k in enumerate(app_mod.load_settings().keys())
+    }
     values["QUIET_HOURS_START"] = "10:00"
     values["QUIET_HOURS_END"] = "22:00"
     resp = client.post("/settings", data=values)
@@ -30,7 +36,9 @@ def test_settings_post_saves_and_reloads(app_mod, client, login, tmp_path, monke
     assert reloaded["called"] is True
 
 
-def test_env_updates_persist_and_reload(app_mod, client, login, tmp_path, monkeypatch):
+def test_env_updates_persist_and_reload(
+    app_mod, client, login, tmp_path, monkeypatch
+):
     app_mod.ENV_PATH = tmp_path / ".env"
 
     original_load = cfg.load_config
@@ -48,7 +56,9 @@ def test_env_updates_persist_and_reload(app_mod, client, login, tmp_path, monkey
     assert "API_TOKEN=v0" in app_mod.ENV_PATH.read_text()
     assert app_mod.print_agent.API_TOKEN == "v0"
 
-    new_text = app_mod.ENV_PATH.read_text().replace("API_TOKEN=v0", "API_TOKEN=new0")
+    new_text = app_mod.ENV_PATH.read_text().replace(
+        "API_TOKEN=v0", "API_TOKEN=new0"
+    )
     app_mod.ENV_PATH.write_text(new_text)
     app_mod.print_agent.reload_config()
     assert app_mod.print_agent.API_TOKEN == "new0"
@@ -58,7 +68,9 @@ def test_env_updates_persist_and_reload(app_mod, client, login, tmp_path, monkey
     assert pa.API_TOKEN == "new0"
 
 
-def test_extra_keys_display_and_save(app_mod, client, login, tmp_path, monkeypatch):
+def test_extra_keys_display_and_save(
+    app_mod, client, login, tmp_path, monkeypatch
+):
     app_mod.ENV_PATH = tmp_path / ".env"
     # create env file with an additional key
     app_mod.ENV_PATH.write_text("EXTRA_KEY=foo\n")

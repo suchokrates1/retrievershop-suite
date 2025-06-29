@@ -1,1 +1,1 @@
-ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'Uniwersalny']
+ALL_SIZES = ["XS", "S", "M", "L", "XL", "Uniwersalny"]
