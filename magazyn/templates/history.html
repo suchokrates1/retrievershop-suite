@@ -1,9 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <h2 class="text-center">Historia drukowania</h2>
-<div class="table-responsive mx-auto">
-    {# .table-responsive ensures horizontal scrolling when needed #}
-<table class="table table-striped table-sm">
+{# .table-responsive ensures horizontal scrolling when needed #}
+<table class="table table-striped table-sm table-responsive mx-auto">
     <thead><tr><th>ID zamówienia</th><th>Nazwa</th><th>Kolor</th><th>Rozmiar</th><th>Czas</th><th>Akcje</th></tr></thead>
     <tbody>
     {% for item in printed %}
@@ -33,5 +32,4 @@
     {% endfor %}
     </tbody>
 </table>
-</div>
 {% endblock %}
