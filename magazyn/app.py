@@ -50,7 +50,7 @@ from .auth import login_required
 from .config import settings
 from . import print_agent
 from .env_info import ENV_INFO
-from __init__ import DB_PATH
+from magazyn import DB_PATH
 from .constants import ALL_SIZES
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
