@@ -1,7 +1,10 @@
+from .notifications import send_report
+from .services import consume_order_stock, get_sales_summary
+from magazyn import DB_PATH
+from .config import settings, load_config
 import os
 import json
 import base64
-import time
 import subprocess
 import logging
 import sqlite3
@@ -15,19 +18,13 @@ class ConfigError(Exception):
     """Raised when required configuration is missing."""
 
 
-
 def parse_time_str(value: str) -> dt_time:
-    """Return a ``datetime.time`` from ``HH:MM`` string or raise ``ValueError``."""
+    """Return time from ``HH:MM`` or raise ``ValueError``."""
     try:
         return dt_time.fromisoformat(value)
     except ValueError as e:
         raise ValueError(f"Invalid time value: {value}") from e
 
-
-from .config import settings, load_config
-from magazyn import DB_PATH
-from .services import consume_order_stock, get_sales_summary
-from .notifications import send_report
 
 API_TOKEN = settings.API_TOKEN
 PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
@@ -74,8 +71,9 @@ def reload_env():
     global settings
     settings = load_config()
     global API_TOKEN, PAGE_ACCESS_TOKEN, RECIPIENT_ID, STATUS_ID, PRINTER_NAME
-    global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START, QUIET_HOURS_END
-    global TIMEZONE, PRINTED_EXPIRY_DAYS, LOG_LEVEL, LOG_FILE, DB_FILE, HEADERS
+    global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START
+    global QUIET_HOURS_END, TIMEZONE, PRINTED_EXPIRY_DAYS, LOG_LEVEL
+    global LOG_FILE, DB_FILE
     API_TOKEN = settings.API_TOKEN
     PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
     RECIPIENT_ID = settings.RECIPIENT_ID
@@ -95,12 +93,15 @@ def reload_env():
     HEADERS["X-BLToken"] = API_TOKEN
 
     from . import db
+
     db.configure_engine(DB_FILE)
 
     logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
     if old_log_file != LOG_FILE:
         root_logger = logging.getLogger()
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s"
+        )
         for h in list(root_logger.handlers):
             if isinstance(h, logging.FileHandler):
                 root_logger.removeHandler(h)
@@ -144,15 +145,19 @@ def ensure_db():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS printed_orders(order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
+        "CREATE TABLE IF NOT EXISTS printed_orders("
+        "order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
     )
     cur.execute("PRAGMA table_info(printed_orders)")
     cols = [row[1] for row in cur.fetchall()]
     if "last_order_data" not in cols:
-        cur.execute("ALTER TABLE printed_orders ADD COLUMN last_order_data TEXT")
+        cur.execute(
+            "ALTER TABLE printed_orders ADD COLUMN last_order_data TEXT"
+        )
         conn.commit()
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS label_queue(order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT)"
+        "CREATE TABLE IF NOT EXISTS label_queue("
+        "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT)"
     )
     conn.commit()
 
@@ -164,7 +169,8 @@ def ensure_db():
                     if "," in line:
                         oid, ts = line.strip().split(",")
                         cur.execute(
-                            "INSERT OR IGNORE INTO printed_orders(order_id, printed_at) VALUES (?, ?)",
+                            "INSERT OR IGNORE INTO printed_orders("
+                            "order_id, printed_at) VALUES (?, ?)",
                             (oid, ts),
                         )
             conn.commit()
@@ -179,7 +185,9 @@ def ensure_db():
                     try:
                         item = json.loads(line)
                         cur.execute(
-                            "INSERT INTO label_queue(order_id, label_data, ext, last_order_data) VALUES (?, ?, ?, ?)",
+                            "INSERT INTO label_queue("
+                            "order_id, label_data, ext, last_order_data)"
+                            " VALUES (?, ?, ?, ?)",
                             (
                                 item.get("order_id"),
                                 item.get("label_data"),
@@ -273,7 +281,8 @@ def clean_old_printed_orders():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute(
-        "DELETE FROM printed_orders WHERE printed_at < ?", (threshold.isoformat(),)
+        "DELETE FROM printed_orders WHERE printed_at < ?",
+        (threshold.isoformat(),),
     )
     conn.commit()
     conn.close()
@@ -283,7 +292,9 @@ def load_queue():
     ensure_db()
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-    cur.execute("SELECT order_id, label_data, ext, last_order_data FROM label_queue")
+    cur.execute(
+        "SELECT order_id, label_data, ext, last_order_data FROM label_queue"
+    )
     rows = cur.fetchall()
     conn.close()
     items = []
@@ -325,7 +336,9 @@ def call_api(method, parameters=None):
     parameters = parameters or {}
     try:
         payload = {"method": method, "parameters": json.dumps(parameters)}
-        response = requests.post(BASE_URL, headers=HEADERS, data=payload, timeout=10)
+        response = requests.post(
+            BASE_URL, headers=HEADERS, data=payload, timeout=10
+        )
         response.raise_for_status()
         logger.info(f"[{method}] {response.status_code}")
         return response.json()
@@ -341,7 +354,8 @@ def call_api(method, parameters=None):
 def get_orders():
     response = call_api("getOrders", {"status_id": STATUS_ID})
     logger.info(
-        "🔁 Surowa odpowiedź:\n%s", json.dumps(response, indent=2, ensure_ascii=False)
+        "🔁 Surowa odpowiedź:\n%s",
+        json.dumps(response, indent=2, ensure_ascii=False),
     )
     orders = response.get("orders", [])
     logger.info(f"🔍 Zamówień znalezionych: {len(orders)}")
@@ -439,10 +453,15 @@ def send_messenger_message(data):
                 "Content-Type": "application/json",
             },
             data=json.dumps(
-                {"recipient": {"id": RECIPIENT_ID}, "message": {"text": message}}
+                {
+                    "recipient": {"id": RECIPIENT_ID},
+                    "message": {"text": message},
+                }
             ),
         )
-        logger.info("📬 Messenger response: %s %s", response.status_code, response.text)
+        logger.info(
+            "📬 Messenger response: %s %s", response.status_code, response.text
+        )
         response.raise_for_status()
         logger.info("✅ Wiadomość została wysłana przez Messengera.")
     except Exception as e:
@@ -462,7 +481,9 @@ def is_quiet_time():
 def _send_periodic_reports():
     global _last_weekly_report, _last_monthly_report
     now = datetime.now()
-    if not _last_weekly_report or now - _last_weekly_report >= timedelta(days=7):
+    if not _last_weekly_report or now - _last_weekly_report >= timedelta(
+        days=7
+    ):
         report = get_sales_summary(7)
         lines = [
             f"- {r['name']} {r['size']}: sprzedano {r['sold']}, zostalo {r['remaining']}"
@@ -470,7 +491,9 @@ def _send_periodic_reports():
         ]
         send_report("Raport tygodniowy", lines)
         _last_weekly_report = now
-    if not _last_monthly_report or now - _last_monthly_report >= timedelta(days=30):
+    if not _last_monthly_report or now - _last_monthly_report >= timedelta(
+        days=30
+    ):
         report = get_sales_summary(30)
         lines = [
             f"- {r['name']} {r['size']}: sprzedano {r['sold']}, zostalo {r['remaining']}"
@@ -498,9 +521,13 @@ def _agent_loop():
                 try:
                     for it in items:
                         print_label(
-                            it["label_data"], it.get("ext", "pdf"), it["order_id"]
+                            it["label_data"],
+                            it.get("ext", "pdf"),
+                            it["order_id"],
                         )
-                    consume_order_stock(items[0].get("last_order_data", {}).get("products", []))
+                    consume_order_stock(
+                        items[0].get("last_order_data", {}).get("products", [])
+                    )
                     mark_as_printed(oid, items[0].get("last_order_data"))
                     printed[oid] = datetime.now()
                 except Exception as e:
@@ -527,7 +554,10 @@ def _agent_loop():
                 if order_id in printed:
                     continue
 
-                logger.info(f"📜 Zamówienie {order_id} ({last_order_data['name']})")
+                logger.info(
+                    f"📜 Zamówienie {order_id} ({
+                        last_order_data['name']})"
+                )
                 packages = get_order_packages(order_id)
                 labels = []
 
@@ -535,16 +565,22 @@ def _agent_loop():
                     package_id = p.get("package_id")
                     courier_code = p.get("courier_code")
                     if not package_id or not courier_code:
-                        logger.warning("  Brak danych: package_id lub courier_code")
+                        logger.warning(
+                            "  Brak danych: package_id lub courier_code"
+                        )
                         continue
 
-                    logger.info(f"  📦 Paczka {package_id} (kurier: {courier_code})")
+                    logger.info(
+                        f"  📦 Paczka {package_id} (kurier: {courier_code})"
+                    )
 
                     label_data, ext = get_label(courier_code, package_id)
                     if label_data:
                         labels.append((label_data, ext))
                     else:
-                        logger.warning("  ❌ Brak etykiety (label_data = null)")
+                        logger.warning(
+                            "  ❌ Brak etykiety (label_data = null)"
+                        )
 
                 if labels:
                     if is_quiet_time():
@@ -566,7 +602,9 @@ def _agent_loop():
                     else:
                         for label_data, ext in labels:
                             print_label(label_data, ext, order_id)
-                        consume_order_stock(last_order_data.get("products", []))
+                        consume_order_stock(
+                            last_order_data.get("products", [])
+                        )
                         send_messenger_message(last_order_data)
                         mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()

@@ -21,7 +21,12 @@ def send_messenger(text: str) -> bool:
                 "Authorization": f"Bearer {settings.PAGE_ACCESS_TOKEN}",
                 "Content-Type": "application/json",
             },
-            data=json.dumps({"recipient": {"id": settings.RECIPIENT_ID}, "message": {"text": text}}),
+            data=json.dumps(
+                {
+                    "recipient": {"id": settings.RECIPIENT_ID},
+                    "message": {"text": text},
+                }
+            ),
         )
         logger.info("Messenger response: %s %s", resp.status_code, resp.text)
         return resp.status_code == 200
@@ -40,9 +45,13 @@ def send_email(subject: str, body: str) -> bool:
     msg["To"] = settings.ALERT_EMAIL
     msg.set_content(body)
     try:
-        with smtplib.SMTP(settings.SMTP_SERVER, int(settings.SMTP_PORT or 25)) as smtp:
+        with smtplib.SMTP(
+            settings.SMTP_SERVER, int(settings.SMTP_PORT or 25)
+        ) as smtp:
             if settings.SMTP_USERNAME:
-                smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD or "")
+                smtp.login(
+                    settings.SMTP_USERNAME, settings.SMTP_PASSWORD or ""
+                )
             smtp.send_message(msg)
         logger.info("Alert email sent to %s", settings.ALERT_EMAIL)
         return True
@@ -53,7 +62,10 @@ def send_email(subject: str, body: str) -> bool:
 
 def send_stock_alert(name: str, size: str, quantity: int) -> None:
     """Notify about low stock via Messenger or email."""
-    text = f"\u26a0\ufe0f Niski stan: {name} ({size}) - pozosta\u0142o {quantity} szt."
+    text = (
+        "\u26a0\ufe0f Niski stan: "
+        f"{name} ({size}) - pozosta\u0142o {quantity} szt."
+    )
     if send_messenger(text):
         return
     send_email("Low stock alert", text)

@@ -4,14 +4,16 @@ from sqlalchemy import text
 from magazyn.models import Product, ProductSize
 
 
-
-
 def test_export_products_includes_barcode(app_mod, client, login):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Red")
         db.add(prod)
         db.flush()
-        db.add(ProductSize(product_id=prod.id, size="M", quantity=5, barcode="123"))
+        db.add(
+            ProductSize(
+                product_id=prod.id, size="M", quantity=5, barcode="123"
+            )
+        )
 
     resp = client.get("/export_products")
 
@@ -21,31 +23,38 @@ def test_export_products_includes_barcode(app_mod, client, login):
 
 
 def test_import_products_reads_barcode(app_mod, tmp_path):
-    df = pd.DataFrame([
-        {
-            "Nazwa": "Prod",
-            "Kolor": "Red",
-            "Barcode (XS)": "111",
-            "Barcode (M)": "999",
-            "Ilość (XS)": 1,
-            "Ilość (S)": 0,
-            "Ilość (M)": 2,
-            "Ilość (L)": 0,
-            "Ilość (XL)": 0,
-            "Ilość (Uniwersalny)": 0,
-        }
-    ])
+    df = pd.DataFrame(
+        [
+            {
+                "Nazwa": "Prod",
+                "Kolor": "Red",
+                "Barcode (XS)": "111",
+                "Barcode (M)": "999",
+                "Ilość (XS)": 1,
+                "Ilość (S)": 0,
+                "Ilość (M)": 2,
+                "Ilość (L)": 0,
+                "Ilość (XL)": 0,
+                "Ilość (Uniwersalny)": 0,
+            }
+        ]
+    )
     file_path = tmp_path / "import.xlsx"
     df.to_excel(file_path, index=False)
 
     with open(file_path, "rb") as f:
         data = {"file": (f, "import.xlsx")}
         with app_mod.app.test_request_context(
-            "/import_products", method="POST", data=data, content_type="multipart/form-data"
+            "/import_products",
+            method="POST",
+            data=data,
+            content_type="multipart/form-data",
         ):
             from flask import session
+
             session["username"] = "x"
             from magazyn import products
+
             products.import_products.__wrapped__()
 
     with app_mod.get_session() as db:
@@ -75,11 +84,15 @@ def test_consume_stock_multiple_batches(app_mod):
 
     with app_mod.get_session() as db:
         qty = db.execute(
-            text("SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"),
+            text(
+                "SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"
+            ),
             {"pid": pid, "size": "M"},
         ).fetchone()[0]
         batches = db.execute(
-            text("SELECT price, quantity FROM purchase_batches WHERE product_id=:pid AND size=:size ORDER BY price"),
+            text(
+                "SELECT price, quantity FROM purchase_batches WHERE product_id=:pid AND size=:size ORDER BY price"
+            ),
             {"pid": pid, "size": "M"},
         ).fetchall()
     assert consumed == 2

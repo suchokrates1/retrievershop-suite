@@ -1,0 +1,7 @@
+[flake8]
+max-line-length = 79
+extend-ignore = E203, W503
+per-file-ignores =
+    magazyn/tests/*: E501,F401,F841,F811,E741
+    magazyn/print_agent.py: E501
+    magazyn/app.py: F401

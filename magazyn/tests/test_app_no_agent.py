@@ -10,6 +10,7 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     monkeypatch.setattr(cfg.settings, "RECIPIENT_ID", "")
 
     import werkzeug
+
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
 
     init = importlib.import_module("magazyn.__init__")
@@ -23,11 +24,16 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     monkeypatch.setattr(pa, "ensure_db_init", lambda: None)
 
     import magazyn.app as app_mod
+
     importlib.reload(app_mod)
     import magazyn.db as db_mod
+
     db_mod.configure_engine(cfg.settings.DB_PATH)
     from sqlalchemy.orm import sessionmaker
-    db_mod.SessionLocal = sessionmaker(bind=db_mod.engine, autoflush=False, expire_on_commit=False)
+
+    db_mod.SessionLocal = sessionmaker(
+        bind=db_mod.engine, autoflush=False, expire_on_commit=False
+    )
     app_mod.app.config["WTF_CSRF_ENABLED"] = False
     app_mod.reset_db()
     return app_mod
