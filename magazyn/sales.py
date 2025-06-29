@@ -10,10 +10,12 @@ PLATFORMS = {
     'allegro': {
         'shipping': settings.DEFAULT_SHIPPING_ALLEGRO,
         'commission': settings.COMMISSION_ALLEGRO,
+        'free_threshold': settings.FREE_SHIPPING_THRESHOLD_ALLEGRO,
     },
     'vinted': {
         'shipping': settings.DEFAULT_SHIPPING_VINTED,
         'commission': settings.COMMISSION_VINTED,
+        'free_threshold': settings.FREE_SHIPPING_THRESHOLD_VINTED,
     },
 }
 
@@ -28,14 +30,21 @@ def list_sales():
 @login_required
 def sales_page():
     platform = request.form.get('platform', 'allegro')
-    config = PLATFORMS.get(platform, {'shipping': 0.0, 'commission': 0.0})
+    config = PLATFORMS.get(platform, {'shipping': 0.0, 'commission': 0.0, 'free_threshold': 0.0})
     price = request.form.get('price', '')
+    auto_shipping = request.form.get('auto_shipping', 'on' if request.method == 'GET' else None)
+    auto_shipping = auto_shipping == 'on'
     shipping = float(request.form.get('shipping', config['shipping'] or 0))
     commission = float(request.form.get('commission', config['commission'] or 0))
     result = None
     if request.method == 'POST':
         try:
             price_val = float(price)
+            if auto_shipping:
+                if config.get('free_threshold') and price_val >= config['free_threshold']:
+                    shipping = 0.0
+                else:
+                    shipping = config['shipping']
             result = round(price_val - shipping - price_val * commission / 100, 2)
         except ValueError:
             result = None
@@ -46,6 +55,7 @@ def sales_page():
         price=price,
         shipping=shipping,
         commission=commission,
+        auto_shipping=auto_shipping,
         result=result,
     )
 
