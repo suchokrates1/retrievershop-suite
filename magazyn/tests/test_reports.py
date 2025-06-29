@@ -5,7 +5,9 @@ import magazyn.db as db_mod
 
 def test_low_stock_alert(app_mod, monkeypatch):
     alerts = []
-    monkeypatch.setattr(db_mod, "send_stock_alert", lambda *a, **k: alerts.append(a))
+    monkeypatch.setattr(
+        db_mod, "send_stock_alert", lambda *a, **k: alerts.append(a)
+    )
     monkeypatch.setattr(cfg.settings, "LOW_STOCK_THRESHOLD", 2)
     services = importlib.import_module("magazyn.services")
     importlib.reload(services)
