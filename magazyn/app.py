@@ -32,7 +32,7 @@ from .db import (
 )
 from .products import bp as products_bp
 from .history import bp as history_bp
-from .sales import bp as sales_bp
+from .sales import bp as sales_bp, _sales_keys
 from .auth import login_required
 from .config import settings
 from . import print_agent
@@ -198,10 +198,13 @@ def logout():
 @login_required
 def settings_page():
     values = load_settings()
+    sales_keys = _sales_keys(values)
     db_vals = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
     db_path_notice = "DB_PATH" in db_vals
     if request.method == "POST":
         for key in list(values.keys()):
+            if key in sales_keys:
+                continue
             values[key] = request.form.get(key, "")
         for tkey in ("QUIET_HOURS_START", "QUIET_HOURS_END"):
             try:
@@ -215,10 +218,10 @@ def settings_page():
         return redirect(url_for("settings_page"))
     settings_list = []
     for key, val in values.items():
+        if key in sales_keys:
+            continue
         label, desc = ENV_INFO.get(key, (key, None))
-        settings_list.append(
-            {"key": key, "label": label, "desc": desc, "value": val}
-        )
+        settings_list.append({"key": key, "label": label, "desc": desc, "value": val})
     return render_template(
         "settings.html", settings=settings_list, db_path_notice=db_path_notice
     )
