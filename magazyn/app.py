@@ -45,6 +45,7 @@ from .products import (
     add_delivery,
 )
 from .history import bp as history_bp, print_history
+from .sales import bp as sales_bp
 from .auth import login_required
 from .config import settings
 from . import print_agent
@@ -64,6 +65,7 @@ app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
 
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)
+app.register_blueprint(sales_bp)
 
 
 @app.context_processor
