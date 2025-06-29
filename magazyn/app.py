@@ -30,21 +30,8 @@ from .db import (
     record_purchase,
     consume_stock,
 )
-from .products import (
-    bp as products_bp,
-    add_item,
-    update_quantity,
-    delete_item,
-    edit_item,
-    items,
-    barcode_scan,
-    barcode_scan_page,
-    export_products,
-    import_products,
-    import_invoice,
-    add_delivery,
-)
-from .history import bp as history_bp, print_history
+from .products import bp as products_bp
+from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .auth import login_required
 from .config import settings
