@@ -26,6 +26,7 @@ def parse_time_str(value: str) -> dt_time:
 
 from .config import settings, load_config
 from __init__ import DB_PATH
+from .services import consume_order_stock
 
 API_TOKEN = settings.API_TOKEN
 PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
@@ -473,6 +474,7 @@ def _agent_loop():
                         print_label(
                             it["label_data"], it.get("ext", "pdf"), it["order_id"]
                         )
+                    consume_order_stock(items[0].get("last_order_data", {}).get("products", []))
                     mark_as_printed(oid, items[0].get("last_order_data"))
                     printed[oid] = datetime.now()
                 except Exception as e:
@@ -538,6 +540,7 @@ def _agent_loop():
                     else:
                         for label_data, ext in labels:
                             print_label(label_data, ext, order_id)
+                        consume_order_stock(last_order_data.get("products", []))
                         send_messenger_message(last_order_data)
                         mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()
