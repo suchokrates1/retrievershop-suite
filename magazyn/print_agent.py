@@ -555,8 +555,7 @@ def _agent_loop():
                     continue
 
                 logger.info(
-                    f"📜 Zamówienie {order_id} ({
-                        last_order_data['name']})"
+                    f"📜 Zamówienie {order_id} ({last_order_data['name']})"
                 )
                 packages = get_order_packages(order_id)
                 labels = []
