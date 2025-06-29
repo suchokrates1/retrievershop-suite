@@ -1,6 +1,8 @@
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from .auth import login_required
 from .config import settings
+from .env_info import ENV_INFO
+from . import print_agent
 
 bp = Blueprint('sales', __name__)
 
@@ -46,3 +48,35 @@ def sales_page():
         commission=commission,
         result=result,
     )
+
+
+def _sales_keys(values):
+    return [k for k in values.keys() if "SHIPPING" in k or "COMMISSION" in k]
+
+
+@bp.route('/sales/settings', methods=['GET', 'POST'])
+@login_required
+def sales_settings():
+    from .app import load_settings, write_env
+
+    values = load_settings()
+    keys = _sales_keys(values)
+
+    if request.method == 'POST':
+        for key in keys:
+            values[key] = request.form.get(key, "")
+        write_env(values)
+        print_agent.reload_config()
+        flash("Zapisano ustawienia.")
+        return redirect(url_for('sales.sales_settings'))
+
+    settings_list = []
+    for key in keys:
+        label, desc = ENV_INFO.get(key, (key, None))
+        settings_list.append({
+            'key': key,
+            'label': label,
+            'desc': desc,
+            'value': values[key],
+        })
+    return render_template('sales_settings.html', settings=settings_list)
