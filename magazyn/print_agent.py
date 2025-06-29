@@ -26,7 +26,8 @@ def parse_time_str(value: str) -> dt_time:
 
 from .config import settings, load_config
 from __init__ import DB_PATH
-from .services import consume_order_stock
+from .services import consume_order_stock, get_sales_summary
+from .notifications import send_report
 
 API_TOKEN = settings.API_TOKEN
 PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
@@ -116,6 +117,9 @@ def reload_config():
 
 last_order_data = {}
 _agent_thread = None
+# Timestamps for last periodic reports
+_last_weekly_report = None
+_last_monthly_report = None
 # Event used to signal the agent loop to exit
 _stop_event = threading.Event()
 
@@ -455,8 +459,30 @@ def is_quiet_time():
         return now >= start or now < end
 
 
+def _send_periodic_reports():
+    global _last_weekly_report, _last_monthly_report
+    now = datetime.now()
+    if not _last_weekly_report or now - _last_weekly_report >= timedelta(days=7):
+        report = get_sales_summary(7)
+        lines = [
+            f"- {r['name']} {r['size']}: sprzedano {r['sold']}, zostalo {r['remaining']}"
+            for r in report
+        ]
+        send_report("Raport tygodniowy", lines)
+        _last_weekly_report = now
+    if not _last_monthly_report or now - _last_monthly_report >= timedelta(days=30):
+        report = get_sales_summary(30)
+        lines = [
+            f"- {r['name']} {r['size']}: sprzedano {r['sold']}, zostalo {r['remaining']}"
+            for r in report
+        ]
+        send_report("Raport miesieczny", lines)
+        _last_monthly_report = now
+
+
 def _agent_loop():
     while not _stop_event.is_set():
+        _send_periodic_reports()
         clean_old_printed_orders()
         printed_entries = load_printed_orders()
         printed = {e["order_id"]: e["printed_at"] for e in printed_entries}
