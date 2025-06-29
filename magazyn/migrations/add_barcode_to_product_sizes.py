@@ -1,5 +1,5 @@
 import sqlite3
-from __init__ import DB_PATH
+from magazyn import DB_PATH
 
 def migrate():
     with sqlite3.connect(DB_PATH) as conn:

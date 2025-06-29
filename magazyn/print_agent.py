@@ -25,7 +25,7 @@ def parse_time_str(value: str) -> dt_time:
 
 
 from .config import settings, load_config
-from __init__ import DB_PATH
+from magazyn import DB_PATH
 from .services import consume_order_stock, get_sales_summary
 from .notifications import send_report
 
