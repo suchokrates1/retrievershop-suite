@@ -61,7 +61,9 @@ not appear on this page.
 
 ## Running Tests
 
-Before running the tests you must install the required dependencies:
+Before running the tests you must install the required dependencies.
+Execute the following command from the repository root before running
+`pytest`:
 
 ```bash
 pip install -r magazyn/requirements.txt
@@ -73,6 +75,8 @@ repository root on `PYTHONPATH`:
 ```bash
 PYTHONPATH=. pytest -q
 ```
+
+The project is developed and tested using **Python 3.9**.
 
 ## Running with Docker Compose
 
