@@ -433,3 +433,45 @@ def import_invoice_file(file):
 
     _import_invoice_df(df)
 
+
+def consume_order_stock(products: List[dict]):
+    """Consume stock for products from a printed order."""
+    for item in products or []:
+        try:
+            qty = _to_int(item.get("quantity", 0))
+        except Exception:
+            qty = 0
+        if qty <= 0:
+            continue
+        barcode = str(item.get("ean") or item.get("barcode") or item.get("sku") or "").strip()
+        name = item.get("name")
+        size = None
+        color = None
+        for attr in item.get("attributes", []):
+            aname = (attr.get("name") or "").lower()
+            if aname in {"rozmiar", "size"} and not size:
+                size = attr.get("value")
+            elif aname in {"kolor", "color"} and not color:
+                color = attr.get("value")
+
+        with get_session() as db:
+            ps = None
+            if barcode:
+                ps = db.query(ProductSize).filter_by(barcode=barcode).first()
+            if not ps and name:
+                query = (
+                    db.query(ProductSize)
+                    .join(Product, Product.id == ProductSize.product_id)
+                    .filter(Product.name == name)
+                )
+                if color is not None:
+                    query = query.filter(Product.color == color)
+                if size is not None:
+                    query = query.filter(ProductSize.size == size)
+                ps = query.first()
+
+            if ps:
+                consume_stock(ps.product_id, ps.size, qty)
+            else:
+                logger.warning("Unable to match product for order item: %s", item)
+
