@@ -26,6 +26,8 @@ def parse_time_str(value: str) -> dt_time:
 
 from .config import settings, load_config
 from __init__ import DB_PATH
+from .db import get_session, record_sale, consume_stock
+from .models import ProductSize
 
 API_TOKEN = settings.API_TOKEN
 PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
@@ -148,6 +150,18 @@ def ensure_db():
         conn.commit()
     cur.execute(
         "CREATE TABLE IF NOT EXISTS label_queue(order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT)"
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS sales("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "product_id INTEGER,"
+        "size TEXT,"
+        "purchase_price REAL,"
+        "sale_price REAL,"
+        "shipping_cost REAL,"
+        "commission REAL,"
+        "platform TEXT,"
+        "sale_date TEXT)"
     )
     conn.commit()
 
@@ -444,6 +458,38 @@ def send_messenger_message(data):
         logger.error(f"Błąd wysyłania wiadomości: {e}")
 
 
+def _record_sales_from_order(data):
+    """Record sale entries based on order data."""
+    if not data:
+        return
+    platform = data.get("platform", "")
+    products = data.get("products", [])
+    for item in products:
+        barcode = str(item.get("ean") or item.get("barcode") or "").strip()
+        qty = int(item.get("quantity", 1) or 1)
+        price = float(item.get("price_brutto") or item.get("price") or 0)
+        if not barcode:
+            continue
+        with get_session() as session:
+            ps = session.query(ProductSize).filter_by(barcode=barcode).first()
+        if not ps:
+            continue
+        for _ in range(qty):
+            try:
+                record_sale(
+                    ps.product_id,
+                    ps.size,
+                    0.0,
+                    price,
+                    0.0,
+                    0.0,
+                    platform,
+                )
+                consume_stock(ps.product_id, ps.size, 1)
+            except Exception as exc:
+                logger.error("Błąd zapisu sprzedaży: %s", exc)
+
+
 def is_quiet_time():
     now = datetime.now(ZoneInfo(TIMEZONE)).time()
     start = QUIET_HOURS_START
@@ -473,6 +519,7 @@ def _agent_loop():
                         print_label(
                             it["label_data"], it.get("ext", "pdf"), it["order_id"]
                         )
+                    _record_sales_from_order(items[0].get("last_order_data"))
                     mark_as_printed(oid, items[0].get("last_order_data"))
                     printed[oid] = datetime.now()
                 except Exception as e:
@@ -533,12 +580,14 @@ def _agent_loop():
                                 }
                             )
                         send_messenger_message(last_order_data)
+                        _record_sales_from_order(last_order_data)
                         mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()
                     else:
                         for label_data, ext in labels:
                             print_label(label_data, ext, order_id)
                         send_messenger_message(last_order_data)
+                        _record_sales_from_order(last_order_data)
                         mark_as_printed(order_id, last_order_data)
                         printed[order_id] = datetime.now()
 

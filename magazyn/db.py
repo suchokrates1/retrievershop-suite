@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
 from . import DB_PATH
-from .models import Base, User, ProductSize, PurchaseBatch
+from .models import Base, User, ProductSize, PurchaseBatch, Sale
 
 engine = None
 SessionLocal = None
@@ -58,7 +58,8 @@ def reset_db():
 
 
 def ensure_schema():
-    """Add missing columns to existing tables if necessary."""
+    """Add missing tables or columns to existing databases."""
+    Base.metadata.create_all(engine)
     conn = engine.raw_connection()
     try:
         cur = conn.execute("PRAGMA table_info(product_sizes)")
@@ -136,3 +137,30 @@ def consume_stock(product_id, size, quantity):
         if to_consume > 0 and ps:
             ps.quantity -= to_consume - remaining
     return to_consume - remaining
+
+
+def record_sale(
+    product_id,
+    size,
+    purchase_price,
+    sale_price,
+    shipping_cost,
+    commission,
+    platform,
+    sale_date=None,
+):
+    """Insert a sale record."""
+    sale_date = sale_date or datetime.datetime.now().isoformat()
+    with get_session() as session:
+        session.add(
+            Sale(
+                product_id=product_id,
+                size=size,
+                purchase_price=purchase_price,
+                sale_price=sale_price,
+                shipping_cost=shipping_cost,
+                commission=commission,
+                platform=platform,
+                sale_date=sale_date,
+            )
+        )
