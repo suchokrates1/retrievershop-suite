@@ -23,3 +23,12 @@ def test_nav_contains_sales_link(app_mod, client, login):
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     assert f'href="{sales_url}"' in html
+
+
+def test_nav_contains_sales_settings_link(app_mod, client, login):
+    from flask import url_for
+    with app_mod.app.test_request_context():
+        settings_url = url_for('sales.sales_settings')
+    resp = client.get("/")
+    html = resp.get_data(as_text=True)
+    assert f'href="{settings_url}"' in html
