@@ -7,6 +7,12 @@ import magazyn.config as cfg
 @pytest.fixture
 def app_mod(tmp_path, monkeypatch):
     monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
+    monkeypatch.setattr(cfg.settings, "DEFAULT_SHIPPING_ALLEGRO", 8.0)
+    monkeypatch.setattr(cfg.settings, "DEFAULT_SHIPPING_VINTED", 7.0)
+    monkeypatch.setattr(cfg.settings, "COMMISSION_ALLEGRO", 10.0)
+    monkeypatch.setattr(cfg.settings, "COMMISSION_VINTED", 5.0)
+    import magazyn.sales as sales_mod
+    importlib.reload(sales_mod)
     import werkzeug
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
     init = importlib.import_module("magazyn.__init__")

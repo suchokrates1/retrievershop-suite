@@ -43,4 +43,20 @@ ENV_INFO = {
         "Ustaw 1 aby włączyć tryb debugowania Flask",
     ),
     "FLASK_ENV": ("Środowisko Flask", "Konfiguracja środowiska Flask"),
+    "DEFAULT_SHIPPING_ALLEGRO": (
+        "Wysyłka Allegro",
+        "Domyślny koszt wysyłki dla platformy Allegro",
+    ),
+    "DEFAULT_SHIPPING_VINTED": (
+        "Wysyłka Vinted",
+        "Domyślny koszt wysyłki dla platformy Vinted",
+    ),
+    "COMMISSION_ALLEGRO": (
+        "Prowizja Allegro (%)",
+        "Procent prowizji pobieranej przez Allegro",
+    ),
+    "COMMISSION_VINTED": (
+        "Prowizja Vinted (%)",
+        "Procent prowizji pobieranej przez Vinted",
+    ),
 }
