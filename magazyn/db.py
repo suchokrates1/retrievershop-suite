@@ -7,7 +7,9 @@ from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
 from . import DB_PATH
-from .models import Base, User, ProductSize, PurchaseBatch
+from .models import Base, User, ProductSize, PurchaseBatch, Sale, Product
+from .config import settings
+from .notifications import send_stock_alert
 
 engine = None
 SessionLocal = None
@@ -105,6 +107,19 @@ def record_purchase(product_id, size, quantity, price, purchase_date=None):
             ps.quantity += quantity
 
 
+def record_sale(session, product_id, size, quantity, sale_date=None):
+    """Record a sale inside an existing session."""
+    sale_date = sale_date or datetime.datetime.now().isoformat()
+    session.add(
+        Sale(
+            product_id=product_id,
+            size=size,
+            quantity=quantity,
+            sale_date=sale_date,
+        )
+    )
+
+
 def consume_stock(product_id, size, quantity):
     """Remove quantity from stock using cheapest purchase batches first."""
     with get_session() as session:
@@ -133,6 +148,16 @@ def consume_stock(product_id, size, quantity):
             if batch.quantity == 0:
                 session.delete(batch)
 
-        if to_consume > 0 and ps:
-            ps.quantity -= to_consume - remaining
-    return to_consume - remaining
+        consumed = to_consume - remaining
+        if consumed > 0 and ps:
+            ps.quantity -= consumed
+            record_sale(session, product_id, size, consumed)
+            if ps.quantity < settings.LOW_STOCK_THRESHOLD:
+                try:
+                    product = session.query(Product).filter_by(id=product_id).first()
+                    name = product.name if product else str(product_id)
+                    send_stock_alert(name, size, ps.quantity)
+                except Exception as exc:
+                    logger.error("Low stock alert failed: %s", exc)
+
+    return consumed
