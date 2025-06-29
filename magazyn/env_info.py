@@ -47,25 +47,13 @@ ENV_INFO = {
         "Wysyłka Allegro",
         "Domyślny koszt wysyłki dla platformy Allegro",
     ),
-    "DEFAULT_SHIPPING_VINTED": (
-        "Wysyłka Vinted",
-        "Domyślny koszt wysyłki dla platformy Vinted",
-    ),
     "FREE_SHIPPING_THRESHOLD_ALLEGRO": (
         "Próg darmowej wysyłki Allegro",
-        "Kwota sprzedaży powyżej której wysyłka jest darmowa",
-    ),
-    "FREE_SHIPPING_THRESHOLD_VINTED": (
-        "Próg darmowej wysyłki Vinted",
         "Kwota sprzedaży powyżej której wysyłka jest darmowa",
     ),
     "COMMISSION_ALLEGRO": (
         "Prowizja Allegro (%)",
         "Procent prowizji pobieranej przez Allegro",
-    ),
-    "COMMISSION_VINTED": (
-        "Prowizja Vinted (%)",
-        "Procent prowizji pobieranej przez Vinted",
     ),
     "LOW_STOCK_THRESHOLD": (
         "Próg niskiego stanu",
