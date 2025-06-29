@@ -14,3 +14,12 @@ def test_nav_container_class(app_mod, client, login):
     nav_html = nav_match.group(1)
     assert "container-fluid" not in nav_html
     assert "class=\"container\"" in nav_html
+
+
+def test_nav_contains_sales_link(app_mod, client, login):
+    from flask import url_for
+    with app_mod.app.test_request_context():
+        sales_url = url_for('sales.list_sales')
+    resp = client.get("/")
+    html = resp.get_data(as_text=True)
+    assert f'href="{sales_url}"' in html
