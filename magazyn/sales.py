@@ -15,7 +15,14 @@ PLATFORMS = {
     },
 }
 
-@bp.route('/sales', methods=['GET', 'POST'])
+
+@bp.route('/sales')
+@login_required
+def list_sales():
+    """Placeholder page listing sales."""
+    return 'Sales list'
+
+@bp.route('/sales/profit', methods=['GET', 'POST'])
 @login_required
 def sales_page():
     platform = request.form.get('platform', 'allegro')
