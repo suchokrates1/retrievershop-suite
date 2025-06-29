@@ -45,7 +45,8 @@ def test_import_products_reads_barcode(app_mod, tmp_path):
         ):
             from flask import session
             session["username"] = "x"
-            app_mod.import_products.__wrapped__()
+            from magazyn import products
+            products.import_products.__wrapped__()
 
     with app_mod.get_session() as db:
         row = db.execute(
