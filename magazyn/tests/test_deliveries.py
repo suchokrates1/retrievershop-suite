@@ -20,7 +20,8 @@ def test_record_delivery(app_mod):
     with app_mod.app.test_request_context("/deliveries", method="POST", data=data):
         from flask import session
         session["username"] = "x"
-        app_mod.add_delivery.__wrapped__()
+        from magazyn import products
+        products.add_delivery.__wrapped__()
 
     with app_mod.get_session() as db:
         batch = db.execute(
@@ -60,7 +61,8 @@ def test_record_multiple_deliveries(app_mod):
     with app_mod.app.test_request_context("/deliveries", method="POST", data=data):
         from flask import session
         session["username"] = "x"
-        app_mod.add_delivery.__wrapped__()
+        from magazyn import products
+        products.add_delivery.__wrapped__()
 
     with app_mod.get_session() as db:
         m = db.execute(
@@ -131,5 +133,6 @@ def test_deliveries_page_shows_color(app_mod):
     with app_mod.app.test_request_context("/deliveries"):
         from flask import session
         session["username"] = "tester"
-        html = app_mod.add_delivery.__wrapped__()
+        from magazyn import products
+        html = products.add_delivery.__wrapped__()
     assert "Prod (Blue)" in html
