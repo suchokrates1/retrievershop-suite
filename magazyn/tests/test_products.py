@@ -15,7 +15,11 @@ def test_add_and_edit_item(app_mod, client, login):
         prod = db.query(Product).filter_by(name="Prod").first()
         assert prod is not None
         prod_id = prod.id
-        ps = db.query(ProductSize).filter_by(product_id=prod_id, size="M").first()
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=prod_id, size="M")
+            .first()
+        )
         assert ps.quantity == 2
         assert ps.barcode == "111"
 
@@ -32,7 +36,11 @@ def test_add_and_edit_item(app_mod, client, login):
         prod = db.get(Product, prod_id)
         assert prod.name == "Prod2"
         assert prod.color == "Zielony"
-        ps = db.query(ProductSize).filter_by(product_id=prod_id, size="M").first()
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=prod_id, size="M")
+            .first()
+        )
         assert ps.quantity == 5
 
 
@@ -41,11 +49,19 @@ def test_barcode_scan(app_mod, client, login):
         prod = Product(name="Prod2", color="Zielony")
         db.add(prod)
         db.flush()
-        db.add(ProductSize(product_id=prod.id, size="M", quantity=1, barcode="111"))
+        db.add(
+            ProductSize(
+                product_id=prod.id, size="M", quantity=1, barcode="111"
+            )
+        )
 
     resp = client.post("/barcode_scan", json={"barcode": "111"})
     assert resp.status_code == 200
-    assert resp.get_json() == {"name": "Prod2", "color": "Zielony", "size": "M"}
+    assert resp.get_json() == {
+        "name": "Prod2",
+        "color": "Zielony",
+        "size": "M",
+    }
 
 
 def test_barcode_scan_invalid(app_mod, client, login):
@@ -87,6 +103,7 @@ def test_items_forms_include_csrf_token(app_mod, client, login):
     resp = client.get("/items")
     html = resp.get_data(as_text=True)
     from flask import session as flask_session
+
     with client.session_transaction() as sess:
         with app_mod.app.test_request_context():
             for k, v in sess.items():
@@ -101,7 +118,11 @@ def test_edit_item_get_shows_product_details(app_mod, client, login):
         prod = Product(name="Prod", color="Blue")
         db.add(prod)
         db.flush()
-        db.add(ProductSize(product_id=prod.id, size="M", quantity=4, barcode="123"))
+        db.add(
+            ProductSize(
+                product_id=prod.id, size="M", quantity=4, barcode="123"
+            )
+        )
         pid = prod.id
 
     resp = client.get(f"/edit_item/{pid}")
@@ -117,7 +138,11 @@ def test_items_page_displays_barcodes(app_mod, client, login):
         prod = Product(name="P", color="C")
         db.add(prod)
         db.flush()
-        db.add(ProductSize(product_id=prod.id, size="M", quantity=2, barcode="321"))
+        db.add(
+            ProductSize(
+                product_id=prod.id, size="M", quantity=2, barcode="321"
+            )
+        )
 
     resp = client.get("/items")
     assert resp.status_code == 200
@@ -131,6 +156,7 @@ def test_scan_barcode_page_contains_csrf(app_mod, client, login):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     from flask import session as flask_session
+
     with client.session_transaction() as sess:
         with app_mod.app.test_request_context():
             for k, v in sess.items():
@@ -162,4 +188,3 @@ def test_add_item_rejects_negative_quantity(app_mod, client, login):
 
     with app_mod.get_session() as db:
         assert db.query(Product).filter_by(name="NegProd").first() is None
-

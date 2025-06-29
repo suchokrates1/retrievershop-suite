@@ -14,5 +14,9 @@ def test_reload_config_updates_logger_level(monkeypatch):
     assert pa.logger.level == logging.DEBUG
 
     # restore original configuration
-    monkeypatch.setattr(pa, "load_config", importlib.import_module("magazyn.config").load_config)
+    monkeypatch.setattr(
+        pa,
+        "load_config",
+        importlib.import_module("magazyn.config").load_config,
+    )
     pa.reload_config()

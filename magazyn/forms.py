@@ -4,20 +4,22 @@ from wtforms.validators import DataRequired, NumberRange
 
 from .constants import ALL_SIZES
 
+
 class LoginForm(FlaskForm):
-    username = StringField('username', validators=[DataRequired()])
-    password = PasswordField('password', validators=[DataRequired()])
+    username = StringField("username", validators=[DataRequired()])
+    password = PasswordField("password", validators=[DataRequired()])
+
 
 class AddItemForm(FlaskForm):
-    name = StringField('name', validators=[DataRequired()])
+    name = StringField("name", validators=[DataRequired()])
     color = SelectField(
-        'color',
+        "color",
         choices=[
-            ('Czerwony', 'Czerwony'),
-            ('Niebieski', 'Niebieski'),
-            ('Zielony', 'Zielony'),
-            ('Czarny', 'Czarny'),
-            ('Biały', 'Biały'),
+            ("Czerwony", "Czerwony"),
+            ("Niebieski", "Niebieski"),
+            ("Zielony", "Zielony"),
+            ("Czarny", "Czarny"),
+            ("Biały", "Biały"),
         ],
         validators=[DataRequired()],
     )

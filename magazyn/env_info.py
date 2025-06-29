@@ -71,7 +71,10 @@ ENV_INFO = {
         "Próg niskiego stanu",
         "Ilość przy której wysyłane jest powiadomienie",
     ),
-    "ALERT_EMAIL": ("Email alertów", "Adres email do powiadomień o niskim stanie"),
+    "ALERT_EMAIL": (
+        "Email alertów",
+        "Adres email do powiadomień o niskim stanie",
+    ),
     "SMTP_SERVER": ("Serwer SMTP", "Adres serwera SMTP do wysyłki e-mail"),
     "SMTP_PORT": ("Port SMTP", "Port serwera SMTP"),
     "SMTP_USERNAME": ("Użytkownik SMTP", "Login do serwera SMTP"),
