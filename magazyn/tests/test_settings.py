@@ -10,8 +10,14 @@ def test_settings_list_all_keys(app_mod, client, login, tmp_path):
     resp = client.get("/settings")
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
-    for key in app_mod.load_settings().keys():
-        assert key in text
+    values = app_mod.load_settings()
+    from magazyn.sales import _sales_keys
+    sales_keys = _sales_keys(values)
+    for key in values.keys():
+        if key in sales_keys:
+            assert key not in text
+        else:
+            assert key in text
 
 
 def test_settings_post_saves_and_reloads(
@@ -24,9 +30,10 @@ def test_settings_post_saves_and_reloads(
         "reload_config",
         lambda: reloaded.update(called=True),
     )
-    values = {
-        k: f"val{i}" for i, k in enumerate(app_mod.load_settings().keys())
-    }
+    values = {k: f"val{i}" for i, k in enumerate(app_mod.load_settings().keys())}
+    from magazyn.sales import _sales_keys
+    for skey in _sales_keys(values):
+        values.pop(skey)
     values["QUIET_HOURS_START"] = "10:00"
     values["QUIET_HOURS_END"] = "22:00"
     resp = client.post("/settings", data=values)
