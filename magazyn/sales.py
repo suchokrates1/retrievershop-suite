@@ -3,68 +3,45 @@ from .auth import login_required
 from .config import settings
 from .env_info import ENV_INFO
 from . import print_agent
+from .db import get_session
+from .models import Sale, Product
 
 bp = Blueprint("sales", __name__)
-
-PLATFORMS = {
-    "allegro": {
-        "shipping": settings.DEFAULT_SHIPPING_ALLEGRO,
-        "commission": settings.COMMISSION_ALLEGRO,
-        "free_threshold": settings.FREE_SHIPPING_THRESHOLD_ALLEGRO,
-    }
-}
 
 
 @bp.route("/sales")
 @login_required
 def list_sales():
-    """Placeholder page listing sales."""
-    return "Sales list"
-
-
-@bp.route("/sales/profit", methods=["GET", "POST"])
-@login_required
-def sales_page():
-    platform = request.form.get("platform", "allegro")
-    config = PLATFORMS.get(
-        platform, {"shipping": 0.0, "commission": 0.0, "free_threshold": 0.0}
-    )
-    price = request.form.get("price", "")
-    auto_shipping = request.form.get(
-        "auto_shipping", "on" if request.method == "GET" else None
-    )
-    auto_shipping = auto_shipping == "on"
-    shipping = float(request.form.get("shipping", config["shipping"] or 0))
-    commission = float(
-        request.form.get("commission", config["commission"] or 0)
-    )
-    result = None
-    if request.method == "POST":
-        try:
-            price_val = float(price)
-            if auto_shipping:
-                if (
-                    config.get("free_threshold")
-                    and price_val >= config["free_threshold"]
-                ):
-                    shipping = 0.0
-                else:
-                    shipping = config["shipping"]
-            result = round(
-                price_val - shipping - price_val * commission / 100, 2
+    """Display table of recorded sales with profit calculation."""
+    with get_session() as db:
+        rows = (
+            db.query(Sale, Product)
+            .join(Product, Sale.product_id == Product.id)
+            .order_by(Sale.sale_date.desc())
+            .all()
+        )
+        sales = []
+        for sale, product in rows:
+            profit = (
+                sale.sale_price
+                - sale.purchase_cost
+                - sale.shipping_cost
+                - sale.commission_fee
             )
-        except ValueError:
-            result = None
-    return render_template(
-        "sales.html",
-        platforms=PLATFORMS.keys(),
-        platform=platform,
-        price=price,
-        shipping=shipping,
-        commission=commission,
-        auto_shipping=auto_shipping,
-        result=result,
-    )
+            sales.append(
+                {
+                    "date": sale.sale_date,
+                    "product": f"{product.name} ({product.color}) {sale.size}",
+                    "purchase_cost": sale.purchase_cost,
+                    "commission": sale.commission_fee,
+                    "shipping": sale.shipping_cost,
+                    "sale_price": sale.sale_price,
+                    "profit": profit,
+                }
+            )
+    return render_template("sales.html", sales=sales)
+
+
 
 
 def _sales_keys(values):
