@@ -11,12 +11,7 @@ PLATFORMS = {
         "shipping": settings.DEFAULT_SHIPPING_ALLEGRO,
         "commission": settings.COMMISSION_ALLEGRO,
         "free_threshold": settings.FREE_SHIPPING_THRESHOLD_ALLEGRO,
-    },
-    "vinted": {
-        "shipping": settings.DEFAULT_SHIPPING_VINTED,
-        "commission": settings.COMMISSION_VINTED,
-        "free_threshold": settings.FREE_SHIPPING_THRESHOLD_VINTED,
-    },
+    }
 }
 
 

@@ -1,11 +1,8 @@
 def _sales_keys():
     return [
         "DEFAULT_SHIPPING_ALLEGRO",
-        "DEFAULT_SHIPPING_VINTED",
         "FREE_SHIPPING_THRESHOLD_ALLEGRO",
-        "FREE_SHIPPING_THRESHOLD_VINTED",
         "COMMISSION_ALLEGRO",
-        "COMMISSION_VINTED",
     ]
 
 
