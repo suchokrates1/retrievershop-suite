@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-3 text-center">Ustawienia sprzedaży</h2>
+<form method="post" class="row row-cols-1 row-cols-md-2 g-3 center-form mx-auto">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <table class="table">
+        <tbody>
+        {% for item in settings %}
+        <tr>
+            <th scope="row">
+                {{ item.label }}
+                {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
+                {% if item.label != item.key %}<br><small class="text-muted">{{ item.key }}</small>{% endif %}
+            </th>
+            <td>
+                <input type="number" step="0.01" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="col-12 form-actions text-center">
+        <button type="submit" class="btn btn-primary">Zapisz</button>
+    </div>
+</form>
+{% endblock %}
