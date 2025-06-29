@@ -64,3 +64,7 @@ class Sale(Base):
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
     sale_date = Column(String, nullable=False)
+    purchase_cost = Column(Float, nullable=False, default=0.0)
+    sale_price = Column(Float, nullable=False, default=0.0)
+    shipping_cost = Column(Float, nullable=False, default=0.0)
+    commission_fee = Column(Float, nullable=False, default=0.0)

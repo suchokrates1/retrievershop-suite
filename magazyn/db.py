@@ -71,6 +71,18 @@ def ensure_schema():
                 "ON product_sizes(barcode)"
             )
             conn.commit()
+
+        cur = conn.execute("PRAGMA table_info(sales)")
+        cols = [row[1] for row in cur.fetchall()]
+        if "purchase_cost" not in cols:
+            conn.execute("ALTER TABLE sales ADD COLUMN purchase_cost REAL DEFAULT 0.0 NOT NULL")
+        if "sale_price" not in cols:
+            conn.execute("ALTER TABLE sales ADD COLUMN sale_price REAL DEFAULT 0.0 NOT NULL")
+        if "shipping_cost" not in cols:
+            conn.execute("ALTER TABLE sales ADD COLUMN shipping_cost REAL DEFAULT 0.0 NOT NULL")
+        if "commission_fee" not in cols:
+            conn.execute("ALTER TABLE sales ADD COLUMN commission_fee REAL DEFAULT 0.0 NOT NULL")
+        conn.commit()
     finally:
         conn.close()
 
@@ -107,7 +119,17 @@ def record_purchase(product_id, size, quantity, price, purchase_date=None):
             ps.quantity += quantity
 
 
-def record_sale(session, product_id, size, quantity, sale_date=None):
+def record_sale(
+    session,
+    product_id,
+    size,
+    quantity,
+    purchase_cost=0.0,
+    sale_price=0.0,
+    shipping_cost=0.0,
+    commission_fee=0.0,
+    sale_date=None,
+):
     """Record a sale inside an existing session."""
     sale_date = sale_date or datetime.datetime.now().isoformat()
     session.add(
@@ -116,6 +138,10 @@ def record_sale(session, product_id, size, quantity, sale_date=None):
             size=size,
             quantity=quantity,
             sale_date=sale_date,
+            purchase_cost=purchase_cost,
+            sale_price=sale_price,
+            shipping_cost=shipping_cost,
+            commission_fee=commission_fee,
         )
     )
 
@@ -141,11 +167,13 @@ def consume_stock(product_id, size, quantity):
         )
 
         remaining = to_consume
+        purchase_cost = 0.0
         for batch in batches:
             if remaining <= 0:
                 break
             use = remaining if batch.quantity >= remaining else batch.quantity
             batch.quantity -= use
+            purchase_cost += use * batch.price
             remaining -= use
             if batch.quantity == 0:
                 session.delete(batch)
@@ -153,7 +181,7 @@ def consume_stock(product_id, size, quantity):
         consumed = to_consume - remaining
         if consumed > 0 and ps:
             ps.quantity -= consumed
-            record_sale(session, product_id, size, consumed)
+            record_sale(session, product_id, size, consumed, purchase_cost=purchase_cost)
             if ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
                     product = (
