@@ -9,17 +9,19 @@ def test_nav_container_class(app_mod, client, login):
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     import re
+
     nav_match = re.search(r"<nav[^>]*>(.*?)</nav>", html, re.S)
     assert nav_match, "nav section missing"
     nav_html = nav_match.group(1)
     assert "container-fluid" not in nav_html
-    assert "class=\"container\"" in nav_html
+    assert 'class="container"' in nav_html
 
 
 def test_nav_contains_sales_link(app_mod, client, login):
     from flask import url_for
+
     with app_mod.app.test_request_context():
-        sales_url = url_for('sales.list_sales')
+        sales_url = url_for("sales.list_sales")
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     assert f'href="{sales_url}"' in html
@@ -27,8 +29,9 @@ def test_nav_contains_sales_link(app_mod, client, login):
 
 def test_nav_contains_sales_settings_link(app_mod, client, login):
     from flask import url_for
+
     with app_mod.app.test_request_context():
-        settings_url = url_for('sales.sales_settings')
+        settings_url = url_for("sales.sales_settings")
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     assert f'href="{settings_url}"' in html

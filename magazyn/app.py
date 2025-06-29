@@ -110,7 +110,9 @@ def write_env(values):
         example = dotenv_values(EXAMPLE_PATH)
         example_keys = list(example.keys())
         current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
-        ordered = example_keys + [k for k in values.keys() if k not in example_keys]
+        ordered = example_keys + [
+            k for k in values.keys() if k not in example_keys
+        ]
     except Exception as e:
         app.logger.exception("Failed to read env template: %s", e)
         if has_request_context():
@@ -131,7 +133,10 @@ def ensure_db_initialized():
     try:
         if os.path.isdir(DB_PATH):
             app.logger.error(
-                f"Database path {DB_PATH} is a directory. Please fix the mount."
+                (
+                    f"Database path {DB_PATH} is a directory. "
+                    "Please fix the mount."
+                )
             )
             if has_request_context():
                 flash("Błąd konfiguracji bazy danych.")
@@ -211,8 +216,12 @@ def settings_page():
     settings_list = []
     for key, val in values.items():
         label, desc = ENV_INFO.get(key, (key, None))
-        settings_list.append({"key": key, "label": label, "desc": desc, "value": val})
-    return render_template("settings.html", settings=settings_list, db_path_notice=db_path_notice)
+        settings_list.append(
+            {"key": key, "label": label, "desc": desc, "value": val}
+        )
+    return render_template(
+        "settings.html", settings=settings_list, db_path_notice=db_path_notice
+    )
 
 
 @app.route("/logs")
@@ -233,7 +242,9 @@ def test_print():
     message = None
     if request.method == "POST":
         success = print_agent.print_test_page()
-        message = "Testowy wydruk wysłany." if success else "Błąd testowego wydruku."
+        message = (
+            "Testowy wydruk wysłany." if success else "Błąd testowego wydruku."
+        )
     return render_template("testprint.html", message=message)
 
 

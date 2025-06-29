@@ -1,6 +1,6 @@
-
 """Package level helpers and backward compatibility variables."""
 
+import sys
 from .config import settings
 
 # Path to the SQLite database shared between the application and the
@@ -11,5 +11,4 @@ from .config import settings
 DB_PATH = settings.DB_PATH
 
 # Allow ``from __init__ import DB_PATH`` when running modules as scripts.
-import sys
 sys.modules.setdefault("__init__", sys.modules[__name__])

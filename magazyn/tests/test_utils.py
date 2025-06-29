@@ -75,11 +75,15 @@ def test_mark_as_printed_deduplicates(tmp_path, monkeypatch):
     monkeypatch.setattr(bl, "datetime", DummyDateTime)
 
     bl.mark_as_printed("xyz")
-    first = {o["order_id"]: o["printed_at"] for o in bl.load_printed_orders()}["xyz"]
+    first = {o["order_id"]: o["printed_at"] for o in bl.load_printed_orders()}[
+        "xyz"
+    ]
 
     DummyDateTime.ts = dt.datetime.fromisoformat("2024-02-02T00:00:00")
     bl.mark_as_printed("xyz")
-    second = {o["order_id"]: o["printed_at"] for o in bl.load_printed_orders()}["xyz"]
+    second = {
+        o["order_id"]: o["printed_at"] for o in bl.load_printed_orders()
+    }["xyz"]
 
     assert first == second
 

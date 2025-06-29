@@ -2,7 +2,7 @@ import datetime
 from contextlib import contextmanager
 import logging
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
@@ -26,7 +26,6 @@ configure_engine(DB_PATH)
 logger = logging.getLogger(__name__)
 
 
-
 @contextmanager
 def get_session():
     session = SessionLocal()
@@ -39,6 +38,7 @@ def get_session():
         raise
     finally:
         session.close()
+
 
 # Backward compatibility
 get_db_connection = get_session
@@ -134,7 +134,9 @@ def consume_stock(product_id, size, quantity):
         batches = (
             session.query(PurchaseBatch)
             .filter_by(product_id=product_id, size=size)
-            .order_by(PurchaseBatch.price.asc(), PurchaseBatch.purchase_date.asc())
+            .order_by(
+                PurchaseBatch.price.asc(), PurchaseBatch.purchase_date.asc()
+            )
             .all()
         )
 
@@ -154,7 +156,9 @@ def consume_stock(product_id, size, quantity):
             record_sale(session, product_id, size, consumed)
             if ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
-                    product = session.query(Product).filter_by(id=product_id).first()
+                    product = (
+                        session.query(Product).filter_by(id=product_id).first()
+                    )
                     name = product.name if product else str(product_id)
                     send_stock_alert(name, size, ps.quantity)
                 except Exception as exc:
