@@ -3,7 +3,8 @@ from typing import Dict, Tuple, Optional, List
 import pandas as pd
 
 from .db import get_session, record_purchase, consume_stock
-from .models import Product, ProductSize, PurchaseBatch
+from .models import Product, ProductSize, PurchaseBatch, Sale
+from sqlalchemy import func
 from .constants import ALL_SIZES
 from datetime import datetime
 from PyPDF2 import PdfReader
@@ -474,4 +475,41 @@ def consume_order_stock(products: List[dict]):
                 consume_stock(ps.product_id, ps.size, qty)
             else:
                 logger.warning("Unable to match product for order item: %s", item)
+
+
+def get_sales_summary(days: int = 7) -> List[dict]:
+    """Return sales summary for the given period."""
+    start = datetime.now() - pd.Timedelta(days=days)
+    with get_session() as db:
+        rows = (
+            db.query(
+                Product.name,
+                Product.color,
+                Sale.size,
+                func.sum(Sale.quantity).label("qty"),
+            )
+            .join(Product, Sale.product_id == Product.id)
+            .filter(Sale.sale_date >= start.isoformat())
+            .group_by(Sale.product_id, Sale.size)
+            .all()
+        )
+        stock = {
+            (ps.product_id, ps.size): ps.quantity
+            for ps in db.query(ProductSize).all()
+        }
+
+    summary = []
+    for name, color, size, qty in rows:
+        remaining = stock.get((
+            db.query(Product).filter_by(name=name, color=color).first().id,
+            size,
+        ), 0)
+        summary.append({
+            "name": name,
+            "color": color,
+            "size": size,
+            "sold": int(qty or 0),
+            "remaining": remaining,
+        })
+    return summary
 

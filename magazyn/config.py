@@ -32,6 +32,12 @@ def load_config():
         DEFAULT_SHIPPING_VINTED=float(os.getenv("DEFAULT_SHIPPING_VINTED", "0")),
         COMMISSION_ALLEGRO=float(os.getenv("COMMISSION_ALLEGRO", "0")),
         COMMISSION_VINTED=float(os.getenv("COMMISSION_VINTED", "0")),
+        LOW_STOCK_THRESHOLD=int(os.getenv("LOW_STOCK_THRESHOLD", "1")),
+        ALERT_EMAIL=os.getenv("ALERT_EMAIL"),
+        SMTP_SERVER=os.getenv("SMTP_SERVER"),
+        SMTP_PORT=os.getenv("SMTP_PORT", "25"),
+        SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
+        SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
     )
 
 
