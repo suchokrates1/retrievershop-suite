@@ -42,6 +42,12 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `SECRET_KEY` | Secret key for Flask sessions |
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
 | `FLASK_ENV` | Flask configuration environment |
+| `DEFAULT_SHIPPING_ALLEGRO` | Default shipping cost when selling on Allegro |
+| `DEFAULT_SHIPPING_VINTED` | Default shipping cost when selling on Vinted |
+| `FREE_SHIPPING_THRESHOLD_ALLEGRO` | Sale price above which Allegro shipping is free |
+| `FREE_SHIPPING_THRESHOLD_VINTED` | Sale price above which Vinted shipping is free |
+| `COMMISSION_ALLEGRO` | Commission percentage charged by Allegro |
+| `COMMISSION_VINTED` | Commission percentage charged by Vinted |
 
 `DB_PATH` is read only during application startup, so changing it requires
 restarting the server.
