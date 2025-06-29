@@ -3,6 +3,7 @@ html, body {
 }
 body {
     margin: 0;
+    padding-top: 70px;
     background-color: #121212;
     color: #f0f0f0;
 }
@@ -51,19 +52,19 @@ label, input, button {
     padding: 8px;
 }
 
-.container {
+.custom-container {
     text-align: center;
     margin: 30px auto;
     width: 100%;
 }
 
-.navbar .container {
+.navbar .custom-container {
     margin: 0 auto;
     max-width: 1140px;
     width: 100%;
 }
 @media (max-width: 768px) {
-    .navbar .container { max-width: 100%; padding: 0 1rem; }
+    .navbar .custom-container { max-width: 100%; padding: 0 1rem; }
 }
 
 .actions {
@@ -75,7 +76,7 @@ label, input, button {
     text-align: center;
 }
 
-.btn {
+.custom-btn {
     display: inline-block;
     margin: 10px;
     padding: 12px 24px;
@@ -86,7 +87,7 @@ label, input, button {
     font-weight: bold;
 }
 
-.btn:hover {
+.custom-btn:hover {
     background-color: #145360;
 }
 
@@ -213,11 +214,6 @@ th {
 }
 
 /* Adjust layout for fixed navbar */
-body {
-    padding-top: 70px;
-    background-color: #121212;
-    color: #f0f0f0;
-}
 
 /* Mobile slide-in menu */
 @media (max-width: 768px) {
@@ -331,7 +327,7 @@ body {
 }
 
 @media (max-width: 768px) {
-    #mobileMenu .btn {
+    #mobileMenu .custom-btn {
         margin-left: auto;
         margin-right: auto;
         display: block;
