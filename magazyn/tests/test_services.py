@@ -48,7 +48,11 @@ def test_record_delivery(app_mod):
     info, sizes = services.get_product_details(prod.id)
     assert sizes["M"]["quantity"] == 3
     with app_mod.get_session() as db:
-        ps = db.query(ProductSize).filter_by(product_id=prod.id, size="M").first()
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=prod.id, size="M")
+            .first()
+        )
         assert ps.quantity == 3
 
 
@@ -57,4 +61,3 @@ def test_find_by_barcode(app_mod):
     prod = services.create_product("Prod", "Green", {"M": 1}, {"M": "999"})
     result = services.find_by_barcode("999")
     assert result == {"name": "Prod", "color": "Green", "size": "M"}
-
