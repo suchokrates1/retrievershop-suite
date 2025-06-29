@@ -2,6 +2,7 @@ import json
 import sqlite3
 import pytest
 import magazyn.print_agent as bl
+from magazyn.models import Product, ProductSize, Sale, PurchaseBatch
 
 
 def test_shorten_product_name():
@@ -166,3 +167,32 @@ def test_call_api_handles_http_error(monkeypatch):
 
     result = bl.call_api("dummy")
     assert result == {}
+
+def test_record_sales_from_order(app_mod):
+    pa = app_mod.print_agent
+    with app_mod.get_session() as db:
+        prod = Product(name="P", color="C")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=2, barcode="111"))
+        db.add(
+            PurchaseBatch(
+                product_id=prod.id,
+                size="M",
+                quantity=2,
+                price=1.0,
+                purchase_date="2023-01-01T00:00:00",
+            )
+        )
+    order = {
+        "platform": "shop",
+        "products": [{"ean": "111", "quantity": 1, "price_brutto": 9.0}],
+    }
+    pa._record_sales_from_order(order)
+    with app_mod.get_session() as db:
+        sale = db.query(Sale).first()
+        ps = db.query(ProductSize).filter_by(product_id=prod.id, size="M").first()
+    assert sale.product_id == prod.id
+    assert sale.size == "M"
+    assert abs(sale.sale_price - 9.0) < 0.01
+    assert ps.quantity == 1

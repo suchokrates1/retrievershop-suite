@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-center">Sprzedaż</h2>
+<div class="table-responsive mx-auto">
+<table class="table table-striped table-sm">
+    <thead>
+    <tr><th>Nazwa</th><th>Kolor</th><th>Rozmiar</th><th>Data</th><th>Cena zakupu</th><th>Cena sprzedaży</th><th>Wysyłka</th><th>Prowizja</th><th>Platforma</th></tr>
+    </thead>
+    <tbody>
+    {% for row in sales %}
+    <tr>
+        <td>{{ row.name or '' }}</td>
+        <td>{{ row.color or '' }}</td>
+        <td>{{ row.size }}</td>
+        <td>{{ row.sale_date.split('T')[0] if row.sale_date else '' }}</td>
+        <td>{{ "%.2f"|format(row.purchase_price) }}</td>
+        <td>{{ "%.2f"|format(row.sale_price) }}</td>
+        <td>{{ "%.2f"|format(row.shipping_cost) }}</td>
+        <td>{{ "%.2f"|format(row.commission) }}</td>
+        <td>{{ row.platform }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

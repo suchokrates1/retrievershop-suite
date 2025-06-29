@@ -47,3 +47,16 @@ class PurchaseBatch(Base):
     quantity = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
     purchase_date = Column(String, nullable=False)
+
+
+class Sale(Base):
+    __tablename__ = 'sales'
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('products.id'))
+    size = Column(String, nullable=False)
+    purchase_price = Column(Float, nullable=False, default=0.0)
+    sale_price = Column(Float, nullable=False, default=0.0)
+    shipping_cost = Column(Float, nullable=False, default=0.0)
+    commission = Column(Float, nullable=False, default=0.0)
+    platform = Column(String)
+    sale_date = Column(String, nullable=False)
