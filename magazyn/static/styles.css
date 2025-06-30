@@ -303,7 +303,6 @@ th {
 
 @media (min-width: 768px) {
     main.container-fluid {
-        max-width: 1140px;
         width: 100%;
         margin-left: auto;
         margin-right: auto;
