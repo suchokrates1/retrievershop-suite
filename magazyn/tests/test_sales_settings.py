@@ -32,3 +32,25 @@ def test_sales_settings_post_saves(
     for key, val in values.items():
         assert f"{key}={val}" in env_text
     assert reloaded["called"] is True
+
+
+def test_thresholds_saved_and_displayed(app_mod, client, login):
+    from magazyn.models import ShippingThreshold
+
+    with app_mod.get_session() as db:
+        db.add(ShippingThreshold(min_order_value=0.0, shipping_cost=10.0))
+
+    resp = client.get("/sales/settings")
+    assert resp.status_code == 200
+    assert "10.00" in resp.get_data(as_text=True)
+
+    data = {
+        "threshold_min": ["0", "100"],
+        "threshold_cost": ["8", "0"],
+    }
+    client.post("/sales/settings", data=data)
+
+    with app_mod.get_session() as db:
+        rows = db.query(ShippingThreshold).order_by(ShippingThreshold.min_order_value).all()
+        assert len(rows) == 2
+        assert rows[1].min_order_value == 100.0
