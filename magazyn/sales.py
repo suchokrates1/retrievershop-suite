@@ -57,7 +57,8 @@ def list_sales():
 
 
 def _sales_keys(values):
-    return [k for k in values.keys() if "SHIPPING" in k or "COMMISSION" in k]
+    keywords = ("SHIPPING", "COMMISSION", "EMAIL", "SMTP")
+    return [k for k in values.keys() if any(word in k for word in keywords)]
 
 
 @bp.route("/sales/settings", methods=["GET", "POST"])
