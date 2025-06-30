@@ -68,3 +68,10 @@ class Sale(Base):
     sale_price = Column(Float, nullable=False, default=0.0)
     shipping_cost = Column(Float, nullable=False, default=0.0)
     commission_fee = Column(Float, nullable=False, default=0.0)
+
+
+class ShippingThreshold(Base):
+    __tablename__ = "shipping_thresholds"
+    id = Column(Integer, primary_key=True)
+    min_order_value = Column(Float, nullable=False)
+    shipping_cost = Column(Float, nullable=False)
