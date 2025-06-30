@@ -141,8 +141,14 @@ def ensure_db_initialized():
             if has_request_context():
                 flash("Błąd konfiguracji bazy danych.")
             raise SystemExit(1)
-        if not os.path.isfile(DB_PATH):
-            init_db()
+        if os.path.exists(DB_PATH) and not os.path.isfile(DB_PATH):
+            app.logger.error(f"Database path {DB_PATH} is not a file.")
+            if has_request_context():
+                flash("Błąd konfiguracji bazy danych.")
+            raise SystemExit(1)
+
+        # Always run table creation so new tables appear automatically.
+        init_db()
         ensure_schema()
         register_default_user()
     except Exception as e:
