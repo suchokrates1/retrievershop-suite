@@ -12,6 +12,10 @@
     {% if show_menu is not defined %}
         {% set show_menu = True %}
     {% endif %}
+    {% if full_width is not defined %}
+        {% set full_width = False %}
+    {% endif %}
+    {% block page_vars %}{% endblock %}
     <div class="page-wrapper">
     <nav class="navbar navbar-dark bg-dark fixed-top">
         <div class="custom-container">
@@ -77,7 +81,7 @@
     </div>
     {% endif %}
 
-    <main class="container-fluid mt-4 pt-4">
+    <main class="container-fluid mt-4 pt-4{% if full_width %} full-width{% endif %}">
 	{% with messages = get_flashed_messages() %}
   {% if messages %}
     <div class="alert alert-info" role="alert">
