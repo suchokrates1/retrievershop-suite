@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-center mb-3">Sprzedaż</h2>
+<div class="table-responsive">
+<table class="table table-striped table-sm mx-auto">
+    <thead>
+    <tr>
+        <th>Data</th>
+        <th>Produkt</th>
+        <th>Koszt zakupu</th>
+        <th>Prowizja</th>
+        <th>Wysyłka</th>
+        <th>Cena sprzedaży</th>
+        <th>Zysk</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for s in sales %}
+    <tr>
+        <td>{{ s.date[:16] }}</td>
+        <td>{{ s.product }}</td>
+        <td>{{ '%.2f'|format(s.purchase_cost) }}</td>
+        <td>{{ '%.2f'|format(s.commission) }}</td>
+        <td>{{ '%.2f'|format(s.shipping) }}</td>
+        <td>{{ '%.2f'|format(s.sale_price) }}</td>
+        <td>{{ '%.2f'|format(s.profit) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
