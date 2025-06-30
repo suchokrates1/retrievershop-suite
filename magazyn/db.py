@@ -75,14 +75,39 @@ def ensure_schema():
         cur = conn.execute("PRAGMA table_info(sales)")
         cols = [row[1] for row in cur.fetchall()]
         if "purchase_cost" not in cols:
-            conn.execute("ALTER TABLE sales ADD COLUMN purchase_cost REAL DEFAULT 0.0 NOT NULL")
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN purchase_cost "
+                "REAL DEFAULT 0.0 NOT NULL"
+            )
         if "sale_price" not in cols:
-            conn.execute("ALTER TABLE sales ADD COLUMN sale_price REAL DEFAULT 0.0 NOT NULL")
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN sale_price "
+                "REAL DEFAULT 0.0 NOT NULL"
+            )
         if "shipping_cost" not in cols:
-            conn.execute("ALTER TABLE sales ADD COLUMN shipping_cost REAL DEFAULT 0.0 NOT NULL")
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN shipping_cost "
+                "REAL DEFAULT 0.0 NOT NULL"
+            )
         if "commission_fee" not in cols:
-            conn.execute("ALTER TABLE sales ADD COLUMN commission_fee REAL DEFAULT 0.0 NOT NULL")
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN commission_fee "
+                "REAL DEFAULT 0.0 NOT NULL"
+            )
         conn.commit()
+
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+            " AND name='shipping_thresholds'"
+        )
+        if not cur.fetchone():
+            conn.execute(
+                "CREATE TABLE shipping_thresholds ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "min_order_value REAL NOT NULL, "
+                "shipping_cost REAL NOT NULL)"
+            )
+            conn.commit()
     finally:
         conn.close()
 
@@ -171,7 +196,9 @@ def consume_stock(product_id, size, quantity):
         for batch in batches:
             if remaining <= 0:
                 break
-            use = remaining if batch.quantity >= remaining else batch.quantity
+            use = (
+                remaining if batch.quantity >= remaining else batch.quantity
+            )
             batch.quantity -= use
             purchase_cost += use * batch.price
             remaining -= use
@@ -181,7 +208,13 @@ def consume_stock(product_id, size, quantity):
         consumed = to_consume - remaining
         if consumed > 0 and ps:
             ps.quantity -= consumed
-            record_sale(session, product_id, size, consumed, purchase_cost=purchase_cost)
+            record_sale(
+                session,
+                product_id,
+                size,
+                consumed,
+                purchase_cost=purchase_cost,
+            )
             if ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
                     product = (
