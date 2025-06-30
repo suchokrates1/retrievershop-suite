@@ -39,7 +39,7 @@ def list_sales():
                     "profit": profit,
                 }
             )
-    return render_template("sales.html", sales=sales)
+    return render_template("sales_list.html", sales=sales)
 
 
 
