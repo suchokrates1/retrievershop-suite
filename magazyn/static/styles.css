@@ -3,13 +3,13 @@ html, body {
 }
 body {
     margin: 0;
-    padding-top: 70px;
+    padding-top: 110px;
     background-color: #121212;
     color: #f0f0f0;
 }
 .page-wrapper {
     /* Subtract navbar height so short pages avoid unnecessary scrolling */
-    min-height: calc(100vh - 70px);
+    min-height: calc(100vh - 110px);
     display: flex;
     flex-direction: column;
 }
