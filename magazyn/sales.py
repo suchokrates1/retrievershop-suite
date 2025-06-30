@@ -1,12 +1,23 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from .auth import login_required
-from .config import settings
 from .env_info import ENV_INFO
 from . import print_agent
 from .db import get_session
-from .models import Sale, Product
+from .models import Sale, Product, ShippingThreshold
 
 bp = Blueprint("sales", __name__)
+
+
+def calculate_shipping(amount: float) -> float:
+    """Return shipping cost for given order value based on thresholds."""
+    with get_session() as db:
+        row = (
+            db.query(ShippingThreshold)
+            .filter(ShippingThreshold.min_order_value <= amount)
+            .order_by(ShippingThreshold.min_order_value.desc())
+            .first()
+        )
+        return row.shipping_cost if row else 0.0
 
 
 @bp.route("/sales")
@@ -22,10 +33,13 @@ def list_sales():
         )
         sales = []
         for sale, product in rows:
+            shipping = sale.shipping_cost or calculate_shipping(
+                sale.sale_price
+            )
             profit = (
                 sale.sale_price
                 - sale.purchase_cost
-                - sale.shipping_cost
+                - shipping
                 - sale.commission_fee
             )
             sales.append(
@@ -34,14 +48,12 @@ def list_sales():
                     "product": f"{product.name} ({product.color}) {sale.size}",
                     "purchase_cost": sale.purchase_cost,
                     "commission": sale.commission_fee,
-                    "shipping": sale.shipping_cost,
+                    "shipping": shipping,
                     "sale_price": sale.sale_price,
                     "profit": profit,
                 }
             )
     return render_template("sales_list.html", sales=sales)
-
-
 
 
 def _sales_keys(values):
@@ -60,6 +72,19 @@ def sales_settings():
         for key in keys:
             values[key] = request.form.get(key, "")
         write_env(values)
+        mins = request.form.getlist("threshold_min")
+        costs = request.form.getlist("threshold_cost")
+        with get_session() as db:
+            db.query(ShippingThreshold).delete()
+            for m, c in zip(mins, costs):
+                if not m and not c:
+                    continue
+                db.add(
+                    ShippingThreshold(
+                        min_order_value=float(m or 0),
+                        shipping_cost=float(c or 0),
+                    )
+                )
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("sales.sales_settings"))
@@ -75,4 +100,12 @@ def sales_settings():
                 "value": values[key],
             }
         )
-    return render_template("sales_settings.html", settings=settings_list)
+    with get_session() as db:
+        thresholds = (
+            db.query(ShippingThreshold)
+            .order_by(ShippingThreshold.min_order_value)
+            .all()
+        )
+    return render_template(
+        "sales_settings.html", settings=settings_list, thresholds=thresholds
+    )
