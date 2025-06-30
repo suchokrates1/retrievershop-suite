@@ -308,6 +308,9 @@ th {
         margin-left: auto;
         margin-right: auto;
     }
+    .container-fluid.full-width {
+        max-width: none;
+    }
 }
 
 
