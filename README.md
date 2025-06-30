@@ -120,7 +120,9 @@ before using the same database file.
 
 Running a newer version of the application on an older database file will
 automatically add missing columns (for example the `barcode` column in the
-`product_sizes` table) during startup.
+`product_sizes` table) during startup. Any tables introduced in new versions
+are created on each launch because `init_db()` now runs every time the
+application starts.
 
 ## Importing invoices
 
