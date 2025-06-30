@@ -221,7 +221,9 @@ def settings_page():
         if key in sales_keys:
             continue
         label, desc = ENV_INFO.get(key, (key, None))
-        settings_list.append({"key": key, "label": label, "desc": desc, "value": val})
+        settings_list.append(
+            {"key": key, "label": label, "desc": desc, "value": val}
+        )
     return render_template(
         "settings.html", settings=settings_list, db_path_notice=db_path_notice
     )
