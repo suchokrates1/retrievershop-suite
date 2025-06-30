@@ -18,21 +18,21 @@
 
         <div class="col-12">
             <label for="sizes" class="form-label">Ilości dla rozmiarów:</label>
-            {% for size in ALL_SIZES %}
-                {% set info = product_sizes[size] %}
-                <div class="col-12">
-                    <label class="form-label">Rozmiar: {{ size }}</label>
-                    <div class="row g-2">
-                        <div class="col">
-                            <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control" placeholder="Ilość">
-                        </div>
-                        <div class="col">
-                            <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
-                        </div>
+        </div>
+        {% for size in ALL_SIZES %}
+            {% set info = product_sizes[size] %}
+            <div class="col-md-6">
+                <label class="form-label">Rozmiar: {{ size }}</label>
+                <div class="row g-2">
+                    <div class="col">
+                        <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control" placeholder="Ilość">
+                    </div>
+                    <div class="col">
+                        <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
                     </div>
                 </div>
-            {% endfor %}
-        </div>
+            </div>
+        {% endfor %}
 
         <div class="col-12 form-actions text-center">
             <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
