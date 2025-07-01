@@ -25,6 +25,18 @@ def _to_float(value) -> float:
     return float(value)
 
 
+def _clean_barcode(value) -> Optional[str]:
+    """Return cleaned barcode string or None for empty/NaN values."""
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -223,7 +235,7 @@ def import_from_dataframe(df: pd.DataFrame):
                 db.flush()
             for size in ALL_SIZES:
                 quantity = row.get(f"Ilość ({size})", 0)
-                size_barcode = row.get(f"Barcode ({size})")
+                size_barcode = _clean_barcode(row.get(f"Barcode ({size})"))
                 ps = (
                     db.query(ProductSize)
                     .filter_by(product_id=product.id, size=size)
@@ -426,9 +438,7 @@ def _import_invoice_df(df: pd.DataFrame):
         size = row.get("Rozmiar")
         quantity = _to_int(row.get("Ilość", 0))
         price = _to_float(row.get("Cena", 0))
-        barcode = row.get("Barcode")
-        if pd.isna(barcode):
-            barcode = None
+        barcode = _clean_barcode(row.get("Barcode"))
 
         with get_session() as db:
             ps = None
