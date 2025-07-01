@@ -1,5 +1,7 @@
 from .notifications import send_report
 from .services import consume_order_stock, get_sales_summary
+from .constants import ALL_SIZES
+import re
 from magazyn import DB_PATH
 from .config import settings, load_config
 import os
@@ -432,10 +434,38 @@ def shorten_product_name(full_name):
     return full_name
 
 
+def parse_product_info(item: dict) -> tuple[str, str, str]:
+    """Return product name, size and color from an order item."""
+    if not item:
+        return "", "", ""
+
+    name = item.get("name", "") or ""
+    size = ""
+    color = ""
+
+    for attr in item.get("attributes", []):
+        aname = (attr.get("name") or "").lower()
+        if aname in {"rozmiar", "size"} and not size:
+            size = attr.get("value", "")
+        elif aname in {"kolor", "color"} and not color:
+            color = attr.get("value", "")
+
+    if not size or not color:
+        words = name.strip().split()
+        if len(words) >= 3:
+            maybe_size = words[-1]
+            if maybe_size.upper() in {s.upper() for s in ALL_SIZES}:
+                size = size or maybe_size
+                color = color or words[-2]
+                name = " ".join(words[:-2])
+
+    return name.strip(), size, color
+
+
 def send_messenger_message(data):
     try:
         message = (
-            f"📦 Nowe zamówienie od: {data.get('name', '-')}\n"
+            f"📦 Nowe zamówienie od: {data.get('customer', '-')}\n"
             f"🛒 Produkty:\n"
             + "".join(
                 f"- {shorten_product_name(p['name'])} (x{p['quantity']})\n"
@@ -543,9 +573,15 @@ def _agent_loop():
                 order_id = str(order["order_id"])
 
                 global last_order_data
+                prod_name, size, color = parse_product_info(
+                    (order.get("products") or [{}])[0]
+                )
                 last_order_data = {
                     "order_id": order_id,
-                    "name": order.get("delivery_fullname", "Nieznany klient"),
+                    "name": prod_name,
+                    "size": size,
+                    "color": color,
+                    "customer": order.get("delivery_fullname", "Nieznany klient"),
                     "platform": order.get("order_source", "brak"),
                     "shipping": order.get("delivery_method", "brak"),
                     "products": order.get("products", []),
