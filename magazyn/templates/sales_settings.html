@@ -60,10 +60,9 @@
 <script>
     function updateDeleteVisibility() {
         const rows = document.querySelectorAll('.threshold-row');
-        const show = rows.length > 1;
-        rows.forEach(r => {
+        rows.forEach((r, idx) => {
             const btn = r.querySelector('.remove-row');
-            if (btn) btn.style.display = show ? 'inline-block' : 'none';
+            if (btn) btn.style.display = idx > 0 ? 'inline-block' : 'none';
         });
     }
 
