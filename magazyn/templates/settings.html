@@ -8,7 +8,7 @@
   Aby zmienić lokalizację, edytuj plik <code>.env</code> i zrestartuj serwer.
 </div>
 {% endif %}
-<form method="post" class="row row-cols-1 row-cols-md-2 g-3 center-form mx-auto">
+<form method="post" id="settingsForm" class="row row-cols-1 row-cols-md-2 g-3 center-form mx-auto">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <table class="table">
         <tbody>
@@ -31,8 +31,8 @@
         {% endfor %}
         </tbody>
     </table>
-    <div class="col-12 form-actions text-center">
-        <button type="submit" class="btn btn-primary">Zapisz</button>
-    </div>
 </form>
+<div class="form-actions text-center mt-3">
+    <button type="submit" form="settingsForm" class="btn btn-primary">Zapisz</button>
+</div>
 {% endblock %}
