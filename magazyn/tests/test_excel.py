@@ -67,6 +67,46 @@ def test_import_products_reads_barcode(app_mod, tmp_path):
         assert row[0] == "999"
 
 
+def test_import_products_handles_missing_quantity(app_mod, tmp_path):
+    df = pd.DataFrame(
+        [
+            {
+                "Nazwa": "ProdNaN",
+                "Kolor": "Green",
+                "Ilość (XS)": pd.NA,
+                "Barcode (XS)": "111",
+            }
+        ]
+    )
+    file_path = tmp_path / "import_nan.xlsx"
+    df.to_excel(file_path, index=False)
+
+    with open(file_path, "rb") as f:
+        data = {"file": (f, "import_nan.xlsx")}
+        with app_mod.app.test_request_context(
+            "/import_products",
+            method="POST",
+            data=data,
+            content_type="multipart/form-data",
+        ):
+            from flask import session
+
+            session["username"] = "x"
+            from magazyn import products
+
+            products.import_products.__wrapped__()
+
+    with app_mod.get_session() as db:
+        qty = db.execute(
+            text(
+                "SELECT ps.quantity FROM product_sizes ps JOIN products p ON ps.product_id = p.id "
+                "WHERE p.name=:name AND p.color=:color AND ps.size='XS'"
+            ),
+            {"name": "ProdNaN", "color": "Green"},
+        ).fetchone()[0]
+        assert qty == 0
+
+
 def test_consume_stock_multiple_batches(app_mod):
     with app_mod.get_session() as db:
         prod = Product(name="Prod", color="Red")

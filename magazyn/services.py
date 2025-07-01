@@ -222,8 +222,16 @@ def import_from_dataframe(df: pd.DataFrame):
                 db.add(product)
                 db.flush()
             for size in ALL_SIZES:
-                quantity = row.get(f"Ilość ({size})", 0)
+                raw_qty = row.get(f"Ilość ({size})")
+                if pd.isna(raw_qty):
+                    raw_qty = 0
+                try:
+                    quantity = _to_int(raw_qty)
+                except Exception:
+                    quantity = 0
                 size_barcode = row.get(f"Barcode ({size})")
+                if pd.isna(size_barcode):
+                    size_barcode = None
                 ps = (
                     db.query(ProductSize)
                     .filter_by(product_id=product.id, size=size)
