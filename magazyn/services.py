@@ -14,12 +14,16 @@ import re
 
 
 def _to_int(value) -> int:
+    if value is None or pd.isna(value):
+        return 0
     if isinstance(value, str):
         value = value.replace(" ", "").replace(",", "")
     return int(value)
 
 
 def _to_float(value) -> float:
+    if value is None or pd.isna(value):
+        return 0.0
     if isinstance(value, str):
         value = value.replace(" ", "").replace(",", ".")
     return float(value)
@@ -234,7 +238,7 @@ def import_from_dataframe(df: pd.DataFrame):
                 db.add(product)
                 db.flush()
             for size in ALL_SIZES:
-                quantity = row.get(f"Ilość ({size})", 0)
+                quantity = _to_int(row.get(f"Ilość ({size})", 0))
                 size_barcode = _clean_barcode(row.get(f"Barcode ({size})"))
                 ps = (
                     db.query(ProductSize)
