@@ -30,7 +30,9 @@
         <tr>
             <th>Minimalna wartość zamówienia</th>
             <th>Koszt wysyłki</th>
-            <th></th>
+            <th class="text-end">
+                <button type="button" id="addThresholdRow" class="btn btn-secondary btn-sm"><i class="bi bi-plus-circle"></i></button>
+            </th>
         </tr>
         </thead>
         <tbody id="thresholdRows">
@@ -50,9 +52,6 @@
         {% endif %}
         </tbody>
         </table>
-    </div>
-    <div class="col-12 text-center mb-3">
-        <button type="button" id="addThresholdRow" class="btn btn-secondary">Dodaj próg</button>
     </div>
 </form>
 <div class="form-actions text-center mt-3">
