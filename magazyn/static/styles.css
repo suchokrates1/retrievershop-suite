@@ -74,6 +74,8 @@ label, input, button {
 /* Optional wrapper for centering form buttons */
 .form-actions {
     text-align: center;
+    width: 100%;
+    margin-top: 1rem;
 }
 
 .custom-btn {

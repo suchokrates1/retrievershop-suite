@@ -2,7 +2,7 @@
 
 {% block content %}
 <h2 class="mb-3 text-center">Ustawienia sprzedaży</h2>
-<form method="post" class="row row-cols-1 row-cols-md-2 g-3 center-form mx-auto">
+<form method="post" id="salesSettingsForm" class="row row-cols-1 row-cols-md-2 g-3 center-form mx-auto">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <table class="table">
         <tbody>
@@ -52,10 +52,10 @@
     <div class="col-12 text-center mb-3">
         <button type="button" id="addThresholdRow" class="btn btn-secondary">Dodaj próg</button>
     </div>
-    <div class="col-12 form-actions text-center">
-        <button type="submit" class="btn btn-primary">Zapisz</button>
-    </div>
 </form>
+<div class="form-actions text-center mt-3">
+    <button type="submit" form="salesSettingsForm" class="btn btn-primary">Zapisz</button>
+</div>
 <script>
     function updateDeleteVisibility() {
         const rows = document.querySelectorAll('.threshold-row');
