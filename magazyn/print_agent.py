@@ -44,6 +44,8 @@ PRINTED_FILE = os.path.join(os.path.dirname(__file__), "printed_orders.txt")
 PRINTED_EXPIRY_DAYS = settings.PRINTED_EXPIRY_DAYS
 LABEL_QUEUE = os.path.join(os.path.dirname(__file__), "queued_labels.jsonl")
 LOG_LEVEL = settings.LOG_LEVEL
+# Whether monthly summary reports should be sent
+ENABLE_MONTHLY_REPORTS = settings.ENABLE_MONTHLY_REPORTS
 # Use the same database file as the web application
 DB_FILE = DB_PATH
 # Location of the legacy database used by the standalone printer agent
@@ -75,7 +77,7 @@ def reload_env():
     global API_TOKEN, PAGE_ACCESS_TOKEN, RECIPIENT_ID, STATUS_ID, PRINTER_NAME
     global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START
     global QUIET_HOURS_END, TIMEZONE, PRINTED_EXPIRY_DAYS, LOG_LEVEL
-    global LOG_FILE, DB_FILE
+    global LOG_FILE, DB_FILE, ENABLE_MONTHLY_REPORTS
     API_TOKEN = settings.API_TOKEN
     PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
     RECIPIENT_ID = settings.RECIPIENT_ID
@@ -93,6 +95,7 @@ def reload_env():
     LOG_FILE = settings.LOG_FILE
     DB_FILE = settings.DB_PATH
     HEADERS["X-BLToken"] = API_TOKEN
+    ENABLE_MONTHLY_REPORTS = settings.ENABLE_MONTHLY_REPORTS
 
     from . import db
 
@@ -545,8 +548,8 @@ def _send_periodic_reports():
         ]
         send_report("Raport tygodniowy", lines)
         _last_weekly_report = now
-    if not _last_monthly_report or now - _last_monthly_report >= timedelta(
-        days=30
+    if ENABLE_MONTHLY_REPORTS and (
+        not _last_monthly_report or now - _last_monthly_report >= timedelta(days=30)
     ):
         report = get_sales_summary(30)
         lines = [
