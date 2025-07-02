@@ -41,6 +41,7 @@ def load_config():
         SMTP_PORT=os.getenv("SMTP_PORT", "25"),
         SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
         SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
+        SEND_MONTHLY_REPORTS=os.getenv("SEND_MONTHLY_REPORTS", "1") != "0",
     )
 
 

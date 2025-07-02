@@ -8,6 +8,7 @@ def _sales_keys():
         "SMTP_PORT",
         "SMTP_USERNAME",
         "SMTP_PASSWORD",
+        "SEND_MONTHLY_REPORTS",
     ]
 
 

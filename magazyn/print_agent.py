@@ -545,8 +545,8 @@ def _send_periodic_reports():
         ]
         send_report("Raport tygodniowy", lines)
         _last_weekly_report = now
-    if not _last_monthly_report or now - _last_monthly_report >= timedelta(
-        days=30
+    if settings.SEND_MONTHLY_REPORTS and (
+        not _last_monthly_report or now - _last_monthly_report >= timedelta(days=30)
     ):
         report = get_sales_summary(30)
         lines = [
