@@ -36,10 +36,10 @@
             </td>
             {% endfor %}
             <td class="text-center">
-                <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm">Edytuj</a>
+                <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
                 <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten przedmiot?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button>
                 </form>
             </td>
         </tr>
