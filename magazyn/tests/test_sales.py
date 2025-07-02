@@ -18,7 +18,7 @@ def test_sales_profit_calculated(app_mod, client, login):
         db.add(ProductSize(product_id=prod.id, size="M", quantity=0))
         pid = prod.id
     app_mod.record_purchase(pid, "M", 1, 10.0)
-    app_mod.consume_stock(pid, "M", 1)
+    app_mod.consume_stock(pid, "M", 1, sale_price=0)
     with app_mod.get_session() as db:
         sale = db.query(Sale).first()
         sale.sale_price = 20.0
@@ -43,7 +43,7 @@ def test_profit_uses_threshold(app_mod, client, login):
             ]
         )
     app_mod.record_purchase(pid, "M", 1, 10.0)
-    app_mod.consume_stock(pid, "M", 1)
+    app_mod.consume_stock(pid, "M", 1, sale_price=0)
     with app_mod.get_session() as db:
         sale = db.query(Sale).first()
         sale.sale_price = 120.0
@@ -62,7 +62,7 @@ def test_consume_stock_records_sale_without_inventory(app_mod):
         db.add(ProductSize(product_id=prod.id, size="M", quantity=0))
         pid = prod.id
 
-    consumed = app_mod.consume_stock(pid, "M", 2)
+    consumed = app_mod.consume_stock(pid, "M", 2, sale_price=0)
 
     assert consumed == 0
     with app_mod.get_session() as db:
