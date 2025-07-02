@@ -27,24 +27,6 @@ h2, h3 {
     margin: auto;
 }
 
-/* Centered layout shared by item forms */
-.center-form {
-    width: 60%;
-    max-width: 650px;
-    margin: auto;
-}
-
-/* Full-width layout for edit item page */
-.wide-form {
-    width: 100%;
-    margin: auto;
-}
-
-@media (max-width: 768px) {
-    .center-form {
-        width: 100%;
-    }
-}
 
 
 label, input, button {
@@ -52,33 +34,6 @@ label, input, button {
     padding: 8px;
 }
 
-.custom-container {
-    text-align: center;
-    margin: 30px auto;
-    width: 100%;
-}
-
-.navbar .custom-container {
-    margin: 0 auto;
-    width: 100%;
-    padding-left: 1rem;
-    padding-right: 1rem;
-}
-@media (min-width: 576px) {
-    .navbar .custom-container { max-width: 540px; }
-}
-@media (min-width: 768px) {
-    .navbar .custom-container { max-width: 720px; }
-}
-@media (min-width: 992px) {
-    .navbar .custom-container { max-width: 960px; }
-}
-@media (min-width: 1200px) {
-    .navbar .custom-container { max-width: 1140px; }
-}
-@media (min-width: 1400px) {
-    .navbar .custom-container { max-width: 1320px; }
-}
 
 .actions {
     margin-top: 20px;
