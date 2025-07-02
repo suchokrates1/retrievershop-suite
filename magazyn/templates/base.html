@@ -82,7 +82,8 @@
     {% endif %}
 
     <main class="container-fluid mt-4 pt-4{% if full_width %} full-width{% endif %}">
-	{% with messages = get_flashed_messages() %}
+        <div class="container">
+            {% with messages = get_flashed_messages() %}
   {% if messages %}
     <div class="alert alert-info" role="alert">
       {% for message in messages %}
@@ -92,7 +93,8 @@
   {% endif %}
 {% endwith %}
 
-        {% block content %}{% endblock %}
+            {% block content %}{% endblock %}
+        </div>
     </main>
     <footer>
         <p>&copy; 2024-{{ current_year }} <a href="https://retrievershop.pl/">Retriever Shop</a> - Magazyn</p>
