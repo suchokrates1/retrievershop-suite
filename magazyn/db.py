@@ -212,13 +212,6 @@ def consume_stock(product_id, size, quantity):
         consumed = to_consume - remaining
         if consumed > 0 and ps:
             ps.quantity -= consumed
-            record_sale(
-                session,
-                product_id,
-                size,
-                consumed,
-                purchase_cost=purchase_cost,
-            )
             if ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
                     product = (
@@ -228,16 +221,22 @@ def consume_stock(product_id, size, quantity):
                     send_stock_alert(name, size, ps.quantity)
                 except Exception as exc:
                     logger.error("Low stock alert failed: %s", exc)
-        else:
-            if quantity > 0 and available == 0:
-                record_sale(session, product_id, size, quantity, purchase_cost=0.0)
-            else:
-                logger.warning(
-                    "Sale not recorded for product_id=%s size=%s: requested=%s available=%s",
-                    product_id,
-                    size,
-                    quantity,
-                    available,
-                )
+
+        if consumed < quantity:
+            logger.warning(
+                "Insufficient stock for product_id=%s size=%s: requested=%s consumed=%s",
+                product_id,
+                size,
+                quantity,
+                consumed,
+            )
+
+        record_sale(
+            session,
+            product_id,
+            size,
+            quantity,
+            purchase_cost=purchase_cost,
+        )
 
     return consumed
