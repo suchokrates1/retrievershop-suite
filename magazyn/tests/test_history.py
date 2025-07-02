@@ -40,22 +40,30 @@ def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
     monkeypatch.setattr(
         app_mod.print_agent, "get_label", lambda code, pid: ("data", "pdf")
     )
+    printed_item = {
+        "order_id": "1",
+        "printed_at": datetime(2023, 1, 1, 0, 0),
+        "last_order_data": {"name": "P", "color": "C", "size": "S"},
+    }
+    monkeypatch.setattr(
+        app_mod.print_agent, "load_printed_orders", lambda: [printed_item]
+    )
     called = {"n": 0}
 
     def fake_print(data, ext, oid):
         called["n"] += 1
 
     monkeypatch.setattr(app_mod.print_agent, "print_label", fake_print)
-    mprinted = {"n": 0}
+    mprinted = {}
     monkeypatch.setattr(
         app_mod.print_agent,
         "mark_as_printed",
-        lambda oid: mprinted.update(n=mprinted["n"] + 1),
+        lambda oid, data=None: mprinted.update({"oid": oid, "data": data}),
     )
     resp = client.post("/history/reprint/1")
     assert resp.status_code == 302
     assert called["n"] == 1
-    assert mprinted["n"] == 1
+    assert mprinted == {"oid": "1", "data": printed_item["last_order_data"]}
 
 
 def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
@@ -67,7 +75,7 @@ def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
                 "order_id": "2",
                 "label_data": "x",
                 "ext": "pdf",
-                "last_order_data": {},
+                "last_order_data": {"name": "Q", "color": "C", "size": "S"},
             }
         ],
     )
@@ -83,17 +91,20 @@ def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
         "save_queue",
         lambda items: saved.update(n=saved["n"] + 1),
     )
-    marked = {"n": 0}
+    marked = {}
     monkeypatch.setattr(
         app_mod.print_agent,
         "mark_as_printed",
-        lambda oid: marked.update(n=marked["n"] + 1),
+        lambda oid, data=None: marked.update({"oid": oid, "data": data}),
     )
     resp = client.post("/history/reprint/2")
     assert resp.status_code == 302
     assert called["n"] == 1
     assert saved["n"] == 1
-    assert marked["n"] == 1
+    assert marked == {
+        "oid": "2",
+        "data": {"name": "Q", "color": "C", "size": "S"},
+    }
 
 
 def test_reprint_logs_exception(app_mod, client, login, monkeypatch):
