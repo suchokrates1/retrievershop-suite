@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
     <h3 class="text-center">Edytuj przedmiot</h3>
     <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="row row-cols-1 row-cols-md-2 g-3 wide-form mx-auto">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -38,7 +37,6 @@
             <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
         </div>
     </form>
-</div>
 
 
 {% endblock %}
