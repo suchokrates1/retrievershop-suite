@@ -179,6 +179,10 @@ def consume_stock(product_id, size, quantity):
             .filter_by(product_id=product_id, size=size)
             .first()
         )
+        if not ps:
+            logger.warning(
+                "Stock entry missing for product_id=%s size=%s", product_id, size
+            )
         available = ps.quantity if ps else 0
         to_consume = min(available, quantity)
 
@@ -224,5 +228,13 @@ def consume_stock(product_id, size, quantity):
                     send_stock_alert(name, size, ps.quantity)
                 except Exception as exc:
                     logger.error("Low stock alert failed: %s", exc)
+        else:
+            logger.warning(
+                "Sale not recorded for product_id=%s size=%s: requested=%s available=%s",
+                product_id,
+                size,
+                quantity,
+                available,
+            )
 
     return consumed
