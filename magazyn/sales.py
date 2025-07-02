@@ -27,7 +27,7 @@ def list_sales():
     with get_session() as db:
         rows = (
             db.query(Sale, Product)
-            .join(Product, Sale.product_id == Product.id)
+            .outerjoin(Product, Sale.product_id == Product.id)
             .order_by(Sale.sale_date.desc())
             .all()
         )
@@ -42,10 +42,13 @@ def list_sales():
                 - shipping
                 - sale.commission_fee
             )
+            name = "unknown" if not product else product.name
+            color = "" if not product else product.color
+            descr = f"{name} ({color}) {sale.size}" if color else f"{name} {sale.size}"
             sales.append(
                 {
                     "date": sale.sale_date,
-                    "product": f"{product.name} ({product.color}) {sale.size}",
+                    "product": descr,
                     "purchase_cost": sale.purchase_cost,
                     "commission": sale.commission_fee,
                     "shipping": shipping,

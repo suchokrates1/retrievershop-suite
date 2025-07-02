@@ -161,6 +161,18 @@ def update_quantity(product_id: int, size: str, action: str):
                 ps.quantity += 1
             elif action == "decrease" and ps.quantity > 0:
                 consume_stock(product_id, size, 1)
+            elif action == "decrease":
+                logger.warning(
+                    "No stock to decrease for product_id=%s size=%s",
+                    product_id,
+                    size,
+                )
+        else:
+            logger.warning(
+                "Product id %s with size %s not found, quantity update skipped",
+                product_id,
+                size,
+            )
 
 
 def find_by_barcode(barcode: str) -> Optional[dict]:
