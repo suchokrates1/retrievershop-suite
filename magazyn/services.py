@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Optional, List
 import pandas as pd
 
-from .db import get_session, record_purchase, consume_stock
+from .db import get_session, record_purchase, consume_stock, record_sale
 from .models import Product, ProductSize, PurchaseBatch, Sale
 from sqlalchemy import func
 from .constants import ALL_SIZES
@@ -569,6 +569,21 @@ def consume_order_stock(products: List[dict]):
             else:
                 logger.warning(
                     "Unable to match product for order item: %s", item
+                )
+                placeholder = db.query(Product).filter_by(name="Unknown").first()
+                if not placeholder:
+                    placeholder = Product(name="Unknown", color="")
+                    db.add(placeholder)
+                    db.flush()
+                record_sale(
+                    db,
+                    placeholder.id,
+                    size or "",
+                    qty,
+                    purchase_cost=0.0,
+                    sale_price=0.0,
+                    shipping_cost=0.0,
+                    commission_fee=0.0,
                 )
 
 

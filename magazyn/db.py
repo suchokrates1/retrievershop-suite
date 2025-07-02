@@ -229,12 +229,15 @@ def consume_stock(product_id, size, quantity):
                 except Exception as exc:
                     logger.error("Low stock alert failed: %s", exc)
         else:
-            logger.warning(
-                "Sale not recorded for product_id=%s size=%s: requested=%s available=%s",
-                product_id,
-                size,
-                quantity,
-                available,
-            )
+            if quantity > 0 and available == 0:
+                record_sale(session, product_id, size, quantity, purchase_cost=0.0)
+            else:
+                logger.warning(
+                    "Sale not recorded for product_id=%s size=%s: requested=%s available=%s",
+                    product_id,
+                    size,
+                    quantity,
+                    available,
+                )
 
     return consumed
