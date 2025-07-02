@@ -210,3 +210,12 @@ def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
     assert data["name"] == "Widget"
     assert data["color"] == "Blue"
     assert data["size"] == "XL"
+
+
+def test_parse_product_info_color_only():
+    bl = get_bl()
+    item = {"name": "Smycz dla psa czerwony"}
+    name, size, color = bl.parse_product_info(item)
+    assert name == "Smycz dla psa"
+    assert size == "Uniwersalny"
+    assert color.lower() == "czerwony"
