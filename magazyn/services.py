@@ -160,7 +160,7 @@ def update_quantity(product_id: int, size: str, action: str):
             if action == "increase":
                 ps.quantity += 1
             elif action == "decrease" and ps.quantity > 0:
-                consume_stock(product_id, size, 1)
+                consume_stock(product_id, size, 1, sale_price=0)
             elif action == "decrease":
                 logger.warning(
                     "No stock to decrease for product_id=%s size=%s",
@@ -565,7 +565,12 @@ def consume_order_stock(products: List[dict]):
                 ps = query.first()
 
             if ps:
-                consume_stock(ps.product_id, ps.size, qty)
+                consume_stock(
+                    ps.product_id,
+                    ps.size,
+                    qty,
+                    sale_price=item.get("price_brutto", 0),
+                )
             else:
                 logger.warning(
                     "Unable to match product for order item: %s", item

@@ -123,7 +123,7 @@ def test_consume_stock_multiple_batches(app_mod):
     app_mod.record_purchase(pid, "M", 1, 5.0)
     app_mod.record_purchase(pid, "M", 1, 6.0)
 
-    consumed = app_mod.consume_stock(pid, "M", 2)
+    consumed = app_mod.consume_stock(pid, "M", 2, sale_price=0)
 
     with app_mod.get_session() as db:
         qty = db.execute(
