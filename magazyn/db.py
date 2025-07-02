@@ -206,16 +206,17 @@ def consume_stock(product_id, size, quantity):
                 session.delete(batch)
 
         consumed = to_consume - remaining
-        if consumed > 0 and ps:
-            ps.quantity -= consumed
+        if ps:
+            if consumed > 0:
+                ps.quantity -= consumed
             record_sale(
                 session,
                 product_id,
                 size,
-                consumed,
+                quantity,
                 purchase_cost=purchase_cost,
             )
-            if ps.quantity < settings.LOW_STOCK_THRESHOLD:
+            if consumed > 0 and ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
                     product = (
                         session.query(Product).filter_by(id=product_id).first()
