@@ -2,7 +2,7 @@
 
 {% block content %}
     <h3 class="text-center">Edytuj przedmiot</h3>
-    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="row g-3 wide-form mx-auto">
+    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="row g-3 w-100">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-6">
             <label for="name" class="form-label">Nazwa:</label>
