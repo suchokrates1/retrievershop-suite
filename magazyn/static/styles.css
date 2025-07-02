@@ -60,11 +60,24 @@ label, input, button {
 
 .navbar .custom-container {
     margin: 0 auto;
-    max-width: 1140px;
     width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
 }
-@media (max-width: 768px) {
-    .navbar .custom-container { max-width: 100%; padding: 0 1rem; }
+@media (min-width: 576px) {
+    .navbar .custom-container { max-width: 540px; }
+}
+@media (min-width: 768px) {
+    .navbar .custom-container { max-width: 720px; }
+}
+@media (min-width: 992px) {
+    .navbar .custom-container { max-width: 960px; }
+}
+@media (min-width: 1200px) {
+    .navbar .custom-container { max-width: 1140px; }
+}
+@media (min-width: 1400px) {
+    .navbar .custom-container { max-width: 1320px; }
 }
 
 .actions {
