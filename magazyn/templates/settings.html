@@ -21,7 +21,12 @@
             </th>
             <td>
                 {% set lower = item.key.lower() %}
-                {% if 'shipping' in lower or 'commission' in lower %}
+                {% if item.key in boolean_keys %}
+                <select class="form-select" id="{{ item.key }}" name="{{ item.key }}">
+                    <option value="1" {% if item.value|string == '1' %}selected{% endif %}>Tak</option>
+                    <option value="0" {% if item.value|string != '1' %}selected{% endif %}>Nie</option>
+                </select>
+                {% elif 'shipping' in lower or 'commission' in lower %}
                 <input type="number" step="0.01" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                 {% else %}
                 <input type="text" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">

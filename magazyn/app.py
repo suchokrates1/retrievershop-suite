@@ -44,6 +44,9 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / ".env"
 EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
+# Settings with boolean values represented as "1" or "0"
+BOOLEAN_KEYS = {"ENABLE_MONTHLY_REPORTS", "FLASK_DEBUG"}
+
 
 app = Flask(__name__)
 app.secret_key = settings.SECRET_KEY
@@ -231,7 +234,10 @@ def settings_page():
             {"key": key, "label": label, "desc": desc, "value": val}
         )
     return render_template(
-        "settings.html", settings=settings_list, db_path_notice=db_path_notice
+        "settings.html",
+        settings=settings_list,
+        db_path_notice=db_path_notice,
+        boolean_keys=BOOLEAN_KEYS,
     )
 
 
