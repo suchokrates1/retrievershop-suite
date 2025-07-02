@@ -14,7 +14,7 @@ def test_nav_container_class(app_mod, client, login):
     assert nav_match, "nav section missing"
     nav_html = nav_match.group(1)
     assert "container-fluid" not in nav_html
-    assert 'class="custom-container"' in nav_html
+    assert 'class="container"' in nav_html
 
 
 def test_nav_contains_sales_link(app_mod, client, login):
