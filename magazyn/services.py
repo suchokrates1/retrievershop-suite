@@ -563,6 +563,9 @@ def consume_order_stock(products: List[dict]):
                 if size is not None:
                     query = query.filter(ProductSize.size == size)
                 ps = query.first()
+                if ps and barcode and not ps.barcode:
+                    ps.barcode = barcode
+                    db.commit()
 
             if ps:
                 consume_stock(
