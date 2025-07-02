@@ -1,7 +1,6 @@
 from .notifications import send_report
 from .services import consume_order_stock, get_sales_summary
-from .constants import ALL_SIZES
-import re
+from .constants import ALL_SIZES, KNOWN_COLORS
 from magazyn import DB_PATH
 from .config import settings, load_config
 import os
@@ -472,14 +471,22 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
         elif aname in {"kolor", "color"} and not color:
             color = attr.get("value", "")
 
-    if not size or not color:
+    if not size:
         words = name.strip().split()
         if len(words) >= 3:
             maybe_size = words[-1]
             if maybe_size.upper() in {s.upper() for s in ALL_SIZES}:
-                size = size or maybe_size
-                color = color or words[-2]
+                size = maybe_size
+                if not color:
+                    color = words[-2]
                 name = " ".join(words[:-2])
+        if not size and len(words) >= 2:
+            maybe_color = words[-1].lower()
+            if maybe_color in {c.lower() for c in KNOWN_COLORS}:
+                if not color:
+                    color = words[-1]
+                size = "Uniwersalny"
+                name = " ".join(words[:-1])
 
     return name.strip(), size, color
 
