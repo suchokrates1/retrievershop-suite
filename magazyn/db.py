@@ -171,7 +171,7 @@ def record_sale(
     )
 
 
-def consume_stock(product_id, size, quantity):
+def consume_stock(product_id, size, quantity, sale_price=0.0):
     """Remove quantity from stock using cheapest purchase batches first."""
     with get_session() as session:
         ps = (
@@ -237,6 +237,7 @@ def consume_stock(product_id, size, quantity):
             size,
             quantity,
             purchase_cost=purchase_cost,
+            sale_price=sale_price,
         )
 
     return consumed
