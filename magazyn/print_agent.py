@@ -228,6 +228,30 @@ def ensure_db():
             old_conn.close()
         except Exception as e:
             logger.error(f"B\u0142\u0105d migracji z {OLD_DB_FILE}: {e}")
+
+    # clean entries where product name was replaced with customer name
+    try:
+        cur.execute("SELECT order_id, last_order_data FROM printed_orders")
+        rows = cur.fetchall()
+        for oid, data_json in rows:
+            try:
+                data = json.loads(data_json) if data_json else {}
+            except Exception:
+                continue
+            name = (data.get("name") or "").strip()
+            cust = (data.get("customer") or "").strip()
+            if name and cust and name == cust:
+                prod_name, size, color = parse_product_info((data.get("products") or [{}])[0])
+                data["name"] = prod_name
+                data["size"] = size
+                data["color"] = color
+                cur.execute(
+                    "UPDATE printed_orders SET last_order_data=? WHERE order_id=?",
+                    (json.dumps(data), oid),
+                )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"B\u0142\u0105d migracji last_order_data: {e}")
     conn.close()
 
 

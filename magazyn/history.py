@@ -24,6 +24,15 @@ def reprint_label(order_id):
         queue = [
             q for q in all_items if str(q.get("order_id")) == str(order_id)
         ]
+        printed_data = None
+        try:
+            for it in print_agent.load_printed_orders():
+                if str(it.get("order_id")) == str(order_id):
+                    printed_data = it.get("last_order_data")
+                    break
+        except Exception:
+            printed_data = None
+
         if queue:
             remaining = [
                 q for q in all_items if str(q.get("order_id")) != str(order_id)
@@ -33,7 +42,7 @@ def reprint_label(order_id):
                     item.get("label_data"), item.get("ext", "pdf"), order_id
                 )
             print_agent.save_queue(remaining)
-            print_agent.mark_as_printed(order_id)
+            print_agent.mark_as_printed(order_id, queue[0].get("last_order_data", printed_data))
         else:
             packages = print_agent.get_order_packages(order_id)
             for p in packages:
@@ -44,7 +53,7 @@ def reprint_label(order_id):
                 label_data, ext = print_agent.get_label(code, pid)
                 if label_data:
                     print_agent.print_label(label_data, ext, order_id)
-            print_agent.mark_as_printed(order_id)
+            print_agent.mark_as_printed(order_id, printed_data)
         flash("Etykieta została ponownie wysłana do drukarki.")
     except Exception as exc:
         logger.exception("Reprint failed for %s", order_id)
