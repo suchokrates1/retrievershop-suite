@@ -1,15 +1,22 @@
 import json
 import sqlite3
 import pytest
-import magazyn.print_agent as bl
+
+
+def get_bl():
+    import importlib
+    import magazyn.print_agent as bl
+    return importlib.reload(bl)
 
 
 def test_shorten_product_name():
+    bl = get_bl()
     assert bl.shorten_product_name("one two three four") == "one three four"
     assert bl.shorten_product_name("one two") == "one two"
 
 
 def test_is_quiet_time(monkeypatch):
+    bl = get_bl()
     import datetime as dt
 
     class DummyDateTime:
@@ -49,6 +56,7 @@ def test_is_quiet_time(monkeypatch):
 
 
 def test_mark_and_load_printed(tmp_path, monkeypatch):
+    bl = get_bl()
     db = tmp_path / "test.db"
     monkeypatch.setattr(bl, "DB_FILE", str(db))
     bl.ensure_db()
@@ -59,6 +67,7 @@ def test_mark_and_load_printed(tmp_path, monkeypatch):
 
 
 def test_mark_as_printed_deduplicates(tmp_path, monkeypatch):
+    bl = get_bl()
     db = tmp_path / "test_dupes.db"
     monkeypatch.setattr(bl, "DB_FILE", str(db))
     bl.ensure_db()
@@ -89,6 +98,7 @@ def test_mark_as_printed_deduplicates(tmp_path, monkeypatch):
 
 
 def test_load_printed_orders_sorted(tmp_path, monkeypatch):
+    bl = get_bl()
     db = tmp_path / "sorted.db"
     monkeypatch.setattr(bl, "DB_FILE", str(db))
     bl.ensure_db()
@@ -114,6 +124,7 @@ def test_load_printed_orders_sorted(tmp_path, monkeypatch):
 
 
 def test_queue_roundtrip(tmp_path, monkeypatch):
+    bl = get_bl()
     db = tmp_path / "queue.db"
     monkeypatch.setattr(bl, "DB_FILE", str(db))
     bl.ensure_db()
@@ -133,6 +144,7 @@ def test_queue_roundtrip(tmp_path, monkeypatch):
 
 
 def test_validate_env_missing_api_token(monkeypatch):
+    bl = get_bl()
     monkeypatch.setattr(bl, "API_TOKEN", "")
     monkeypatch.setattr(bl, "PAGE_ACCESS_TOKEN", "x")
     monkeypatch.setattr(bl, "RECIPIENT_ID", "x")
@@ -141,6 +153,7 @@ def test_validate_env_missing_api_token(monkeypatch):
 
 
 def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
+    bl = get_bl()
     db = tmp_path / "queue_bad.db"
     monkeypatch.setattr(bl, "DB_FILE", str(db))
     bl.ensure_db()
@@ -157,6 +170,7 @@ def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
 
 
 def test_call_api_handles_http_error(monkeypatch):
+    bl = get_bl()
     class DummyResp:
         status_code = 500
 
@@ -170,3 +184,29 @@ def test_call_api_handles_http_error(monkeypatch):
 
     result = bl.call_api("dummy")
     assert result == {}
+
+
+def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
+    bl = get_bl()
+    db = tmp_path / "mig.db"
+    monkeypatch.setattr(bl, "DB_FILE", str(db))
+    bl.ensure_db()
+    conn = sqlite3.connect(db)
+    cur = conn.cursor()
+    bad = {
+        "name": "John Doe",
+        "customer": "John Doe",
+        "products": [{"name": "Widget Blue XL"}],
+    }
+    cur.execute(
+        "INSERT INTO printed_orders(order_id, printed_at, last_order_data) VALUES (?,?,?)",
+        ("1", "2023-01-01T00:00:00", json.dumps(bad)),
+    )
+    conn.commit()
+    conn.close()
+    bl.ensure_db()
+    orders = bl.load_printed_orders()
+    data = orders[0]["last_order_data"]
+    assert data["name"] == "Widget"
+    assert data["color"] == "Blue"
+    assert data["size"] == "XL"
