@@ -219,3 +219,11 @@ def test_parse_product_info_color_only():
     assert name == "Smycz dla psa"
     assert size == "Uniwersalny"
     assert color.lower() == "czerwony"
+
+
+def test_parse_product_info_size_and_color_from_name():
+    bl = get_bl()
+    item = {"name": "Szelki dla psa Truelove Front Line Premium XL czarne"}
+    name, size, color = bl.parse_product_info(item)
+    assert size == "XL"
+    assert color.lower() == "czarne"
