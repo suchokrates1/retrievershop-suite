@@ -42,8 +42,6 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `SECRET_KEY` | Secret key for Flask sessions |
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
 | `FLASK_ENV` | Flask configuration environment |
-| `DEFAULT_SHIPPING_ALLEGRO` | Default shipping cost when selling on Allegro |
-| `FREE_SHIPPING_THRESHOLD_ALLEGRO` | Sale price above which Allegro shipping is free |
 | `COMMISSION_ALLEGRO` | Commission percentage charged by Allegro |
 | `ENABLE_MONTHLY_REPORTS` | Set to `1` to send monthly sales reports |
 
