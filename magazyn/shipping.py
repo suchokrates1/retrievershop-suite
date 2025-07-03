@@ -5,7 +5,9 @@ import pandas as pd
 
 bp = Blueprint("shipping", __name__)
 
-ALLEGRO_COSTS_FILE = Path(__file__).resolve().parent / "samples" / "deliveries_allegro.xlsx"
+ALLEGRO_COSTS_FILE = (
+    Path(__file__).resolve().parent / "samples" / "deliveries_allegro.xlsx"
+)
 
 
 def load_costs(file_path: Path = ALLEGRO_COSTS_FILE) -> pd.DataFrame:
@@ -43,4 +45,3 @@ def shipping_costs():
     return render_template(
         "shipping_costs.html", columns=columns, rows=rows
     )
-

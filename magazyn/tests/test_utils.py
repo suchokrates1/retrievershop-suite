@@ -171,6 +171,7 @@ def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
 
 def test_call_api_handles_http_error(monkeypatch):
     bl = get_bl()
+
     class DummyResp:
         status_code = 500
 

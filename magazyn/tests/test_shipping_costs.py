@@ -59,4 +59,3 @@ def test_shipping_costs_edit(app_mod, client, login, tmp_path, monkeypatch):
     client.post("/shipping_costs", data=data)
     df2 = pd.read_excel(file_path, header=None)
     assert abs(float(df2.iloc[1, 1]) - 9.99) < 0.01
-
