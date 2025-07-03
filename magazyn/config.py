@@ -28,12 +28,6 @@ def load_config():
         ),
         SECRET_KEY=os.getenv("SECRET_KEY", "default_secret_key"),
         FLASK_DEBUG=os.getenv("FLASK_DEBUG") == "1",
-        DEFAULT_SHIPPING_ALLEGRO=float(
-            os.getenv("DEFAULT_SHIPPING_ALLEGRO", "0")
-        ),
-        FREE_SHIPPING_THRESHOLD_ALLEGRO=float(
-            os.getenv("FREE_SHIPPING_THRESHOLD_ALLEGRO", "0")
-        ),
         COMMISSION_ALLEGRO=float(os.getenv("COMMISSION_ALLEGRO", "0")),
         LOW_STOCK_THRESHOLD=int(os.getenv("LOW_STOCK_THRESHOLD", "1")),
         ALERT_EMAIL=os.getenv("ALERT_EMAIL"),
