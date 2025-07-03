@@ -507,6 +507,7 @@ def send_messenger_message(data):
                 for p in data.get("products", [])
             )
             + f"🚚 Wysyłka: {data.get('shipping', '-')}\n"
+            f"🚛 Kurier: {data.get('courier_code', '-')}\n"
             f"🌐 Platforma: {data.get('platform', '-')}\n"
             f"📎 ID: {data.get('order_id', '-')}"
         )
@@ -620,6 +621,7 @@ def _agent_loop():
                     "platform": order.get("order_source", "brak"),
                     "shipping": order.get("delivery_method", "brak"),
                     "products": order.get("products", []),
+                    "courier_code": "",
                 }
 
                 if order_id in printed:
@@ -628,11 +630,14 @@ def _agent_loop():
                 # Skip logging order details to avoid sensitive data in logs
                 packages = get_order_packages(order_id)
                 labels = []
+                courier_code = ""
 
                 for p in packages:
                     package_id = p.get("package_id")
-                    courier_code = p.get("courier_code")
-                    if not package_id or not courier_code:
+                    code = p.get("courier_code")
+                    if code and not courier_code:
+                        courier_code = code
+                    if not package_id or not code:
                         logger.warning(
                             "  Brak danych: package_id lub courier_code"
                         )
@@ -646,6 +651,9 @@ def _agent_loop():
                     else:
                         # Missing label data
                         pass
+
+                if courier_code:
+                    last_order_data["courier_code"] = courier_code
 
                 if labels:
                     if is_quiet_time():
