@@ -20,66 +20,8 @@
         {% endfor %}
         </tbody>
     </table>
-
-    <div class="col-12 text-center">
-        <h5 class="mt-4">Progi kosztów wysyłki</h5>
-    </div>
-    <table class="table" id="thresholdTable">
-        <thead>
-        <tr>
-            <th>Minimalna wartość zamówienia</th>
-            <th>Koszt wysyłki</th>
-            <th class="text-end">
-                <button type="button" id="addThresholdRow" class="btn btn-secondary btn-sm"><i class="bi bi-plus-circle"></i></button>
-            </th>
-        </tr>
-        </thead>
-        <tbody id="thresholdRows">
-        {% for t in thresholds %}
-        <tr class="threshold-row">
-            <td><input type="number" step="0.01" class="form-control" name="threshold_min" value="{{ '%.2f'|format(t.min_order_value) }}"></td>
-            <td><input type="number" step="0.01" class="form-control" name="threshold_cost" value="{{ '%.2f'|format(t.shipping_cost) }}"></td>
-            <td><button type="button" class="btn btn-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
-        </tr>
-        {% endfor %}
-        {% if thresholds|length == 0 %}
-        <tr class="threshold-row">
-            <td><input type="number" step="0.01" class="form-control" name="threshold_min"></td>
-            <td><input type="number" step="0.01" class="form-control" name="threshold_cost"></td>
-            <td><button type="button" class="btn btn-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
-        </tr>
-        {% endif %}
-        </tbody>
-        </table>
 </form>
 <div class="form-actions text-center mt-3">
     <button type="submit" form="salesSettingsForm" class="btn btn-primary">Zapisz</button>
 </div>
-<script>
-    function updateDeleteVisibility() {
-        const rows = document.querySelectorAll('.threshold-row');
-        rows.forEach((r, idx) => {
-            const btn = r.querySelector('.remove-row');
-            if (btn) btn.style.display = idx > 0 ? 'inline-block' : 'none';
-        });
-    }
-
-    document.getElementById('addThresholdRow').addEventListener('click', () => {
-        const container = document.getElementById('thresholdRows');
-        const row = container.querySelector('.threshold-row').cloneNode(true);
-        row.querySelectorAll('input').forEach(i => i.value = '');
-        container.appendChild(row);
-        updateDeleteVisibility();
-    });
-    document.addEventListener('click', e => {
-        if (e.target.classList.contains('remove-row')) {
-            const rows = document.querySelectorAll('.threshold-row');
-            if (rows.length > 1) {
-                e.target.closest('.threshold-row').remove();
-                updateDeleteVisibility();
-            }
-        }
-    });
-    updateDeleteVisibility();
-</script>
 {% endblock %}

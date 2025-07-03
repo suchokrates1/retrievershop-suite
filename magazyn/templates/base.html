@@ -49,6 +49,7 @@
                         <ul class="dropdown-menu dropdown-menu-dark">
                             <li><a class="dropdown-item" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('shipping.shipping_costs') }}">Koszty wysyłek</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('agent_logs') }}">Logi</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
                         </ul>
@@ -72,6 +73,7 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('sales.list_sales') }}">Sprzedaż</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('shipping.shipping_costs') }}">Koszty wysyłek</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
             <li class="nav-item mt-auto text-center">
