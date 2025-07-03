@@ -1,7 +1,5 @@
 def _sales_keys():
     return [
-        "DEFAULT_SHIPPING_ALLEGRO",
-        "FREE_SHIPPING_THRESHOLD_ALLEGRO",
         "COMMISSION_ALLEGRO",
         "ALERT_EMAIL",
         "SMTP_SERVER",
