@@ -210,3 +210,15 @@ def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
     assert data["name"] == "Widget"
     assert data["color"] == "Blue"
     assert data["size"] == "XL"
+
+
+def test_parse_product_info_size_before_color():
+    bl = get_bl()
+    item = {
+        "name": "Szelki dla psa Truelove Front Line Premium XL czarne",
+        "attributes": [],
+    }
+    name, size, color = bl.parse_product_info(item)
+    assert name == "Szelki dla psa Truelove Front Line Premium"
+    assert size == "XL"
+    assert color == "czarne"

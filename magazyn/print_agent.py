@@ -382,12 +382,7 @@ def call_api(method, parameters=None):
 
 def get_orders():
     response = call_api("getOrders", {"status_id": STATUS_ID})
-    logger.info(
-        "🔁 Surowa odpowiedź:\n%s",
-        json.dumps(response, indent=2, ensure_ascii=False),
-    )
     orders = response.get("orders", [])
-    logger.info(f"🔍 Zamówień znalezionych: {len(orders)}")
     return orders
 
 
@@ -426,7 +421,7 @@ def print_label(base64_data, extension, order_id):
                 result.stderr.decode().strip(),
             )
         else:
-            logger.info(f"📨 Etykieta wydrukowana dla zamówienia {order_id}")
+            logger.info("📨 Label printed")
     except Exception as e:
         logger.error(f"Błąd drukowania: {e}")
 
@@ -480,10 +475,16 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
     if not size or not color:
         words = name.strip().split()
         if len(words) >= 3:
-            maybe_size = words[-1]
-            if maybe_size.upper() in {s.upper() for s in ALL_SIZES}:
-                size = size or maybe_size
-                color = color or words[-2]
+            last = words[-1]
+            second_last = words[-2]
+            upper_sizes = {s.upper() for s in ALL_SIZES}
+            if second_last.upper() in upper_sizes:
+                size = size or second_last
+                color = color or last
+                name = " ".join(words[:-2])
+            elif last.upper() in upper_sizes:
+                size = size or last
+                color = color or second_last
                 name = " ".join(words[:-2])
 
     return name.strip(), size, color
@@ -617,9 +618,7 @@ def _agent_loop():
                 if order_id in printed:
                     continue
 
-                logger.info(
-                    f"📜 Zamówienie {order_id} ({last_order_data['name']})"
-                )
+                # Skip logging order details to avoid sensitive data in logs
                 packages = get_order_packages(order_id)
                 labels = []
 
@@ -632,23 +631,18 @@ def _agent_loop():
                         )
                         continue
 
-                    logger.info(
-                        f"  📦 Paczka {package_id} (kurier: {courier_code})"
-                    )
+                    # Avoid logging package identifiers
 
                     label_data, ext = get_label(courier_code, package_id)
                     if label_data:
                         labels.append((label_data, ext))
                     else:
-                        logger.warning(
-                            "  ❌ Brak etykiety (label_data = null)"
-                        )
+                        # Missing label data
+                        pass
 
                 if labels:
                     if is_quiet_time():
-                        logger.info(
-                            "🕒 Cisza nocna — etykiety nie zostaną wydrukowane teraz."
-                        )
+                        # Quiet hours: postpone printing
                         for label_data, ext in labels:
                             queue.append(
                                 {
