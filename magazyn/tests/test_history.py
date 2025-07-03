@@ -6,7 +6,7 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
     item = {
         "order_id": "1",
         "printed_at": ts,
-        "last_order_data": {"name": "N", "color": "C", "size": "S"},
+        "last_order_data": {"name": "N", "color": "C", "size": "S", "courier_code": "K"},
     }
     monkeypatch.setattr(
         app_mod.print_agent, "load_printed_orders", lambda: [item]
@@ -28,6 +28,7 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
     assert "N" in html
     assert "C" in html
     assert "S" in html
+    assert "K" in html
 
 
 def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
