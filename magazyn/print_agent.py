@@ -483,10 +483,16 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
         if not size and len(words) >= 2:
             maybe_color = words[-1].lower()
             if maybe_color in {c.lower() for c in KNOWN_COLORS}:
-                if not color:
-                    color = words[-1]
-                size = "Uniwersalny"
-                name = " ".join(words[:-1])
+                if len(words) >= 3 and words[-2].upper() in {s.upper() for s in ALL_SIZES}:
+                    size = words[-2]
+                    if not color:
+                        color = words[-1]
+                    name = " ".join(words[:-2])
+                else:
+                    if not color:
+                        color = words[-1]
+                    size = "Uniwersalny"
+                    name = " ".join(words[:-1])
 
     return name.strip(), size, color
 
