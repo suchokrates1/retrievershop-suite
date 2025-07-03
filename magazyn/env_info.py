@@ -43,14 +43,6 @@ ENV_INFO = {
         "Ustaw 1 aby włączyć tryb debugowania Flask",
     ),
     "FLASK_ENV": ("Środowisko Flask", "Konfiguracja środowiska Flask"),
-    "DEFAULT_SHIPPING_ALLEGRO": (
-        "Wysyłka Allegro",
-        "Domyślny koszt wysyłki dla platformy Allegro",
-    ),
-    "FREE_SHIPPING_THRESHOLD_ALLEGRO": (
-        "Próg darmowej wysyłki Allegro",
-        "Kwota sprzedaży powyżej której wysyłka jest darmowa",
-    ),
     "COMMISSION_ALLEGRO": (
         "Prowizja Allegro (%)",
         "Procent prowizji pobieranej przez Allegro",

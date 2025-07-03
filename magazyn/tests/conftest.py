@@ -8,8 +8,6 @@ import magazyn.config as cfg
 @pytest.fixture
 def app_mod(tmp_path, monkeypatch):
     monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
-    monkeypatch.setattr(cfg.settings, "DEFAULT_SHIPPING_ALLEGRO", 8.0)
-    monkeypatch.setattr(cfg.settings, "FREE_SHIPPING_THRESHOLD_ALLEGRO", 150.0)
     monkeypatch.setattr(cfg.settings, "COMMISSION_ALLEGRO", 10.0)
     import magazyn.sales as sales_mod
 
