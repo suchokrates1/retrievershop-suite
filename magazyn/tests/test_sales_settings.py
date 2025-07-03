@@ -35,5 +35,3 @@ def test_sales_settings_post_saves(
     for key, val in values.items():
         assert f"{key}={val}" in env_text
     assert reloaded["called"] is True
-
-
