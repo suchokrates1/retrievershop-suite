@@ -169,7 +169,7 @@ def update_quantity(product_id: int, size: str, action: str):
                 )
         else:
             logger.warning(
-                "Product id %s with size %s not found, quantity update skipped",
+                "Product id %s size %s not found, quantity update skipped",
                 product_id,
                 size,
             )
@@ -578,7 +578,11 @@ def consume_order_stock(products: List[dict]):
                 logger.warning(
                     "Unable to match product for order item: %s", item
                 )
-                placeholder = db.query(Product).filter_by(name="Unknown").first()
+                placeholder = (
+                    db.query(Product)
+                    .filter_by(name="Unknown")
+                    .first()
+                )
                 if not placeholder:
                     placeholder = Product(name="Unknown", color="")
                     db.add(placeholder)

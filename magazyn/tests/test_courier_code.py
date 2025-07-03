@@ -12,7 +12,7 @@ def test_agent_loop_stores_courier_code(monkeypatch):
     monkeypatch.setattr(mod, "save_queue", lambda q: None)
     monkeypatch.setattr(mod, "is_quiet_time", lambda: False)
     monkeypatch.setattr(mod, "consume_order_stock", lambda p: None)
-    monkeypatch.setattr(mod, "print_label", lambda d,e,o: None)
+    monkeypatch.setattr(mod, "print_label", lambda d, e, o: None)
 
     captured = {}
     monkeypatch.setattr(mod, "mark_as_printed", lambda oid, data=None: captured.setdefault("marked", data))
@@ -25,8 +25,10 @@ def test_agent_loop_stores_courier_code(monkeypatch):
     class Stopper:
         def __init__(self):
             self.calls = 0
+
         def is_set(self):
             return self.calls > 0
+
         def wait(self, t):
             self.calls += 1
     mod._stop_event = Stopper()

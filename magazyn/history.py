@@ -42,7 +42,10 @@ def reprint_label(order_id):
                     item.get("label_data"), item.get("ext", "pdf"), order_id
                 )
             print_agent.save_queue(remaining)
-            print_agent.mark_as_printed(order_id, queue[0].get("last_order_data", printed_data))
+            print_agent.mark_as_printed(
+                order_id,
+                queue[0].get("last_order_data", printed_data),
+            )
         else:
             packages = print_agent.get_order_packages(order_id)
             for p in packages:
