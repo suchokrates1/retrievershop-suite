@@ -82,19 +82,6 @@ def sales_settings():
         for key in keys:
             values[key] = request.form.get(key, "")
         write_env(values)
-        mins = request.form.getlist("threshold_min")
-        costs = request.form.getlist("threshold_cost")
-        with get_session() as db:
-            db.query(ShippingThreshold).delete()
-            for m, c in zip(mins, costs):
-                if not m and not c:
-                    continue
-                db.add(
-                    ShippingThreshold(
-                        min_order_value=float(m or 0),
-                        shipping_cost=float(c or 0),
-                    )
-                )
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("sales.sales_settings"))
@@ -110,12 +97,6 @@ def sales_settings():
                 "value": values[key],
             }
         )
-    with get_session() as db:
-        thresholds = (
-            db.query(ShippingThreshold)
-            .order_by(ShippingThreshold.min_order_value)
-            .all()
-        )
     return render_template(
-        "sales_settings.html", settings=settings_list, thresholds=thresholds
+        "sales_settings.html", settings=settings_list
     )

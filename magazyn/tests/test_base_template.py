@@ -35,3 +35,13 @@ def test_nav_contains_sales_settings_link(app_mod, client, login):
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     assert f'href="{settings_url}"' in html
+
+
+def test_nav_contains_shipping_link(app_mod, client, login):
+    from flask import url_for
+
+    with app_mod.app.test_request_context():
+        shipping_url = url_for("shipping.shipping_costs")
+    resp = client.get("/")
+    html = resp.get_data(as_text=True)
+    assert f'href="{shipping_url}"' in html
