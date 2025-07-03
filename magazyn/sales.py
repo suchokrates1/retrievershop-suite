@@ -44,7 +44,11 @@ def list_sales():
             )
             name = "unknown" if not product else product.name
             color = "" if not product else product.color
-            descr = f"{name} ({color}) {sale.size}" if color else f"{name} {sale.size}"
+            descr = (
+                f"{name} ({color}) {sale.size}"
+                if color
+                else f"{name} {sale.size}"
+            )
             sales.append(
                 {
                     "date": sale.sale_date,

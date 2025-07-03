@@ -181,7 +181,9 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
         )
         if not ps:
             logger.warning(
-                "Stock entry missing for product_id=%s size=%s", product_id, size
+                "Missing stock entry for product_id=%s size=%s",
+                product_id,
+                size,
             )
         available = ps.quantity if ps else 0
         to_consume = min(available, quantity)
@@ -224,7 +226,8 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
 
         if consumed < quantity:
             logger.warning(
-                "Insufficient stock for product_id=%s size=%s: requested=%s consumed=%s",
+                "Insufficient stock for product_id=%s size=%s:"
+                " requested=%s consumed=%s",
                 product_id,
                 size,
                 quantity,
