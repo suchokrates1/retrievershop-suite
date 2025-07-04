@@ -213,7 +213,9 @@ def export_rows():
                 ProductSize.quantity,
             )
             .join(
-                ProductSize, Product.id == ProductSize.product_id, isouter=True
+                ProductSize,
+                Product.id == ProductSize.product_id,
+                isouter=True,
             )
             .all()
         )
@@ -471,7 +473,9 @@ def _import_invoice_df(df: pd.DataFrame):
 
             if not product:
                 product = (
-                    db.query(Product).filter_by(name=name, color=color).first()
+                    db.query(Product)
+                    .filter_by(name=name, color=color)
+                    .first()
                 )
                 if not product:
                     product = Product(name=name, color=color)
@@ -624,7 +628,10 @@ def get_sales_summary(days: int = 7) -> List[dict]:
     for name, color, size, qty in rows:
         remaining = stock.get(
             (
-                db.query(Product).filter_by(name=name, color=color).first().id,
+                db.query(Product)
+                .filter_by(name=name, color=color)
+                .first()
+                .id,
                 size,
             ),
             0,

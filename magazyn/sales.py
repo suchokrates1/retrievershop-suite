@@ -1,4 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+)
 from .auth import login_required
 from .env_info import ENV_INFO
 from . import print_agent
