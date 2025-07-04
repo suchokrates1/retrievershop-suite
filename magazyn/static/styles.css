@@ -27,6 +27,10 @@ h2, h3 {
     margin: auto;
 }
 
+.login-form label {
+    white-space: nowrap;
+}
+
 
 
 label, input, button {
