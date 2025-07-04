@@ -28,6 +28,7 @@ def load_config():
         ),
         SECRET_KEY=os.getenv("SECRET_KEY", "default_secret_key"),
         FLASK_DEBUG=os.getenv("FLASK_DEBUG") == "1",
+        FLASK_ENV=os.getenv("FLASK_ENV", "production"),
         COMMISSION_ALLEGRO=float(os.getenv("COMMISSION_ALLEGRO", "0")),
         LOW_STOCK_THRESHOLD=int(os.getenv("LOW_STOCK_THRESHOLD", "1")),
         ALERT_EMAIL=os.getenv("ALERT_EMAIL"),
