@@ -27,6 +27,18 @@
                 </select>
                 {% elif 'shipping' in lower or 'commission' in lower %}
                 <input type="number" step="0.01" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                {% elif item.key == 'LOG_LEVEL' %}
+                <select class="form-select" id="{{ item.key }}" name="{{ item.key }}">
+                    {% for lvl in ['DEBUG','INFO','WARNING','ERROR','CRITICAL'] %}
+                    <option value="{{ lvl }}" {% if item.value == lvl %}selected{% endif %}>{{ lvl }}</option>
+                    {% endfor %}
+                </select>
+                {% elif item.key == 'FLASK_ENV' %}
+                <select class="form-select" id="{{ item.key }}" name="{{ item.key }}">
+                    {% for env in ['production','development'] %}
+                    <option value="{{ env }}" {% if item.value == env %}selected{% endif %}>{{ env }}</option>
+                    {% endfor %}
+                </select>
                 {% else %}
                 <input type="text" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                 {% endif %}
