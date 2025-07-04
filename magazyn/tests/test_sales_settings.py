@@ -14,8 +14,10 @@ def test_sales_settings_list_keys(app_mod, client, login, tmp_path):
     resp = client.get("/sales/settings")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
+    from magazyn.env_info import ENV_INFO
     for key in _sales_keys():
-        assert key in html
+        label = ENV_INFO.get(key, (key, None))[0]
+        assert label in html
 
 
 def test_sales_settings_post_saves(

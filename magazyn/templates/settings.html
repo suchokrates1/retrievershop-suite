@@ -17,7 +17,6 @@
             <th scope="row">
                 {{ item.label }}
                 {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
-                {% if item.label != item.key %}<br><small class="text-muted">{{ item.key }}</small>{% endif %}
             </th>
             <td>
                 {% set lower = item.key.lower() %}
