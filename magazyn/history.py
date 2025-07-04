@@ -35,7 +35,9 @@ def reprint_label(order_id):
 
         if queue:
             remaining = [
-                q for q in all_items if str(q.get("order_id")) != str(order_id)
+                q
+                for q in all_items
+                if str(q.get("order_id")) != str(order_id)
             ]
             for item in queue:
                 print_agent.print_label(
