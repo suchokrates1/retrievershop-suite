@@ -39,6 +39,13 @@
                     <option value="{{ env }}" {% if item.value == env %}selected{% endif %}>{{ env }}</option>
                     {% endfor %}
                 </select>
+                {% elif 'password' in lower or 'secret' in lower %}
+                <div class="input-group">
+                    <input type="password" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                    <span class="input-group-text toggle-password" data-target="{{ item.key }}">
+                        <i class="bi bi-eye"></i>
+                    </span>
+                </div>
                 {% else %}
                 <input type="text" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                 {% endif %}
@@ -51,4 +58,19 @@
 <div class="form-actions text-center mt-3">
     <button type="submit" form="settingsForm" class="btn btn-primary">Zapisz</button>
 </div>
+<script>
+    document.querySelectorAll('.toggle-password').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const input = document.getElementById(btn.dataset.target);
+            if (!input) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+            } else {
+                input.type = 'password';
+                btn.innerHTML = '<i class="bi bi-eye"></i>';
+            }
+        });
+    });
+</script>
 {% endblock %}
