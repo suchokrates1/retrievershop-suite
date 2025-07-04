@@ -217,7 +217,9 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
             if ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
                     product = (
-                        session.query(Product).filter_by(id=product_id).first()
+                        session.query(Product)
+                        .filter_by(id=product_id)
+                        .first()
                     )
                     name = product.name if product else str(product_id)
                     send_stock_alert(name, size, ps.quantity)
