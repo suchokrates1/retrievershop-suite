@@ -12,12 +12,14 @@ def test_settings_list_all_keys(app_mod, client, login, tmp_path):
     text = resp.get_data(as_text=True)
     values = app_mod.load_settings()
     from magazyn.sales import _sales_keys
+    from magazyn.env_info import ENV_INFO
     sales_keys = _sales_keys(values)
     for key in values.keys():
+        label = ENV_INFO.get(key, (key, None))[0]
         if key in sales_keys:
-            assert key not in text
+            assert label not in text
         else:
-            assert key in text
+            assert label in text
 
 
 def test_settings_post_saves_and_reloads(
@@ -85,7 +87,9 @@ def test_extra_keys_display_and_save(
     resp = client.get("/settings")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "EXTRA_KEY" in html
+    from magazyn.env_info import ENV_INFO
+    label = ENV_INFO.get("EXTRA_KEY", ("EXTRA_KEY", None))[0]
+    assert label in html
 
     values = app_mod.load_settings()
     assert values.get("EXTRA_KEY") == "foo"
