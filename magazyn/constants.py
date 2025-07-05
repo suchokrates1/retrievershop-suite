@@ -21,4 +21,7 @@ KNOWN_COLORS = [
     "fioletowe",
     "srebrny",
     "srebrne",
+    "pomarańczowy",
+    "pomarańczowe",
+    "pomarańczowa",
 ]
