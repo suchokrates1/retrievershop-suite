@@ -10,4 +10,3 @@ def test_weekly_report_not_sent_when_disabled(monkeypatch):
     pa._last_weekly_report = None
     pa._send_periodic_reports()
     assert calls == []
-
