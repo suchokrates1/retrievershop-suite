@@ -12,7 +12,11 @@ def test_agent_loop_stores_courier_code(monkeypatch):
     monkeypatch.setattr(mod, "save_queue", lambda q: None)
     monkeypatch.setattr(mod, "is_quiet_time", lambda: False)
     monkeypatch.setattr(mod, "consume_order_stock", lambda p: None)
-    monkeypatch.setattr(mod, "print_label", lambda d, e, o: None)
+    monkeypatch.setattr(
+        mod,
+        "print_label",
+        lambda d, e, o: None,
+    )
 
     captured = {}
     monkeypatch.setattr(mod, "mark_as_printed", lambda oid, data=None: captured.setdefault("marked", data))
