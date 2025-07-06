@@ -23,7 +23,7 @@ h2, h3 {
 
 /* Centered layout for the login page form */
 .login-form {
-    max-width: 300px;
+    max-width: none;
     margin: auto;
 }
 
