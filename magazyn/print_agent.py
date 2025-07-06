@@ -43,7 +43,8 @@ PRINTED_FILE = os.path.join(os.path.dirname(__file__), "printed_orders.txt")
 PRINTED_EXPIRY_DAYS = settings.PRINTED_EXPIRY_DAYS
 LABEL_QUEUE = os.path.join(os.path.dirname(__file__), "queued_labels.jsonl")
 LOG_LEVEL = settings.LOG_LEVEL
-# Whether monthly summary reports should be sent
+# Whether periodic summary reports should be sent
+ENABLE_WEEKLY_REPORTS = settings.ENABLE_WEEKLY_REPORTS
 ENABLE_MONTHLY_REPORTS = settings.ENABLE_MONTHLY_REPORTS
 # Use the same database file as the web application
 DB_FILE = DB_PATH
@@ -76,7 +77,7 @@ def reload_env():
     global API_TOKEN, PAGE_ACCESS_TOKEN, RECIPIENT_ID, STATUS_ID, PRINTER_NAME
     global CUPS_SERVER, CUPS_PORT, POLL_INTERVAL, QUIET_HOURS_START
     global QUIET_HOURS_END, TIMEZONE, PRINTED_EXPIRY_DAYS, LOG_LEVEL
-    global LOG_FILE, DB_FILE, ENABLE_MONTHLY_REPORTS
+    global LOG_FILE, DB_FILE, ENABLE_WEEKLY_REPORTS, ENABLE_MONTHLY_REPORTS
     API_TOKEN = settings.API_TOKEN
     PAGE_ACCESS_TOKEN = settings.PAGE_ACCESS_TOKEN
     RECIPIENT_ID = settings.RECIPIENT_ID
@@ -94,6 +95,7 @@ def reload_env():
     LOG_FILE = settings.LOG_FILE
     DB_FILE = settings.DB_PATH
     HEADERS["X-BLToken"] = API_TOKEN
+    ENABLE_WEEKLY_REPORTS = settings.ENABLE_WEEKLY_REPORTS
     ENABLE_MONTHLY_REPORTS = settings.ENABLE_MONTHLY_REPORTS
 
     from . import db
@@ -547,8 +549,8 @@ def is_quiet_time():
 def _send_periodic_reports():
     global _last_weekly_report, _last_monthly_report
     now = datetime.now()
-    if not _last_weekly_report or now - _last_weekly_report >= timedelta(
-        days=7
+    if ENABLE_WEEKLY_REPORTS and (
+        not _last_weekly_report or now - _last_weekly_report >= timedelta(days=7)
     ):
         report = get_sales_summary(7)
         lines = [
