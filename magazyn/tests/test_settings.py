@@ -45,6 +45,26 @@ def test_settings_post_saves_and_reloads(
     assert reloaded["called"] is True
 
 
+def test_weekly_reports_setting_saved(app_mod, client, login, tmp_path):
+    app_mod.ENV_PATH = tmp_path / ".env"
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Raport tygodniowy" in html
+
+    values = app_mod.load_settings()
+    assert "ENABLE_WEEKLY_REPORTS" in values
+    values["ENABLE_WEEKLY_REPORTS"] = "0"
+    from magazyn.sales import _sales_keys
+    for skey in _sales_keys(values):
+        values.pop(skey)
+    values["QUIET_HOURS_START"] = "10:00"
+    values["QUIET_HOURS_END"] = "22:00"
+    client.post("/settings", data=values)
+    env_text = app_mod.ENV_PATH.read_text()
+    assert "ENABLE_WEEKLY_REPORTS=0" in env_text
+
+
 def test_env_updates_persist_and_reload(
     app_mod, client, login, tmp_path, monkeypatch
 ):

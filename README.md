@@ -43,6 +43,7 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
 | `FLASK_ENV` | Flask configuration environment |
 | `COMMISSION_ALLEGRO` | Commission percentage charged by Allegro |
+| `ENABLE_WEEKLY_REPORTS` | Set to `1` to send weekly sales reports |
 | `ENABLE_MONTHLY_REPORTS` | Set to `1` to send monthly sales reports |
 
 `DB_PATH` is read only during application startup, so changing it requires

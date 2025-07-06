@@ -37,6 +37,7 @@ def load_config():
         SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
         SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
         ENABLE_MONTHLY_REPORTS=os.getenv("ENABLE_MONTHLY_REPORTS", "1") == "1",
+        ENABLE_WEEKLY_REPORTS=os.getenv("ENABLE_WEEKLY_REPORTS", "1") == "1",
     )
 
 
