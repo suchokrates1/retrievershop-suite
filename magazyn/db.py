@@ -52,9 +52,9 @@ def init_db():
 def reset_db():
     """Drop all tables and recreate them.
 
-    This is useful for testing scenarios that require a completely clean
-    database state without losing the ability of :func:`init_db` to preserve
-    existing data."""
+    This is useful for testing scenarios that require a completely
+    clean database state without losing the ability of :func:`init_db`
+    to preserve existing data."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
@@ -65,7 +65,9 @@ def ensure_schema():
     try:
         cur = conn.execute("PRAGMA table_info(product_sizes)")
         if "barcode" not in [row[1] for row in cur.fetchall()]:
-            conn.execute("ALTER TABLE product_sizes ADD COLUMN barcode TEXT")
+            conn.execute(
+                "ALTER TABLE product_sizes ADD COLUMN barcode TEXT"
+            )
             conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_sizes_barcode "
                 "ON product_sizes(barcode)"
@@ -122,7 +124,13 @@ def register_default_user():
             session.add(User(username="admin", password=hashed_password))
 
 
-def record_purchase(product_id, size, quantity, price, purchase_date=None):
+def record_purchase(
+    product_id,
+    size,
+    quantity,
+    price,
+    purchase_date=None,
+):
     """Insert a purchase batch and increase stock quantity."""
     purchase_date = purchase_date or datetime.datetime.now().isoformat()
     with get_session() as session:
@@ -192,7 +200,8 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
             session.query(PurchaseBatch)
             .filter_by(product_id=product_id, size=size)
             .order_by(
-                PurchaseBatch.price.asc(), PurchaseBatch.purchase_date.asc()
+                PurchaseBatch.price.asc(),
+                PurchaseBatch.purchase_date.asc(),
             )
             .all()
         )
