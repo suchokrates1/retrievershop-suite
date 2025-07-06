@@ -22,7 +22,9 @@ def reprint_label(order_id):
     try:
         all_items = print_agent.load_queue()
         queue = [
-            q for q in all_items if str(q.get("order_id")) == str(order_id)
+            q
+            for q in all_items
+            if str(q.get("order_id")) == str(order_id)
         ]
         printed_data = None
         try:
@@ -41,7 +43,9 @@ def reprint_label(order_id):
             ]
             for item in queue:
                 print_agent.print_label(
-                    item.get("label_data"), item.get("ext", "pdf"), order_id
+                    item.get("label_data"),
+                    item.get("ext", "pdf"),
+                    order_id,
                 )
             print_agent.save_queue(remaining)
             print_agent.mark_as_printed(

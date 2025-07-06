@@ -120,7 +120,12 @@ def list_products() -> List[dict]:
         for p in products:
             sizes = {s.size: s.quantity for s in p.sizes}
             result.append(
-                {"id": p.id, "name": p.name, "color": p.color, "sizes": sizes}
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "color": p.color,
+                    "sizes": sizes,
+                }
             )
     return result
 
@@ -196,7 +201,12 @@ def get_products_for_delivery():
         return db.query(Product.id, Product.name, Product.color).all()
 
 
-def record_delivery(product_id: int, size: str, quantity: int, price: float):
+def record_delivery(
+    product_id: int,
+    size: str,
+    quantity: int,
+    price: float,
+):
     """Record a delivery and update stock."""
     record_purchase(product_id, size, quantity, price)
 
@@ -320,9 +330,9 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
             break
     if not column_pos:
         # fallback to sorted unique x positions
-        column_pos = sorted({t[0] for _, line in sorted_lines for t in line})[
-            :4
-        ]
+        column_pos = sorted(
+            {t[0] for _, line in sorted_lines for t in line}
+        )[:4]
 
     rows = []
     for _, line in sorted_lines:
@@ -344,7 +354,10 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
             continue
         size = cols[1]
         if size not in ALL_SIZES:
-            logger.warning("Unexpected size '%s' in PDF row, skipping", size)
+            logger.warning(
+                "Unexpected size '%s' in PDF row, skipping",
+                size,
+            )
             continue
         rows.append(
             {
@@ -540,7 +553,10 @@ def consume_order_stock(products: List[dict]):
         if qty <= 0:
             continue
         barcode = str(
-            item.get("ean") or item.get("barcode") or item.get("sku") or ""
+            item.get("ean")
+            or item.get("barcode")
+            or item.get("sku")
+            or ""
         ).strip()
         name = item.get("name")
         size = None
@@ -555,7 +571,11 @@ def consume_order_stock(products: List[dict]):
         with get_session() as db:
             ps = None
             if barcode:
-                ps = db.query(ProductSize).filter_by(barcode=barcode).first()
+                ps = (
+                    db.query(ProductSize)
+                    .filter_by(barcode=barcode)
+                    .first()
+                )
             if not ps and name:
                 query = (
                     db.query(ProductSize)
