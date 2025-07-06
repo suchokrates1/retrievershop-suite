@@ -6,9 +6,7 @@ import pandas as pd
 bp = Blueprint("shipping", __name__)
 
 ALLEGRO_COSTS_FILE = (
-    Path(__file__)
-    .resolve()
-    .parent
+    Path(__file__).resolve().parent
     / "samples"
     / "deliveries_allegro.xlsx"
 )
