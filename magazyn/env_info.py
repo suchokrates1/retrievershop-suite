@@ -59,6 +59,10 @@ ENV_INFO = {
     "SMTP_PORT": ("Port SMTP", "Port serwera SMTP"),
     "SMTP_USERNAME": ("Użytkownik SMTP", "Login do serwera SMTP"),
     "SMTP_PASSWORD": ("Hasło SMTP", "Hasło do serwera SMTP"),
+    "ENABLE_WEEKLY_REPORTS": (
+        "Raport tygodniowy",
+        "Wysyłaj raport tygodniowy",
+    ),
     "ENABLE_MONTHLY_REPORTS": (
         "Raport miesięczny",
         "Wysyłaj raport miesięczny",

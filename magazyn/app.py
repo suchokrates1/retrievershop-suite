@@ -46,7 +46,7 @@ ENV_PATH = ROOT_DIR / ".env"
 EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 # Settings with boolean values represented as "1" or "0"
-BOOLEAN_KEYS = {"ENABLE_MONTHLY_REPORTS", "FLASK_DEBUG"}
+BOOLEAN_KEYS = {"ENABLE_MONTHLY_REPORTS", "ENABLE_WEEKLY_REPORTS", "FLASK_DEBUG"}
 
 
 app = Flask(__name__)
