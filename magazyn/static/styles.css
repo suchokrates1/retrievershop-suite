@@ -80,6 +80,11 @@ header .logo img {
     vertical-align: middle;
 }
 
+/* Logo in the navigation bar */
+.navbar-brand img {
+    height: 140px;
+}
+
 
 footer {
     margin-top: auto;
@@ -241,9 +246,6 @@ th {
         text-decoration: none;
     }
 
-    .navbar-brand img {
-        height: 140px;
-    }
 
     .navbar-nav .dropdown-menu {
         position: absolute;
