@@ -30,15 +30,21 @@ def save_costs(df: pd.DataFrame, file_path: Path = ALLEGRO_COSTS_FILE) -> None:
 def shipping_costs():
     df = load_costs()
     columns = list(df.columns)
+    # Ensure numeric columns are floats to avoid dtype warnings
+    try:
+        df[columns[1:]] = df[columns[1:]].astype(float)
+    except (ValueError, TypeError):
+        pass
     if request.method == "POST":
         for r in range(len(df)):
             for c_idx, col in enumerate(columns[1:]):
                 key = f"val_{r}_{c_idx}"
-                val = request.form.get(key, "0")
+                val_raw = request.form.get(key, "0")
                 try:
-                    df.at[r, col] = float(val)
+                    val = float(val_raw)
                 except ValueError:
-                    df.at[r, col] = val
+                    val = val_raw
+                df.at[r, col] = val
         save_costs(df)
         flash("Zapisano koszty wysyłek.")
         return redirect(url_for("shipping.shipping_costs"))
