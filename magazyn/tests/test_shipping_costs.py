@@ -1,4 +1,5 @@
 import pandas as pd
+import warnings
 
 
 def _create_file(path):
@@ -56,6 +57,8 @@ def test_shipping_costs_edit(app_mod, client, login, tmp_path, monkeypatch):
             if i == 0 and j == 0:
                 val = "9.99"
             data[f"val_{i}_{j}"] = val
-    client.post("/shipping_costs", data=data)
+    with warnings.catch_warnings(record=True) as w:
+        client.post("/shipping_costs", data=data)
+    assert not w
     df2 = pd.read_excel(file_path, header=None)
     assert abs(float(df2.iloc[1, 1]) - 9.99) < 0.01
