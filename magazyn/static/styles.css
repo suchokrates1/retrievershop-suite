@@ -242,7 +242,7 @@ th {
     }
 
     .navbar-brand img {
-        height: 70px;
+        height: 140px;
     }
 
     .navbar-nav .dropdown-menu {
@@ -298,7 +298,7 @@ th {
 
 /* Additional mobile menu styling */
 .mobile-logo {
-    height: 20px;
+    height: 40px;
     display: block;
 }
 
