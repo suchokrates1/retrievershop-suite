@@ -241,9 +241,14 @@ th {
         text-decoration: none;
     }
 
-    .navbar-brand img {
-        height: 70px;
-    }
+.navbar-brand img {
+    height: 140px;
+}
+
+.app-title {
+    font-size: 2rem;
+    text-align: center;
+}
 
     .navbar-nav .dropdown-menu {
         position: absolute;
@@ -298,7 +303,7 @@ th {
 
 /* Additional mobile menu styling */
 .mobile-logo {
-    height: 20px;
+    height: 40px;
     display: block;
 }
 
