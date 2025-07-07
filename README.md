@@ -58,19 +58,18 @@ not appear on this page.
 
 ## Running Tests
 
-Before running the tests you must install the required dependencies.
-Execute the following command from the repository root before running
-`pytest`:
+Use the `run-tests.sh` helper script in the repository root. It installs the
+required dependencies and executes `pytest` with the repository root on
+`PYTHONPATH`:
 
 ```bash
-pip install -r magazyn/requirements.txt
+./run-tests.sh
 ```
 
-Tests rely on modules within this repository, so execute `pytest` with the
-repository root on `PYTHONPATH`:
+Additional arguments are passed directly to `pytest`, for example:
 
 ```bash
-PYTHONPATH=. pytest -q
+./run-tests.sh magazyn/tests/test_agent_thread.py
 ```
 
 The project is developed and tested using **Python 3.9**.
