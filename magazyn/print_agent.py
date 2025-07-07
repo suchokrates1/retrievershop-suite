@@ -1,6 +1,6 @@
 from .notifications import send_report
 from .services import consume_order_stock, get_sales_summary
-from .constants import ALL_SIZES, KNOWN_COLORS
+from .constants import ALL_SIZES, KNOWN_COLORS, PRODUCT_ALIASES
 from magazyn import DB_PATH
 from .config import settings, load_config
 import os
@@ -496,7 +496,9 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
                     size = "Uniwersalny"
                     name = " ".join(words[:-1])
 
-    return name.strip(), size, color
+    name = name.strip()
+    name = PRODUCT_ALIASES.get(name, name)
+    return name, size, color
 
 
 def send_messenger_message(data):
