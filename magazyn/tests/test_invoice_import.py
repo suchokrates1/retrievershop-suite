@@ -232,3 +232,67 @@ def test_confirm_invoice_updates_existing(app_mod, client, login, tmp_path):
             {"pid": prod.id},
         ).fetchone()
         assert batch[0] == 2
+
+
+def test_import_invoice_alias_matches_existing(app_mod, client, login, tmp_path):
+    with app_mod.get_session() as db:
+        prod = Product(name="Szelki dla psa Truelove Tropical", color="turkusowe")
+        db.add(prod)
+        db.flush()
+        ps = ProductSize(product_id=prod.id, size="L", quantity=1)
+        db.add(ps)
+        db.flush()
+
+    df = pd.DataFrame(
+        [
+            {
+                "Nazwa": "Szelki dla psa Truelove Front Line Premium Tropical",
+                "Kolor": "turkusowe",
+                "Rozmiar": "L",
+                "Ilość": 2,
+                "Cena": 4.0,
+                "Barcode": "",
+            }
+        ]
+    )
+    file_path = tmp_path / "alias.xlsx"
+    df.to_excel(file_path, index=False)
+
+    with open(file_path, "rb") as f:
+        data = {"file": (f, "alias.xlsx")}
+        resp = client.post(
+            "/import_invoice", data=data, content_type="multipart/form-data"
+        )
+    assert resp.status_code == 200
+
+    confirm = {
+        "name_0": "Szelki dla psa Truelove Front Line Premium Tropical",
+        "color_0": "turkusowe",
+        "size_0": "L",
+        "quantity_0": "2",
+        "price_0": "4.0",
+        "barcode_0": "",
+        "accept_0": "y",
+    }
+    resp = client.post("/confirm_invoice", data=confirm)
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        prod = (
+            db.query(Product)
+            .filter_by(name="Szelki dla psa Truelove Tropical", color="turkusowe")
+            .first()
+        )
+        assert prod is not None
+        assert (
+            db.query(Product)
+            .filter_by(name="Szelki dla psa Truelove Front Line Premium Tropical")
+            .first()
+            is None
+        )
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=prod.id, size="L")
+            .first()
+        )
+        assert ps.quantity == 3

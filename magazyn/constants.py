@@ -24,4 +24,11 @@ KNOWN_COLORS = [
     "pomarańczowy",
     "pomarańczowe",
     "pomarańczowa",
+    "turkusowy",
+    "turkusowe",
 ]
+
+# Maps alternative product names to canonical ones to simplify lookups.
+PRODUCT_ALIASES = {
+    "Szelki dla psa Truelove Front Line Premium Tropical": "Szelki dla psa Truelove Tropical",
+}

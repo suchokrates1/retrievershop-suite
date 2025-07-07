@@ -5,7 +5,7 @@ import pandas as pd
 from .db import get_session, record_purchase, consume_stock, record_sale
 from .models import Product, ProductSize, PurchaseBatch, Sale
 from sqlalchemy import func
-from .constants import ALL_SIZES
+from .constants import ALL_SIZES, PRODUCT_ALIASES
 from datetime import datetime
 from PyPDF2 import PdfReader
 import logging
@@ -465,6 +465,7 @@ def _import_invoice_df(df: pd.DataFrame):
     """Record purchases using rows from a DataFrame."""
     for _, row in df.iterrows():
         name = row.get("Nazwa")
+        name = PRODUCT_ALIASES.get(name, name)
         color = row.get("Kolor", "")
         size = row.get("Rozmiar")
         quantity = _to_int(row.get("Ilość", 0))
@@ -559,6 +560,7 @@ def consume_order_stock(products: List[dict]):
             or ""
         ).strip()
         name = item.get("name")
+        name = PRODUCT_ALIASES.get(name, name)
         size = None
         color = None
         for attr in item.get("attributes", []):
