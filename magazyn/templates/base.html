@@ -18,7 +18,7 @@
     {% block page_vars %}{% endblock %}
     <div class="page-wrapper">
     <nav class="navbar navbar-dark bg-dark fixed-top">
-        <div class="container">
+        <div class="{% if full_width %}container-fluid{% else %}container{% endif %}">
             <div class="d-flex flex-column">
                 <div class="d-flex align-items-center w-100">
                     <span class="navbar-brand mb-2 mb-md-0">
