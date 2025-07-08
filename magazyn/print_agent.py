@@ -5,6 +5,7 @@ from .parsing import parse_product_info
 from magazyn import DB_PATH
 from .config import settings, load_config
 import os
+import fcntl
 import json
 import base64
 import subprocess
@@ -54,6 +55,10 @@ OLD_DB_FILE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), os.pardir, "printer", "data.db")
 )
 LOG_FILE = settings.LOG_FILE
+LOCK_FILE = os.getenv(
+    "AGENT_LOCK_FILE", os.path.join(os.path.dirname(LOG_FILE), "agent.lock")
+)
+_lock_handle = None
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -651,18 +656,44 @@ def _agent_loop():
 
 
 def start_agent_thread():
-    global _agent_thread, _stop_event
+    """Start the background agent if not already running.
+
+    Returns ``True`` when a new thread was started and ``False`` otherwise.
+    """
+    global _agent_thread, _stop_event, _lock_handle
     if _agent_thread and _agent_thread.is_alive():
-        return
+        return False
+    if _lock_handle is None:
+        try:
+            _lock_handle = open(LOCK_FILE, "w")
+            fcntl.flock(_lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            if _lock_handle:
+                _lock_handle.close()
+                _lock_handle = None
+            logger.info("Print agent already running, skipping startup")
+            return False
     _stop_event = threading.Event()
     _agent_thread = threading.Thread(target=_agent_loop, daemon=True)
     _agent_thread.start()
+    return True
 
 
 def stop_agent_thread():
-    """Signal the agent loop to stop and wait for it to finish."""
-    global _agent_thread
+    """Signal the agent loop to stop and release the lock."""
+    global _agent_thread, _lock_handle
     if _agent_thread and _agent_thread.is_alive():
         _stop_event.set()
         _agent_thread.join()
         _agent_thread = None
+    if _lock_handle:
+        try:
+            fcntl.flock(_lock_handle, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        _lock_handle.close()
+        _lock_handle = None
+        try:
+            os.remove(LOCK_FILE)
+        except OSError:
+            pass

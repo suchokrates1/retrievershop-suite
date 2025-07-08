@@ -58,6 +58,8 @@ app.secret_key = settings.SECRET_KEY
 CSRFProtect(app)
 app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
 
+_print_agent_started = False
+
 app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)
 app.register_blueprint(sales_bp)
@@ -71,10 +73,18 @@ def inject_current_year():
 
 def start_print_agent():
     """Initialize and start the background label printing agent."""
+    global _print_agent_started
+    if _print_agent_started:
+        return
+    _print_agent_started = True
     try:
         print_agent.validate_env()
         print_agent.ensure_db_init()
-        print_agent.start_agent_thread()
+        started = print_agent.start_agent_thread()
+        if not started:
+            app.logger.info("Print agent already running")
+            _print_agent_started = False
+            return
     except print_agent.ConfigError as e:
         app.logger.error(f"Failed to start print agent: {e}")
     except Exception as e:

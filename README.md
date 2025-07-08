@@ -49,6 +49,13 @@ This repository contains the code for the RetrieverShop warehouse application an
 `DB_PATH` is read only during application startup, so changing it requires
 restarting the server.
 
+### Single printing agent
+
+Only one printing agent should run at a time. The application uses a lock
+file (`agent.lock` next to the log file) to ensure additional processes skip
+starting the agent. When multiple workers load the application, only the first
+one obtains the lock and launches the background thread.
+
 ## Modifying settings via the web interface
 
 After starting the application you can modify the values stored in your `.env` file without touching the filesystem. Log in to the web interface and open the **Ustawienia** tab from the navigation bar.
