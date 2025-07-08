@@ -41,6 +41,14 @@ def test_update_quantity_increase(app_mod):
     assert sizes["M"]["quantity"] == 2
 
 
+def test_update_quantity_decrease_without_batches(app_mod):
+    services = load_services()
+    prod = services.create_product("Prod", "Red", {"M": 1}, {"M": "111"})
+    services.update_quantity(prod.id, "M", "decrease")
+    info, sizes = services.get_product_details(prod.id)
+    assert sizes["M"]["quantity"] == 0
+
+
 def test_record_delivery(app_mod):
     services = load_services()
     prod = services.create_product("Prod", "Red", {"M": 0}, {"M": "111"})
