@@ -236,7 +236,7 @@ def test_parse_product_info_size_and_color_from_name():
     item = {"name": "Szelki dla psa Truelove Front Line Premium XL czarne"}
     name, size, color = bl.parse_product_info(item)
     assert size == "XL"
-    assert color.lower() == "czarne"
+    assert color.lower() == "czarny"
 
 
 def test_parse_product_info_alias():
@@ -247,4 +247,4 @@ def test_parse_product_info_alias():
     name, size, color = bl.parse_product_info(item)
     assert name == "Szelki dla psa Truelove Tropical"
     assert size == "L"
-    assert color.lower() == "turkusowe"
+    assert color.lower() == "turkusowy"

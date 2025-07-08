@@ -6,6 +6,7 @@ from .db import get_session, record_purchase, consume_stock, record_sale
 from .models import Product, ProductSize, PurchaseBatch, Sale
 from sqlalchemy import func
 from .constants import ALL_SIZES, PRODUCT_ALIASES
+from .parsing import parse_product_info
 from datetime import datetime
 from PyPDF2 import PdfReader
 import logging
@@ -559,16 +560,9 @@ def consume_order_stock(products: List[dict]):
             or item.get("sku")
             or ""
         ).strip()
-        name = item.get("name")
-        name = PRODUCT_ALIASES.get(name, name)
-        size = None
-        color = None
-        for attr in item.get("attributes", []):
-            aname = (attr.get("name") or "").lower()
-            if aname in {"rozmiar", "size"} and not size:
-                size = attr.get("value")
-            elif aname in {"kolor", "color"} and not color:
-                color = attr.get("value")
+        name, size, color = parse_product_info(item)
+        size = size or None
+        color = color or None
 
         with get_session() as db:
             ps = None
