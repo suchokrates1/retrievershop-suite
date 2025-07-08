@@ -211,9 +211,7 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
         for batch in batches:
             if remaining <= 0:
                 break
-            use = (
-                remaining if batch.quantity >= remaining else batch.quantity
-            )
+            use = remaining if batch.quantity >= remaining else batch.quantity
             batch.quantity -= use
             purchase_cost += use * batch.price
             remaining -= use
@@ -221,7 +219,11 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
                 session.delete(batch)
 
         consumed = to_consume - remaining
-        if consumed > 0 and ps:
+        if consumed == 0 and to_consume > 0 and ps and not batches:
+            # Adjust quantity even when no purchase batches exist
+            ps.quantity -= to_consume
+            consumed = to_consume
+        elif consumed > 0 and ps:
             ps.quantity -= consumed
             if ps.quantity < settings.LOW_STOCK_THRESHOLD:
                 try:
