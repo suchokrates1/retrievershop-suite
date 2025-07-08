@@ -8,7 +8,7 @@ pipeline {
         stage('Build Docker image') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}:${TAG}")
+                    docker.build("${IMAGE_NAME}:${TAG}", "-f magazyn/Dockerfile .")
                 }
             }
         }
