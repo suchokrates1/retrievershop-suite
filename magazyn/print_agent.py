@@ -1,6 +1,7 @@
 from .notifications import send_report
 from .services import consume_order_stock, get_sales_summary
 from .constants import ALL_SIZES, KNOWN_COLORS, PRODUCT_ALIASES
+from .parsing import parse_product_info
 from magazyn import DB_PATH
 from .config import settings, load_config
 import os
@@ -457,48 +458,6 @@ def shorten_product_name(full_name):
     return full_name
 
 
-def parse_product_info(item: dict) -> tuple[str, str, str]:
-    """Return product name, size and color from an order item."""
-    if not item:
-        return "", "", ""
-
-    name = item.get("name", "") or ""
-    size = ""
-    color = ""
-
-    for attr in item.get("attributes", []):
-        aname = (attr.get("name") or "").lower()
-        if aname in {"rozmiar", "size"} and not size:
-            size = attr.get("value", "")
-        elif aname in {"kolor", "color"} and not color:
-            color = attr.get("value", "")
-
-    if not size:
-        words = name.strip().split()
-        if len(words) >= 3:
-            maybe_size = words[-1]
-            if maybe_size.upper() in {s.upper() for s in ALL_SIZES}:
-                size = maybe_size
-                if not color:
-                    color = words[-2]
-                name = " ".join(words[:-2])
-        if not size and len(words) >= 2:
-            maybe_color = words[-1].lower()
-            if maybe_color in {c.lower() for c in KNOWN_COLORS}:
-                if len(words) >= 3 and words[-2].upper() in {s.upper() for s in ALL_SIZES}:
-                    size = words[-2]
-                    if not color:
-                        color = words[-1]
-                    name = " ".join(words[:-2])
-                else:
-                    if not color:
-                        color = words[-1]
-                    size = "Uniwersalny"
-                    name = " ".join(words[:-1])
-
-    name = name.strip()
-    name = PRODUCT_ALIASES.get(name, name)
-    return name, size, color
 
 
 def send_messenger_message(data):

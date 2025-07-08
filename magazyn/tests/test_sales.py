@@ -91,3 +91,38 @@ def test_sales_page_shows_unknown_for_unmatched_order(app_mod, client, login):
     resp = client.get("/sales")
     html = resp.get_data(as_text=True)
     assert "Unknown" in html
+
+def test_consume_order_stock_parses_name_for_match(app_mod):
+    import importlib
+    services = importlib.import_module("magazyn.services")
+    importlib.reload(services)
+
+    with app_mod.get_session() as db:
+        prod = Product(name="Szelki dla psa Truelove Front Line Premium", color="Czarny")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=1))
+        pid = prod.id
+    app_mod.record_purchase(pid, "M", 1, 10.0)
+
+    services.consume_order_stock(
+        [
+            {
+                "name": "Szelki dla psa Truelove Front Line Premium M czarne",
+                "quantity": 1,
+                "attributes": [],
+            }
+        ]
+    )
+
+    with app_mod.get_session() as db:
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=pid, size="M")
+            .one()
+        )
+        assert ps.quantity == 1
+        sale = db.query(Sale).first()
+        assert sale.product_id == pid
+        assert sale.size == "M"
+        assert sale.quantity == 1
