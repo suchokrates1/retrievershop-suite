@@ -126,3 +126,37 @@ def test_consume_order_stock_parses_name_for_match(app_mod):
         assert sale.product_id == pid
         assert sale.size == "M"
         assert sale.quantity == 1
+
+
+def test_consume_order_stock_records_sale_price(app_mod, client, login):
+    import importlib
+    services = importlib.import_module("magazyn.services")
+    importlib.reload(services)
+
+    with app_mod.get_session() as db:
+        prod = Product(name="Priced", color="Orange")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=1))
+        pid = prod.id
+
+    app_mod.record_purchase(pid, "M", 1, 10.0)
+
+    services.consume_order_stock(
+        [
+            {
+                "name": "Priced",
+                "quantity": 1,
+                "attributes": [{"name": "size", "value": "M"}],
+                "price_brutto": 50.0,
+            }
+        ]
+    )
+
+    with app_mod.get_session() as db:
+        sale = db.query(Sale).first()
+        assert sale.sale_price == 50.0
+
+    resp = client.get("/sales")
+    html = resp.get_data(as_text=True)
+    assert "50.00" in html
