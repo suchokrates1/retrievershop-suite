@@ -388,9 +388,11 @@ def call_api(method, parameters=None):
 
 
 def get_orders():
-    response = call_api("getOrders", {"status_id": STATUS_ID})
-    orders = response.get("orders", [])
-    return orders
+    response = call_api(
+        "getOrders",
+        {"status_id": STATUS_ID, "include_products": 1},
+    )
+    return response.get("orders", [])
 
 
 def get_order_packages(order_id):
