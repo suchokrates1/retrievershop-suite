@@ -17,7 +17,7 @@
     <tbody>
     {% for s in sales %}
     <tr>
-        <td>{{ s.date[:16] }}</td>
+        <td>{{ s.date | format_dt }}</td>
         <td>{{ s.product }}</td>
         <td>{{ '%.2f'|format(s.purchase_cost) }}</td>
         <td>{{ '%.2f'|format(s.commission) }}</td>

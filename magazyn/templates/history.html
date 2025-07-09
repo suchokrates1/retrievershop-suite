@@ -6,7 +6,16 @@
 <h2 class="text-center">Historia drukowania</h2>
 {# .table-responsive ensures horizontal scrolling when needed #}
 <div class="table-responsive">
-<table class="table table-striped table-sm w-100">
+<table class="table table-striped table-sm w-100 history-table">
+    <colgroup>
+        <col style="width:8.33%">
+        <col style="width:33.33%">
+        <col style="width:8.33%">
+        <col style="width:8.33%">
+        <col style="width:16.67%">
+        <col style="width:16.67%">
+        <col style="width:8.33%">
+    </colgroup>
     <thead><tr><th>ID zamówienia</th><th>Nazwa</th><th>Kolor</th><th>Rozmiar</th><th>Kurier</th><th>Czas</th><th>Akcje</th></tr></thead>
     <tbody>
     {% for item in printed %}
@@ -16,7 +25,7 @@
         <td>{{ item.last_order_data.color or '' }}</td>
         <td>{{ item.last_order_data.size or '' }}</td>
         <td>{{ item.last_order_data.courier_code or '' }}</td>
-        <td>{{ item.printed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ item.printed_at | format_dt }}</td>
         <td>
             <form class="d-inline" method="post" action="{{ url_for('history.reprint_label', order_id=item.order_id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

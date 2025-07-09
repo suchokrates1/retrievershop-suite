@@ -118,6 +118,15 @@ td:nth-child(n+3):nth-child(-n+8) {
     padding: 0; /* Usuń nadmiarowe odstępy */
 }
 
+/* Szerokości kolumn w historii drukowania (1,4,1,1,2,2,1 z podziału na 12) */
+.history-table col:nth-child(1) { width: 8.33%; }
+.history-table col:nth-child(2) { width: 33.33%; }
+.history-table col:nth-child(3) { width: 8.33%; }
+.history-table col:nth-child(4) { width: 8.33%; }
+.history-table col:nth-child(5) { width: 16.67%; }
+.history-table col:nth-child(6) { width: 16.67%; }
+.history-table col:nth-child(7) { width: 8.33%; }
+
 /* Ensure long tables remain usable on small screens */
 .table-responsive {
     width: 100%;

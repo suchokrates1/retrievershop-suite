@@ -58,6 +58,19 @@ app.secret_key = settings.SECRET_KEY
 CSRFProtect(app)
 app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
 
+
+@app.template_filter("format_dt")
+def format_dt(value, fmt="%d/%m/%Y %H:%M"):
+    """Return datetime formatted with day/month/year."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except Exception:
+            return value[:16]
+    return value.strftime(fmt)
+
 _print_agent_started = False
 
 app.register_blueprint(products_bp)
