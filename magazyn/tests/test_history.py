@@ -24,7 +24,7 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
                 flask_session[k] = v
             token = app_mod.app.jinja_env.globals["csrf_token"]()
     assert token in html
-    assert ts.strftime("%Y-%m-%d %H:%M") in html
+    assert ts.strftime("%d/%m/%Y %H:%M") in html
     assert "N" in html
     assert "C" in html
     assert "S" in html
