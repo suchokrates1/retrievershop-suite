@@ -16,7 +16,7 @@
         <td>{{ item.last_order_data.color or '' }}</td>
         <td>{{ item.last_order_data.size or '' }}</td>
         <td>{{ item.last_order_data.courier_code or '' }}</td>
-        <td>{{ item.printed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ item.printed_at | format_dt }}</td>
         <td>
             <form class="d-inline" method="post" action="{{ url_for('history.reprint_label', order_id=item.order_id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
