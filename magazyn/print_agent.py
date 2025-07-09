@@ -368,15 +368,37 @@ def save_queue(items):
     conn.close()
 
 
+_api_calls_total = 0
+_api_calls_success = 0
+_last_api_log = datetime.now()
+
+
+def _maybe_log_api_summary():
+    """Log hourly summary of successful API calls."""
+    global _api_calls_total, _api_calls_success, _last_api_log
+    now = datetime.now()
+    if now - _last_api_log >= timedelta(hours=1) and _api_calls_total:
+        logger.info(
+            "Udane połączenia: [%s/%s]",
+            _api_calls_success,
+            _api_calls_total,
+        )
+        _api_calls_total = 0
+        _api_calls_success = 0
+        _last_api_log = now
+
+
 def call_api(method, parameters=None):
+    global _api_calls_total, _api_calls_success
     parameters = parameters or {}
+    success = False
     try:
         payload = {"method": method, "parameters": json.dumps(parameters)}
         response = requests.post(
             BASE_URL, headers=HEADERS, data=payload, timeout=10
         )
         response.raise_for_status()
-        logger.info(f"[{method}] {response.status_code}")
+        success = True
         return response.json()
     except requests.exceptions.HTTPError as e:
         logger.error(f"HTTP error in call_api({method}): {e}")
@@ -384,6 +406,11 @@ def call_api(method, parameters=None):
         logger.error(f"Request error in call_api({method}): {e}")
     except Exception as e:
         logger.error(f"Błąd w call_api({method}): {e}")
+    finally:
+        _api_calls_total += 1
+        if success:
+            _api_calls_success += 1
+        _maybe_log_api_summary()
     return {}
 
 
