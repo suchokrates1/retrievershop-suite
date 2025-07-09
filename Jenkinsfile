@@ -1,23 +1,17 @@
 pipeline {
     agent any
-    environment {
-        IMAGE_NAME = "suchokrates1/retrievershop-suite"
-        TAG = "latest"
-    }
     stages {
-        stage('Build Docker image') {
+        stage('Deploy on RPi5') {
             steps {
-                script {
-                    docker.build("${IMAGE_NAME}:${TAG}", "-f magazyn/Dockerfile magazyn")
-                }
+                sh """
+                ssh suchokrates1@192.168.1.107 '
+                    cd /home/suchokrates1/retrievershop-suite &&
+                    git pull &&
+                    docker compose down || true &&
+                    docker compose up -d --build
+                '
+                """
             }
         }
-        // stage('Push to Docker Hub') {
-        //     steps {
-        //         withDockerRegistry([ credentialsId: 'dockerhub', url: '' ]) {
-        //             docker.image("${IMAGE_NAME}:${TAG}").push()
-        //         }
-        //     }
-        // }
     }
 }
