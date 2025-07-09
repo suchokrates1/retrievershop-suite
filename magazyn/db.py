@@ -179,7 +179,14 @@ def record_sale(
     )
 
 
-def consume_stock(product_id, size, quantity, sale_price=0.0):
+def consume_stock(
+    product_id,
+    size,
+    quantity,
+    sale_price=0.0,
+    shipping_cost=0.0,
+    commission_fee=0.0,
+):
     """Remove quantity from stock using cheapest purchase batches first."""
     with get_session() as session:
         ps = (
@@ -254,6 +261,20 @@ def consume_stock(product_id, size, quantity, sale_price=0.0):
             quantity,
             purchase_cost=purchase_cost,
             sale_price=sale_price,
+            shipping_cost=shipping_cost,
+            commission_fee=commission_fee,
         )
+
+        if consumed > 0:
+            product = (
+                session.query(Product).filter_by(id=product_id).first()
+            )
+            name = product.name if product else str(product_id)
+            logger.info(
+                "Pobrano z magazynu: %s %s x%s",
+                name,
+                size,
+                consumed,
+            )
 
     return consumed
