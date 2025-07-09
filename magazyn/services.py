@@ -8,10 +8,16 @@ from sqlalchemy import func
 from .constants import ALL_SIZES, PRODUCT_ALIASES
 from .parsing import parse_product_info
 from datetime import datetime
+from .config import settings
 from PyPDF2 import PdfReader
 import logging
 import io
 import re
+
+
+def _calculate_shipping(amount: float) -> float:
+    from .sales import calculate_shipping
+    return calculate_shipping(amount)
 
 
 def _to_int(value) -> int:
@@ -561,6 +567,9 @@ def consume_order_stock(products: List[dict]):
             or ""
         ).strip()
         name, size, color = parse_product_info(item)
+        price = _to_float(item.get("price_brutto", 0))
+        shipping_cost = _calculate_shipping(price)
+        commission_fee = price * settings.COMMISSION_ALLEGRO / 100.0
         size = size or None
         color = color or None
 
@@ -592,7 +601,9 @@ def consume_order_stock(products: List[dict]):
                     ps.product_id,
                     ps.size,
                     qty,
-                    sale_price=item.get("price_brutto", 0),
+                    sale_price=price,
+                    shipping_cost=shipping_cost,
+                    commission_fee=commission_fee,
                 )
             else:
                 logger.warning(
