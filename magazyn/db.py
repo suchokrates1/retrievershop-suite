@@ -1,13 +1,23 @@
 import datetime
 from contextlib import contextmanager
 import logging
+from pathlib import Path
+import importlib.util
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
 from . import DB_PATH
-from .models import Base, User, ProductSize, PurchaseBatch, Sale, Product
+from .models import (
+    Base,
+    User,
+    ProductSize,
+    PurchaseBatch,
+    Sale,
+    Product,
+    AllegroOffer,
+)
 from .config import settings
 from .notifications import send_stock_alert
 
@@ -44,9 +54,22 @@ def get_session():
 get_db_connection = get_session
 
 
+def apply_migrations():
+    """Execute all migration scripts in the migrations directory."""
+    migrations_dir = Path(__file__).with_name("migrations")
+    for path in sorted(migrations_dir.glob("*.py")):
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        migrate = getattr(module, "migrate", None)
+        if callable(migrate):
+            migrate()
+
+
 def init_db():
     """Initialize the SQLite database and create required tables."""
     Base.metadata.create_all(engine)
+    apply_migrations()
 
 
 def reset_db():
@@ -57,6 +80,7 @@ def reset_db():
     to preserve existing data."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    apply_migrations()
 
 
 def ensure_schema():

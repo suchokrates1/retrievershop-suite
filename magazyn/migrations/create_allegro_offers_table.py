@@ -1,0 +1,27 @@
+import sqlite3
+from magazyn import DB_PATH
+
+
+def migrate():
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='allegro_offers'"
+        )
+        if not cur.fetchone():
+            cur.execute(
+                "CREATE TABLE allegro_offers ("
+                "offer_id TEXT PRIMARY KEY, "
+                "title TEXT NOT NULL, "
+                "price REAL NOT NULL, "
+                "product_id INTEGER NOT NULL REFERENCES products(id), "
+                "synced_at TEXT)"
+            )
+            conn.commit()
+            print("Created allegro_offers table")
+        else:
+            print("allegro_offers table already exists")
+
+
+if __name__ == "__main__":
+    migrate()
