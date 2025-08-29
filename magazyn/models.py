@@ -75,3 +75,12 @@ class ShippingThreshold(Base):
     id = Column(Integer, primary_key=True)
     min_order_value = Column(Float, nullable=False)
     shipping_cost = Column(Float, nullable=False)
+
+
+class AllegroOffer(Base):
+    __tablename__ = "allegro_offers"
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    barcode = Column(String)
+    product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
+    product_size = relationship("ProductSize")
