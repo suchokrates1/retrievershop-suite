@@ -41,7 +41,7 @@ def test_record_delivery(app_mod):
             {"pid": pid, "size": "M"},
         ).fetchone()
     assert batch[0] == 3
-    assert abs(batch[1] - 4.5) < 0.001
+    assert abs(float(batch[1]) - 4.5) < 0.001
     assert qty[0] == 3
 
 
@@ -105,8 +105,8 @@ def test_record_multiple_deliveries(app_mod):
             ),
             {"pid": pid},
         ).scalar()
-    assert m[0] == 2 and abs(m[1] - 1.5) < 0.001
-    assert l[0] == 1 and abs(l[1] - 2.0) < 0.001
+    assert m[0] == 2 and abs(float(m[1]) - 1.5) < 0.001
+    assert l[0] == 1 and abs(float(l[1]) - 2.0) < 0.001
     assert qty_m == 2
     assert qty_l == 1
 
@@ -139,7 +139,7 @@ def test_consume_stock_cheapest(app_mod):
     assert consumed == 2
     assert qty == 1
     assert len(batches) == 1
-    assert batches[0][0] == 5.0
+    assert float(batches[0][0]) == 5.0
     assert batches[0][1] == 1
 
 
