@@ -34,6 +34,7 @@ from .products import bp as products_bp
 from .history import bp as history_bp
 from .sales import bp as sales_bp, _sales_keys
 from .shipping import bp as shipping_bp
+from .allegro import bp as allegro_bp
 from .auth import login_required
 from .config import settings
 from . import print_agent
@@ -77,6 +78,7 @@ app.register_blueprint(products_bp)
 app.register_blueprint(history_bp)
 app.register_blueprint(sales_bp)
 app.register_blueprint(shipping_bp)
+app.register_blueprint(allegro_bp)
 
 
 @app.context_processor
