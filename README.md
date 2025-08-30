@@ -43,6 +43,9 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
 | `FLASK_ENV` | Flask configuration environment |
 | `COMMISSION_ALLEGRO` | Commission percentage charged by Allegro |
+| `ALLEGRO_CLIENT_ID` | Client identifier for Allegro OAuth |
+| `ALLEGRO_CLIENT_SECRET` | Secret key for Allegro OAuth |
+| `ALLEGRO_REDIRECT_URI` | Redirect URI registered for the Allegro application |
 | `ENABLE_WEEKLY_REPORTS` | Set to `1` to send weekly sales reports |
 | `ENABLE_MONTHLY_REPORTS` | Set to `1` to send monthly sales reports |
 
@@ -62,6 +65,28 @@ After starting the application you can modify the values stored in your `.env` f
 The form lists all variables defined in `.env.example` so new options appear automatically. When you click **Zapisz** the application rewrites `.env` in the same order as `.env.example` and calls `print_agent.reload_config()` so the running printing agent immediately uses the updated environment. Log-related options like `LOG_LEVEL` and `LOG_FILE` therefore take effect as soon as you save the form.
 Variables that are only read when the application starts, such as `DB_PATH`, do
 not appear on this page.
+
+## Allegro integration
+
+### Obtaining tokens
+
+1. Register an application in [Allegro's Developer Console](https://developer.allegro.pl/) and note the client ID and secret.
+2. Set `ALLEGRO_REDIRECT_URI` in `.env` to match the redirect URL configured for your application.
+3. Visit `https://allegro.pl/auth/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI` in a browser and authorise access.
+4. Exchange the returned `code` for tokens using the helper:
+   ```bash
+   python - <<'PY'
+from magazyn.allegro_api import get_access_token
+print(get_access_token("YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET", "AUTH_CODE", "YOUR_REDIRECT_URI"))
+PY
+   ```
+   Save the `access_token` and `refresh_token` values.
+
+### Running synchronization
+
+1. Start the application.
+2. Navigate to the **Oferty Allegro** page at `/allegro/offers`.
+3. Use the **Odśwież** button to launch offer synchronization.
 
 ## Running Tests
 
