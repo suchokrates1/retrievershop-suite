@@ -5,6 +5,7 @@ import requests
 
 AUTH_URL = "https://allegro.pl/auth/oauth/token"
 API_BASE_URL = "https://api.allegro.pl"
+DEFAULT_TIMEOUT = 10
 
 
 def get_access_token(client_id: str, client_secret: str, code: str, redirect_uri: Optional[str] = None) -> dict:
@@ -30,7 +31,9 @@ def get_access_token(client_id: str, client_secret: str, code: str, redirect_uri
     if redirect_uri:
         data["redirect_uri"] = redirect_uri
 
-    response = requests.post(AUTH_URL, data=data, auth=(client_id, client_secret))
+    response = requests.post(
+        AUTH_URL, data=data, auth=(client_id, client_secret), timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json()
 
@@ -46,7 +49,7 @@ def refresh_token(refresh_token: str) -> dict:
     auth = (client_id, client_secret) if client_id and client_secret else None
 
     data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
-    response = requests.post(AUTH_URL, data=data, auth=auth)
+    response = requests.post(AUTH_URL, data=data, auth=auth, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -73,7 +76,9 @@ def fetch_offers(access_token: str, page: int = 1) -> dict:
     params = {"page": page}
     url = f"{API_BASE_URL}/sale/offers"
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(
+        url, headers=headers, params=params, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json()
 
@@ -113,7 +118,9 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
     offers = []
 
     while True:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(
+            url, headers=headers, params=params, timeout=DEFAULT_TIMEOUT
+        )
         response.raise_for_status()
         data = response.json()
 
