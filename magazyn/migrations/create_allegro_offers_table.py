@@ -11,10 +11,12 @@ def migrate():
         if not cur.fetchone():
             cur.execute(
                 "CREATE TABLE allegro_offers ("
-                "offer_id TEXT PRIMARY KEY, "
+                "id INTEGER PRIMARY KEY, "
+                "offer_id TEXT UNIQUE, "
                 "title TEXT NOT NULL, "
                 "price REAL NOT NULL, "
                 "product_id INTEGER NOT NULL REFERENCES products(id), "
+                "product_size_id INTEGER REFERENCES product_sizes(id), "
                 "synced_at TEXT)"
             )
             conn.commit()
