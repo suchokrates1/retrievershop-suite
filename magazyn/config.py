@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 def load_config():
     """Load settings from .env and environment variables."""
     load_dotenv()
+    excluded = {
+        seller.strip()
+        for seller in os.getenv("ALLEGRO_EXCLUDED_SELLERS", "").split(",")
+        if seller.strip()
+    }
     return SimpleNamespace(
         API_TOKEN=os.getenv("API_TOKEN"),
         PAGE_ACCESS_TOKEN=os.getenv("PAGE_ACCESS_TOKEN"),
@@ -30,6 +35,8 @@ def load_config():
         FLASK_DEBUG=os.getenv("FLASK_DEBUG") == "1",
         FLASK_ENV=os.getenv("FLASK_ENV", "production"),
         COMMISSION_ALLEGRO=float(os.getenv("COMMISSION_ALLEGRO", "0")),
+        ALLEGRO_SELLER_ID=os.getenv("ALLEGRO_SELLER_ID"),
+        ALLEGRO_EXCLUDED_SELLERS=excluded,
         LOW_STOCK_THRESHOLD=int(os.getenv("LOW_STOCK_THRESHOLD", "1")),
         ALERT_EMAIL=os.getenv("ALERT_EMAIL"),
         SMTP_SERVER=os.getenv("SMTP_SERVER"),
