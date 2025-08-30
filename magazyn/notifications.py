@@ -6,6 +6,7 @@ from email.message import EmailMessage
 import requests
 
 from .config import settings
+from .allegro_api import DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ def send_messenger(text: str) -> bool:
                     "message": {"text": text},
                 }
             ),
+            timeout=DEFAULT_TIMEOUT,
         )
         logger.info("Messenger response: %s %s", resp.status_code, resp.text)
         return resp.status_code == 200
