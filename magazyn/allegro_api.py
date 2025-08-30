@@ -76,3 +76,74 @@ def fetch_offers(access_token: str, page: int = 1) -> dict:
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
     return response.json()
+
+
+def fetch_product_listing(ean: str, page: int = 1) -> list:
+    """Return offers for a product identified by its EAN.
+
+    Parameters
+    ----------
+    ean : str
+        EAN code or search phrase used to look up offers.
+    page : int
+        Starting page of the listing. Defaults to ``1``.
+
+    Returns
+    -------
+    list
+        A list of dictionaries each containing ``id``, ``seller`` and
+        ``sellingMode.price.amount`` for an offer.
+    """
+
+    token = os.getenv("ALLEGRO_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("Missing Allegro access token")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    params = {"page": page}
+    if ean.isdigit():
+        params["ean"] = ean
+    else:
+        params["phrase"] = ean
+
+    url = f"{API_BASE_URL}/offers/listing"
+    offers = []
+
+    while True:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        items = data.get("items", {})
+        page_offers = []
+        if isinstance(items, dict):
+            for key in ("promoted", "regular", "offers"):
+                page_offers.extend(items.get(key, []))
+        elif isinstance(items, list):
+            page_offers = items
+
+        for offer in page_offers:
+            offers.append(
+                {
+                    "id": offer.get("id"),
+                    "seller": offer.get("seller"),
+                    "sellingMode": {
+                        "price": {
+                            "amount": offer.get("sellingMode", {})
+                            .get("price", {})
+                            .get("amount")
+                        }
+                    },
+                }
+            )
+
+        next_link = data.get("links", {}).get("next")
+        if not next_link:
+            break
+        page += 1
+        params["page"] = page
+
+    return offers
