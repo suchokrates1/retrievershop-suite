@@ -9,7 +9,7 @@ from .constants import ALL_SIZES, PRODUCT_ALIASES
 from .parsing import parse_product_info
 from datetime import datetime
 from .config import settings
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 import logging
 import io
 import re
