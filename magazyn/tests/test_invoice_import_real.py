@@ -127,4 +127,4 @@ def test_import_invoice_file_real(app_mod):
             ).fetchone()
             assert batch is not None
             assert batch[0] == item["qty"]
-            assert abs(batch[1] - item["price"]) < 0.001
+            assert abs(float(batch[1]) - item["price"]) < 0.001

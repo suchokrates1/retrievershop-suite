@@ -18,13 +18,13 @@ def test_parse_tiptop_invoice():
     assert first["Rozmiar"] == "XL"
     assert first["Ilość"] == 5
     assert first["Barcode"] == "6971818794853"
-    assert abs(first["Cena"] - 134.33) < 0.01
+    assert abs(float(first["Cena"]) - 134.33) < 0.01
 
     other = df[df["Nazwa"].str.contains("Pas samochodowy")].iloc[0]
     assert other["Rozmiar"] == ""
     assert other["Ilość"] == 10
     assert other["Barcode"] == "6976128181720"
-    assert abs(other["Cena"] - 53.33) < 0.01
+    assert abs(float(other["Cena"]) - 53.33) < 0.01
 
 
 class FakePage:

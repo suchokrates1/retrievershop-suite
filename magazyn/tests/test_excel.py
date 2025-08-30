@@ -141,5 +141,5 @@ def test_consume_stock_multiple_batches(app_mod):
     assert consumed == 2
     assert qty == 1
     assert len(batches) == 1
-    assert batches[0][0] == 7.0
+    assert float(batches[0][0]) == 7.0
     assert batches[0][1] == 1
