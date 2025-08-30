@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Powiąż aukcję</h1>
+<p><strong>{{ offer.title }}</strong> (ID: {{ offer.offer_id }})</p>
+<form method="post">
+    <div class="mb-3">
+        <label for="product_id" class="form-label">ID produktu</label>
+        <input type="number" name="product_id" id="product_id" class="form-control" value="{{ offer.product_id }}">
+    </div>
+    <button type="submit" class="btn btn-primary">Zapisz</button>
+</form>
+{% endblock %}
