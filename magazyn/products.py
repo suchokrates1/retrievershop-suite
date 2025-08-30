@@ -268,7 +268,7 @@ def confirm_invoice():
                         ps.product_id,
                         ps.size,
                         services._to_int(qty_val),
-                        services._to_float(price_val),
+                        services._to_decimal(price_val),
                     )
             continue
         confirmed.append(
@@ -312,7 +312,7 @@ def add_delivery():
         for pid, sz, qty, pr in zip(ids, sizes, quantities, prices):
             try:
                 services.record_delivery(
-                    int(pid), sz, services._to_int(qty), services._to_float(pr)
+                    int(pid), sz, services._to_int(qty), services._to_decimal(pr)
                 )
             except Exception as e:
                 flash(f"Błąd podczas dodawania dostawy: {e}")

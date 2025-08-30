@@ -1,4 +1,6 @@
 import magazyn.allegro_sync as sync_mod
+from decimal import Decimal
+
 from magazyn.db import get_session
 from magazyn.models import Product, ProductSize, AllegroOffer
 
@@ -42,6 +44,6 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
         offer = offers[0]
         assert offer.offer_id == "O1"
         assert offer.title == "Test offer"
-        assert offer.price == 15.0
+        assert offer.price == Decimal("15.00")
         assert offer.product_id == product_id
 

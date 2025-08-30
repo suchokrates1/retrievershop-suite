@@ -2,7 +2,9 @@ import datetime
 from contextlib import contextmanager
 import logging
 from pathlib import Path
+import datetime
 import importlib.util
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +22,14 @@ from .models import (
 )
 from .config import settings
 from .notifications import send_stock_alert
+
+TWOPLACES = Decimal("0.01")
+
+
+def to_decimal(value) -> Decimal:
+    if isinstance(value, Decimal):
+        return value.quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    return Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
 
 engine = None
 SessionLocal = None
@@ -103,22 +113,22 @@ def ensure_schema():
         if "purchase_cost" not in cols:
             conn.execute(
                 "ALTER TABLE sales ADD COLUMN purchase_cost "
-                "REAL DEFAULT 0.0 NOT NULL"
+                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
             )
         if "sale_price" not in cols:
             conn.execute(
                 "ALTER TABLE sales ADD COLUMN sale_price "
-                "REAL DEFAULT 0.0 NOT NULL"
+                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
             )
         if "shipping_cost" not in cols:
             conn.execute(
                 "ALTER TABLE sales ADD COLUMN shipping_cost "
-                "REAL DEFAULT 0.0 NOT NULL"
+                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
             )
         if "commission_fee" not in cols:
             conn.execute(
                 "ALTER TABLE sales ADD COLUMN commission_fee "
-                "REAL DEFAULT 0.0 NOT NULL"
+                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
             )
         conn.commit()
 
@@ -131,7 +141,7 @@ def ensure_schema():
                 "CREATE TABLE shipping_thresholds ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 "min_order_value REAL NOT NULL, "
-                "shipping_cost REAL NOT NULL)"
+                "shipping_cost NUMERIC(10,2) NOT NULL)"
             )
             conn.commit()
     finally:
@@ -158,6 +168,7 @@ def record_purchase(
     """Insert a purchase batch and increase stock quantity."""
     purchase_date = purchase_date or datetime.datetime.now().isoformat()
     with get_session() as session:
+        price = to_decimal(price)
         session.add(
             PurchaseBatch(
                 product_id=product_id,
@@ -181,14 +192,18 @@ def record_sale(
     product_id,
     size,
     quantity,
-    purchase_cost=0.0,
-    sale_price=0.0,
-    shipping_cost=0.0,
-    commission_fee=0.0,
+    purchase_cost=Decimal("0.00"),
+    sale_price=Decimal("0.00"),
+    shipping_cost=Decimal("0.00"),
+    commission_fee=Decimal("0.00"),
     sale_date=None,
 ):
     """Record a sale inside an existing session."""
     sale_date = sale_date or datetime.datetime.now().isoformat()
+    purchase_cost = to_decimal(purchase_cost)
+    sale_price = to_decimal(sale_price)
+    shipping_cost = to_decimal(shipping_cost)
+    commission_fee = to_decimal(commission_fee)
     session.add(
         Sale(
             product_id=product_id,
@@ -207,12 +222,15 @@ def consume_stock(
     product_id,
     size,
     quantity,
-    sale_price=0.0,
-    shipping_cost=0.0,
-    commission_fee=0.0,
+    sale_price=Decimal("0.00"),
+    shipping_cost=Decimal("0.00"),
+    commission_fee=Decimal("0.00"),
 ):
     """Remove quantity from stock using cheapest purchase batches first."""
     with get_session() as session:
+        sale_price = to_decimal(sale_price)
+        shipping_cost = to_decimal(shipping_cost)
+        commission_fee = to_decimal(commission_fee)
         ps = (
             session.query(ProductSize)
             .filter_by(product_id=product_id, size=size)
@@ -238,7 +256,7 @@ def consume_stock(
         )
 
         remaining = to_consume
-        purchase_cost = 0.0
+        purchase_cost = Decimal("0.00")
         for batch in batches:
             if remaining <= 0:
                 break
@@ -283,7 +301,7 @@ def consume_stock(
             product_id,
             size,
             quantity,
-            purchase_cost=purchase_cost,
+            purchase_cost=purchase_cost.quantize(TWOPLACES, rounding=ROUND_HALF_UP),
             sale_price=sale_price,
             shipping_cost=shipping_cost,
             commission_fee=commission_fee,

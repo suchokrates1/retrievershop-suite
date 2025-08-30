@@ -59,7 +59,7 @@ def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
             {"pid": prod.id},
         ).fetchone()
         assert batch[0] == 2
-    assert abs(batch[1] - 5.5) < 0.001
+        assert abs(float(batch[1]) - 5.5) < 0.001
 
 
 def test_import_invoice_with_spaces(app_mod, client, login, tmp_path):
@@ -116,7 +116,7 @@ def test_import_invoice_with_spaces(app_mod, client, login, tmp_path):
             ),
             {"pid": prod.id},
         ).fetchone()
-        assert abs(batch[0] - 2345.67) < 0.001
+        assert abs(float(batch[0]) - 2345.67) < 0.001
 
 
 def test_import_invoice_pdf(app_mod, client, login):

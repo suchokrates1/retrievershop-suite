@@ -1,4 +1,5 @@
 import pytest
+from decimal import Decimal
 
 from magazyn.allegro_price_monitor import check_prices
 from magazyn.db import get_session
@@ -40,21 +41,21 @@ def test_check_prices_grouped(monkeypatch, app_mod):
                 AllegroOffer(
                     offer_id="o1",
                     title="o1",
-                    price=50.0,
+                    price=Decimal("50.0"),
                     product_id=product.id,
                     product_size_id=ps1.id,
                 ),
                 AllegroOffer(
                     offer_id="o2",
                     title="o2",
-                    price=60.0,
+                    price=Decimal("60.0"),
                     product_id=product.id,
                     product_size_id=ps1.id,
                 ),
                 AllegroOffer(
                     offer_id="o3",
                     title="o3",
-                    price=70.0,
+                    price=Decimal("70.0"),
                     product_id=product.id,
                     product_size_id=ps2.id,
                 ),
