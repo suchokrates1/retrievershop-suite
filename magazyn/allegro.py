@@ -10,13 +10,9 @@ from flask import (
 from .db import get_session
 from .models import AllegroOffer, Product, ProductSize
 from .auth import login_required
+from .allegro_sync import sync_offers
 
 bp = Blueprint("allegro", __name__)
-
-
-def sync_offers():
-    """Synchronize offers from Allegro API (placeholder)."""
-    return []
 
 
 @bp.route("/allegro/offers")
