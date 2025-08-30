@@ -8,7 +8,7 @@ from flask import (
 )
 
 from .db import get_session
-from .models import AllegroOffer, Product
+from .models import AllegroOffer, Product, ProductSize
 from .auth import login_required
 
 bp = Blueprint("allegro", __name__)
@@ -24,20 +24,30 @@ def sync_offers():
 def offers():
     with get_session() as db:
         rows = (
-            db.query(AllegroOffer, Product)
-            .outerjoin(Product, AllegroOffer.product_id == Product.id)
+            db.query(AllegroOffer, ProductSize, Product)
+            .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
+            .outerjoin(Product, ProductSize.product_id == Product.id)
             .all()
         )
-        offers = [
-            {
-                "offer_id": offer.offer_id,
-                "title": offer.title,
-                "price": offer.price,
-                "product_name": product.name if product else None,
-            }
-            for offer, product in rows
-        ]
-    return render_template("allegro/offers.html", offers=offers)
+        grouped = {}
+        for offer, size, product in rows:
+            key = size.id if size else None
+            group = grouped.setdefault(
+                key,
+                {
+                    "product_name": product.name if product else None,
+                    "size": size.size if size else None,
+                    "offers": [],
+                },
+            )
+            group["offers"].append(
+                {
+                    "offer_id": offer.offer_id,
+                    "title": offer.title,
+                    "price": offer.price,
+                }
+            )
+    return render_template("allegro/offers.html", groups=grouped.values())
 
 
 @bp.route("/allegro/refresh", methods=["POST"])
