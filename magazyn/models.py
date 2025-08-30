@@ -29,6 +29,7 @@ class ProductSize(Base):
     quantity = Column(Integer, nullable=False, default=0)
     barcode = Column(String, unique=True)
     product = relationship("Product", back_populates="sizes")
+    allegro_offers = relationship("AllegroOffer", back_populates="product_size")
 
 
 class PrintedOrder(Base):
@@ -79,10 +80,13 @@ class ShippingThreshold(Base):
 
 class AllegroOffer(Base):
     __tablename__ = "allegro_offers"
-    offer_id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
+    offer_id = Column(String, unique=True)
     title = Column(String, nullable=False)
     price = Column(Float, nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
     synced_at = Column(String)
 
     product = relationship("Product")
+    product_size = relationship("ProductSize", back_populates="allegro_offers")
