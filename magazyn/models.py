@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Numeric
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -54,7 +54,7 @@ class PurchaseBatch(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
-    price = Column(Float, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
     purchase_date = Column(String, nullable=False)
 
 
@@ -65,17 +65,17 @@ class Sale(Base):
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
     sale_date = Column(String, nullable=False)
-    purchase_cost = Column(Float, nullable=False, default=0.0)
-    sale_price = Column(Float, nullable=False, default=0.0)
-    shipping_cost = Column(Float, nullable=False, default=0.0)
-    commission_fee = Column(Float, nullable=False, default=0.0)
+    purchase_cost = Column(Numeric(10, 2), nullable=False, default=0.0)
+    sale_price = Column(Numeric(10, 2), nullable=False, default=0.0)
+    shipping_cost = Column(Numeric(10, 2), nullable=False, default=0.0)
+    commission_fee = Column(Numeric(10, 2), nullable=False, default=0.0)
 
 
 class ShippingThreshold(Base):
     __tablename__ = "shipping_thresholds"
     id = Column(Integer, primary_key=True)
     min_order_value = Column(Float, nullable=False)
-    shipping_cost = Column(Float, nullable=False)
+    shipping_cost = Column(Numeric(10, 2), nullable=False)
 
 
 class AllegroOffer(Base):
@@ -83,7 +83,7 @@ class AllegroOffer(Base):
     id = Column(Integer, primary_key=True)
     offer_id = Column(String, unique=True)
     title = Column(String, nullable=False)
-    price = Column(Float, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
     synced_at = Column(String)

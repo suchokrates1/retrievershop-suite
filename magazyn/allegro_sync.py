@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 import logging
+from decimal import Decimal, InvalidOperation
 
 from . import allegro_api
 from .models import AllegroOffer, ProductSize
@@ -46,8 +47,8 @@ def sync_offers():
                 )
                 if price_data is not None:
                     try:
-                        price = float(price_data)
-                    except (TypeError, ValueError):
+                        price = Decimal(price_data).quantize(Decimal("0.01"))
+                    except (TypeError, ValueError, InvalidOperation):
                         logger.error(
                             "Invalid price data for offer %s: %r",
                             offer.get("id"),
@@ -55,7 +56,7 @@ def sync_offers():
                         )
                         continue
                 else:
-                    price = 0.0
+                    price = Decimal("0.00")
                 existing = (
                     session.query(AllegroOffer)
                     .filter_by(offer_id=offer.get("id"))
