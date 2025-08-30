@@ -11,20 +11,21 @@ from .env_info import ENV_INFO
 from . import print_agent
 from .db import get_session
 from .models import Sale, Product, ShippingThreshold
+from decimal import Decimal
 
 bp = Blueprint("sales", __name__)
 
 
-def calculate_shipping(amount: float) -> float:
+def calculate_shipping(amount: Decimal) -> Decimal:
     """Return shipping cost for given order value based on thresholds."""
     with get_session() as db:
         row = (
             db.query(ShippingThreshold)
-            .filter(ShippingThreshold.min_order_value <= amount)
+            .filter(ShippingThreshold.min_order_value <= float(amount))
             .order_by(ShippingThreshold.min_order_value.desc())
             .first()
         )
-        return row.shipping_cost if row else 0.0
+        return row.shipping_cost if row else Decimal("0.00")
 
 
 @bp.route("/sales")

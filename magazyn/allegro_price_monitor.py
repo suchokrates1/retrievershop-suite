@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, InvalidOperation
 
 from .allegro_api import fetch_product_listing
 from .config import settings
@@ -23,7 +24,7 @@ def check_prices() -> None:
             .all()
         )
 
-        offers_by_barcode: dict[str, list[tuple[float, str]]] = {}
+        offers_by_barcode: dict[str, list[tuple[Decimal, str]]] = {}
         for offer, ps in rows:
             barcode = ps.barcode
             own_price = offer.price
@@ -54,8 +55,8 @@ def check_prices() -> None:
                     .get("amount")
                 )
                 try:
-                    price = float(price_str)
-                except (TypeError, ValueError):
+                    price = Decimal(price_str).quantize(Decimal("0.01"))
+                except (TypeError, ValueError, InvalidOperation):
                     continue
                 competitor_prices.append(price)
 

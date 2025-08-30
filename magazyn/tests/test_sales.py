@@ -1,6 +1,8 @@
 from magazyn.app import app
 from magazyn.models import Product, ProductSize, Sale, ShippingThreshold
 
+from decimal import Decimal
+
 
 def test_sales_page_get(app_mod, client, login):
     resp = client.get("/sales")
@@ -69,7 +71,7 @@ def test_consume_stock_records_sale_without_inventory(app_mod):
         sale = db.query(Sale).first()
         assert sale.product_id == pid
         assert sale.quantity == 2
-        assert sale.purchase_cost == 0.0
+        assert sale.purchase_cost == Decimal("0.00")
 
 
 def test_sales_page_shows_unknown_for_unmatched_order(app_mod, client, login):
@@ -155,7 +157,7 @@ def test_consume_order_stock_records_sale_price(app_mod, client, login):
 
     with app_mod.get_session() as db:
         sale = db.query(Sale).first()
-        assert sale.sale_price == 50.0
+        assert sale.sale_price == Decimal("50.0")
 
     resp = client.get("/sales")
     html = resp.get_data(as_text=True)

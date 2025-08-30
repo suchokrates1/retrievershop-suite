@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Tuple, Optional, List
 import pandas as pd
+from decimal import Decimal, ROUND_HALF_UP
 
 from .db import get_session, record_purchase, consume_stock, record_sale
 from .models import Product, ProductSize, PurchaseBatch, Sale
@@ -14,8 +15,10 @@ import logging
 import io
 import re
 
+TWOPLACES = Decimal("0.01")
 
-def _calculate_shipping(amount: float) -> float:
+
+def _calculate_shipping(amount: Decimal) -> Decimal:
     from .sales import calculate_shipping
     return calculate_shipping(amount)
 
@@ -28,12 +31,12 @@ def _to_int(value) -> int:
     return int(value)
 
 
-def _to_float(value) -> float:
+def _to_decimal(value) -> Decimal:
     if value is None or pd.isna(value):
-        return 0.0
+        return Decimal("0.00")
     if isinstance(value, str):
         value = value.replace(" ", "").replace(",", ".")
-    return float(value)
+    return Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
 
 
 def _clean_barcode(value) -> Optional[str]:
@@ -212,7 +215,7 @@ def record_delivery(
     product_id: int,
     size: str,
     quantity: int,
-    price: float,
+    price: Decimal,
 ):
     """Record a delivery and update stock."""
     record_purchase(product_id, size, quantity, price)
@@ -356,7 +359,7 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
             continue
         try:
             qty = _to_int(cols[2])
-            price = _to_float(cols[3])
+            price = _to_decimal(cols[3])
         except ValueError:
             continue
         size = cols[1]
@@ -390,7 +393,7 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
             lines.extend(t.strip() for t in txt.splitlines())
 
     def _num(val: str) -> float:
-        return _to_float(val)
+        return _to_decimal(val)
 
     rows = []
     i = 0
@@ -476,7 +479,7 @@ def _import_invoice_df(df: pd.DataFrame):
         color = row.get("Kolor", "")
         size = row.get("Rozmiar")
         quantity = _to_int(row.get("Ilość", 0))
-        price = _to_float(row.get("Cena", 0))
+        price = _to_decimal(row.get("Cena", 0))
         barcode = _clean_barcode(row.get("Barcode"))
 
         with get_session() as db:
@@ -567,9 +570,13 @@ def consume_order_stock(products: List[dict]):
             or ""
         ).strip()
         name, size, color = parse_product_info(item)
-        price = _to_float(item.get("price_brutto", 0))
+        price = _to_decimal(item.get("price_brutto", 0))
         shipping_cost = _calculate_shipping(price)
-        commission_fee = price * settings.COMMISSION_ALLEGRO / 100.0
+        commission_fee = (
+            price
+            * Decimal(str(settings.COMMISSION_ALLEGRO))
+            / Decimal("100")
+        ).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
         size = size or None
         color = color or None
 
@@ -623,10 +630,10 @@ def consume_order_stock(products: List[dict]):
                     placeholder.id,
                     size or "",
                     qty,
-                    purchase_cost=0.0,
-                    sale_price=0.0,
-                    shipping_cost=0.0,
-                    commission_fee=0.0,
+                    purchase_cost=Decimal("0.00"),
+                    sale_price=Decimal("0.00"),
+                    shipping_cost=Decimal("0.00"),
+                    commission_fee=Decimal("0.00"),
                 )
 
 
