@@ -22,11 +22,16 @@ def check_prices() -> None:
             .join(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
             .all()
         )
+
+        offers_by_barcode: dict[str, list[tuple[float, str]]] = {}
         for offer, ps in rows:
             barcode = ps.barcode
             own_price = offer.price
             if not barcode or own_price is None:
                 continue
+            offers_by_barcode.setdefault(barcode, []).append((own_price, offer.offer_id))
+
+        for barcode, offers in offers_by_barcode.items():
             try:
                 listing = fetch_product_listing(barcode)
             except Exception as exc:  # pragma: no cover - network errors
@@ -57,10 +62,11 @@ def check_prices() -> None:
             if not competitor_prices:
                 continue
             lowest = min(competitor_prices)
-            if lowest < own_price:
-                send_messenger(
-                    f"⚠️ Niższa cena dla {barcode}: {lowest:.2f} < {own_price:.2f}"
-                )
+            for own_price, offer_id in offers:
+                if lowest < own_price:
+                    send_messenger(
+                        f"⚠️ Niższa cena dla {barcode} (oferta {offer_id}): {lowest:.2f} < {own_price:.2f}"
+                    )
 
 
 if __name__ == "__main__":
