@@ -3,27 +3,28 @@
 <h1>Oferty Allegro</h1>
 <form method="post" action="{{ url_for('allegro.refresh') }}" class="mb-3">
     <button type="submit" class="btn btn-primary">Odśwież</button>
-</form>
+    </form>
+{% for group in groups %}
+<h3>{{ group.product_name }} {% if group.size %}- {{ group.size }}{% endif %}</h3>
 <table class="table table-striped">
     <thead>
         <tr>
             <th>ID</th>
             <th>Tytuł</th>
             <th>Cena</th>
-            <th>Produkt</th>
             <th></th>
         </tr>
     </thead>
     <tbody>
-    {% for offer in offers %}
+    {% for offer in group.offers %}
         <tr>
             <td>{{ offer.offer_id }}</td>
             <td>{{ offer.title }}</td>
             <td>{{ offer.price }}</td>
-            <td>{{ offer.product_name or 'brak' }}</td>
             <td><a href="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="btn btn-sm btn-secondary">Powiąż</a></td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
+{% endfor %}
 {% endblock %}

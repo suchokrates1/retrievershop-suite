@@ -41,14 +41,28 @@ def sync_offers():
                     or offer.get("sellingMode", {}).get("price", {}).get("amount")
                 )
                 price = float(price_data) if price_data is not None else 0.0
-                allegro_offer = AllegroOffer(
-                    offer_id=offer.get("id"),
-                    title=offer.get("name") or offer.get("title", ""),
-                    price=price,
-                    product_id=ps.product_id,
-                    synced_at=datetime.utcnow().isoformat(),
+                existing = (
+                    session.query(AllegroOffer)
+                    .filter_by(offer_id=offer.get("id"))
+                    .first()
                 )
-                session.merge(allegro_offer)
+                if existing:
+                    existing.title = offer.get("name") or offer.get("title", "")
+                    existing.price = price
+                    existing.product_id = ps.product_id
+                    existing.product_size_id = ps.id
+                    existing.synced_at = datetime.utcnow().isoformat()
+                else:
+                    session.add(
+                        AllegroOffer(
+                            offer_id=offer.get("id"),
+                            title=offer.get("name") or offer.get("title", ""),
+                            price=price,
+                            product_id=ps.product_id,
+                            product_size_id=ps.id,
+                            synced_at=datetime.utcnow().isoformat(),
+                        )
+                    )
             next_page = data.get("nextPage") or data.get("links", {}).get("next")
             if not next_page:
                 break
