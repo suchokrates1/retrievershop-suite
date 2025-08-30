@@ -46,6 +46,10 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `ALLEGRO_CLIENT_ID` | Client identifier for Allegro OAuth |
 | `ALLEGRO_CLIENT_SECRET` | Secret key for Allegro OAuth |
 | `ALLEGRO_REDIRECT_URI` | Redirect URI registered for the Allegro application |
+| `ALLEGRO_ACCESS_TOKEN` | OAuth access token used for Allegro API requests |
+| `ALLEGRO_REFRESH_TOKEN` | Token used to refresh the Allegro access token |
+| `ALLEGRO_SELLER_ID` | Your Allegro seller ID to exclude own offers |
+| `ALLEGRO_EXCLUDED_SELLERS` | Comma-separated seller IDs to ignore |
 | `ENABLE_WEEKLY_REPORTS` | Set to `1` to send weekly sales reports |
 | `ENABLE_MONTHLY_REPORTS` | Set to `1` to send monthly sales reports |
 
@@ -80,13 +84,63 @@ from magazyn.allegro_api import get_access_token
 print(get_access_token("YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET", "AUTH_CODE", "YOUR_REDIRECT_URI"))
 PY
    ```
-   Save the `access_token` and `refresh_token` values.
+   Save the `access_token` and `refresh_token` values as `ALLEGRO_ACCESS_TOKEN`
+   and `ALLEGRO_REFRESH_TOKEN` in your environment or `.env` file.
 
 ### Running synchronization
 
 1. Start the application.
 2. Navigate to the **Oferty Allegro** page at `/allegro/offers`.
 3. Use the **Odśwież** button to launch offer synchronization.
+
+### Price monitor
+
+The `allegro_price_monitor` helper checks public listings on Allegro and
+notifies when competitors offer lower prices.  Configure the following
+variables in your `.env`:
+
+- `ALLEGRO_ACCESS_TOKEN` – OAuth token obtained in the steps above.
+- `ALLEGRO_SELLER_ID` – your Allegro seller ID so the monitor can skip your
+  own offers.
+- `ALLEGRO_EXCLUDED_SELLERS` – comma-separated seller IDs to ignore.
+
+Run the monitor manually with:
+
+```bash
+python -m magazyn.allegro_price_monitor
+```
+
+To execute it on a schedule, add a cron entry such as:
+
+```cron
+0 * * * * cd /path/to/retrievershop-suite && /usr/bin/env python -m magazyn.allegro_price_monitor >> /var/log/allegro_price_monitor.log 2>&1
+```
+
+Alternatively create a systemd service and timer:
+
+```ini
+# /etc/systemd/system/allegro_price_monitor.service
+[Unit]
+Description=Allegro price monitor
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/retrievershop-suite
+ExecStart=/usr/bin/env python -m magazyn.allegro_price_monitor
+
+# /etc/systemd/system/allegro_price_monitor.timer
+[Unit]
+Description=Run Allegro price monitor hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable the timer with `sudo systemctl enable --now allegro_price_monitor.timer`.
 
 ## Running Tests
 
