@@ -42,6 +42,18 @@
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('sales.list_sales') }}">Sprzedaż</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers') }}">Oferty Allegro</a></li>
+                    {#
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle text-white" href="#" id="navbarAllegro" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Allegro
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="{{ url_for('allegro.offers') }}">Oferty</a></li>
+                            <li><a class="dropdown-item" href="#">Monitor cen</a></li>
+                        </ul>
+                    </li>
+                    #}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle text-white" href="#" id="navbarSettings" role="button" aria-expanded="false">
                             Ustawienia
@@ -72,6 +84,18 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('sales.list_sales') }}">Sprzedaż</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers') }}">Oferty Allegro</a></li>
+            {#
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle text-white" href="#" id="mobileAllegro" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    Allegro
+                </a>
+                <ul class="dropdown-menu dropdown-menu-dark">
+                    <li><a class="dropdown-item" href="{{ url_for('allegro.offers') }}">Oferty</a></li>
+                    <li><a class="dropdown-item" href="#">Monitor cen</a></li>
+                </ul>
+            </li>
+            #}
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('shipping.shipping_costs') }}">Koszty wysyłek</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
