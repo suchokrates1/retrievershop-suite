@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import logging
 from decimal import Decimal, InvalidOperation
@@ -62,12 +62,13 @@ def sync_offers():
                     .filter_by(offer_id=offer.get("id"))
                     .first()
                 )
+                timestamp = datetime.now(timezone.utc).isoformat()
                 if existing:
                     existing.title = offer.get("name") or offer.get("title", "")
                     existing.price = price
                     existing.product_id = ps.product_id
                     existing.product_size_id = ps.id
-                    existing.synced_at = datetime.utcnow().isoformat()
+                    existing.synced_at = timestamp
                 else:
                     session.add(
                         AllegroOffer(
@@ -76,7 +77,7 @@ def sync_offers():
                             price=price,
                             product_id=ps.product_id,
                             product_size_id=ps.id,
-                            synced_at=datetime.utcnow().isoformat(),
+                            synced_at=timestamp,
                         )
                     )
             next_page = data.get("nextPage") or data.get("links", {}).get("next")
