@@ -326,3 +326,32 @@ th {
         right: 0;
     }
 }
+
+.barcode-capture-input {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    border: none;
+    background: transparent;
+    color: transparent;
+    caret-color: transparent;
+}
+
+.barcode-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    max-width: 320px;
+    z-index: 1080;
+}
+
+.barcode-toast .alert {
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+.barcode-result-large {
+    font-size: 1.25rem;
+}

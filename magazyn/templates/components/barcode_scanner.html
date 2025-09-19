@@ -1,0 +1,20 @@
+<div id="global-barcode-scanner" class="barcode-scanner" aria-hidden="false">
+    <form id="global-barcode-form" class="barcode-scanner__form" autocomplete="off">
+        <label for="global-barcode-input" class="visually-hidden">Kod kreskowy</label>
+        <input
+            id="global-barcode-input"
+            type="text"
+            name="barcode"
+            class="barcode-capture-input"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="off"
+        >
+        <input type="hidden" id="barcode-csrf-token" value="{{ csrf_token() }}">
+    </form>
+    <audio id="barcode-beep" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
+    <div id="global-barcode-toast" class="barcode-toast d-none" role="status" aria-live="polite">
+        <div class="alert alert-success mb-2 d-none" data-barcode-result></div>
+        <div class="alert alert-danger mb-0 d-none" data-barcode-error></div>
+    </div>
+</div>

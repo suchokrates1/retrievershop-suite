@@ -1,128 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
     <div class="container text-center">
-        <h2 class="mb-4">Skanuj kod kreskowy</h2>
-        <form id="barcode-form" class="row justify-content-center">
-            <div class="col-md-6">
-                <label for="barcode-input" class="form-label visually-hidden">Kod kreskowy</label>
-                <input type="text"
-                       id="barcode-input"
-                       class="form-control form-control-lg text-center"
-                       placeholder="Przyłóż czytnik kodów kreskowych"
-                       autocomplete="off"
-                       autofocus>
+        <h2 class="mb-3">Skanuj kod kreskowy</h2>
+        <p class="lead">Przyłóż czytnik kodów kreskowych do produktu. Wynik pojawi się automatycznie.</p>
+        <div class="card mt-4 shadow-sm">
+            <div class="card-body">
+                <p class="text-muted mb-1">Ostatni zeskanowany kod:</p>
+                <p class="barcode-result-large fw-semibold" data-barcode-code></p>
+                <div class="alert alert-success mt-3 d-none" data-barcode-result></div>
+                <div class="alert alert-danger mt-3 d-none" data-barcode-error></div>
             </div>
-        </form>
-        <div id="barcode-result" class="alert alert-success mt-4 d-none"></div>
-        <div id="barcode-error" class="alert alert-danger mt-4 d-none"></div>
+        </div>
+        <p class="mt-4 text-muted">Czytnik pozostaje aktywny także na innych podstronach aplikacji.</p>
     </div>
-
-    <audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
-    <input type="hidden" id="csrf-token" value="{{ csrf_token() }}">
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.getElementById('barcode-form');
-            const input = document.getElementById('barcode-input');
-            const resultEl = document.getElementById('barcode-result');
-            const errorEl = document.getElementById('barcode-error');
-            const beepSound = document.getElementById('beep-sound');
-            const csrfToken = document.getElementById('csrf-token').value;
-
-            const focusInput = () => {
-                if (input) {
-                    input.focus();
-                    input.select();
-                }
-            };
-
-            focusInput();
-
-            form.addEventListener('submit', (event) => {
-                event.preventDefault();
-                const code = input.value.trim();
-                if (!code) {
-                    errorEl.textContent = 'Wprowadź kod kreskowy.';
-                    errorEl.classList.remove('d-none');
-                    resultEl.classList.add('d-none');
-                    focusInput();
-                    return;
-                }
-
-                fetch('/barcode_scan', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken,
-                    },
-                    body: JSON.stringify({ barcode: code })
-                })
-                    .then((response) => {
-                        if (!response.ok) {
-                            throw new Error('request-failed');
-                        }
-                        return response.json();
-                    })
-                    .then((data) => {
-                        const infoParts = [];
-                        if (data.name) {
-                            infoParts.push(data.name);
-                        }
-                        if (data.color) {
-                            infoParts.push(`kolor ${data.color}`);
-                        }
-                        if (data.size) {
-                            infoParts.push(`rozmiar ${data.size}`);
-                        }
-                        const info = infoParts.join(', ');
-                        resultEl.textContent = `Znaleziono produkt: ${info}`;
-                        resultEl.classList.remove('d-none');
-                        errorEl.classList.add('d-none');
-
-                        if (beepSound) {
-                            try {
-                                beepSound.currentTime = 0;
-                                void beepSound.play();
-                            } catch (err) {
-                                console.warn('Nie udało się odtworzyć dźwięku', err);
-                            }
-                        }
-
-                        if ('speechSynthesis' in window) {
-                            const speechParts = [];
-                            if (data.name) {
-                                speechParts.push(`Produkt ${data.name}`);
-                            }
-                            if (data.size) {
-                                speechParts.push(`Rozmiar ${data.size}`);
-                            }
-                            if (data.color) {
-                                speechParts.push(`Kolor ${data.color}`);
-                            }
-                            const message = speechParts.join('. ');
-                            if (message) {
-                                window.speechSynthesis.cancel();
-                                const utterance = new SpeechSynthesisUtterance(message);
-                                window.speechSynthesis.speak(utterance);
-                            }
-                        }
-                    })
-                    .catch(() => {
-                        errorEl.textContent = 'Nie znaleziono produktu o podanym kodzie kreskowym.';
-                        errorEl.classList.remove('d-none');
-                        resultEl.classList.add('d-none');
-
-                        if ('speechSynthesis' in window) {
-                            window.speechSynthesis.cancel();
-                            const utterance = new SpeechSynthesisUtterance('Nie znaleziono produktu o podanym kodzie kreskowym.');
-                            window.speechSynthesis.speak(utterance);
-                        }
-                    })
-                    .finally(() => {
-                        input.value = '';
-                        focusInput();
-                    });
-            });
-        });
-    </script>
 {% endblock %}
