@@ -1,129 +1,98 @@
 {% extends "base.html" %}
 {% block content %}
-    <script src="{{ url_for('static', filename='quagga.min.js') }}"></script>
     <div class="container text-center">
-        <h2 class="mb-3">Skanuj kod kreskowy</h2>
-        <div id="scanner-container"></div>
-        <p id="barcode-result" class="mt-2">Kod kreskowy: </p>
-        <button id="torch-toggle" class="btn btn-secondary d-none mt-2">Włącz latarkę</button>
+        <h2 class="mb-4">Skanuj kod kreskowy</h2>
+        <form id="barcode-form" class="row justify-content-center">
+            <div class="col-md-6">
+                <label for="barcode-input" class="form-label visually-hidden">Kod kreskowy</label>
+                <input type="text"
+                       id="barcode-input"
+                       class="form-control form-control-lg text-center"
+                       placeholder="Przyłóż czytnik kodów kreskowych"
+                       autocomplete="off"
+                       autofocus>
+            </div>
+        </form>
+        <div id="barcode-result" class="alert alert-success mt-4 d-none"></div>
+        <div id="barcode-error" class="alert alert-danger mt-4 d-none"></div>
     </div>
 
-    <!-- Element audio do odtworzenia dźwięku -->
     <audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
-    <input type="hidden" id="csrf" value="{{ csrf_token() }}">
-    <input type="hidden" id="next-url" value="{{ next }}">
+    <input type="hidden" id="csrf-token" value="{{ csrf_token() }}">
 
     <script>
-        let torchEnabled = false;
-        const torchBtn = document.getElementById('torch-toggle');
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('barcode-form');
+            const input = document.getElementById('barcode-input');
+            const resultEl = document.getElementById('barcode-result');
+            const errorEl = document.getElementById('barcode-error');
+            const beepSound = document.getElementById('beep-sound');
+            const csrfToken = document.getElementById('csrf-token').value;
 
-        Quagga.init({
-            inputStream: {
-                type: "LiveStream",
-                target: document.querySelector('#scanner-container'),
-                constraints: {
-                    facingMode: "environment" // Użyj tylnej kamery
+            const focusInput = () => {
+                if (input) {
+                    input.focus();
+                    input.select();
                 }
-            },
-            decoder: {
-                // rozszerzona lista obsługiwanych typów kodów
-                readers: [
-                    "code_128_reader",
-                    "ean_reader",
-                    "ean_8_reader",
-                    "upc_reader",
-                    "code_39_reader",
-                    "codabar_reader"
-                ]
-            },
-            locate: true
-        }, function (err) {
-            if (err) {
-                console.log(err);
-                const el = document.getElementById('barcode-result');
-                if (el) {
-                    el.innerText = 'B\u0142\u0105d uruchomienia skanera. Sprawd\u017a, czy przegl\u0105darka ma dost\u0119p do kamery.';
-                }
-                return;
-            }
-            console.log("Inicjalizacja zakończona");
-            Quagga.start();
+            };
 
-            const track = Quagga.CameraAccess.getActiveTrack();
-            if (track && track.getCapabilities().torch && torchBtn) {
-                torchBtn.classList.remove('d-none');
-                torchBtn.addEventListener('click', () => {
-                    torchEnabled = !torchEnabled;
-                    track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
-                    torchBtn.textContent = torchEnabled ? 'Wyłącz latarkę' : 'Włącz latarkę';
-                });
-            }
+            focusInput();
 
-            Quagga.onProcessed(function () {
-                const overlay = Quagga.canvas.ctx.overlay;
-                const dom = Quagga.canvas.dom.overlay;
-                if (!overlay || !dom) {
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const code = input.value.trim();
+                if (!code) {
+                    errorEl.textContent = 'Wprowadź kod kreskowy.';
+                    errorEl.classList.remove('d-none');
+                    resultEl.classList.add('d-none');
+                    focusInput();
                     return;
                 }
-                const { width, height } = dom;
-                const imageData = overlay.getImageData(0, 0, width, height).data;
-                let sum = 0;
-                for (let i = 0; i < imageData.length; i += 4) {
-                    sum += imageData[i] + imageData[i + 1] + imageData[i + 2];
-                }
-                const brightness = sum / (imageData.length / 4) / 3;
-                if (brightness < 60 && !torchEnabled) {
-                    const track = Quagga.CameraAccess.getActiveTrack();
-                    if (track && track.getCapabilities().torch) {
-                        track.applyConstraints({ advanced: [{ torch: true }] });
-                        torchEnabled = true;
-                    }
-                }
-            });
-        });
 
-        Quagga.onDetected(function (data) {
-            document.getElementById('barcode-result').innerText = "Kod kreskowy: " + data.codeResult.code;
-            
-            // Odtwórz dźwięk
-            const beepSound = document.getElementById('beep-sound');
-            beepSound.play();
-            
-            Quagga.stop();
+                fetch('/barcode_scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({ barcode: code })
+                })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('request-failed');
+                        }
+                        return response.json();
+                    })
+                    .then((data) => {
+                        const info = `${data.name}, kolor ${data.color}, rozmiar ${data.size}`;
+                        resultEl.textContent = `Znaleziono produkt: ${info}`;
+                        resultEl.classList.remove('d-none');
+                        errorEl.classList.add('d-none');
 
-            const activeTrack = Quagga.CameraAccess.getActiveTrack();
-            if (activeTrack && torchEnabled && activeTrack.getCapabilities().torch) {
-                activeTrack.applyConstraints({ advanced: [{ torch: false }] });
-                torchEnabled = false;
-                if (torchBtn) {
-                    torchBtn.textContent = 'Włącz latarkę';
-                }
-            }
+                        if (beepSound) {
+                            try {
+                                beepSound.currentTime = 0;
+                                void beepSound.play();
+                            } catch (err) {
+                                console.warn('Nie udało się odtworzyć dźwięku', err);
+                            }
+                        }
 
-            // Przekierowanie lub wysłanie kodu kreskowego do backendu (np. do Flask)
-            fetch('/barcode_scan', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.getElementById('csrf').value
-                },
-                body: JSON.stringify({ barcode: data.codeResult.code })
-            })
-            .then(res => {
-                if (res.status === 204) {
-                    speechSynthesis.speak(new SpeechSynthesisUtterance('Nie znaleziono produktu o podanym kodzie kreskowym'));
-                    return null;
-                }
-                return res.json().catch(() => null);
-            })
-            .then(result => {
-                if (result) {
-                    const text = `${result.name}, kolor ${result.color}, rozmiar ${result.size}`;
-                    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-                }
-                const nextUrlInput = document.getElementById('next-url');
-                const nextUrl = nextUrlInput ? nextUrlInput.value : '/items';
-                window.location.href = nextUrl;
+                        if ('speechSynthesis' in window) {
+                            window.speechSynthesis.cancel();
+                            const utterance = new SpeechSynthesisUtterance(info);
+                            window.speechSynthesis.speak(utterance);
+                        }
+                    })
+                    .catch(() => {
+                        errorEl.textContent = 'Nie znaleziono produktu o podanym kodzie kreskowym.';
+                        errorEl.classList.remove('d-none');
+                        resultEl.classList.add('d-none');
+                    })
+                    .finally(() => {
+                        input.value = '';
+                        focusInput();
+                    });
             });
         });
     </script>
