@@ -94,10 +94,10 @@
                                 speechParts.push(`Produkt ${data.name}`);
                             }
                             if (data.size) {
-                                speechParts.push(`Rozmiar ${data.size}`);
+                                speechParts.push(`${data.size}`);
                             }
                             if (data.color) {
-                                speechParts.push(`Kolor ${data.color}`);
+                                speechParts.push(`${data.color}`);
                             }
                             const message = speechParts.join('. ');
                             if (message) {
