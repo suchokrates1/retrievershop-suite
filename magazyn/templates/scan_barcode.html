@@ -111,6 +111,12 @@
                         errorEl.textContent = 'Nie znaleziono produktu o podanym kodzie kreskowym.';
                         errorEl.classList.remove('d-none');
                         resultEl.classList.add('d-none');
+
+                        if ('speechSynthesis' in window) {
+                            window.speechSynthesis.cancel();
+                            const utterance = new SpeechSynthesisUtterance('Nie znaleziono produktu o podanym kodzie kreskowym.');
+                            window.speechSynthesis.speak(utterance);
+                        }
                     })
                     .finally(() => {
                         input.value = '';
