@@ -64,7 +64,17 @@
                         return response.json();
                     })
                     .then((data) => {
-                        const info = `${data.name}, kolor ${data.color}, rozmiar ${data.size}`;
+                        const infoParts = [];
+                        if (data.name) {
+                            infoParts.push(data.name);
+                        }
+                        if (data.color) {
+                            infoParts.push(`kolor ${data.color}`);
+                        }
+                        if (data.size) {
+                            infoParts.push(`rozmiar ${data.size}`);
+                        }
+                        const info = infoParts.join(', ');
                         resultEl.textContent = `Znaleziono produkt: ${info}`;
                         resultEl.classList.remove('d-none');
                         errorEl.classList.add('d-none');
@@ -79,9 +89,22 @@
                         }
 
                         if ('speechSynthesis' in window) {
-                            window.speechSynthesis.cancel();
-                            const utterance = new SpeechSynthesisUtterance(info);
-                            window.speechSynthesis.speak(utterance);
+                            const speechParts = [];
+                            if (data.name) {
+                                speechParts.push(`Produkt ${data.name}`);
+                            }
+                            if (data.size) {
+                                speechParts.push(`Rozmiar ${data.size}`);
+                            }
+                            if (data.color) {
+                                speechParts.push(`Kolor ${data.color}`);
+                            }
+                            const message = speechParts.join('. ');
+                            if (message) {
+                                window.speechSynthesis.cancel();
+                                const utterance = new SpeechSynthesisUtterance(message);
+                                window.speechSynthesis.speak(utterance);
+                            }
                         }
                     })
                     .catch(() => {
