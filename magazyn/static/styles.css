@@ -101,6 +101,21 @@ footer a:hover {
     text-decoration: underline;
 }
 
+.barcode-feedback {
+    position: fixed;
+    top: 220px;
+    right: 1rem;
+    max-width: 360px;
+    width: min(90vw, 360px);
+    z-index: 1100;
+    pointer-events: none;
+}
+
+.barcode-feedback .alert {
+    margin-bottom: 0.5rem;
+    pointer-events: auto;
+}
+
 /* Ustawienie szerokości tabeli */
 table {
     width: 100%; /* Zmniejsz szerokość, aby tabela była bardziej kompaktowa */
