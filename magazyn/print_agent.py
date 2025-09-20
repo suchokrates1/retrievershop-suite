@@ -1,6 +1,6 @@
 from .notifications import send_report
 from .services import consume_order_stock, get_sales_summary
-from .constants import ALL_SIZES, KNOWN_COLORS, PRODUCT_ALIASES
+from .constants import ALL_SIZES, KNOWN_COLORS
 from .parsing import parse_product_info
 from magazyn import DB_PATH
 from .config import settings, load_config

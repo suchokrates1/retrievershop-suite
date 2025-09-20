@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from .db import get_session, record_purchase, consume_stock, record_sale
 from .models import Product, ProductSize, PurchaseBatch, Sale
 from sqlalchemy import func
-from .constants import ALL_SIZES, PRODUCT_ALIASES
+from .constants import ALL_SIZES, normalize_product_title_fragment, resolve_product_alias
 from .parsing import parse_product_info
 from datetime import datetime
 from .config import settings
@@ -474,8 +474,8 @@ def _parse_pdf(file) -> pd.DataFrame:
 def _import_invoice_df(df: pd.DataFrame):
     """Record purchases using rows from a DataFrame."""
     for _, row in df.iterrows():
-        name = row.get("Nazwa")
-        name = PRODUCT_ALIASES.get(name, name)
+        name = normalize_product_title_fragment(row.get("Nazwa", ""))
+        name = resolve_product_alias(name)
         color = row.get("Kolor", "")
         size = row.get("Rozmiar")
         quantity = _to_int(row.get("Ilość", 0))
