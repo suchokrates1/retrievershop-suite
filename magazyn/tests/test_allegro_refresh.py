@@ -207,6 +207,46 @@ def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
             assert offer.product_size_id is not None
 
 
+def test_sync_offers_matches_partial_product_color(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        assert offset == 0
+        assert limit == 100
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "MC1",
+                        "name": "Dwukolorowy produkt czerwony M",
+                        "sellingMode": {"price": {"amount": "19.99"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        product = Product(name="Dwukolorowy produkt", color="Czerwono-białe")
+        size = ProductSize(product=product, size="M")
+        session.add_all([product, size])
+        session.flush()
+        product_id = product.id
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 1, "matched": 1}
+
+    with get_session() as session:
+        offer = session.query(AllegroOffer).filter_by(offer_id="MC1").one()
+        assert offer.product_id == product_id
+        assert offer.product_size_id is not None
+
+
 def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")

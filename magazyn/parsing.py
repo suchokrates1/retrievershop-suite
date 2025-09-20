@@ -42,6 +42,30 @@ def normalize_color(color: str) -> str:
             if len(normalized_alias) > len(base_match):
                 base_match = normalized_alias
                 base_color = canonical
+    if base_match:
+        return base_color.capitalize()
+
+    normalized_known_colors = {
+        _strip_diacritics(known): known for known in KNOWN_COLORS
+    }
+
+    def _match_known(normalized: str) -> str | None:
+        if not normalized:
+            return None
+        return normalized_known_colors.get(normalized)
+
+    matched_color = _match_known(normalized_color)
+    if matched_color:
+        base_color = matched_color
+    else:
+        for suffix, replacement in (("o", "y"), ("a", "y"), ("e", "y")):
+            if normalized_color.endswith(suffix) and len(normalized_color) > 1:
+                candidate = normalized_color[:-1] + replacement
+                matched_color = _match_known(candidate)
+                if matched_color:
+                    base_color = matched_color
+                    break
+
     return base_color.capitalize()
 
 

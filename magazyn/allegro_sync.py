@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import os
 import logging
+import re
 from decimal import Decimal, InvalidOperation
 from collections.abc import Mapping
 from urllib.parse import urlparse, parse_qs
@@ -11,7 +12,7 @@ from sqlalchemy import or_
 from . import allegro_api
 from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
-from .parsing import parse_offer_title
+from .parsing import normalize_color, parse_offer_title
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,24 @@ logger = logging.getLogger(__name__)
 def _clear_cached_tokens():
     os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
     os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+
+_COLOR_COMPONENT_PATTERN = re.compile(r"[-/\s]+")
+
+
+def _normalized_product_colors(color: str | None) -> list[str]:
+    if not color:
+        return []
+    parts = _COLOR_COMPONENT_PATTERN.split(color)
+    normalized_parts: list[str] = []
+    for part in parts:
+        clean_part = part.strip()
+        if not clean_part:
+            continue
+        normalized_part = normalize_color(clean_part)
+        if normalized_part and normalized_part not in normalized_parts:
+            normalized_parts.append(normalized_part)
+    return normalized_parts
 
 
 def sync_offers():
@@ -164,14 +183,22 @@ def sync_offers():
                     .filter(Product.name == name, ProductSize.size == size)
                 )
 
-                if color:
-                    query = query.filter(Product.color == color)
+                normalized_offer_color = normalize_color(color) if color else ""
+
+                if normalized_offer_color:
+                    product_size = None
+                    for candidate in query.all():
+                        normalized_product_colors = _normalized_product_colors(
+                            candidate.product.color
+                        )
+                        if normalized_offer_color in normalized_product_colors:
+                            product_size = candidate
+                            break
                 else:
                     query = query.filter(
                         or_(Product.color == "", Product.color.is_(None))
                     )
-
-                product_size = query.first()
+                    product_size = query.first()
 
                 product_id = product_size.product_id if product_size else None
                 product_size_id = product_size.id if product_size else None
