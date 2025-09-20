@@ -85,8 +85,14 @@ def offers():
 @login_required
 def refresh():
     try:
-        sync_offers()
-        flash("Oferty zaktualizowane")
+        result = sync_offers()
+        fetched = result.get("fetched", 0)
+        matched = result.get("matched", 0)
+        flash(
+            "Oferty zaktualizowane (pobrano {fetched}, zaktualizowano {matched})".format(
+                fetched=fetched, matched=matched
+            )
+        )
     except Exception as e:
         flash(f"Błąd synchronizacji ofert: {e}")
     return redirect(url_for("allegro.offers"))
