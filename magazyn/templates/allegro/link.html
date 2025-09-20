@@ -6,6 +6,12 @@
     <div class="mb-3">
         <label for="product_id" class="form-label">ID produktu</label>
         <input type="number" name="product_id" id="product_id" class="form-control" value="{{ offer.product_id }}">
+        <div class="form-text">Pozostaw puste, jeśli chcesz wskazać konkretny rozmiar.</div>
+    </div>
+    <div class="mb-3">
+        <label for="product_size_id" class="form-label">ID rozmiaru produktu</label>
+        <input type="number" name="product_size_id" id="product_size_id" class="form-control" value="{{ offer.product_size_id }}">
+        <div class="form-text">Wprowadź ID pozycji z magazynu, aby powiązać ofertę z konkretnym rozmiarem.</div>
     </div>
     <button type="submit" class="btn btn-primary">Zapisz</button>
 </form>
