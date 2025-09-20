@@ -164,7 +164,19 @@ def test_refresh_reports_counts_when_no_matches(client, login, monkeypatch):
     )
 
     with get_session() as session:
-        assert session.query(AllegroOffer).count() == 0
+        offers = session.query(AllegroOffer).all()
+        assert len(offers) == 1
+        offer = offers[0]
+        assert offer.offer_id == "O3"
+        assert offer.title == "Unmatched offer"
+        assert offer.price == Decimal("10.00")
+        assert offer.product_id is None
+        assert offer.product_size_id is None
+
+    response = client.get("/allegro/offers")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "Unmatched offer" in body
 
 
 def test_sync_offers_raises_on_unrecoverable_error(monkeypatch):
