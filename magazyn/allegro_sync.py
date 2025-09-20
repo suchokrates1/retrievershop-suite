@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 import os
 import logging
+import re
+import unicodedata
 from decimal import Decimal, InvalidOperation
 from collections.abc import Mapping
 from urllib.parse import urlparse, parse_qs
@@ -11,9 +13,31 @@ from sqlalchemy import or_
 from . import allegro_api
 from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
-from .parsing import parse_offer_title
+from .parsing import parse_offer_title, normalize_color
 
 logger = logging.getLogger(__name__)
+
+
+_COLOR_COMPONENT_PATTERN = re.compile(r"[\\s/\\-]+")
+
+
+def _normalize_color_key(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    stripped = "".join(char for char in normalized if not unicodedata.combining(char))
+    return stripped.casefold().strip()
+
+
+def _normalized_product_color_components(value: str) -> set[str]:
+    components: set[str] = set()
+    for component in _COLOR_COMPONENT_PATTERN.split(value or ""):
+        component = component.strip()
+        if not component:
+            continue
+        normalized_component = normalize_color(component)
+        key = _normalize_color_key(normalized_component)
+        if key:
+            components.add(key)
+    return components
 
 
 def _clear_cached_tokens():
@@ -157,21 +181,48 @@ def sync_offers():
 
                 title = offer.get("name") or offer.get("title", "")
                 name, color, size = parse_offer_title(title)
+                color = normalize_color(color)
+                normalized_offer_color_key = _normalize_color_key(color)
 
-                query = (
+                base_query = (
                     session.query(ProductSize)
                     .join(Product)
                     .filter(Product.name == name, ProductSize.size == size)
                 )
 
                 if color:
-                    query = query.filter(Product.color == color)
+                    product_sizes = base_query.all()
                 else:
-                    query = query.filter(
-                        or_(Product.color == "", Product.color.is_(None))
+                    product_sizes = (
+                        base_query.filter(
+                            or_(Product.color == "", Product.color.is_(None))
+                        ).all()
                     )
 
-                product_size = query.first()
+                product_size = None
+                if color:
+                    for candidate in product_sizes:
+                        product_color_value = candidate.product.color or ""
+                        if not product_color_value.strip():
+                            continue
+                        normalized_product_color = normalize_color(product_color_value)
+                        if (
+                            _normalize_color_key(normalized_product_color)
+                            == normalized_offer_color_key
+                        ):
+                            product_size = candidate
+                            break
+                    if not product_size and normalized_offer_color_key:
+                        for candidate in product_sizes:
+                            product_color_value = candidate.product.color or ""
+                            component_keys = _normalized_product_color_components(
+                                product_color_value
+                            )
+                            if normalized_offer_color_key in component_keys:
+                                product_size = candidate
+                                break
+                else:
+                    product_size = product_sizes[0] if product_sizes else None
 
                 product_id = product_size.product_id if product_size else None
                 product_size_id = product_size.id if product_size else None
@@ -268,3 +319,4 @@ def _extract_pagination(next_data, current_limit):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     sync_offers()
+

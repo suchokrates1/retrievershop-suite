@@ -151,6 +151,51 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
         ]
 
 
+def test_sync_offers_matches_single_color_component(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        assert offset == 0
+        assert limit == 100
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "MC1",
+                        "name": "Dwukolorowy produkt biały M",
+                        "sellingMode": {"price": {"amount": "10.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        product = Product(name="Dwukolorowy produkt", color="Czerwono-biały")
+        size = ProductSize(product=product, size="M")
+        session.add_all([product, size])
+        session.flush()
+        product_id = product.id
+        product_size_id = size.id
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 1, "matched": 1}
+
+    with get_session() as session:
+        offer = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id == "MC1")
+            .one()
+        )
+        assert offer.product_id == product_id
+        assert offer.product_size_id == product_size_id
+
+
 def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
