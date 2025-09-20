@@ -29,7 +29,20 @@
                     {% if item.error %}
                         <span class="text-muted">{{ item.error }}</span>
                     {% elif item.competitor_price %}
-                        {{ item.competitor_price }} zł
+                        <div class="d-flex align-items-center gap-2">
+                            <span>{{ item.competitor_price }} zł</span>
+                            {% if item.competitor_offer_url %}
+                                <a
+                                    class="btn btn-outline-secondary btn-sm"
+                                    href="{{ item.competitor_offer_url }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label="Zobacz ofertę konkurencji"
+                                >
+                                    <i class="bi bi-diagram-3"></i>
+                                </a>
+                            {% endif %}
+                        </div>
                     {% else %}
                         <span class="text-muted">Brak danych</span>
                     {% endif %}

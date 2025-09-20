@@ -208,7 +208,8 @@ def price_check():
 
     price_checks = []
     for offer in offers:
-        competitor_prices: list[Decimal] = []
+        competitor_min_price: Optional[Decimal] = None
+        competitor_min_offer_id: Optional[str] = None
         error: Optional[str] = None
         barcodes = offer.get("barcodes", [])
         unique_barcodes: list[str] = []
@@ -224,6 +225,7 @@ def price_check():
                     error = str(exc)
                     continue
                 for item in listing:
+                    offer_id = item.get("id")
                     seller = item.get("seller") or {}
                     seller_id = seller.get("id")
                     if (
@@ -241,19 +243,34 @@ def price_check():
                         price = Decimal(price_str).quantize(Decimal("0.01"))
                     except (TypeError, ValueError, InvalidOperation):
                         continue
-                    competitor_prices.append(price)
-            if competitor_prices:
+                    if (
+                        competitor_min_price is None
+                        or price < competitor_min_price
+                        or (
+                            price == competitor_min_price
+                            and competitor_min_offer_id is None
+                        )
+                    ):
+                        competitor_min_price = price
+                        competitor_min_offer_id = offer_id
+            if competitor_min_price is not None:
                 error = None
         else:
             error = "Brak kodu EAN"
 
-        competitor_min = min(competitor_prices) if competitor_prices else None
+        competitor_min = competitor_min_price
         is_lowest = None
         if offer["price"] is not None:
             if competitor_min is None:
                 is_lowest = True
             else:
                 is_lowest = offer["price"] <= competitor_min
+
+        competitor_offer_url = (
+            f"https://allegro.pl/oferta/{competitor_min_offer_id}"
+            if competitor_min_offer_id
+            else None
+        )
 
         price_checks.append(
             {
@@ -264,6 +281,7 @@ def price_check():
                 "competitor_price": _format_decimal(competitor_min),
                 "is_lowest": is_lowest,
                 "error": error,
+                "competitor_offer_url": competitor_offer_url,
             }
         )
 
