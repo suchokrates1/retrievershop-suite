@@ -414,6 +414,20 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
 
     monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
     monkeypatch.setattr("magazyn.allegro_api.refresh_token", fake_refresh)
+    persisted = []
+
+    def capture_tokens(***REMOVED***=None, refresh_token=None):
+        persisted.append(
+            {"***REMOVED***": ***REMOVED***, "refresh_token": refresh_token}
+        )
+        if ***REMOVED*** is not None:
+            os.environ["ALLEGRO_ACCESS_TOKEN"] = ***REMOVED***
+        if refresh_token is not None:
+            os.environ["ALLEGRO_REFRESH_TOKEN"] = refresh_token
+
+    monkeypatch.setattr(
+        "magazyn.allegro_api.update_allegro_tokens", capture_tokens
+    )
 
     offers = fetch_product_listing("1234567890123")
 
@@ -422,6 +436,9 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
     assert calls[1]["headers"]["Authorization"] == "Bearer new-access"
     assert os.getenv("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert os.getenv("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
+    assert persisted == [
+        {"***REMOVED***": "new-access", "refresh_token": "new-refresh"}
+    ]
     assert offers == [
         {
             "id": "offer-1",
