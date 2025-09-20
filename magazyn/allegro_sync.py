@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import os
 import logging
 from decimal import Decimal, InvalidOperation
+from collections.abc import Mapping
 
 from requests.exceptions import HTTPError
 
@@ -109,6 +110,15 @@ def sync_offers():
                 message = f"Failed to fetch Allegro offers on page {page}"
                 logger.error(message, exc_info=True)
                 raise RuntimeError(message) from exc
+            if not isinstance(data, Mapping):
+                logger.error(
+                    "Malformed response from Allegro on page %s: %r", page, data
+                )
+                raise RuntimeError(
+                    "Failed to fetch Allegro offers on page "
+                    f"{page}: malformed response from Allegro"
+                )
+
             offers = data.get("offers") or data.get("items", {}).get("offers", [])
             if offers:
                 try:
