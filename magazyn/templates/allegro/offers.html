@@ -5,27 +5,102 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary">Odśwież</button>
     </form>
-{% for group in groups %}
-<h3>{{ group.product_name }} {% if group.size %}- {{ group.size }}{% endif %}</h3>
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Tytuł</th>
-            <th>Cena</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for offer in group.offers %}
-        <tr>
-            <td>{{ offer.offer_id }}</td>
-            <td>{{ offer.title }}</td>
-            <td>{{ offer.price }}</td>
-            <td><a href="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="btn btn-sm btn-secondary">Powiąż</a></td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endfor %}
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Tytuł</th>
+                <th scope="col">Cena</th>
+                <th scope="col" class="w-50">Powiązanie z magazynem</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for offer in offers %}
+            <tr>
+                <td>{{ offer.offer_id }}</td>
+                <td>{{ offer.title }}</td>
+                <td>{{ offer.price }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="product_size_id" value="{{ offer.product_size_id or '' }}" data-selected-input>
+                        <div class="dropdown flex-grow-1 search-dropdown" data-offer-id="{{ offer.offer_id }}">
+                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-selected-label data-placeholder="Wybierz z magazynu">
+                                {{ offer.selected_label or 'Wybierz z magazynu' }}
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
+                                <input type="text" class="form-control form-control-sm mb-2 search-dropdown-input" placeholder="Szukaj..." autocomplete="off" data-search-input>
+                                <div class="list-group search-dropdown-options" data-options>
+                                    <button type="button" class="list-group-item list-group-item-action" data-value="" data-label="Wybierz z magazynu" data-filter="">
+                                        <div class="fw-semibold">Brak powiązania</div>
+                                        <div class="small text-muted">Zostaw ofertę bez przypisania</div>
+                                    </button>
+                                    {% for item in inventory %}
+                                    <button type="button" class="list-group-item list-group-item-action" data-value="{{ item.id }}" data-label="{{ item.label }}" data-filter="{{ item.filter }}">
+                                        <div class="fw-semibold">{{ item.label }}</div>
+                                        <div class="small text-muted">{{ item.extra }}</div>
+                                    </button>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">Zapisz</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.search-dropdown').forEach(dropdown => {
+        const toggleButton = dropdown.querySelector('[data-selected-label]');
+        const hiddenInput = dropdown.closest('form').querySelector('[data-selected-input]');
+        const searchInput = dropdown.querySelector('[data-search-input]');
+        const options = dropdown.querySelectorAll('[data-value]');
+        const placeholder = toggleButton.dataset.placeholder || toggleButton.textContent.trim();
+
+        const updateLabel = (text) => {
+            toggleButton.textContent = text && text.trim() ? text : placeholder;
+        };
+
+        const dropdownInstance = bootstrap.Dropdown.getOrCreateInstance(toggleButton);
+
+        options.forEach(option => {
+            option.addEventListener('click', () => {
+                hiddenInput.value = option.dataset.value;
+                updateLabel(option.dataset.label || placeholder);
+                dropdownInstance.hide();
+            });
+        });
+
+        if (hiddenInput.value) {
+            const selectedOption = Array.from(options).find(option => option.dataset.value === hiddenInput.value);
+            if (selectedOption) {
+                updateLabel(selectedOption.dataset.label || placeholder);
+            }
+        }
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim().toLowerCase();
+            options.forEach(option => {
+                if (!option.dataset.filter) {
+                    option.classList.toggle('d-none', Boolean(query));
+                    return;
+                }
+                const matches = option.dataset.filter.includes(query);
+                option.classList.toggle('d-none', !matches);
+            });
+        });
+
+        dropdown.addEventListener('hidden.bs.dropdown', () => {
+            searchInput.value = '';
+            options.forEach(option => option.classList.remove('d-none'));
+        });
+    });
+});
+</script>
 {% endblock %}
