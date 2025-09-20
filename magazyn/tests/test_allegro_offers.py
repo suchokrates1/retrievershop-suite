@@ -1,9 +1,14 @@
+import os
 from decimal import Decimal
 import re
+
+import pytest
+import requests
 
 from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
+from magazyn.allegro_api import fetch_product_listing
 
 
 def test_offers_page_shows_manual_mapping_dropdown(client, login):
@@ -255,3 +260,94 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
     assert "120.00 zł" in row_high
     assert "80.00 zł" in row_high
     assert "text-danger" in row_high and "✗" in row_high
+
+
+def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
+    class FakeResponse:
+        def __init__(self, status_code, data):
+            self.status_code = status_code
+            self._data = data
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(response=self)
+
+        def json(self):
+            return self._data
+
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
+    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")
+
+    listing_payload = {
+        "items": {
+            "regular": [
+                {
+                    "id": "offer-1",
+                    "seller": {"id": "seller-1"},
+                    "sellingMode": {"price": {"amount": "10.00"}},
+                }
+            ]
+        },
+        "links": {},
+    }
+
+    responses = [FakeResponse(401, {}), FakeResponse(200, listing_payload)]
+    calls = []
+
+    def fake_get(url, headers, params, timeout):
+        calls.append({"headers": headers.copy(), "params": params.copy()})
+        return responses.pop(0)
+
+    def fake_refresh(refresh_value):
+        assert refresh_value == "refresh-token"
+        return {"access_token": "new-access", "refresh_token": "new-refresh"}
+
+    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.refresh_token", fake_refresh)
+
+    offers = fetch_product_listing("1234567890123")
+
+    assert len(calls) == 2
+    assert calls[0]["headers"]["Authorization"] == "Bearer expired-token"
+    assert calls[1]["headers"]["Authorization"] == "Bearer new-access"
+    assert os.getenv("ALLEGRO_ACCESS_TOKEN") == "new-access"
+    assert os.getenv("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
+    assert offers == [
+        {
+            "id": "offer-1",
+            "seller": {"id": "seller-1"},
+            "sellingMode": {"price": {"amount": "10.00"}},
+        }
+    ]
+
+
+def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(monkeypatch):
+    class FakeResponse:
+        def __init__(self, status_code, data):
+            self.status_code = status_code
+            self._data = data
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(response=self)
+
+        def json(self):
+            return self._data
+
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    responses = [FakeResponse(403, {})]
+    calls = []
+
+    def fake_get(url, headers, params, timeout):
+        calls.append({"headers": headers.copy(), "params": params.copy()})
+        return responses.pop(0)
+
+    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
+
+    with pytest.raises(RuntimeError, match="please re-authorize"):
+        fetch_product_listing("1234567890123")
+
+    assert len(calls) == 1
+    assert calls[0]["headers"]["Authorization"] == "Bearer expired-token"
