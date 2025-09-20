@@ -25,7 +25,8 @@
                 <td>
                     <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="product_size_id" value="{{ offer.product_size_id or '' }}" data-selected-input>
+                        <input type="hidden" name="product_id" value="{{ offer.product_id or '' }}" data-product-input>
+                        <input type="hidden" name="product_size_id" value="{{ offer.product_size_id or '' }}" data-size-input>
                         <div class="dropdown flex-grow-1 search-dropdown" data-offer-id="{{ offer.offer_id }}">
                             <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-selected-label data-placeholder="Wybierz z magazynu">
                                 {{ offer.selected_label or 'Wybierz z magazynu' }}
@@ -33,14 +34,16 @@
                             <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
                                 <input type="text" class="form-control form-control-sm mb-2 search-dropdown-input" placeholder="Szukaj..." autocomplete="off" data-search-input>
                                 <div class="list-group search-dropdown-options" data-options>
-                                    <button type="button" class="list-group-item list-group-item-action" data-value="" data-label="Wybierz z magazynu" data-filter="">
+                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="none" data-value="" data-label="Wybierz z magazynu" data-filter="">
                                         <div class="fw-semibold">Brak powiązania</div>
                                         <div class="small text-muted">Zostaw ofertę bez przypisania</div>
                                     </button>
                                     {% for item in inventory %}
-                                    <button type="button" class="list-group-item list-group-item-action" data-value="{{ item.id }}" data-label="{{ item.label }}" data-filter="{{ item.filter }}">
+                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="{{ item.type }}" data-value="{{ item.id }}" data-label="{{ item.label }}" data-filter="{{ item.filter }}">
                                         <div class="fw-semibold">{{ item.label }}</div>
-                                        <div class="small text-muted">{{ item.extra }}</div>
+                                        <div class="small text-muted">
+                                            <span class="badge bg-secondary me-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
+                                        </div>
                                     </button>
                                     {% endfor %}
                                 </div>
@@ -80,9 +83,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.search-dropdown').forEach(dropdown => {
         const toggleButton = dropdown.querySelector('[data-selected-label]');
-        const hiddenInput = dropdown.closest('form').querySelector('[data-selected-input]');
+        const form = dropdown.closest('form');
+        const productInput = form.querySelector('[data-product-input]');
+        const sizeInput = form.querySelector('[data-size-input]');
         const searchInput = dropdown.querySelector('[data-search-input]');
-        const options = dropdown.querySelectorAll('[data-value]');
+        const options = dropdown.querySelectorAll('[data-option]');
         const placeholder = toggleButton.dataset.placeholder || toggleButton.textContent.trim();
 
         const updateLabel = (text) => {
@@ -93,18 +98,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
         options.forEach(option => {
             option.addEventListener('click', () => {
-                hiddenInput.value = option.dataset.value;
+                const kind = option.dataset.kind;
+                const value = option.dataset.value || '';
+                if (kind === 'product') {
+                    productInput.value = value;
+                    sizeInput.value = '';
+                } else if (kind === 'size') {
+                    sizeInput.value = value;
+                    productInput.value = '';
+                } else {
+                    productInput.value = '';
+                    sizeInput.value = '';
+                }
                 updateLabel(option.dataset.label || placeholder);
                 dropdownInstance.hide();
             });
         });
 
-        if (hiddenInput.value) {
-            const selectedOption = Array.from(options).find(option => option.dataset.value === hiddenInput.value);
+        const setInitialSelection = () => {
+            let currentType = null;
+            let currentValue = '';
+            if (sizeInput.value) {
+                currentType = 'size';
+                currentValue = sizeInput.value;
+            } else if (productInput.value) {
+                currentType = 'product';
+                currentValue = productInput.value;
+            }
+            const selectedOption = Array.from(options).find(option => {
+                if (!currentType) {
+                    return option.dataset.kind === 'none';
+                }
+                return option.dataset.kind === currentType && option.dataset.value === currentValue;
+            });
             if (selectedOption) {
                 updateLabel(selectedOption.dataset.label || placeholder);
+            } else {
+                updateLabel(placeholder);
             }
-        }
+        };
+
+        setInitialSelection();
 
         searchInput.addEventListener('input', () => {
             const query = searchInput.value.trim().toLowerCase();
