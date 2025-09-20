@@ -207,6 +207,75 @@ def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
             assert offer.product_size_id is not None
 
 
+def test_sync_offers_matches_alias_variants(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    offers = [
+        {
+            "id": "AL1",
+            "name": "Szelki dla psa Truelove Fron Line Premium M czarne",
+            "sellingMode": {"price": {"amount": "25.00"}},
+        },
+        {
+            "id": "AL2",
+            "name": "Szelki dla psa Truelove Front Line Premium Tropical L turkusowe",
+            "sellingMode": {"price": {"amount": "26.00"}},
+        },
+        {
+            "id": "AL3",
+            "name": "Szelki dla psa Truelove FrontLine Lumen S czerwone",
+            "sellingMode": {"price": {"amount": "27.00"}},
+        },
+        {
+            "id": "AL4",
+            "name": "Szelki dla psa Truelove Front Line Premium Blossom XS różowe",
+            "sellingMode": {"price": {"amount": "28.00"}},
+        },
+    ]
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        assert offset == 0
+        assert limit == 100
+        return {"items": {"offers": offers}, "links": {}}
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        expectations = {}
+        product_specs = [
+            ("Szelki dla psa Truelove Front Line Premium", "Czarny", "M"),
+            ("Szelki dla psa Truelove Tropical", "Turkusowy", "L"),
+            ("Szelki dla psa Truelove Lumen", "Czerwony", "S"),
+            ("Szelki dla psa Truelove Blossom", "Różowy", "XS"),
+        ]
+        for idx, (name, color, size) in enumerate(product_specs, start=1):
+            product = Product(name=name, color=color)
+            size_obj = ProductSize(product=product, size=size)
+            session.add_all([product, size_obj])
+            session.flush()
+            expectations[f"AL{idx}"] = (product.id, size_obj.id)
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 4, "matched": 4}
+
+    with get_session() as session:
+        stored_offers = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id.in_(expectations))
+            .order_by(AllegroOffer.offer_id)
+            .all()
+        )
+
+    assert len(stored_offers) == 4
+    for offer in stored_offers:
+        product_id, product_size_id = expectations[offer.offer_id]
+        assert offer.product_id == product_id
+        assert offer.product_size_id == product_size_id
+
+
 def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")
