@@ -32,6 +32,9 @@ def test_offers_page_shows_manual_mapping_dropdown(client, login):
     response = client.get("/allegro/offers")
 
     body = response.data.decode("utf-8")
+    assert body.count("<table") == 2
+    assert "Oferty wymagające przypięcia" in body
+    assert "Oferty powiązane z magazynem" in body
     assert "data-search-input" in body
     assert "Brak powiązania" in body
     assert "Szelki spacerowe" in body
@@ -67,11 +70,21 @@ def test_link_offer_to_product_size_updates_relation(client, login):
     response = client.post(
         f"/allegro/link/{offer_id}",
         data={"product_size_id": size_target.id},
-        follow_redirects=False,
+        follow_redirects=True,
     )
 
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/allegro/offers")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert body.count("<table") == 2
+    unlinked_section = re.search(
+        r'id="unlinked-offers".*?<tbody>(.*?)</tbody>', body, re.S
+    )
+    linked_section = re.search(
+        r'id="linked-offers".*?<tbody>(.*?)</tbody>', body, re.S
+    )
+    assert unlinked_section and linked_section
+    assert "Oferta Smyczy" not in unlinked_section.group(1)
+    assert "Oferta Smyczy" in linked_section.group(1)
 
     with get_session() as session:
         updated = (
@@ -122,18 +135,31 @@ def test_offers_without_inventory_are_listed_first(client, login):
     response = client.get("/allegro/offers")
     body = response.data.decode("utf-8")
 
-    table_match = re.search(r"<tbody>(.*?)</tbody>", body, re.S)
-    assert table_match, "Expected offers table body in the response"
-    rows = re.findall(r"<tr>(.*?)</tr>", table_match.group(1), re.S)
+    unlinked_section = re.search(
+        r'id="unlinked-offers".*?<tbody>(.*?)</tbody>', body, re.S
+    )
+    linked_section = re.search(
+        r'id="linked-offers".*?<tbody>(.*?)</tbody>', body, re.S
+    )
+    assert unlinked_section and linked_section
 
-    titles = []
-    for row in rows:
-        columns = re.findall(r"<td>(.*?)</td>", row, re.S)
+    unlinked_rows = re.findall(r"<tr>(.*?)</tr>", unlinked_section.group(1), re.S)
+    unlinked_titles = []
+    for row in unlinked_rows:
+        columns = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
         if len(columns) >= 2:
-            titles.append(re.sub(r"\s+", " ", columns[1]).strip())
+            unlinked_titles.append(re.sub(r"\s+", " ", columns[1]).strip())
 
-    assert titles[0] == "ZZZ Oferta bez przypisania"
-    assert titles[1:] == sorted(titles[1:])
+    assert unlinked_titles == ["ZZZ Oferta bez przypisania"]
+
+    linked_rows = re.findall(r"<tr>(.*?)</tr>", linked_section.group(1), re.S)
+    linked_titles = []
+    for row in linked_rows:
+        columns = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+        if len(columns) >= 2:
+            linked_titles.append(re.sub(r"\s+", " ", columns[1]).strip())
+
+    assert linked_titles == sorted(linked_titles)
 
 
 def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
