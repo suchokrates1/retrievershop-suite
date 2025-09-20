@@ -12,6 +12,11 @@ from .db import get_session
 logger = logging.getLogger(__name__)
 
 
+def _clear_cached_tokens():
+    os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
+    os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+
 def sync_offers():
     """Synchronize offers from Allegro with local database."""
     token = os.getenv("ALLEGRO_ACCESS_TOKEN")
@@ -26,9 +31,13 @@ def sync_offers():
             if new_refresh:
                 refresh = new_refresh
                 os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
-        except Exception:
+        except Exception as exc:
+            _clear_cached_tokens()
             logger.exception("Failed to refresh Allegro token")
-            raise
+            raise RuntimeError(
+                "Failed to refresh Allegro token before syncing offers; "
+                "please re-authorize the Allegro integration"
+            ) from exc
     if not token:
         raise RuntimeError("Missing Allegro access token")
 
@@ -43,13 +52,15 @@ def sync_offers():
                     try:
                         token_data = allegro_api.refresh_token(refresh)
                     except Exception as refresh_exc:
+                        _clear_cached_tokens()
                         logger.exception("Failed to refresh Allegro token")
                         raise RuntimeError(
                             "Failed to refresh Allegro token after unauthorized response "
-                            f"on page {page}"
+                            f"on page {page}; please re-authorize the Allegro integration"
                         ) from refresh_exc
                     new_token = token_data.get("access_token")
                     if not new_token:
+                        _clear_cached_tokens()
                         message = (
                             "Failed to refresh Allegro offers on page "
                             f"{page}: missing access token"
@@ -64,6 +75,7 @@ def sync_offers():
                         os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
                     continue
                 if status_code == 401 and not refresh:
+                    os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
                     message = (
                         "Failed to fetch Allegro offers on page "
                         f"{page}: unauthorized and no refresh token available"
