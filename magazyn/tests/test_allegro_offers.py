@@ -304,6 +304,74 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
     assert "text-danger" in row_high and "✗" in row_high
 
 
+def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatch):
+    with get_session() as session:
+        product = Product(name="Legowisko", color="Szare")
+        session.add(product)
+        session.flush()
+
+        size_small = ProductSize(
+            product_id=product.id,
+            size="S",
+            barcode="333",
+        )
+        size_large = ProductSize(
+            product_id=product.id,
+            size="L",
+            barcode="444",
+        )
+        session.add_all([size_small, size_large])
+        session.flush()
+
+        session.add(
+            AllegroOffer(
+                offer_id="offer-product",
+                title="Oferta produktowa",
+                price=Decimal("150.00"),
+                product_id=product.id,
+            )
+        )
+
+    monkeypatch.setattr(settings, "ALLEGRO_SELLER_ID", "our-seller")
+    monkeypatch.setattr(settings, "ALLEGRO_EXCLUDED_SELLERS", set())
+
+    called_barcodes: list[str] = []
+
+    def fake_listing(barcode):
+        called_barcodes.append(barcode)
+        if barcode == "333":
+            return [
+                {
+                    "seller": {"id": "competitor-1"},
+                    "sellingMode": {"price": {"amount": "120.00"}},
+                }
+            ]
+        if barcode == "444":
+            return [
+                {
+                    "seller": {"id": "competitor-2"},
+                    "sellingMode": {"price": {"amount": "85.00"}},
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("magazyn.allegro.fetch_product_listing", fake_listing)
+
+    response = client.get("/allegro/price-check")
+    assert response.status_code == 200
+
+    body = response.data.decode("utf-8")
+    row = next(
+        row
+        for row in re.findall(r"<tr>.*?</tr>", body, re.S)
+        if "Oferta produktowa" in row
+    )
+
+    assert "Legowisko Szare" in row
+    assert "85.00 zł" in row
+    assert set(called_barcodes) == {"333", "444"}
+
+
 def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
     class FakeResponse:
         def __init__(self, status_code, data):
