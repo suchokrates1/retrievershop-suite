@@ -36,8 +36,8 @@ PRODUCT_KEYWORDS: list[tuple[str, str, int]] = [
     ("adventure dog", "Szelki dla psa Truelove Adventure Dog", 2),
     ("lumen", "Szelki dla psa Truelove Lumen", 1),
     ("blossom", "Szelki dla psa Truelove Blossom", 1),
-    ("front line premium", "Szelki dla psa Truelove Front Line Premium", 0),
-    ("front line", "Szelki dla psa Truelove Front Line Premium", 0),
+    ("front line premium", "Szelki dla psa Truelove Front Line Premium", 1),
+    ("front line", "Szelki dla psa Truelove Front Line", 0),
 ]
 
 
