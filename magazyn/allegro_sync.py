@@ -6,10 +6,12 @@ from collections.abc import Mapping
 from urllib.parse import urlparse, parse_qs
 
 from requests.exceptions import HTTPError
+from sqlalchemy import or_
 
 from . import allegro_api
-from .models import AllegroOffer, ProductSize
+from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
+from .parsing import parse_offer_title
 
 logger = logging.getLogger(__name__)
 
@@ -153,12 +155,23 @@ def sync_offers():
                 else:
                     price = Decimal("0.00")
 
-                barcode = offer.get("ean") or offer.get("barcode")
-                product_size = None
-                if barcode:
-                    product_size = (
-                        session.query(ProductSize).filter_by(barcode=barcode).first()
+                title = offer.get("name") or offer.get("title", "")
+                name, color, size = parse_offer_title(title)
+
+                query = (
+                    session.query(ProductSize)
+                    .join(Product)
+                    .filter(Product.name == name, ProductSize.size == size)
+                )
+
+                if color:
+                    query = query.filter(Product.color == color)
+                else:
+                    query = query.filter(
+                        or_(Product.color == "", Product.color.is_(None))
                     )
+
+                product_size = query.first()
 
                 product_id = product_size.product_id if product_size else None
                 product_size_id = product_size.id if product_size else None
@@ -169,7 +182,6 @@ def sync_offers():
                     .first()
                 )
                 timestamp = datetime.now(timezone.utc).isoformat()
-                title = offer.get("name") or offer.get("title", "")
 
                 if existing:
                     existing.title = title

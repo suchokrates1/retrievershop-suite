@@ -22,8 +22,8 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
                 "offers": [
                     {
                         "id": "O1",
-                        "name": "Test offer",
-                        "ean": "123456",
+                        "name": "Test offer czerwony",
+                        "ean": "ignored",
                         "sellingMode": {"price": {"amount": "15.00"}},
                     }
                 ]
@@ -34,8 +34,8 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
 
     with get_session() as session:
-        product = Product(name="Prod", color="red")
-        ps = ProductSize(product=product, size="L", barcode="123456")
+        product = Product(name="Test offer", color="Czerwony")
+        ps = ProductSize(product=product, size="Uniwersalny")
         session.add(product)
         session.add(ps)
         session.flush()
@@ -59,7 +59,7 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
         assert len(offers) == 1
         offer = offers[0]
         assert offer.offer_id == "O1"
-        assert offer.title == "Test offer"
+        assert offer.title == "Test offer czerwony"
         assert offer.price == Decimal("15.00")
         assert offer.product_id == product_id
 
@@ -74,13 +74,13 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
                 "offers": [
                     {
                         "id": "P1",
-                        "name": "Paginated offer 1",
+                        "name": "Paginated product 1 czerwony L",
                         "ean": "111000",
                         "sellingMode": {"price": {"amount": "12.00"}},
                     },
                     {
                         "id": "P2",
-                        "name": "Paginated offer 2",
+                        "name": "Paginated product 2 zielony L",
                         "ean": "222000",
                         "sellingMode": {"price": {"amount": "13.00"}},
                     },
@@ -98,7 +98,7 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
                 "offers": [
                     {
                         "id": "P3",
-                        "name": "Paginated offer 3",
+                        "name": "Paginated product 3 niebieski L",
                         "ean": "333000",
                         "sellingMode": {"price": {"amount": "14.00"}},
                     }
@@ -120,9 +120,10 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
     with get_session() as session:
         products = []
         sizes = []
-        for idx, ean in enumerate(["111000", "222000", "333000"], start=1):
-            product = Product(name=f"Paginated product {idx}", color="color")
-            size = ProductSize(product=product, size="L", barcode=ean)
+        colors = ["Czerwony", "Zielony", "Niebieski"]
+        for idx, color in enumerate(colors, start=1):
+            product = Product(name=f"Paginated product {idx}", color=color)
+            size = ProductSize(product=product, size="L")
             products.append(product)
             sizes.append(size)
         session.add_all(products + sizes)
@@ -144,9 +145,9 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
         )
         assert len(offers) == 3
         assert [offer.title for offer in offers] == [
-            "Paginated offer 1",
-            "Paginated offer 2",
-            "Paginated offer 3",
+            "Paginated product 1 czerwony L",
+            "Paginated product 2 zielony L",
+            "Paginated product 3 niebieski L",
         ]
 
 
@@ -163,13 +164,13 @@ def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
                 "offers": [
                     {
                         "id": "NM1",
-                        "name": "Offer without selling mode",
+                        "name": "Prod NM1 czarne S",
                         "ean": "111111",
                         "sellingMode": None,
                     },
                     {
                         "id": "NM2",
-                        "name": "Offer with invalid price",
+                        "name": "Prod NM2 różowe M",
                         "ean": "222222",
                         "sellingMode": {"price": "unexpected"},
                     },
@@ -181,10 +182,10 @@ def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
 
     with get_session() as session:
-        product_one = Product(name="Prod NM1", color="one")
-        size_one = ProductSize(product=product_one, size="S", barcode="111111")
-        product_two = Product(name="Prod NM2", color="two")
-        size_two = ProductSize(product=product_two, size="M", barcode="222222")
+        product_one = Product(name="Prod NM1", color="Czarny")
+        size_one = ProductSize(product=product_one, size="S")
+        product_two = Product(name="Prod NM2", color="Różowy")
+        size_two = ProductSize(product=product_two, size="M")
         session.add_all([product_one, size_one, product_two, size_two])
         session.flush()
 
@@ -227,7 +228,7 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
                 "offers": [
                     {
                         "id": "O2",
-                        "name": "Refreshed offer",
+                        "name": "Prod2 zielony M",
                         "ean": "654321",
                         "sellingMode": {"price": {"amount": "20.00"}},
                     }
@@ -247,8 +248,8 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", fake_refresh)
 
     with get_session() as session:
-        product = Product(name="Prod2", color="blue")
-        ps = ProductSize(product=product, size="M", barcode="654321")
+        product = Product(name="Prod2", color="Zielony")
+        ps = ProductSize(product=product, size="M")
         session.add(product)
         session.add(ps)
         session.flush()
@@ -267,7 +268,7 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
         assert len(offers) == 1
         offer = offers[0]
         assert offer.offer_id == "O2"
-        assert offer.title == "Refreshed offer"
+        assert offer.title == "Prod2 zielony M"
         assert offer.price == Decimal("20.00")
         assert offer.product_id == product_id
 
