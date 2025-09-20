@@ -3,6 +3,7 @@ import os
 import logging
 from decimal import Decimal, InvalidOperation
 from collections.abc import Mapping
+from urllib.parse import urlparse, parse_qs
 
 from requests.exceptions import HTTPError
 
@@ -55,14 +56,15 @@ def sync_offers():
     if not token:
         raise RuntimeError("Missing Allegro access token")
 
-    page = 1
+    offset = 0
+    limit = 100
     fetched_count = 0
     matched_count = 0
 
     with get_session() as session:
         while True:
             try:
-                data = allegro_api.fetch_offers(token, page)
+                data = allegro_api.fetch_offers(token, offset=offset, limit=limit)
             except HTTPError as exc:
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
                 if status_code == 401 and refresh:
@@ -73,14 +75,14 @@ def sync_offers():
                         logger.exception("Failed to refresh Allegro token")
                         raise RuntimeError(
                             "Failed to refresh Allegro token after unauthorized response "
-                            f"on page {page}; please re-authorize the Allegro integration"
+                            f"at offset {offset}; please re-authorize the Allegro integration"
                         ) from refresh_exc
                     new_token = token_data.get("access_token")
                     if not new_token:
                         _clear_cached_tokens()
                         message = (
-                            "Failed to refresh Allegro offers on page "
-                            f"{page}: missing access token"
+                            "Failed to refresh Allegro offers at offset "
+                            f"{offset}: missing access token"
                         )
                         logger.error(message)
                         raise RuntimeError(message)
@@ -94,29 +96,29 @@ def sync_offers():
                 if status_code == 401 and not refresh:
                     os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
                     message = (
-                        "Failed to fetch Allegro offers on page "
-                        f"{page}: unauthorized and no refresh token available"
+                        "Failed to fetch Allegro offers at offset "
+                        f"{offset}: unauthorized and no refresh token available"
                     )
                     logger.error(message, exc_info=True)
                     raise RuntimeError(message) from exc
                 detail = f"HTTP status {status_code}" if status_code else "HTTP error"
                 message = (
-                    "Failed to fetch Allegro offers on page "
-                    f"{page}: {detail}"
+                    "Failed to fetch Allegro offers at offset "
+                    f"{offset}: {detail}"
                 )
                 logger.error(message, exc_info=True)
                 raise RuntimeError(message) from exc
             except Exception as exc:
-                message = f"Failed to fetch Allegro offers on page {page}"
+                message = f"Failed to fetch Allegro offers at offset {offset}"
                 logger.error(message, exc_info=True)
                 raise RuntimeError(message) from exc
             if not isinstance(data, Mapping):
                 logger.error(
-                    "Malformed response from Allegro on page %s: %r", page, data
+                    "Malformed response from Allegro at offset %s: %r", offset, data
                 )
                 raise RuntimeError(
-                    "Failed to fetch Allegro offers on page "
-                    f"{page}: malformed response from Allegro"
+                    "Failed to fetch Allegro offers at offset "
+                    f"{offset}: malformed response from Allegro"
                 )
 
             offers = data.get("offers") or data.get("items", {}).get("offers", [])
@@ -190,11 +192,65 @@ def sync_offers():
                 if product_size:
                     matched_count += 1
             next_page = data.get("nextPage") or data.get("links", {}).get("next")
+            if isinstance(next_page, list):
+                next_page = next_page[0] if next_page else None
             if not next_page:
                 break
-            page += 1
+            next_offset, next_limit = _extract_pagination(next_page, limit)
+            if next_offset is None or next_offset == offset:
+                break
+            offset = next_offset
+            limit = next_limit
 
     return {"fetched": fetched_count, "matched": matched_count}
+
+
+def _parse_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_from_href(href):
+    try:
+        query = parse_qs(urlparse(href).query)
+    except Exception:
+        return None, None
+    offset = None
+    limit = None
+    offset_values = query.get("offset")
+    if offset_values:
+        offset = _parse_int(offset_values[0])
+    limit_values = query.get("limit")
+    if limit_values:
+        limit = _parse_int(limit_values[0])
+    return offset, limit
+
+
+def _extract_pagination(next_data, current_limit):
+    next_offset = None
+    next_limit = current_limit
+
+    if isinstance(next_data, Mapping):
+        next_offset = _parse_int(next_data.get("offset"))
+        new_limit = _parse_int(next_data.get("limit"))
+        if new_limit is not None:
+            next_limit = new_limit
+        href = next_data.get("href")
+        if href:
+            href_offset, href_limit = _extract_from_href(href)
+            if href_limit is not None:
+                next_limit = href_limit
+            if next_offset is None:
+                next_offset = href_offset
+    elif isinstance(next_data, str):
+        href_offset, href_limit = _extract_from_href(next_data)
+        if href_limit is not None:
+            next_limit = href_limit
+        next_offset = href_offset
+
+    return next_offset, next_limit
 
 
 if __name__ == "__main__":
