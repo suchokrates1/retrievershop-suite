@@ -13,9 +13,10 @@ from magazyn.models import Product, ProductSize, AllegroOffer
 def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
 
-    def fake_fetch_offers(token, page):
+    def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
-        assert page == 1
+        assert offset == 0
+        assert limit == 100
         return {
             "items": {
                 "offers": [
@@ -63,13 +64,100 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
         assert offer.product_id == product_id
 
 
+def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    responses = [
+        {
+            "items": {
+                "offers": [
+                    {
+                        "id": "P1",
+                        "name": "Paginated offer 1",
+                        "ean": "111000",
+                        "sellingMode": {"price": {"amount": "12.00"}},
+                    },
+                    {
+                        "id": "P2",
+                        "name": "Paginated offer 2",
+                        "ean": "222000",
+                        "sellingMode": {"price": {"amount": "13.00"}},
+                    },
+                ]
+            },
+            "nextPage": {"offset": 2, "limit": 2},
+            "links": {
+                "next": {
+                    "href": "https://api.allegro.pl/sale/offers?offset=2&limit=2"
+                }
+            },
+        },
+        {
+            "items": {
+                "offers": [
+                    {
+                        "id": "P3",
+                        "name": "Paginated offer 3",
+                        "ean": "333000",
+                        "sellingMode": {"price": {"amount": "14.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        },
+    ]
+
+    calls = []
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        calls.append({"offset": offset, "limit": limit})
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        products = []
+        sizes = []
+        for idx, ean in enumerate(["111000", "222000", "333000"], start=1):
+            product = Product(name=f"Paginated product {idx}", color="color")
+            size = ProductSize(product=product, size="L", barcode=ean)
+            products.append(product)
+            sizes.append(size)
+        session.add_all(products + sizes)
+        session.flush()
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 3, "matched": 3}
+    assert len(calls) == 2
+    assert calls[0] == {"offset": 0, "limit": 100}
+    assert calls[1] == {"offset": 2, "limit": 2}
+
+    with get_session() as session:
+        offers = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id.in_(["P1", "P2", "P3"]))
+            .order_by(AllegroOffer.offer_id)
+            .all()
+        )
+        assert len(offers) == 3
+        assert [offer.title for offer in offers] == [
+            "Paginated offer 1",
+            "Paginated offer 2",
+            "Paginated offer 3",
+        ]
+
+
 def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
 
-    def fake_fetch_offers(token, page):
+    def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
-        assert page == 1
+        assert offset == 0
+        assert limit == 100
         return {
             "items": {
                 "offers": [
@@ -124,15 +212,16 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
     attempts = {"count": 0}
 
-    def fake_fetch_offers(token, page):
+    def fake_fetch_offers(token, offset=0, limit=100):
         attempts["count"] += 1
-        assert page == 1
+        assert offset == 0
         if attempts["count"] == 1:
             class DummyResponse:
                 status_code = 401
 
             raise HTTPError(response=DummyResponse())
         assert token == "new-access"
+        assert limit == 100
         return {
             "items": {
                 "offers": [
@@ -186,9 +275,10 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 def test_refresh_reports_counts_when_no_matches(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
 
-    def fake_fetch_offers(token, page):
+    def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
-        assert page == 1
+        assert offset == 0
+        assert limit == 100
         return {
             "items": {
                 "offers": [
@@ -238,7 +328,7 @@ def test_sync_offers_raises_on_unrecoverable_error(monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
 
-    def failing_fetch(token, page):
+    def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
             status_code = 403
 
@@ -256,7 +346,7 @@ def test_refresh_flashes_error_on_sync_failure(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
 
-    def failing_fetch(token, page):
+    def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
             status_code = 403
 
@@ -301,7 +391,7 @@ def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, mon
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-refresh")
 
-    def failing_fetch(token, page):
+    def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
             status_code = 401
 
@@ -334,7 +424,7 @@ def test_refresh_handles_empty_response(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
 
-    def empty_fetch(token, page):
+    def empty_fetch(token, offset=0, limit=100):
         return None
 
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", empty_fetch)

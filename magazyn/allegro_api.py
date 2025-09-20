@@ -54,15 +54,18 @@ def refresh_token(refresh_token: str) -> dict:
     return response.json()
 
 
-def fetch_offers(access_token: str, page: int = 1) -> dict:
+def fetch_offers(access_token: str, offset: int = 0, limit: int = 100) -> dict:
     """Fetch offers from Allegro using a valid access token.
 
     Parameters
     ----------
     access_token : str
         OAuth access token for Allegro API.
-    page : int
-        Page number of results to retrieve. Defaults to ``1``.
+    offset : int
+        Zero-based offset describing where to start fetching results.
+        Defaults to ``0``.
+    limit : int
+        Number of results to fetch per request. Defaults to ``100``.
 
     Returns
     -------
@@ -73,7 +76,7 @@ def fetch_offers(access_token: str, page: int = 1) -> dict:
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
-    params = {"page": page}
+    params = {"offset": offset, "limit": limit}
     url = f"{API_BASE_URL}/sale/offers"
 
     response = requests.get(
