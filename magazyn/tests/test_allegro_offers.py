@@ -256,14 +256,17 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
         if barcode == "111":
             return [
                 {
+                    "id": "our-offer",
                     "seller": {"id": "our-seller"},
                     "sellingMode": {"price": {"amount": "90.00"}},
                 },
                 {
+                    "id": "competitor-a-offer",
                     "seller": {"id": "competitor-a"},
                     "sellingMode": {"price": {"amount": "95.00"}},
                 },
                 {
+                    "id": "competitor-b-offer",
                     "seller": {"id": "competitor-b"},
                     "sellingMode": {"price": {"amount": "110.00"}},
                 },
@@ -271,10 +274,12 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
         if barcode == "222":
             return [
                 {
+                    "id": "competitor-c-offer",
                     "seller": {"id": "competitor-c"},
                     "sellingMode": {"price": {"amount": "80.00"}},
                 },
                 {
+                    "id": "competitor-d-offer",
                     "seller": {"id": "competitor-d"},
                     "sellingMode": {"price": {"amount": "125.00"}},
                 },
@@ -297,10 +302,13 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
 
     assert "90.00 zł" in row_low
     assert "95.00 zł" in row_low
+    assert "href=\"https://allegro.pl/oferta/competitor-a-offer\"" in row_low
+    assert "aria-label=\"Zobacz ofertę konkurencji\"" in row_low
     assert "text-success" in row_low and "✓" in row_low
 
     assert "120.00 zł" in row_high
     assert "80.00 zł" in row_high
+    assert "href=\"https://allegro.pl/oferta/competitor-c-offer\"" in row_high
     assert "text-danger" in row_high and "✗" in row_high
 
 
@@ -342,6 +350,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
         if barcode == "333":
             return [
                 {
+                    "id": "competitor-1-offer",
                     "seller": {"id": "competitor-1"},
                     "sellingMode": {"price": {"amount": "120.00"}},
                 }
@@ -349,6 +358,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
         if barcode == "444":
             return [
                 {
+                    "id": "competitor-2-offer",
                     "seller": {"id": "competitor-2"},
                     "sellingMode": {"price": {"amount": "85.00"}},
                 }
@@ -369,6 +379,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
 
     assert "Legowisko Szare" in row
     assert "85.00 zł" in row
+    assert "href=\"https://allegro.pl/oferta/competitor-2-offer\"" in row
     assert set(called_barcodes) == {"333", "444"}
 
 
