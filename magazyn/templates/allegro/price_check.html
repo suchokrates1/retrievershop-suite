@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Monitor cen Allegro</h1>
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">Oferta</th>
+                <th scope="col">Produkt</th>
+                <th scope="col">Nasza cena</th>
+                <th scope="col">Najniższa cena konkurencji</th>
+                <th scope="col" class="text-center">Najtańsza?</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in price_checks %}
+            <tr>
+                <td>{{ item.title }}</td>
+                <td>{{ item.label }}</td>
+                <td>
+                    {% if item.own_price %}
+                        {{ item.own_price }} zł
+                    {% else %}
+                        <span class="text-muted">–</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.error %}
+                        <span class="text-muted">{{ item.error }}</span>
+                    {% elif item.competitor_price %}
+                        {{ item.competitor_price }} zł
+                    {% else %}
+                        <span class="text-muted">Brak danych</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if item.is_lowest is none %}
+                        <span class="text-muted">–</span>
+                    {% elif item.is_lowest %}
+                        <span class="text-success" title="Nasza oferta jest najtańsza">✓</span>
+                    {% else %}
+                        <span class="text-danger" title="Konkurencja ma niższą cenę">✗</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">Brak powiązanych ofert Allegro.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
