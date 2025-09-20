@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unicodedata
 
-from .constants import ALL_SIZES, KNOWN_COLORS, PRODUCT_ALIASES
+from .constants import (
+    ALL_SIZES,
+    KNOWN_COLORS,
+    normalize_product_title_fragment,
+    resolve_product_alias,
+)
 
 COLOR_ALIASES = {
     "czerwone": "czerwony",
@@ -84,8 +89,8 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
                     size = "Uniwersalny"
                     name = " ".join(words[:-1])
 
-    name = name.strip()
-    name = PRODUCT_ALIASES.get(name, name)
+    name = normalize_product_title_fragment(name.strip())
+    name = resolve_product_alias(name)
     color = normalize_color(color)
     return name, size, color
 
@@ -145,7 +150,8 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
                 remaining_words.pop(index)
 
     name = " ".join(remaining_words).strip()
-    name = PRODUCT_ALIASES.get(name, name)
+    name = normalize_product_title_fragment(name)
+    name = resolve_product_alias(name)
 
     if not size:
         size = "Uniwersalny"
