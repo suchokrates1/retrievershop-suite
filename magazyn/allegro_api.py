@@ -2,6 +2,7 @@ import os
 from typing import Optional
 
 import requests
+from requests.exceptions import HTTPError
 
 AUTH_URL = "https://allegro.pl/auth/oauth/token"
 API_BASE_URL = "https://api.allegro.pl"
@@ -104,13 +105,10 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
     """
 
     token = os.getenv("ALLEGRO_ACCESS_TOKEN")
+    refresh = os.getenv("ALLEGRO_REFRESH_TOKEN")
     if not token:
         raise RuntimeError("Missing Allegro access token")
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.allegro.public.v1+json",
-    }
     params = {"page": page}
     if ean.isdigit():
         params["ean"] = ean
@@ -119,12 +117,43 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
 
     url = f"{API_BASE_URL}/offers/listing"
     offers = []
+    refreshed = False
 
     while True:
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.allegro.public.v1+json",
+        }
         response = requests.get(
             url, headers=headers, params=params, timeout=DEFAULT_TIMEOUT
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except HTTPError as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code in (401, 403):
+                friendly_message = (
+                    "Failed to refresh Allegro access token for product listing; "
+                    "please re-authorize the Allegro integration"
+                )
+                if refresh and not refreshed:
+                    refreshed = True
+                    try:
+                        token_data = refresh_token(refresh)
+                    except Exception as refresh_exc:
+                        raise RuntimeError(friendly_message) from refresh_exc
+                    new_token = token_data.get("access_token")
+                    if not new_token:
+                        raise RuntimeError(friendly_message)
+                    token = new_token
+                    os.environ["ALLEGRO_ACCESS_TOKEN"] = new_token
+                    new_refresh = token_data.get("refresh_token")
+                    if new_refresh:
+                        refresh = new_refresh
+                        os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
+                    continue
+                raise RuntimeError(friendly_message) from exc
+            raise
         data = response.json()
 
         items = data.get("items", {})
