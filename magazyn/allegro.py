@@ -23,27 +23,62 @@ def offers():
             db.query(AllegroOffer, ProductSize, Product)
             .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
             .outerjoin(Product, ProductSize.product_id == Product.id)
+            .order_by(AllegroOffer.title)
             .all()
         )
-        grouped = {}
+        offers = []
         for offer, size, product in rows:
-            key = size.id if size else None
-            group = grouped.setdefault(
-                key,
-                {
-                    "product_name": product.name if product else None,
-                    "size": size.size if size else None,
-                    "offers": [],
-                },
-            )
-            group["offers"].append(
+            label = None
+            if product and size:
+                parts = [product.name]
+                if product.color:
+                    parts.append(product.color)
+                label = " – ".join([" ".join(parts), size.size])
+            offers.append(
                 {
                     "offer_id": offer.offer_id,
                     "title": offer.title,
                     "price": offer.price,
+                    "product_size_id": offer.product_size_id,
+                    "selected_label": label,
+                    "barcode": size.barcode if size else None,
                 }
             )
-    return render_template("allegro/offers.html", groups=grouped.values())
+
+        inventory_rows = (
+            db.query(ProductSize, Product)
+            .join(Product, ProductSize.product_id == Product.id)
+            .order_by(Product.name, ProductSize.size)
+            .all()
+        )
+        inventory = []
+        for size, product in inventory_rows:
+            name_parts = [product.name]
+            if product.color:
+                name_parts.append(product.color)
+            main_label = " ".join(name_parts)
+            label = f"{main_label} – {size.size}"
+            extra_parts = []
+            if size.barcode:
+                extra_parts.append(f"EAN: {size.barcode}")
+            quantity = size.quantity if size.quantity is not None else 0
+            extra_parts.append(f"Stan: {quantity}")
+            filter_text = " ".join(
+                [
+                    label,
+                    size.barcode or "",
+                    str(quantity),
+                ]
+            ).strip().lower()
+            inventory.append(
+                {
+                    "id": size.id,
+                    "label": label,
+                    "extra": ", ".join(extra_parts),
+                    "filter": filter_text,
+                }
+            )
+    return render_template("allegro/offers.html", offers=offers, inventory=inventory)
 
 
 @bp.route("/allegro/refresh", methods=["POST"])
@@ -67,21 +102,36 @@ def link_offer(offer_id):
             return redirect(url_for("allegro.offers"))
 
         if request.method == "POST":
+            product_size_id = request.form.get("product_size_id", type=int)
             product_id = request.form.get("product_id", type=int)
-            if product_id:
+            if product_size_id:
+                product_size = (
+                    db.query(ProductSize).filter_by(id=product_size_id).first()
+                )
+                if product_size:
+                    offer.product_size_id = product_size.id
+                    offer.product_id = product_size.product_id
+                    flash("Powiązano ofertę z pozycją magazynową")
+                else:
+                    flash("Nie znaleziono rozmiaru produktu o podanym ID")
+            elif product_id:
                 product = db.query(Product).filter_by(id=product_id).first()
                 if product:
                     offer.product_id = product.id
+                    offer.product_size_id = None
                     flash("Powiązano aukcję z produktem")
-                    return redirect(url_for("allegro.offers"))
-                flash("Nie znaleziono produktu o podanym ID")
+                else:
+                    flash("Nie znaleziono produktu o podanym ID")
             else:
-                flash("Nie podano ID produktu")
+                offer.product_size_id = None
+                flash("Usunięto powiązanie z magazynem")
+            return redirect(url_for("allegro.offers"))
 
         offer_data = {
             "offer_id": offer.offer_id,
             "title": offer.title,
             "price": offer.price,
             "product_id": offer.product_id or "",
+            "product_size_id": offer.product_size_id or "",
         }
     return render_template("allegro/link.html", offer=offer_data)

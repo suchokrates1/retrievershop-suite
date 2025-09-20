@@ -159,3 +159,57 @@ def test_refresh_flashes_error_on_sync_failure(client, login, monkeypatch):
         for _, message in flashes
     )
 
+
+def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
+    monkeypatch.delenv("ALLEGRO_ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-token")
+
+    def failing_refresh(token):
+        class DummyResponse:
+            status_code = 401
+
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", failing_refresh)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        sync_mod.sync_offers()
+
+    message = str(excinfo.value)
+    assert "please re-authorize" in message
+    assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
+    assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+
+
+def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
+    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-refresh")
+
+    def failing_fetch(token, page):
+        class DummyResponse:
+            status_code = 401
+
+        raise HTTPError(response=DummyResponse())
+
+    def failing_refresh(token):
+        class DummyResponse:
+            status_code = 400
+
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", failing_fetch)
+    monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", failing_refresh)
+
+    response = client.post("/allegro/refresh")
+    assert response.status_code == 302
+
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+
+    assert any(
+        "Błąd synchronizacji ofert" in message and "please re-authorize" in message
+        for _, message in flashes
+    )
+    assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
+    assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+
