@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from flask import (
     Blueprint,
     render_template,
@@ -9,9 +11,11 @@ from flask import (
 
 from sqlalchemy import case
 
+from .allegro_price_monitor import fetch_product_listing
+from .auth import login_required
+from .config import settings
 from .db import get_session
 from .models import AllegroOffer, Product, ProductSize
-from .auth import login_required
 from .allegro_sync import sync_offers
 
 bp = Blueprint("allegro", __name__)
@@ -84,6 +88,95 @@ def offers():
                 }
             )
     return render_template("allegro/offers.html", offers=offers, inventory=inventory)
+
+
+def _format_decimal(value: Decimal | None) -> str | None:
+    if value is None:
+        return None
+    return f"{value:.2f}"
+
+
+@bp.route("/allegro/price-check")
+@login_required
+def price_check():
+    with get_session() as db:
+        rows = (
+            db.query(AllegroOffer, ProductSize, Product)
+            .join(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
+            .join(Product, ProductSize.product_id == Product.id)
+            .all()
+        )
+
+        offers = []
+        for offer, size, product in rows:
+            name_parts = [product.name]
+            if product.color:
+                name_parts.append(product.color)
+            label = " ".join(name_parts) + f" – {size.size}"
+            offers.append(
+                {
+                    "offer_id": offer.offer_id,
+                    "title": offer.title,
+                    "price": Decimal(offer.price).quantize(Decimal("0.01")),
+                    "barcode": size.barcode,
+                    "label": label,
+                }
+            )
+
+    price_checks = []
+    for offer in offers:
+        competitor_prices: list[Decimal] = []
+        error: str | None = None
+        barcode = offer["barcode"]
+        if barcode:
+            try:
+                listing = fetch_product_listing(barcode)
+            except Exception as exc:  # pragma: no cover - network errors
+                error = str(exc)
+            else:
+                for item in listing:
+                    seller = item.get("seller") or {}
+                    seller_id = seller.get("id")
+                    if (
+                        not seller_id
+                        or seller_id == settings.ALLEGRO_SELLER_ID
+                        or seller_id in settings.ALLEGRO_EXCLUDED_SELLERS
+                    ):
+                        continue
+                    price_str = (
+                        item.get("sellingMode", {})
+                        .get("price", {})
+                        .get("amount")
+                    )
+                    try:
+                        price = Decimal(price_str).quantize(Decimal("0.01"))
+                    except (TypeError, ValueError, InvalidOperation):
+                        continue
+                    competitor_prices.append(price)
+        else:
+            error = "Brak kodu EAN"
+
+        competitor_min = min(competitor_prices) if competitor_prices else None
+        is_lowest = None
+        if offer["price"] is not None:
+            if competitor_min is None:
+                is_lowest = True
+            else:
+                is_lowest = offer["price"] <= competitor_min
+
+        price_checks.append(
+            {
+                "offer_id": offer["offer_id"],
+                "title": offer["title"],
+                "label": offer["label"],
+                "own_price": _format_decimal(offer["price"]),
+                "competitor_price": _format_decimal(competitor_min),
+                "is_lowest": is_lowest,
+                "error": error,
+            }
+        )
+
+    return render_template("allegro/price_check.html", price_checks=price_checks)
 
 
 @bp.route("/allegro/refresh", methods=["POST"])
