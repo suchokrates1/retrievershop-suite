@@ -1,6 +1,7 @@
 from decimal import Decimal
 import re
 
+from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
 
@@ -133,3 +134,98 @@ def test_offers_without_inventory_are_listed_first(client, login):
 
     assert titles[0] == "ZZZ Oferta bez przypisania"
     assert titles[1:] == sorted(titles[1:])
+
+
+def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
+    with get_session() as session:
+        product = Product(name="Szelki", color="Niebieskie")
+        session.add(product)
+        session.flush()
+
+        size_low = ProductSize(
+            product_id=product.id,
+            size="M",
+            quantity=2,
+            barcode="111",
+        )
+        size_high = ProductSize(
+            product_id=product.id,
+            size="L",
+            quantity=3,
+            barcode="222",
+        )
+        session.add_all([size_low, size_high])
+        session.flush()
+
+        session.add_all(
+            [
+                AllegroOffer(
+                    offer_id="offer-low",
+                    title="Oferta najtańsza",
+                    price=Decimal("90.00"),
+                    product_id=product.id,
+                    product_size_id=size_low.id,
+                ),
+                AllegroOffer(
+                    offer_id="offer-high",
+                    title="Oferta droższa",
+                    price=Decimal("120.00"),
+                    product_id=product.id,
+                    product_size_id=size_high.id,
+                ),
+            ]
+        )
+
+    monkeypatch.setattr(settings, "ALLEGRO_SELLER_ID", "our-seller")
+    monkeypatch.setattr(settings, "ALLEGRO_EXCLUDED_SELLERS", set())
+
+    def fake_listing(barcode):
+        if barcode == "111":
+            return [
+                {
+                    "seller": {"id": "our-seller"},
+                    "sellingMode": {"price": {"amount": "90.00"}},
+                },
+                {
+                    "seller": {"id": "competitor-a"},
+                    "sellingMode": {"price": {"amount": "95.00"}},
+                },
+                {
+                    "seller": {"id": "competitor-b"},
+                    "sellingMode": {"price": {"amount": "110.00"}},
+                },
+            ]
+        if barcode == "222":
+            return [
+                {
+                    "seller": {"id": "competitor-c"},
+                    "sellingMode": {"price": {"amount": "80.00"}},
+                },
+                {
+                    "seller": {"id": "competitor-d"},
+                    "sellingMode": {"price": {"amount": "125.00"}},
+                },
+            ]
+        return []
+
+    monkeypatch.setattr("magazyn.allegro.fetch_product_listing", fake_listing)
+
+    response = client.get("/allegro/price-check")
+    assert response.status_code == 200
+
+    body = response.data.decode("utf-8")
+    assert "Monitor cen Allegro" in body
+    assert "Najniższa cena konkurencji" in body
+
+    rows = re.findall(r"<tr>.*?</tr>", body, re.S)
+    data_rows = [row for row in rows if "Oferta" in row and "th" not in row]
+    row_low = next(row for row in data_rows if "Oferta najtańsza" in row)
+    row_high = next(row for row in data_rows if "Oferta droższa" in row)
+
+    assert "90.00 zł" in row_low
+    assert "95.00 zł" in row_low
+    assert "text-success" in row_low and "✓" in row_low
+
+    assert "120.00 zł" in row_high
+    assert "80.00 zł" in row_high
+    assert "text-danger" in row_high and "✗" in row_high
