@@ -1,6 +1,7 @@
 import os
 from decimal import Decimal
 
+import pytest
 from requests.exceptions import HTTPError
 
 import magazyn.allegro_sync as sync_mod
@@ -115,4 +116,46 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
         assert offer.title == "Refreshed offer"
         assert offer.price == Decimal("20.00")
         assert offer.product_id == product_id
+
+
+def test_sync_offers_raises_on_unrecoverable_error(monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def failing_fetch(token, page):
+        class DummyResponse:
+            status_code = 403
+
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", failing_fetch)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        sync_mod.sync_offers()
+
+    assert "HTTP status 403" in str(excinfo.value)
+
+
+def test_refresh_flashes_error_on_sync_failure(client, login, monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def failing_fetch(token, page):
+        class DummyResponse:
+            status_code = 403
+
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", failing_fetch)
+
+    response = client.post("/allegro/refresh")
+    assert response.status_code == 302
+
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+
+    assert any(
+        "Błąd synchronizacji ofert" in message and "HTTP status 403" in message
+        for _, message in flashes
+    )
 
