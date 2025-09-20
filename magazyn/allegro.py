@@ -7,6 +7,8 @@ from flask import (
     flash,
 )
 
+from sqlalchemy import case
+
 from .db import get_session
 from .models import AllegroOffer, Product, ProductSize
 from .auth import login_required
@@ -23,7 +25,10 @@ def offers():
             db.query(AllegroOffer, ProductSize, Product)
             .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
             .outerjoin(Product, ProductSize.product_id == Product.id)
-            .order_by(AllegroOffer.title)
+            .order_by(
+                case((AllegroOffer.product_size_id.is_(None), 0), else_=1),
+                AllegroOffer.title,
+            )
             .all()
         )
         offers = []
