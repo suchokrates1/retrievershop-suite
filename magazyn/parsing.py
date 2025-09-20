@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import unicodedata
+
 from .constants import ALL_SIZES, KNOWN_COLORS, PRODUCT_ALIASES
 
 COLOR_ALIASES = {
@@ -8,6 +12,9 @@ COLOR_ALIASES = {
     "białe": "biały",
     "brązowe": "brązowy",
     "różowe": "różowy",
+    "różowa": "różowy",
+    "róż": "różowy",
+    "różow": "różowy",
     "fioletowe": "fioletowy",
     "srebrne": "srebrny",
     "pomarańczowe": "pomarańczowy",
@@ -16,11 +23,26 @@ COLOR_ALIASES = {
 }
 
 
+def _strip_diacritics(value: str) -> str:
+    """Return *value* lower-cased and stripped of diacritics."""
+
+    normalized = unicodedata.normalize("NFKD", value.lower())
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
 def normalize_color(color: str) -> str:
     if not color:
         return ""
-    base = COLOR_ALIASES.get(color.lower(), color).lower()
-    return base.capitalize()
+    normalized_color = _strip_diacritics(color)
+    base_match = ""
+    base_color = color.lower()
+    for alias, canonical in COLOR_ALIASES.items():
+        normalized_alias = _strip_diacritics(alias)
+        if normalized_color.startswith(normalized_alias):
+            if len(normalized_alias) > len(base_match):
+                base_match = normalized_alias
+                base_color = canonical
+    return base_color.capitalize()
 
 
 def parse_product_info(item: dict) -> tuple[str, str, str]:
@@ -88,7 +110,9 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
 
     words = [word for word in (title or "").strip().split() if word]
     size_lookup = {size.upper(): size for size in ALL_SIZES}
-    known_colors = {color.lower() for color in KNOWN_COLORS}
+    normalized_known_colors = [
+        (_strip_diacritics(color), color) for color in KNOWN_COLORS
+    ]
 
     color = ""
     size = ""
@@ -108,9 +132,17 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
             remaining_words.pop(index)
             continue
         lower_word = word.lower()
-        if not color and lower_word in known_colors:
-            color = normalize_color(word)
-            remaining_words.pop(index)
+        if not color:
+            normalized_word = _strip_diacritics(lower_word)
+            matched_color = ""
+            matched_length = 0
+            for normalized_color, original_color in normalized_known_colors:
+                if normalized_word.startswith(normalized_color) and len(normalized_color) > matched_length:
+                    matched_color = original_color
+                    matched_length = len(normalized_color)
+            if matched_color:
+                color = normalize_color(matched_color)
+                remaining_words.pop(index)
 
     name = " ".join(remaining_words).strip()
     name = PRODUCT_ALIASES.get(name, name)
