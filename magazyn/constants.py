@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import re
+import unicodedata
+
 ALL_SIZES = ["XS", "S", "M", "L", "XL", "Uniwersalny"]
 
 # Common color names that may appear in product titles.  They are stored in
@@ -30,7 +35,110 @@ KNOWN_COLORS = [
     "turkusowe",
 ]
 
-# Maps alternative product names to canonical ones to simplify lookups.
+# Regex rules used to normalize product titles and alias lookups.  The patterns
+# are applied in order which allows the more specific replacements (e.g. with
+# "Premium") to run before the general ones.
+_PRODUCT_TITLE_REPLACEMENTS = [
+    (re.compile(r"\bfron\b", re.IGNORECASE), "Front"),
+    (
+        re.compile(r"\bfront[\s-]*line\s+premium\b", re.IGNORECASE),
+        "Front Line Premium",
+    ),
+    (re.compile(r"\bfront[\s-]*line\b", re.IGNORECASE), "Front Line"),
+]
+
+
+def _apply_title_replacements(value: str) -> str:
+    """Return *value* with known typos corrected and whitespace normalized."""
+
+    result = value or ""
+    for pattern, replacement in _PRODUCT_TITLE_REPLACEMENTS:
+        result = pattern.sub(replacement, result)
+    result = re.sub(r"\s+", " ", result).strip()
+    return result
+
+
+def normalize_product_title_fragment(value: str) -> str:
+    """Return title fragment with consistent wording for matching purposes."""
+
+    return _apply_title_replacements(value)
+
+
+def _normalize_alias_key(value: str) -> str:
+    """Return a case-folded key used when looking up product aliases."""
+
+    normalized = unicodedata.normalize("NFKC", value or "").casefold()
+    for pattern, replacement in _PRODUCT_TITLE_REPLACEMENTS:
+        normalized = pattern.sub(replacement.casefold(), normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+_PRODUCT_ALIAS_GROUPS: dict[str, set[str]] = {
+    "Szelki dla psa Truelove Tropical": {
+        "Szelki dla psa Truelove Front Line Premium Tropical",
+        "Szelki dla psa Truelove FrontLine Premium Tropical",
+        "Szelki dla psa Truelove Front-Line Premium Tropical",
+        "Szelki dla psa Truelove Fron Line Premium Tropical",
+    },
+    "Szelki dla psa Truelove Front Line Premium": {
+        "Szelki dla psa Truelove Front Line",
+        "Szelki dla psa Truelove FrontLine Premium",
+        "Szelki dla psa Truelove Front-Line Premium",
+        "Szelki dla psa Truelove FrontLine",
+        "Szelki dla psa Truelove Front-Line",
+        "Szelki dla psa Truelove Fron Line Premium",
+        "Szelki dla psa Truelove Fron Line",
+    },
+    "Szelki dla psa Truelove Lumen": {
+        "Szelki dla psa Truelove Front Line Lumen",
+        "Szelki dla psa Truelove Front Line Premium Lumen",
+        "Szelki dla psa Truelove FrontLine Lumen",
+        "Szelki dla psa Truelove FrontLine Premium Lumen",
+        "Szelki dla psa Truelove Front-Line Lumen",
+        "Szelki dla psa Truelove Front-Line Premium Lumen",
+        "Szelki dla psa Truelove Fron Line Lumen",
+        "Szelki dla psa Truelove Fron Line Premium Lumen",
+    },
+    "Szelki dla psa Truelove Blossom": {
+        "Szelki dla psa Truelove Front Line Blossom",
+        "Szelki dla psa Truelove Front Line Premium Blossom",
+        "Szelki dla psa Truelove FrontLine Blossom",
+        "Szelki dla psa Truelove FrontLine Premium Blossom",
+        "Szelki dla psa Truelove Front-Line Blossom",
+        "Szelki dla psa Truelove Front-Line Premium Blossom",
+        "Szelki dla psa Truelove Fron Line Blossom",
+        "Szelki dla psa Truelove Fron Line Premium Blossom",
+    },
+}
+
+
+def _build_alias_lookup() -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for canonical, aliases in _PRODUCT_ALIAS_GROUPS.items():
+        variants = set(aliases)
+        variants.add(canonical)
+        for variant in variants:
+            key = _normalize_alias_key(variant)
+            lookup[key] = canonical
+    return lookup
+
+
+_PRODUCT_ALIAS_LOOKUP = _build_alias_lookup()
+
+
+def resolve_product_alias(name: str) -> str:
+    """Return canonical product name for *name* if an alias is known."""
+
+    key = _normalize_alias_key(name)
+    return _PRODUCT_ALIAS_LOOKUP.get(key, (name or "").strip())
+
+
+# Backwards compatibility mapping that contains explicit alias -> canonical
+# entries (without additional normalization).  New code should prefer
+# ``resolve_product_alias`` which understands spelling variants.
 PRODUCT_ALIASES = {
-    "Szelki dla psa Truelove Front Line Premium Tropical": "Szelki dla psa Truelove Tropical",
+    alias: canonical
+    for canonical, aliases in _PRODUCT_ALIAS_GROUPS.items()
+    for alias in aliases
 }
