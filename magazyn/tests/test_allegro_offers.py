@@ -44,6 +44,8 @@ def test_offers_page_shows_manual_mapping_dropdown(client, login):
     assert "Brak powiązania" in body
     assert "Szelki spacerowe" in body
     assert "EAN: 1234567890123" in body
+    assert 'name="product_id"' in body
+    assert 'data-kind="product"' in body
 
 
 def test_link_offer_to_product_size_updates_relation(client, login):
@@ -99,6 +101,46 @@ def test_link_offer_to_product_size_updates_relation(client, login):
         )
         assert updated.product_size_id == size_target.id
         assert updated.product_id == product_target.id
+
+
+def test_link_offer_to_product_updates_relation(client, login):
+    with get_session() as session:
+        product = Product(name="Obroża miejska", color="Czarna")
+        session.add(product)
+        session.flush()
+
+        offer_id = "offer-3"
+        session.add(
+            AllegroOffer(
+                offer_id=offer_id,
+                title="Obroża bez rozmiaru",
+                price=Decimal("39.99"),
+            )
+        )
+
+    response = client.post(
+        f"/allegro/link/{offer_id}",
+        data={"product_id": product.id},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    linked_section = re.search(
+        r'id="linked-offers".*?<tbody>(.*?)</tbody>', body, re.S
+    )
+    assert linked_section
+    assert "Obroża bez rozmiaru" in linked_section.group(1)
+    assert "Obroża miejska" in linked_section.group(1)
+
+    with get_session() as session:
+        updated = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id == offer_id)
+            .one()
+        )
+        assert updated.product_id == product.id
+        assert updated.product_size_id is None
 
 
 def test_offers_without_inventory_are_listed_first(client, login):
