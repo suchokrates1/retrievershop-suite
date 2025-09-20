@@ -237,8 +237,9 @@ def sync_offers():
                 if existing:
                     existing.title = title
                     existing.price = price
-                    existing.product_id = product_id
-                    existing.product_size_id = product_size_id
+                    if product_size is not None or existing.product_size_id is None:
+                        existing.product_id = product_id
+                        existing.product_size_id = product_size_id
                     existing.synced_at = timestamp
                 else:
                     session.add(
