@@ -63,6 +63,61 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
         assert offer.product_id == product_id
 
 
+def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def fake_fetch_offers(token, page):
+        assert token == "token"
+        assert page == 1
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "NM1",
+                        "name": "Offer without selling mode",
+                        "ean": "111111",
+                        "sellingMode": None,
+                    },
+                    {
+                        "id": "NM2",
+                        "name": "Offer with invalid price",
+                        "ean": "222222",
+                        "sellingMode": {"price": "unexpected"},
+                    },
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        product_one = Product(name="Prod NM1", color="one")
+        size_one = ProductSize(product=product_one, size="S", barcode="111111")
+        product_two = Product(name="Prod NM2", color="two")
+        size_two = ProductSize(product=product_two, size="M", barcode="222222")
+        session.add_all([product_one, size_one, product_two, size_two])
+        session.flush()
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 2, "matched": 2}
+
+    with get_session() as session:
+        offers = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id.in_(["NM1", "NM2"]))
+            .order_by(AllegroOffer.offer_id)
+            .all()
+        )
+        assert len(offers) == 2
+        for offer in offers:
+            assert offer.price == Decimal("0.00")
+            assert offer.product_id is not None
+            assert offer.product_size_id is not None
+
+
 def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")

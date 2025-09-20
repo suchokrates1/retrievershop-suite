@@ -129,10 +129,15 @@ def sync_offers():
                 offers = []
             fetched_count += len(offers)
             for offer in offers:
-                price_data = (
-                    offer.get("price")
-                    or offer.get("sellingMode", {}).get("price", {}).get("amount")
-                )
+                price_data = offer.get("price")
+                if price_data is None:
+                    selling_mode = offer.get("sellingMode")
+                    if not isinstance(selling_mode, Mapping):
+                        selling_mode = {}
+                    price = selling_mode.get("price")
+                    if not isinstance(price, Mapping):
+                        price = {}
+                    price_data = price.get("amount")
                 if price_data is not None:
                     try:
                         price = Decimal(price_data).quantize(Decimal("0.01"))
