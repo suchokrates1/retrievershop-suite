@@ -18,7 +18,20 @@ def _clear_cached_tokens():
 
 
 def sync_offers():
-    """Synchronize offers from Allegro with local database."""
+    """Synchronize offers from Allegro with local database.
+
+    Returns
+    -------
+    dict
+        Dictionary containing two keys:
+
+        ``fetched``
+            Number of offers fetched from Allegro across all pages.
+
+        ``matched``
+            Number of offers that were matched with local products and
+            saved or updated in the database.
+    """
     token = os.getenv("ALLEGRO_ACCESS_TOKEN")
     refresh = os.getenv("ALLEGRO_REFRESH_TOKEN")
     if not token and refresh:
@@ -42,6 +55,9 @@ def sync_offers():
         raise RuntimeError("Missing Allegro access token")
 
     page = 1
+    fetched_count = 0
+    matched_count = 0
+
     with get_session() as session:
         while True:
             try:
@@ -94,6 +110,14 @@ def sync_offers():
                 logger.error(message, exc_info=True)
                 raise RuntimeError(message) from exc
             offers = data.get("offers") or data.get("items", {}).get("offers", [])
+            if offers:
+                try:
+                    offers = list(offers)
+                except TypeError:
+                    offers = [offer for offer in offers]
+            else:
+                offers = []
+            fetched_count += len(offers)
             for offer in offers:
                 barcode = offer.get("ean") or offer.get("barcode")
                 if not barcode:
@@ -129,6 +153,7 @@ def sync_offers():
                     existing.product_id = ps.product_id
                     existing.product_size_id = ps.id
                     existing.synced_at = timestamp
+                    matched_count += 1
                 else:
                     session.add(
                         AllegroOffer(
@@ -140,10 +165,13 @@ def sync_offers():
                             synced_at=timestamp,
                         )
                     )
+                    matched_count += 1
             next_page = data.get("nextPage") or data.get("links", {}).get("next")
             if not next_page:
                 break
             page += 1
+
+    return {"fetched": fetched_count, "matched": matched_count}
 
 
 if __name__ == "__main__":
