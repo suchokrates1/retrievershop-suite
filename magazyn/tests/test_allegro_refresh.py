@@ -274,3 +274,29 @@ def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, mon
     assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
     assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
 
+
+def test_refresh_handles_empty_response(client, login, monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def empty_fetch(token, page):
+        return None
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", empty_fetch)
+
+    response = client.post("/allegro/refresh")
+    assert response.status_code == 302
+
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+
+    assert any(
+        "Błąd synchronizacji ofert" in message
+        and "malformed response" in message
+        for _, message in flashes
+    )
+    assert all("'NoneType'" not in message for _, message in flashes)
+
+    with get_session() as session:
+        assert session.query(AllegroOffer).count() == 0
+
