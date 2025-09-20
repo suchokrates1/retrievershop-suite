@@ -35,7 +35,8 @@ def offers():
             )
             .all()
         )
-        offers = []
+        linked_offers: list[dict] = []
+        unlinked_offers: list[dict] = []
         for offer, size, product in rows:
             label = None
             if product and size:
@@ -43,16 +44,18 @@ def offers():
                 if product.color:
                     parts.append(product.color)
                 label = " – ".join([" ".join(parts), size.size])
-            offers.append(
-                {
-                    "offer_id": offer.offer_id,
-                    "title": offer.title,
-                    "price": offer.price,
-                    "product_size_id": offer.product_size_id,
-                    "selected_label": label,
-                    "barcode": size.barcode if size else None,
-                }
-            )
+            offer_data = {
+                "offer_id": offer.offer_id,
+                "title": offer.title,
+                "price": offer.price,
+                "product_size_id": offer.product_size_id,
+                "selected_label": label,
+                "barcode": size.barcode if size else None,
+            }
+            if offer.product_size_id:
+                linked_offers.append(offer_data)
+            else:
+                unlinked_offers.append(offer_data)
 
         inventory_rows = (
             db.query(ProductSize, Product)
@@ -87,7 +90,12 @@ def offers():
                     "filter": filter_text,
                 }
             )
-    return render_template("allegro/offers.html", offers=offers, inventory=inventory)
+    return render_template(
+        "allegro/offers.html",
+        unlinked_offers=unlinked_offers,
+        linked_offers=linked_offers,
+        inventory=inventory,
+    )
 
 
 def _format_decimal(value: Decimal | None) -> str | None:
