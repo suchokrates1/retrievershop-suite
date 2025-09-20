@@ -29,7 +29,7 @@ def offers():
         rows = (
             db.query(AllegroOffer, ProductSize, Product)
             .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
-            .outerjoin(Product, ProductSize.product_id == Product.id)
+            .outerjoin(Product, AllegroOffer.product_id == Product.id)
             .order_by(
                 case((AllegroOffer.product_size_id.is_(None), 0), else_=1),
                 AllegroOffer.title,
@@ -40,20 +40,27 @@ def offers():
         unlinked_offers: list[dict] = []
         for offer, size, product in rows:
             label = None
-            if product and size:
-                parts = [product.name]
-                if product.color:
-                    parts.append(product.color)
+            product_for_label = product or (size.product if size else None)
+            if product_for_label and size:
+                parts = [product_for_label.name]
+                if product_for_label.color:
+                    parts.append(product_for_label.color)
                 label = " – ".join([" ".join(parts), size.size])
+            elif product_for_label:
+                parts = [product_for_label.name]
+                if product_for_label.color:
+                    parts.append(product_for_label.color)
+                label = " ".join(parts)
             offer_data = {
                 "offer_id": offer.offer_id,
                 "title": offer.title,
                 "price": offer.price,
                 "product_size_id": offer.product_size_id,
+                "product_id": offer.product_id,
                 "selected_label": label,
                 "barcode": size.barcode if size else None,
             }
-            if offer.product_size_id:
+            if offer.product_size_id or offer.product_id:
                 linked_offers.append(offer_data)
             else:
                 unlinked_offers.append(offer_data)
@@ -64,7 +71,38 @@ def offers():
             .order_by(Product.name, ProductSize.size)
             .all()
         )
-        inventory = []
+        product_rows = db.query(Product).order_by(Product.name).all()
+        inventory: list[dict] = []
+        product_inventory: list[dict] = []
+        for product in product_rows:
+            name_parts = [product.name]
+            if product.color:
+                name_parts.append(product.color)
+            label = " ".join(name_parts)
+            sizes = list(product.sizes or [])
+            total_quantity = sum(
+                size.quantity or 0 for size in sizes if size.quantity is not None
+            )
+            barcodes = sorted({size.barcode for size in sizes if size.barcode})
+            extra_parts = ["Powiązanie na poziomie produktu"]
+            if barcodes:
+                extra_parts.append(f"EAN: {', '.join(barcodes)}")
+            if sizes:
+                extra_parts.append(f"Stan łączny: {total_quantity}")
+            filter_values = [label, "produkt"]
+            filter_values.extend(barcodes)
+            if total_quantity:
+                filter_values.append(str(total_quantity))
+            product_inventory.append(
+                {
+                    "id": product.id,
+                    "label": label,
+                    "extra": ", ".join(extra_parts),
+                    "filter": " ".join(filter_values).strip().lower(),
+                    "type": "product",
+                    "type_label": "Produkt",
+                }
+            )
         for size, product in inventory_rows:
             name_parts = [product.name]
             if product.color:
@@ -81,6 +119,7 @@ def offers():
                     label,
                     size.barcode or "",
                     str(quantity),
+                    "rozmiar",
                 ]
             ).strip().lower()
             inventory.append(
@@ -89,8 +128,11 @@ def offers():
                     "label": label,
                     "extra": ", ".join(extra_parts),
                     "filter": filter_text,
+                    "type": "size",
+                    "type_label": "Rozmiar",
                 }
             )
+        inventory = product_inventory + inventory
     return render_template(
         "allegro/offers.html",
         unlinked_offers=unlinked_offers,
