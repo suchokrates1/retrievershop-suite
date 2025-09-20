@@ -196,6 +196,51 @@ def test_sync_offers_matches_single_color_component(monkeypatch, app_mod):
         assert offer.product_size_id == product_size_id
 
 
+def test_sync_offers_matches_keyword_models(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        assert offset == 0
+        assert limit == 100
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "KW1",
+                        "name": "Mega okazja! Truelove Lumen dla psa czerwone M",
+                        "sellingMode": {"price": {"amount": "20.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        product = Product(name="Szelki dla psa Truelove Lumen", color="Czerwony")
+        size = ProductSize(product=product, size="M")
+        session.add_all([product, size])
+        session.flush()
+        product_id = product.id
+        product_size_id = size.id
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 1, "matched": 1}
+
+    with get_session() as session:
+        offer = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id == "KW1")
+            .one()
+        )
+        assert offer.product_id == product_id
+        assert offer.product_size_id == product_size_id
+
+
 def test_sync_offers_preserves_manual_link_when_no_match(monkeypatch, app_mod):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
