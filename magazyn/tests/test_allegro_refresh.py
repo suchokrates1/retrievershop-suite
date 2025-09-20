@@ -422,6 +422,64 @@ def test_sync_offers_matches_alias_variants(monkeypatch, app_mod):
         assert offer.product_size_id == product_size_id
 
 
+def test_sync_offers_distinguishes_front_line_variants(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    offers = [
+        {
+            "id": "FL1",
+            "name": "Mega okazja! Szelki dla psa Truelove Front Line czerwone M",
+            "sellingMode": {"price": {"amount": "30.00"}},
+        },
+        {
+            "id": "FL2",
+            "name": "Szelki dla psa Truelove Front Line Premium czerwone M",
+            "sellingMode": {"price": {"amount": "35.00"}},
+        },
+    ]
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        assert offset == 0
+        assert limit == 100
+        return {"items": {"offers": offers}, "links": {}}
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        front_line = Product(name="Szelki dla psa Truelove Front Line", color="Czerwony")
+        front_line_size = ProductSize(product=front_line, size="M")
+        premium = Product(
+            name="Szelki dla psa Truelove Front Line Premium", color="Czerwony"
+        )
+        premium_size = ProductSize(product=premium, size="M")
+        session.add_all([front_line, front_line_size, premium, premium_size])
+        session.flush()
+        expectations = {
+            "FL1": (front_line.id, front_line_size.id),
+            "FL2": (premium.id, premium_size.id),
+        }
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 2, "matched": 2}
+
+    with get_session() as session:
+        stored_offers = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id.in_(expectations))
+            .order_by(AllegroOffer.offer_id)
+            .all()
+        )
+
+    assert len(stored_offers) == 2
+    for offer in stored_offers:
+        product_id, product_size_id = expectations[offer.offer_id]
+        assert offer.product_id == product_id
+        assert offer.product_size_id == product_size_id
+
+
 def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")
