@@ -519,6 +519,18 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
     monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", fake_refresh)
+    persisted = []
+
+    def capture_tokens(access_token=None, refresh_token=None):
+        persisted.append(
+            {"access_token": access_token, "refresh_token": refresh_token}
+        )
+        if access_token is not None:
+            os.environ["ALLEGRO_ACCESS_TOKEN"] = access_token
+        if refresh_token is not None:
+            os.environ["ALLEGRO_REFRESH_TOKEN"] = refresh_token
+
+    monkeypatch.setattr("magazyn.allegro_sync.update_allegro_tokens", capture_tokens)
 
     with get_session() as session:
         product = Product(name="Prod2", color="Zielony")
@@ -535,6 +547,9 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     assert refresh_calls["count"] == 1
     assert os.getenv("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert os.getenv("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
+    assert persisted == [
+        {"access_token": "new-access", "refresh_token": "new-refresh"}
+    ]
 
     with get_session() as session:
         offers = session.query(AllegroOffer).all()
