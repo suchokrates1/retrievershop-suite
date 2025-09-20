@@ -196,6 +196,62 @@ def test_sync_offers_matches_single_color_component(monkeypatch, app_mod):
         assert offer.product_size_id == product_size_id
 
 
+def test_sync_offers_preserves_manual_link_when_no_match(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        assert token == "token"
+        assert offset == 0
+        assert limit == 100
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "MAN1",
+                        "name": "Niepowiązany produkt niebieski S",
+                        "sellingMode": {"price": {"amount": "25.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        product = Product(name="Manualny produkt", color="Zielony")
+        size = ProductSize(product=product, size="L")
+        session.add_all([product, size])
+        session.flush()
+        product_id = product.id
+        product_size_id = size.id
+
+        offer = AllegroOffer(
+            offer_id="MAN1",
+            title="Ręcznie powiązana oferta",
+            price=Decimal("10.00"),
+            product_id=product_id,
+            product_size_id=product_size_id,
+        )
+        session.add(offer)
+        session.commit()
+
+    result = sync_mod.sync_offers()
+
+    assert result == {"fetched": 1, "matched": 0}
+
+    with get_session() as session:
+        refreshed_offer = (
+            session.query(AllegroOffer)
+            .filter(AllegroOffer.offer_id == "MAN1")
+            .one()
+        )
+        assert refreshed_offer.product_id == product_id
+        assert refreshed_offer.product_size_id == product_size_id
+        assert refreshed_offer.price == Decimal("25.00")
+
+
 def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
     monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
