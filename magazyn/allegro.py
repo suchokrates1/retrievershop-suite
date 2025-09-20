@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from typing import Optional
 
 from flask import (
     Blueprint,
@@ -98,7 +99,7 @@ def offers():
     )
 
 
-def _format_decimal(value: Decimal | None) -> str | None:
+def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
     if value is None:
         return None
     return f"{value:.2f}"
@@ -134,7 +135,7 @@ def price_check():
     price_checks = []
     for offer in offers:
         competitor_prices: list[Decimal] = []
-        error: str | None = None
+        error: Optional[str] = None
         barcode = offer["barcode"]
         if barcode:
             try:
