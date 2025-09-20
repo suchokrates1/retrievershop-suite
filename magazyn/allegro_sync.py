@@ -14,6 +14,7 @@ from . import allegro_api
 from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
 from .parsing import parse_offer_title, normalize_color
+from .env_tokens import update_allegro_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +67,11 @@ def sync_offers():
         try:
             token_data = allegro_api.refresh_token(refresh)
             token = token_data.get("access_token")
-            if token:
-                os.environ["ALLEGRO_ACCESS_TOKEN"] = token
             new_refresh = token_data.get("refresh_token")
             if new_refresh:
                 refresh = new_refresh
-                os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
+            if token:
+                update_allegro_tokens(token, refresh)
         except Exception as exc:
             _clear_cached_tokens()
             logger.exception("Failed to refresh Allegro token")
@@ -113,11 +113,10 @@ def sync_offers():
                         logger.error(message)
                         raise RuntimeError(message)
                     token = new_token
-                    os.environ["ALLEGRO_ACCESS_TOKEN"] = token
                     new_refresh = token_data.get("refresh_token")
                     if new_refresh:
                         refresh = new_refresh
-                        os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
+                    update_allegro_tokens(token, refresh)
                     continue
                 if status_code == 401 and not refresh:
                     os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
