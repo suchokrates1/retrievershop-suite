@@ -319,6 +319,7 @@ def link_offer(offer_id):
                     flash("Nie znaleziono produktu o podanym ID")
             else:
                 offer.product_size_id = None
+                offer.product_id = None
                 flash("Usunięto powiązanie z magazynem")
             return redirect(url_for("allegro.offers"))
 
