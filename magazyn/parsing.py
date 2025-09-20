@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unicodedata
 
 from .constants import (
@@ -27,6 +28,18 @@ COLOR_ALIASES = {
     "turkusowe": "turkusowy",
 }
 
+# Mapping of normalized product keywords to canonical product names.  The
+# priority value controls which keyword should win when multiple keywords are
+# present in the offer title.
+PRODUCT_KEYWORDS: list[tuple[str, str, int]] = [
+    ("tropical", "Szelki dla psa Truelove Tropical", 2),
+    ("adventure dog", "Szelki dla psa Truelove Adventure Dog", 2),
+    ("lumen", "Szelki dla psa Truelove Lumen", 1),
+    ("blossom", "Szelki dla psa Truelove Blossom", 1),
+    ("front line premium", "Szelki dla psa Truelove Front Line Premium", 0),
+    ("front line", "Szelki dla psa Truelove Front Line Premium", 0),
+]
+
 
 def _strip_diacritics(value: str) -> str:
     """Return *value* lower-cased and stripped of diacritics."""
@@ -48,6 +61,38 @@ def normalize_color(color: str) -> str:
                 base_match = normalized_alias
                 base_color = canonical
     return base_color.capitalize()
+
+
+def _normalize_keyword_text(value: str) -> str:
+    """Return normalized representation for keyword matching."""
+
+    normalized = _strip_diacritics(value)
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def _detect_product_keyword(title: str) -> str:
+    """Return canonical product name if *title* contains a known keyword."""
+
+    normalized_title = _normalize_keyword_text(title)
+    if not normalized_title:
+        return ""
+
+    padded_title = f" {normalized_title} "
+    matches: list[tuple[int, int, str]] = []
+    for keyword, canonical, priority in PRODUCT_KEYWORDS:
+        normalized_keyword = _normalize_keyword_text(keyword)
+        if not normalized_keyword:
+            continue
+        if f" {normalized_keyword} " in padded_title:
+            matches.append((priority, len(normalized_keyword), canonical))
+
+    if not matches:
+        return ""
+
+    priority, _, canonical = max(matches, key=lambda item: (item[0], item[1]))
+    return resolve_product_alias(normalize_product_title_fragment(canonical))
 
 
 def parse_product_info(item: dict) -> tuple[str, str, str]:
@@ -149,9 +194,11 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
                 color = normalize_color(matched_color)
                 remaining_words.pop(index)
 
-    name = " ".join(remaining_words).strip()
-    name = normalize_product_title_fragment(name)
-    name = resolve_product_alias(name)
+    name = _detect_product_keyword(title)
+    if not name:
+        name = " ".join(remaining_words).strip()
+        name = normalize_product_title_fragment(name)
+        name = resolve_product_alias(name)
 
     if not size:
         size = "Uniwersalny"
