@@ -4,6 +4,8 @@ from typing import Optional
 import requests
 from requests.exceptions import HTTPError
 
+from .env_tokens import update_allegro_tokens
+
 AUTH_URL = "https://allegro.pl/auth/oauth/token"
 API_BASE_URL = "https://api.allegro.pl"
 DEFAULT_TIMEOUT = 10
@@ -146,11 +148,10 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
                     if not new_token:
                         raise RuntimeError(friendly_message)
                     token = new_token
-                    os.environ["ALLEGRO_ACCESS_TOKEN"] = new_token
                     new_refresh = token_data.get("refresh_token")
                     if new_refresh:
                         refresh = new_refresh
-                        os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
+                    update_allegro_tokens(token, refresh)
                     continue
                 raise RuntimeError(friendly_message) from exc
             raise
