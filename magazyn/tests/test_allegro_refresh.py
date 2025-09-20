@@ -43,6 +43,16 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
     response = client.post("/allegro/refresh")
     assert response.status_code == 302
 
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+
+    assert any(
+        "Oferty zaktualizowane" in message
+        and "pobrano 1" in message
+        and "zaktualizowano 1" in message
+        for _, message in flashes
+    )
+
     with get_session() as session:
         offers = session.query(AllegroOffer).all()
         assert len(offers) == 1
@@ -116,6 +126,45 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
         assert offer.title == "Refreshed offer"
         assert offer.price == Decimal("20.00")
         assert offer.product_id == product_id
+
+
+def test_refresh_reports_counts_when_no_matches(client, login, monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+
+    def fake_fetch_offers(token, page):
+        assert token == "token"
+        assert page == 1
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "O3",
+                        "name": "Unmatched offer",
+                        "ean": "999999",
+                        "sellingMode": {"price": {"amount": "10.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    response = client.post("/allegro/refresh")
+    assert response.status_code == 302
+
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+
+    assert any(
+        "Oferty zaktualizowane" in message
+        and "pobrano 1" in message
+        and "zaktualizowano 0" in message
+        for _, message in flashes
+    )
+
+    with get_session() as session:
+        assert session.query(AllegroOffer).count() == 0
 
 
 def test_sync_offers_raises_on_unrecoverable_error(monkeypatch):
