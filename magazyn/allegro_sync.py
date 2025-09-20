@@ -119,12 +119,6 @@ def sync_offers():
                 offers = []
             fetched_count += len(offers)
             for offer in offers:
-                barcode = offer.get("ean") or offer.get("barcode")
-                if not barcode:
-                    continue
-                ps = session.query(ProductSize).filter_by(barcode=barcode).first()
-                if not ps:
-                    continue
                 price_data = (
                     offer.get("price")
                     or offer.get("sellingMode", {}).get("price", {}).get("amount")
@@ -141,30 +135,44 @@ def sync_offers():
                         continue
                 else:
                     price = Decimal("0.00")
+
+                barcode = offer.get("ean") or offer.get("barcode")
+                product_size = None
+                if barcode:
+                    product_size = (
+                        session.query(ProductSize).filter_by(barcode=barcode).first()
+                    )
+
+                product_id = product_size.product_id if product_size else None
+                product_size_id = product_size.id if product_size else None
+
                 existing = (
                     session.query(AllegroOffer)
                     .filter_by(offer_id=offer.get("id"))
                     .first()
                 )
                 timestamp = datetime.now(timezone.utc).isoformat()
+                title = offer.get("name") or offer.get("title", "")
+
                 if existing:
-                    existing.title = offer.get("name") or offer.get("title", "")
+                    existing.title = title
                     existing.price = price
-                    existing.product_id = ps.product_id
-                    existing.product_size_id = ps.id
+                    existing.product_id = product_id
+                    existing.product_size_id = product_size_id
                     existing.synced_at = timestamp
-                    matched_count += 1
                 else:
                     session.add(
                         AllegroOffer(
                             offer_id=offer.get("id"),
-                            title=offer.get("name") or offer.get("title", ""),
+                            title=title,
                             price=price,
-                            product_id=ps.product_id,
-                            product_size_id=ps.id,
+                            product_id=product_id,
+                            product_size_id=product_size_id,
                             synced_at=timestamp,
                         )
                     )
+
+                if product_size:
                     matched_count += 1
             next_page = data.get("nextPage") or data.get("links", {}).get("next")
             if not next_page:
