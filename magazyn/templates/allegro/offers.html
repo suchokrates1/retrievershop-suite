@@ -5,6 +5,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary">Odśwież</button>
     </form>
+{% macro render_offers_table(offers) -%}
 <div class="table-responsive">
     <table class="table table-striped align-middle">
         <thead>
@@ -49,10 +50,31 @@
                     </form>
                 </td>
             </tr>
+        {% else %}
+            <tr>
+                <td colspan="4" class="text-center text-muted">Brak ofert w tej sekcji.</td>
+            </tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
+{%- endmacro %}
+
+<section id="unlinked-offers" class="mb-5">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h2 class="h4 mb-0">Oferty wymagające przypięcia</h2>
+        <span class="badge bg-secondary" data-offers-count>{{ unlinked_offers|length }}</span>
+    </div>
+    {{ render_offers_table(unlinked_offers) }}
+</section>
+
+<section id="linked-offers">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h2 class="h4 mb-0">Oferty powiązane z magazynem</h2>
+        <span class="badge bg-secondary" data-offers-count>{{ linked_offers|length }}</span>
+    </div>
+    {{ render_offers_table(linked_offers) }}
+</section>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
