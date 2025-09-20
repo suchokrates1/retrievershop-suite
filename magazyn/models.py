@@ -84,7 +84,7 @@ class AllegroOffer(Base):
     offer_id = Column(String, unique=True)
     title = Column(String, nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"))
     product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
     synced_at = Column(String)
 
