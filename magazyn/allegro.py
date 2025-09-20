@@ -10,7 +10,7 @@ from flask import (
     flash,
 )
 
-from sqlalchemy import case
+from sqlalchemy import case, or_
 
 from .allegro_price_monitor import fetch_product_listing
 from .auth import login_required
@@ -153,23 +153,55 @@ def price_check():
     with get_session() as db:
         rows = (
             db.query(AllegroOffer, ProductSize, Product)
-            .join(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
-            .join(Product, ProductSize.product_id == Product.id)
+            .outerjoin(
+                ProductSize, AllegroOffer.product_size_id == ProductSize.id
+            )
+            .outerjoin(
+                Product,
+                or_(
+                    Product.id == AllegroOffer.product_id,
+                    Product.id == ProductSize.product_id,
+                ),
+            )
+            .filter(
+                or_(
+                    AllegroOffer.product_size_id.isnot(None),
+                    AllegroOffer.product_id.isnot(None),
+                )
+            )
             .all()
         )
 
         offers = []
         for offer, size, product in rows:
-            name_parts = [product.name]
-            if product.color:
-                name_parts.append(product.color)
-            label = " ".join(name_parts) + f" – {size.size}"
+            product_for_label = product or (size.product if size else None)
+            if not product_for_label:
+                continue
+
+            barcodes: list[str] = []
+            if size:
+                name_parts = [product_for_label.name]
+                if product_for_label.color:
+                    name_parts.append(product_for_label.color)
+                label = " ".join(name_parts) + f" – {size.size}"
+                if size.barcode:
+                    barcodes.append(size.barcode)
+            else:
+                name_parts = [product_for_label.name]
+                if product_for_label.color:
+                    name_parts.append(product_for_label.color)
+                label = " ".join(name_parts)
+                related_sizes = list(product_for_label.sizes or [])
+                for related_size in related_sizes:
+                    if related_size.barcode:
+                        barcodes.append(related_size.barcode)
+
             offers.append(
                 {
                     "offer_id": offer.offer_id,
                     "title": offer.title,
                     "price": Decimal(offer.price).quantize(Decimal("0.01")),
-                    "barcode": size.barcode,
+                    "barcodes": barcodes,
                     "label": label,
                 }
             )
@@ -178,13 +210,19 @@ def price_check():
     for offer in offers:
         competitor_prices: list[Decimal] = []
         error: Optional[str] = None
-        barcode = offer["barcode"]
-        if barcode:
-            try:
-                listing = fetch_product_listing(barcode)
-            except Exception as exc:  # pragma: no cover - network errors
-                error = str(exc)
-            else:
+        barcodes = offer.get("barcodes", [])
+        unique_barcodes: list[str] = []
+        for barcode in barcodes:
+            if barcode and barcode not in unique_barcodes:
+                unique_barcodes.append(barcode)
+
+        if unique_barcodes:
+            for barcode in unique_barcodes:
+                try:
+                    listing = fetch_product_listing(barcode)
+                except Exception as exc:  # pragma: no cover - network errors
+                    error = str(exc)
+                    continue
                 for item in listing:
                     seller = item.get("seller") or {}
                     seller_id = seller.get("id")
@@ -204,6 +242,8 @@ def price_check():
                     except (TypeError, ValueError, InvalidOperation):
                         continue
                     competitor_prices.append(price)
+            if competitor_prices:
+                error = None
         else:
             error = "Brak kodu EAN"
 
