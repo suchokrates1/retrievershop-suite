@@ -42,16 +42,20 @@ def sync_offers():
                 if status_code == 401 and refresh:
                     try:
                         token_data = allegro_api.refresh_token(refresh)
-                    except Exception:
+                    except Exception as refresh_exc:
                         logger.exception("Failed to refresh Allegro token")
-                        break
+                        raise RuntimeError(
+                            "Failed to refresh Allegro token after unauthorized response "
+                            f"on page {page}"
+                        ) from refresh_exc
                     new_token = token_data.get("access_token")
                     if not new_token:
-                        logger.error(
-                            "Failed to refresh offers on page %s due to missing access token",
-                            page,
+                        message = (
+                            "Failed to refresh Allegro offers on page "
+                            f"{page}: missing access token"
                         )
-                        break
+                        logger.error(message)
+                        raise RuntimeError(message)
                     token = new_token
                     os.environ["ALLEGRO_ACCESS_TOKEN"] = token
                     new_refresh = token_data.get("refresh_token")
@@ -59,11 +63,24 @@ def sync_offers():
                         refresh = new_refresh
                         os.environ["ALLEGRO_REFRESH_TOKEN"] = new_refresh
                     continue
-                logger.error("Failed to fetch offers on page %s", page, exc_info=True)
-                break
-            except Exception:
-                logger.error("Failed to fetch offers on page %s", page, exc_info=True)
-                break
+                if status_code == 401 and not refresh:
+                    message = (
+                        "Failed to fetch Allegro offers on page "
+                        f"{page}: unauthorized and no refresh token available"
+                    )
+                    logger.error(message, exc_info=True)
+                    raise RuntimeError(message) from exc
+                detail = f"HTTP status {status_code}" if status_code else "HTTP error"
+                message = (
+                    "Failed to fetch Allegro offers on page "
+                    f"{page}: {detail}"
+                )
+                logger.error(message, exc_info=True)
+                raise RuntimeError(message) from exc
+            except Exception as exc:
+                message = f"Failed to fetch Allegro offers on page {page}"
+                logger.error(message, exc_info=True)
+                raise RuntimeError(message) from exc
             offers = data.get("offers") or data.get("items", {}).get("offers", [])
             for offer in offers:
                 barcode = offer.get("ean") or offer.get("barcode")
