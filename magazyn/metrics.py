@@ -33,6 +33,27 @@ PRINT_AGENT_DOWNTIME_SECONDS = Counter(
     "Total duration in seconds spent waiting before retries.",
 )
 
+ALLEGRO_API_ERRORS_TOTAL = Counter(
+    "magazyn_allegro_api_errors_total",
+    "Total number of Allegro API errors grouped by endpoint and status code.",
+    ["endpoint", "status"],
+)
+ALLEGRO_API_RETRIES_TOTAL = Counter(
+    "magazyn_allegro_api_retries_total",
+    "Total number of retry attempts performed for Allegro API requests.",
+    ["endpoint"],
+)
+ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS = Counter(
+    "magazyn_allegro_api_rate_limit_sleep_seconds",
+    "Total duration spent sleeping due to Allegro API rate limits.",
+    ["endpoint"],
+)
+ALLEGRO_SYNC_ERRORS_TOTAL = Counter(
+    "magazyn_allegro_sync_errors_total",
+    "Total number of unrecoverable Allegro synchronisation errors.",
+    ["reason"],
+)
+
 PRINT_QUEUE_SIZE.set(0)
 PRINT_QUEUE_OLDEST_AGE_SECONDS.set(0)
 PRINT_LABEL_ERRORS_TOTAL.labels(stage="print")
@@ -40,4 +61,13 @@ PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue")
 PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop")
 PRINT_AGENT_RETRIES_TOTAL.inc(0)
 PRINT_AGENT_DOWNTIME_SECONDS.inc(0)
+ALLEGRO_API_ERRORS_TOTAL.labels(endpoint="offers", status="0").inc(0)
+ALLEGRO_API_ERRORS_TOTAL.labels(endpoint="listing", status="0").inc(0)
+ALLEGRO_API_RETRIES_TOTAL.labels(endpoint="offers").inc(0)
+ALLEGRO_API_RETRIES_TOTAL.labels(endpoint="listing").inc(0)
+ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS.labels(endpoint="offers").inc(0)
+ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS.labels(endpoint="listing").inc(0)
+ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="http").inc(0)
+ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc(0)
+ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="unexpected").inc(0)
 
