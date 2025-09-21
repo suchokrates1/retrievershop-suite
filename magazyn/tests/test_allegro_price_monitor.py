@@ -1,9 +1,13 @@
-import pytest
 from decimal import Decimal
 
-from magazyn.allegro_price_monitor import check_prices
+from magazyn.allegro_price_monitor import COMPETITOR_SUFFIX, check_prices
 from magazyn.db import get_session
-from magazyn.models import Product, ProductSize, AllegroOffer
+from magazyn.models import (
+    AllegroOffer,
+    AllegroPriceHistory,
+    Product,
+    ProductSize,
+)
 
 
 def test_check_prices_grouped(monkeypatch, app_mod):
@@ -62,10 +66,19 @@ def test_check_prices_grouped(monkeypatch, app_mod):
             ]
         )
 
-    check_prices()
+    result = check_prices()
 
     assert calls == {"123": 1, "456": 1}
     assert len(messages) == 2
     assert any("oferta o1" in m for m in messages)
     assert any("oferta o2" in m for m in messages)
     assert all("oferta o3" not in m for m in messages)
+    assert result["alerts"] == 2
+    assert isinstance(result["trend_report"], list)
+
+    with get_session() as session:
+        history = session.query(AllegroPriceHistory).all()
+        recorded_ids = {entry.offer_id for entry in history}
+        assert "o1" in recorded_ids
+        assert f"o1{COMPETITOR_SUFFIX}" in recorded_ids
+        assert any(item["offer_id"] == f"o1{COMPETITOR_SUFFIX}" for item in result["trend_report"])
