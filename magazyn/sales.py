@@ -1,5 +1,6 @@
 from flask import (
     Blueprint,
+    current_app,
     render_template,
     request,
     redirect,
@@ -10,7 +11,7 @@ from .auth import login_required
 from .env_info import ENV_INFO
 from . import print_agent
 from .db import get_session
-from .settings_store import settings_store
+from .settings_store import SettingsPersistenceError, settings_store
 from .models import Sale, Product, ShippingThreshold
 from decimal import Decimal
 
@@ -89,7 +90,16 @@ def sales_settings():
 
     if request.method == "POST":
         updates = {key: request.form.get(key, values.get(key, "")) for key in keys}
-        settings_store.update(updates)
+        try:
+            settings_store.update(updates)
+        except SettingsPersistenceError as exc:
+            current_app.logger.error(
+                "Failed to persist sales settings", exc_info=exc
+            )
+            flash(
+                "Nie można zapisać ustawień sprzedaży, ponieważ baza konfiguracji jest w trybie tylko do odczytu."
+            )
+            return redirect(url_for("sales.sales_settings"))
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("sales.sales_settings"))
