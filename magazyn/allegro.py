@@ -9,6 +9,7 @@ from flask import (
     redirect,
     url_for,
     flash,
+    jsonify,
 )
 
 from sqlalchemy import case, or_
@@ -148,9 +149,7 @@ def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
     return f"{value:.2f}"
 
 
-@bp.route("/allegro/price-check")
-@login_required
-def price_check():
+def build_price_checks() -> list[dict]:
     with get_session() as db:
         rows = (
             db.query(AllegroOffer, ProductSize, Product)
@@ -207,21 +206,7 @@ def price_check():
                 }
             )
 
-    access_token = os.getenv("ALLEGRO_ACCESS_TOKEN")
-    refresh_token = os.getenv("ALLEGRO_REFRESH_TOKEN")
-
-    if not access_token or not refresh_token:
-        auth_error = (
-            "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, "
-            "aby ponownie autoryzować aplikację."
-        )
-        return render_template(
-            "allegro/price_check.html",
-            price_checks=[],
-            auth_error=auth_error,
-        )
-
-    price_checks = []
+    price_checks: list[dict] = []
     for offer in offers:
         competitor_min_price: Optional[Decimal] = None
         competitor_min_offer_id: Optional[str] = None
@@ -300,11 +285,34 @@ def price_check():
             }
         )
 
-    return render_template(
-        "allegro/price_check.html",
-        price_checks=price_checks,
-        auth_error=None,
+    return price_checks
+
+
+@bp.route("/allegro/price-check")
+@login_required
+def price_check():
+    access_token = os.getenv("ALLEGRO_ACCESS_TOKEN")
+    refresh_token = os.getenv("ALLEGRO_REFRESH_TOKEN")
+
+    auth_error = None
+    if not access_token or not refresh_token:
+        auth_error = (
+            "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, "
+            "aby ponownie autoryzować aplikację."
+        )
+
+    wants_json = (
+        request.args.get("format") == "json"
+        or request.accept_mimetypes.best == "application/json"
     )
+
+    if wants_json:
+        if auth_error:
+            return jsonify({"price_checks": [], "auth_error": auth_error})
+        price_checks = build_price_checks()
+        return jsonify({"price_checks": price_checks, "auth_error": None})
+
+    return render_template("allegro/price_check.html", auth_error=auth_error)
 
 
 @bp.route("/allegro/refresh", methods=["POST"])
