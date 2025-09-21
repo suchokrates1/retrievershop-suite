@@ -1,4 +1,13 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Numeric
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    ForeignKey,
+    Text,
+    Numeric,
+    Index,
+)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -23,8 +32,15 @@ class Product(Base):
 
 class ProductSize(Base):
     __tablename__ = "product_sizes"
+    __table_args__ = (
+        Index("idx_product_sizes_product_id_size", "product_id", "size"),
+    )
     id = Column(Integer, primary_key=True)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False, default=0)
     barcode = Column(String, unique=True)
@@ -54,7 +70,11 @@ class LabelQueue(Base):
 class PurchaseBatch(Base):
     __tablename__ = "purchase_batches"
     id = Column(Integer, primary_key=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
@@ -63,8 +83,13 @@ class PurchaseBatch(Base):
 
 class Sale(Base):
     __tablename__ = "sales"
+    __table_args__ = (Index("idx_sales_sale_date", "sale_date"),)
     id = Column(Integer, primary_key=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
     sale_date = Column(String, nullable=False)
@@ -87,8 +112,16 @@ class AllegroOffer(Base):
     offer_id = Column(String, unique=True)
     title = Column(String, nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    product_size_id = Column(
+        Integer,
+        ForeignKey("product_sizes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     synced_at = Column(String)
 
     product = relationship("Product")
@@ -97,9 +130,22 @@ class AllegroOffer(Base):
 
 class AllegroPriceHistory(Base):
     __tablename__ = "allegro_price_history"
+    __table_args__ = (
+        Index("idx_allegro_price_history_recorded_at", "recorded_at"),
+        Index(
+            "idx_allegro_price_history_offer_recorded_at",
+            "offer_id",
+            "recorded_at",
+        ),
+        Index("idx_allegro_price_history_product_size", "product_size_id"),
+    )
     id = Column(Integer, primary_key=True)
     offer_id = Column(String, index=True)
-    product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
+    product_size_id = Column(
+        Integer,
+        ForeignKey("product_sizes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     price = Column(Numeric(10, 2), nullable=False)
     recorded_at = Column(String, nullable=False)
 

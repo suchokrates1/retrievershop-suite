@@ -169,6 +169,23 @@ Additional arguments are passed directly to `pytest`, for example:
 
 The project is developed and tested using **Python 3.12**.
 
+## Database migrations
+
+### Index and foreign key improvements
+
+The `add_indexes_and_foreign_keys` migration rebuilds several tables to add
+database-level `ON DELETE` behaviour and supporting indexes used by Allegro
+synchronisation and sales reports. During the upgrade SQLite recreates the
+`product_sizes`, `purchase_batches`, `sales`, `allegro_offers` and
+`allegro_price_history` tables in place and copies existing data. Depending on
+the size of these tables the migration can momentarily lock the database file.
+
+The `sales.product_id` and `allegro_offers.product_id` columns now allow `NULL`
+values. Existing rows retain their identifiers, but when the related product is
+deleted future rows automatically clear the relationship instead of raising a
+foreign-key error. Historical price samples and offers remain accessible even if
+the referenced product size disappears.
+
 ## Running with Docker Compose
 
 Start the stack using the `docker-compose.yml` file in the repository root:
