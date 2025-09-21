@@ -24,7 +24,6 @@ from .db import (
     get_session,
     init_db,
     reset_db,
-    ensure_schema,
     register_default_user,
     record_purchase,
     consume_stock,
@@ -175,7 +174,6 @@ def ensure_db_initialized(app_obj=None):
 
         # Always run table creation so new tables appear automatically.
         init_db()
-        ensure_schema()
         register_default_user()
     except Exception as e:
         logger = (app_obj or current_app).logger
