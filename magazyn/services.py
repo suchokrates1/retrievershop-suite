@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """Backward compatibility layer for legacy service imports."""
 
+from pypdf import PdfReader
+
 from .db import consume_stock, get_session, record_purchase, record_sale
 from .models import Product, ProductSize, PurchaseBatch, Sale
 from .domain.inventory import (
@@ -59,6 +61,7 @@ __all__ = [
     "_parse_pdf",
     "_parse_simple_pdf",
     "_parse_tiptop_invoice",
+    "PdfReader",
     "_to_decimal",
     "_to_int",
     "Product",
