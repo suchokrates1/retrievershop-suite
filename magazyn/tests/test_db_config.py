@@ -9,6 +9,7 @@ from magazyn.models import User
 
 def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
     first = tmp_path / "first.db"
+    monkeypatch.setattr(db, "apply_migrations", lambda: None)
     db.configure_engine(str(first))
     db.init_db()
     with db.get_session() as session:
