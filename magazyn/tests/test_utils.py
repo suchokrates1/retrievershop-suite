@@ -154,6 +154,7 @@ def test_queue_roundtrip(tmp_path, monkeypatch):
     assert loaded[0]["label_data"] == item["label_data"]
     assert loaded[0]["ext"] == item["ext"]
     assert loaded[0]["last_order_data"] == item["last_order_data"]
+    assert loaded[0]["status"] == "queued"
 
 
 def test_validate_env_missing_api_token(monkeypatch):
@@ -185,6 +186,7 @@ def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
     conn.close()
     items = agent.load_queue()
     assert items[0]["last_order_data"] == {}
+    assert items[0]["status"] == "queued"
 
 
 def test_call_api_handles_http_error(monkeypatch):
