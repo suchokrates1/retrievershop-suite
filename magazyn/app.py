@@ -150,6 +150,14 @@ def write_env(values):
         current_app.logger.exception("Failed to write .env file: %s", e)
         if has_request_context():
             flash(f"Błąd zapisu pliku .env: {e}")
+        return
+
+    try:
+        os.chmod(ENV_PATH, 0o600)
+    except (AttributeError, NotImplementedError, OSError, PermissionError) as e:
+        current_app.logger.error(
+            "Failed to set permissions on %s: %s", ENV_PATH, e
+        )
 
 
 def ensure_db_initialized(app_obj=None):
