@@ -14,7 +14,14 @@
             </th>
             <td>
                 {% set lower = item.key.lower() %}
-                {% if 'password' in lower or 'secret' in lower %}
+                {% set is_sensitive =
+                    'password' in lower
+                    or 'secret' in lower
+                    or 'token' in lower
+                    or 'client_secret' in lower
+                    or 'key' in lower
+                %}
+                {% if is_sensitive %}
                 <div class="input-group">
                     <input type="password" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                     <span class="input-group-text toggle-password" data-target="{{ item.key }}">
