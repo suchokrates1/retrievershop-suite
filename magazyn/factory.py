@@ -56,8 +56,8 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
                 rule
             )
 
-    app.before_first_request(lambda: ensure_db_initialized(app))
-    app.before_first_request(lambda: start_print_agent(app))
+    ensure_db_initialized(app)
+    start_print_agent(app)
 
     _register_shutdown_hook()
 
