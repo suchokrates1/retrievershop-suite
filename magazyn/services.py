@@ -641,8 +641,19 @@ def get_sales_summary(days: int = 7) -> List[dict]:
     """Return sales summary for the given period."""
     start = datetime.now() - pd.Timedelta(days=days)
     with get_session() as db:
+        stock = {
+            (product_id, size): quantity
+            for product_id, size, quantity in (
+                db.query(
+                    ProductSize.product_id,
+                    ProductSize.size,
+                    ProductSize.quantity,
+                ).all()
+            )
+        }
         rows = (
             db.query(
+                Product.id,
                 Product.name,
                 Product.color,
                 Sale.size,
@@ -653,30 +664,18 @@ def get_sales_summary(days: int = 7) -> List[dict]:
             .group_by(Sale.product_id, Sale.size)
             .all()
         )
-        stock = {
-            (ps.product_id, ps.size): ps.quantity
-            for ps in db.query(ProductSize).all()
-        }
 
-    summary = []
-    for name, color, size, qty in rows:
-        remaining = stock.get(
-            (
-                db.query(Product)
-                .filter_by(name=name, color=color)
-                .first()
-                .id,
-                size,
-            ),
-            0,
-        )
-        summary.append(
-            {
-                "name": name,
-                "color": color,
-                "size": size,
-                "sold": int(qty or 0),
-                "remaining": remaining,
-            }
-        )
+        summary = []
+        for product_id, name, color, size, qty in rows:
+            remaining = stock.get((product_id, size), 0)
+            summary.append(
+                {
+                    "name": name,
+                    "color": color,
+                    "size": size,
+                    "sold": int(qty or 0),
+                    "remaining": remaining,
+                }
+            )
+
     return summary
