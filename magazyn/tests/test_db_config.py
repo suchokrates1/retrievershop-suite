@@ -1,10 +1,10 @@
-import sqlite3
 from types import SimpleNamespace
 from werkzeug.security import generate_password_hash
 
 import magazyn.db as db
 import magazyn.print_agent as pa
 from magazyn.models import User
+from magazyn.db import sqlite_connect
 
 
 def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
@@ -26,8 +26,8 @@ def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
     with db.get_session() as session:
         session.add(User(username="u2", password=generate_password_hash("p")))
 
-    conn1 = sqlite3.connect(first)
-    conn2 = sqlite3.connect(second)
+    conn1 = sqlite_connect(first)
+    conn2 = sqlite_connect(second)
     assert conn1.execute("SELECT username FROM users").fetchall() == [("u1",)]
     assert conn2.execute("SELECT username FROM users").fetchall() == [("u2",)]
     conn1.close()

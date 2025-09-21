@@ -5,10 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sqlite3
 from pathlib import Path
 from typing import Iterable, Optional
 
+from magazyn.db import sqlite_connect
 from magazyn.print_agent import AgentConfig, LabelAgent, load_config
 
 LOGGER = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def migrate_printed_file(db_path: str, printed_file: Path) -> None:
     if not printed_file.exists():
         LOGGER.info("Printed orders file %s not found, skipping", printed_file)
         return
-    conn = sqlite3.connect(db_path)
+    conn = sqlite_connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM printed_orders")
     if cur.fetchone()[0]:
@@ -44,7 +44,7 @@ def migrate_queue_file(db_path: str, queue_file: Path) -> None:
     if not queue_file.exists():
         LOGGER.info("Queued labels file %s not found, skipping", queue_file)
         return
-    conn = sqlite3.connect(db_path)
+    conn = sqlite_connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM label_queue")
     if cur.fetchone()[0]:
@@ -79,9 +79,9 @@ def migrate_from_legacy_db(db_path: str, legacy_db: Path) -> None:
     if not legacy_db.exists():
         LOGGER.info("Legacy database %s not found, skipping", legacy_db)
         return
-    conn = sqlite3.connect(db_path)
+    conn = sqlite_connect(db_path)
     cur = conn.cursor()
-    old_conn = sqlite3.connect(legacy_db)
+    old_conn = sqlite_connect(legacy_db)
     old_cur = old_conn.cursor()
     try:
         for table, columns in (("printed_orders", 3), ("label_queue", 4)):

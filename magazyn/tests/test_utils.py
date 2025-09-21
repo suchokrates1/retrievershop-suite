@@ -1,6 +1,7 @@
 import json
-import sqlite3
 import pytest
+
+from magazyn.db import sqlite_connect
 
 
 def get_bl():
@@ -174,7 +175,7 @@ def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
     agent.config = agent.config.with_updates(db_file=str(db))
     agent._configure_db_engine()
     agent.ensure_db()
-    conn = sqlite3.connect(db)
+    conn = sqlite_connect(db)
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO label_queue(order_id, label_data, ext, last_order_data) VALUES (?,?,?,?)",
@@ -212,7 +213,7 @@ def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
     agent.config = agent.config.with_updates(db_file=str(db))
     agent._configure_db_engine()
     agent.ensure_db()
-    conn = sqlite3.connect(db)
+    conn = sqlite_connect(db)
     cur = conn.cursor()
     bad = {
         "name": "John Doe",

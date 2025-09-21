@@ -1,9 +1,9 @@
-import sqlite3
 from magazyn import DB_PATH
+from magazyn.db import sqlite_connect
 
 
 def migrate():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite_connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='allegro_offers'"
