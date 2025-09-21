@@ -1,9 +1,9 @@
-import sqlite3
 from magazyn import DB_PATH
+from magazyn.db import sqlite_connect
 
 
 def migrate():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite_connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute("PRAGMA table_info(products)")
         cols = [row[1] for row in cur.fetchall()]
