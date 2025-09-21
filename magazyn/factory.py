@@ -17,6 +17,7 @@ from .shipping import bp as shipping_bp
 from .allegro import bp as allegro_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
+from .diagnostics import bp as diagnostics_bp
 
 _shutdown_registered = False
 
@@ -47,6 +48,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(sales_bp)
     app.register_blueprint(shipping_bp)
     app.register_blueprint(allegro_bp)
+    app.register_blueprint(diagnostics_bp)
 
     for rule in list(app.url_map.iter_rules()):
         if rule.endpoint.startswith("main."):
