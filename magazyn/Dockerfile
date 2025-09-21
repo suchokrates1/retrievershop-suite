@@ -5,7 +5,9 @@ FROM python:3.12-slim AS builder
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-WORKDIR /app
+WORKDIR /app/magazyn
+
+ENV PYTHONPATH="/app:/app/magazyn"
 
 RUN python -m venv "$VIRTUAL_ENV"
 
@@ -19,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY . /app
+COPY . /app/magazyn
 
 
 FROM python:3.12-slim AS runtime
@@ -27,7 +29,9 @@ FROM python:3.12-slim AS runtime
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-WORKDIR /app
+WORKDIR /app/magazyn
+
+ENV PYTHONPATH="/app:/app/magazyn"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cups-client \
