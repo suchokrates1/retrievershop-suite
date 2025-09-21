@@ -30,6 +30,9 @@ class ProductSize(Base):
     barcode = Column(String, unique=True)
     product = relationship("Product", back_populates="sizes")
     allegro_offers = relationship("AllegroOffer", back_populates="product_size")
+    price_history = relationship(
+        "AllegroPriceHistory", back_populates="product_size", cascade="all, delete-orphan"
+    )
 
 
 class PrintedOrder(Base):
@@ -90,3 +93,14 @@ class AllegroOffer(Base):
 
     product = relationship("Product")
     product_size = relationship("ProductSize", back_populates="allegro_offers")
+
+
+class AllegroPriceHistory(Base):
+    __tablename__ = "allegro_price_history"
+    id = Column(Integer, primary_key=True)
+    offer_id = Column(String, index=True)
+    product_size_id = Column(Integer, ForeignKey("product_sizes.id"))
+    price = Column(Numeric(10, 2), nullable=False)
+    recorded_at = Column(String, nullable=False)
+
+    product_size = relationship("ProductSize", back_populates="price_history")
