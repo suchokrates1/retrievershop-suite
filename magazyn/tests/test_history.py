@@ -1,4 +1,8 @@
 from datetime import datetime
+import json
+import sqlite3
+
+import magazyn.db as db_mod
 
 
 def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
@@ -132,3 +136,54 @@ def test_reprint_logs_exception(app_mod, client, login, monkeypatch):
     with client.session_transaction() as sess:
         msgs = sess.get("_flashes")
     assert any("Błąd ponownego drukowania" in m for _, m in msgs)
+
+
+def test_history_readonly_db(app_mod, client, login, tmp_path, monkeypatch, caplog):
+    db_file = tmp_path / "readonly.db"
+    conn = sqlite3.connect(db_file)
+    try:
+        conn.execute(
+            "CREATE TABLE printed_orders("  # noqa: S608 - static SQL
+            "order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE label_queue("  # noqa: S608 - static SQL
+            "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT, queued_at TEXT, status TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE agent_state("  # noqa: S608 - static SQL
+            "key TEXT PRIMARY KEY, value TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO printed_orders(order_id, printed_at, last_order_data) VALUES (?, ?, ?)",
+            (
+                "1",
+                "2023-01-01T00:00:00",
+                json.dumps(
+                    {
+                        "name": "Same",
+                        "customer": "Same",
+                        "products": [{"name": "Prod", "size": "L", "color": "Red"}],
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    ro_path = f"file:{db_file}?mode=ro"
+
+    def ro_sqlite_connect(path, **kwargs):
+        if isinstance(path, str) and path.startswith("file:"):
+            kwargs.setdefault("uri", True)
+        return db_mod.sqlite_connect(path, **kwargs)
+
+    monkeypatch.setattr(app_mod.print_agent, "sqlite_connect", ro_sqlite_connect)
+    ro_config = app_mod.print_agent.agent.config.with_updates(db_file=ro_path)
+    monkeypatch.setattr(app_mod.print_agent.agent, "config", ro_config)
+
+    caplog.set_level("WARNING")
+    resp = client.get("/history")
+    assert resp.status_code == 200
+    assert any("read-only" in rec.message.lower() for rec in caplog.records)
