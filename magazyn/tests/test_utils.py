@@ -192,6 +192,8 @@ def test_load_queue_handles_corrupted_json(tmp_path, monkeypatch):
 def test_call_api_handles_http_error(monkeypatch):
     bl = get_bl()
     agent = bl.agent
+    agent._api_call_times.clear()
+    agent.config = agent.config.with_updates(api_retry_attempts=1)
 
     class DummyResp:
         status_code = 500
@@ -208,6 +210,178 @@ def test_call_api_handles_http_error(monkeypatch):
     assert result == {}
 
 
+def test_call_api_retries_with_backoff(monkeypatch):
+    bl = get_bl()
+    agent = bl.agent
+    agent._api_call_times.clear()
+    agent.config = agent.config.with_updates(
+        api_retry_attempts=2,
+        api_retry_backoff_initial=0.5,
+        api_retry_backoff_max=1.0,
+    )
+
+    attempts = {"count": 0}
+
+    def fake_post(*args, **kwargs):
+        if attempts["count"] == 0:
+            attempts["count"] += 1
+            raise bl.requests.ConnectionError("boom")
+
+        class DummyResp:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"ok": True}
+
+        attempts["count"] += 1
+        return DummyResp()
+
+    waits = []
+
+    def fake_wait(timeout):
+        waits.append(timeout)
+        return False
+
+    monkeypatch.setattr(agent._stop_event, "wait", fake_wait)
+    monkeypatch.setattr(bl.requests, "post", fake_post)
+
+    result = agent.call_api("dummy")
+    assert result == {"ok": True}
+    assert waits == [0.5]
+
+
+def test_call_api_rate_limit(monkeypatch):
+    bl = get_bl()
+    agent = bl.agent
+    agent._api_call_times.clear()
+    agent.config = agent.config.with_updates(
+        api_rate_limit_calls=1,
+        api_rate_limit_period=10,
+        api_retry_attempts=1,
+    )
+
+    timeline = {"value": 0.0}
+
+    def fake_monotonic():
+        return timeline["value"]
+
+    waits = []
+
+    def fake_wait(timeout):
+        waits.append(timeout)
+        timeline["value"] += timeout
+        return False
+
+    class DummyResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    responses = iter([DummyResp(), DummyResp()])
+
+    monkeypatch.setattr(bl.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(agent._stop_event, "wait", fake_wait)
+    monkeypatch.setattr(bl.requests, "post", lambda *a, **k: next(responses))
+
+    agent.call_api("dummy")
+    agent.call_api("dummy")
+
+    assert waits == [10]
+
+
+def test_get_orders_uses_last_success_marker(tmp_path, monkeypatch):
+    bl = get_bl()
+    agent = bl.agent
+    agent._api_call_times.clear()
+    db = tmp_path / "marker.db"
+    agent.config = agent.config.with_updates(db_file=str(db))
+    agent._configure_db_engine()
+    agent.ensure_db()
+    agent.update_last_success_marker("111", "2023-01-01T00:00:00")
+
+    captured = {}
+
+    class DummyResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"orders": [{"order_id": "222"}, {"order_id": "333"}]}
+
+    def fake_post(url, headers, data, timeout):
+        captured["data"] = data
+        return DummyResp()
+
+    monkeypatch.setattr(bl.requests, "post", fake_post)
+
+    import datetime as dt
+
+    class DummyDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime.fromisoformat("2024-01-01T00:00:00")
+
+    monkeypatch.setattr(bl, "datetime", DummyDateTime)
+
+    orders = agent.get_orders()
+    assert [order["order_id"] for order in orders] == ["222", "333"]
+    params = json.loads(captured["data"]["parameters"])
+    assert params["last_success_order_id"] == "111"
+    assert params["last_success_timestamp"] == "2023-01-01T00:00:00"
+
+    marker = agent.load_last_success_marker()
+    assert marker.order_id == "333"
+    assert marker.timestamp == "2024-01-01T00:00:00"
+
+
+def test_save_queue_deduplicates(tmp_path):
+    bl = get_bl()
+    agent = bl.agent
+    db = tmp_path / "queue_dupes.db"
+    agent.config = agent.config.with_updates(db_file=str(db))
+    agent._configure_db_engine()
+    agent.ensure_db()
+
+    queue = [
+        {
+            "order_id": "1",
+            "label_data": "aaa",
+            "ext": "pdf",
+            "last_order_data": {},
+            "queued_at": "2023-01-01T00:00:00",
+            "status": "queued",
+        },
+        {
+            "order_id": "1",
+            "label_data": "aaa",
+            "ext": "pdf",
+            "last_order_data": {},
+            "queued_at": "2023-01-01T00:00:01",
+            "status": "queued",
+        },
+        {
+            "order_id": "2",
+            "label_data": "bbb",
+            "ext": "pdf",
+            "last_order_data": {},
+            "queued_at": "2023-01-01T00:00:02",
+            "status": "queued",
+        },
+    ]
+
+    agent.save_queue(queue)
+    loaded = agent.load_queue()
+
+    assert [item["order_id"] for item in loaded] == ["1", "2"]
 def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
     bl = get_bl()
     agent = bl.agent

@@ -45,6 +45,13 @@ def load_config():
         SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
         ENABLE_MONTHLY_REPORTS=os.getenv("ENABLE_MONTHLY_REPORTS", "1") == "1",
         ENABLE_WEEKLY_REPORTS=os.getenv("ENABLE_WEEKLY_REPORTS", "1") == "1",
+        API_RATE_LIMIT_CALLS=int(os.getenv("API_RATE_LIMIT_CALLS", "60")),
+        API_RATE_LIMIT_PERIOD=float(os.getenv("API_RATE_LIMIT_PERIOD", "60")),
+        API_RETRY_ATTEMPTS=int(os.getenv("API_RETRY_ATTEMPTS", "3")),
+        API_RETRY_BACKOFF_INITIAL=float(
+            os.getenv("API_RETRY_BACKOFF_INITIAL", "1.0")
+        ),
+        API_RETRY_BACKOFF_MAX=float(os.getenv("API_RETRY_BACKOFF_MAX", "30.0")),
     )
 
 

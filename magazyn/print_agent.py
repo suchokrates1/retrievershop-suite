@@ -7,9 +7,11 @@ import logging
 import os
 import subprocess
 import threading
+import time
+from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, time as dt_time
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
 import requests
@@ -79,6 +81,11 @@ class AgentConfig:
     legacy_printed_file: Optional[str] = None
     legacy_queue_file: Optional[str] = None
     legacy_db_file: Optional[str] = None
+    api_rate_limit_calls: int = 60
+    api_rate_limit_period: float = 60.0
+    api_retry_attempts: int = 3
+    api_retry_backoff_initial: float = 1.0
+    api_retry_backoff_max: float = 30.0
 
     @classmethod
     def from_settings(cls, cfg: Any) -> "AgentConfig":
@@ -112,10 +119,21 @@ class AgentConfig:
             legacy_db_file=os.path.abspath(
                 os.path.join(base_dir, os.pardir, "printer", "data.db")
             ),
+            api_rate_limit_calls=cfg.API_RATE_LIMIT_CALLS,
+            api_rate_limit_period=cfg.API_RATE_LIMIT_PERIOD,
+            api_retry_attempts=cfg.API_RETRY_ATTEMPTS,
+            api_retry_backoff_initial=cfg.API_RETRY_BACKOFF_INITIAL,
+            api_retry_backoff_max=cfg.API_RETRY_BACKOFF_MAX,
         )
 
     def with_updates(self, **kwargs: Any) -> "AgentConfig":
         return replace(self, **kwargs)
+
+
+@dataclass
+class SuccessMarker:
+    order_id: Optional[str]
+    timestamp: Optional[str]
 
 
 class LabelAgent:
@@ -128,10 +146,12 @@ class LabelAgent:
         self.last_order_data: Dict[str, Any] = {}
         self._agent_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._rate_limit_lock = threading.Lock()
         self._lock_handle = None
         self._api_calls_total = 0
         self._api_calls_success = 0
         self._last_api_log = datetime.now()
+        self._api_call_times: Deque[float] = deque()
         self._headers = {
             "X-BLToken": config.api_token,
             "Content-Type": "application/x-www-form-urlencoded",
@@ -317,6 +337,10 @@ class LabelAgent:
             "CREATE TABLE IF NOT EXISTS label_queue("  # noqa: S608 - static SQL
             "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT, queued_at TEXT, status TEXT)"
         )
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS agent_state("  # noqa: S608 - static SQL
+            "key TEXT PRIMARY KEY, value TEXT)"
+        )
         cur.execute("PRAGMA table_info(label_queue)")
         queue_cols = [row[1] for row in cur.fetchall()]
         if "queued_at" not in queue_cols:
@@ -399,6 +423,45 @@ class LabelAgent:
         conn.commit()
         conn.close()
 
+    def _load_state_value(self, key: str) -> Optional[str]:
+        self.ensure_db()
+        conn = sqlite_connect(self.config.db_file)
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM agent_state WHERE key=?", (key,))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+
+    def _save_state_value(self, key: str, value: Optional[str]) -> None:
+        self.ensure_db()
+        conn = sqlite_connect(self.config.db_file)
+        cur = conn.cursor()
+        if value is None:
+            cur.execute("DELETE FROM agent_state WHERE key=?", (key,))
+        else:
+            cur.execute(
+                "INSERT INTO agent_state(key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
+        conn.commit()
+        conn.close()
+
+    def load_last_success_marker(self) -> SuccessMarker:
+        return SuccessMarker(
+            order_id=self._load_state_value("last_success_order_id"),
+            timestamp=self._load_state_value("last_success_timestamp"),
+        )
+
+    def update_last_success_marker(
+        self, order_id: Optional[str], timestamp: Optional[str] = None
+    ) -> None:
+        if timestamp is None:
+            timestamp = datetime.now().isoformat()
+        self._save_state_value("last_success_timestamp", timestamp)
+        if order_id is not None:
+            self._save_state_value("last_success_order_id", order_id)
+
     def clean_old_printed_orders(self) -> None:
         threshold = datetime.now() - timedelta(days=self.config.printed_expiry_days)
         conn = sqlite_connect(self.config.db_file)
@@ -410,8 +473,22 @@ class LabelAgent:
         conn.commit()
         conn.close()
 
+    def _deduplicate_queue(self, queue: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        items = list(queue)
+        seen: set[str] = set()
+        unique: List[Dict[str, Any]] = []
+        for item in items:
+            order_id = item.get("order_id")
+            if order_id is not None and order_id in seen:
+                self.logger.debug("Dropping duplicate queue entry for %s", order_id)
+                continue
+            if order_id is not None:
+                seen.add(order_id)
+            unique.append(item)
+        return unique
+
     def _update_queue_metrics(self, queue: Iterable[Dict[str, Any]]) -> None:
-        queue_list = list(queue)
+        queue_list = self._deduplicate_queue(queue)
         size = len(queue_list)
         PRINT_QUEUE_SIZE.set(size)
 
@@ -462,7 +539,14 @@ class LabelAgent:
                     "status": status or "queued",
                 }
             )
-        return items
+        deduped = self._deduplicate_queue(items)
+        if len(deduped) != len(items):
+            self.logger.info(
+                "Removed %s duplicate queue entries from storage",
+                len(items) - len(deduped),
+            )
+            self.save_queue(deduped)
+        return deduped
 
     def save_queue(self, items: Iterable[Dict[str, Any]]) -> None:
         items_list = self._update_queue_metrics(items)
@@ -501,6 +585,31 @@ class LabelAgent:
             self._api_calls_success = 0
             self._last_api_log = now
 
+    def _enforce_rate_limit(self) -> None:
+        max_calls = max(0, self.config.api_rate_limit_calls)
+        window = self.config.api_rate_limit_period
+        if max_calls <= 0 or window <= 0:
+            return
+        with self._rate_limit_lock:
+            now = time.monotonic()
+            while self._api_call_times and now - self._api_call_times[0] >= window:
+                self._api_call_times.popleft()
+            if len(self._api_call_times) >= max_calls:
+                wait_until = self._api_call_times[0] + window
+                wait_time = wait_until - now
+                if wait_time > 0:
+                    self.logger.debug(
+                        "Rate limit reached, waiting %.2fs before next API call",
+                        wait_time,
+                    )
+                    PRINT_AGENT_DOWNTIME_SECONDS.inc(wait_time)
+                    if self._stop_event.wait(wait_time):
+                        raise ApiError("Rate limit wait interrupted")
+                now = time.monotonic()
+                while self._api_call_times and now - self._api_call_times[0] >= window:
+                    self._api_call_times.popleft()
+            self._api_call_times.append(time.monotonic())
+
     def call_api(
         self,
         method: str,
@@ -509,41 +618,98 @@ class LabelAgent:
         raise_on_error: bool = False,
     ) -> Dict[str, Any]:
         parameters = parameters or {}
-        success = False
-        try:
-            payload = {"method": method, "parameters": json.dumps(parameters)}
-            response = requests.post(
-                self.config.base_url, headers=self._headers, data=payload, timeout=10
-            )
-            response.raise_for_status()
-            success = True
-            return response.json()
-        except requests.exceptions.HTTPError as exc:
-            self.logger.error("HTTP error in call_api(%s): %s", method, exc)
-            if raise_on_error:
-                raise ApiError(str(exc)) from exc
-        except requests.exceptions.RequestException as exc:
-            self.logger.error("Request error in call_api(%s): %s", method, exc)
-            if raise_on_error:
-                raise ApiError(str(exc)) from exc
-        except Exception as exc:  # pragma: no cover - defensive
-            self.logger.error("Błąd w call_api(%s): %s", method, exc)
-            if raise_on_error:
-                raise ApiError(str(exc)) from exc
-        finally:
-            self._api_calls_total += 1
+        max_attempts = max(1, self.config.api_retry_attempts)
+        backoff_initial = max(0.0, self.config.api_retry_backoff_initial)
+        backoff_max = max(backoff_initial, self.config.api_retry_backoff_max)
+        attempts = 0
+        last_error: Optional[Exception] = None
+
+        while attempts < max_attempts and not self._stop_event.is_set():
+            attempts += 1
+            try:
+                self._enforce_rate_limit()
+            except ApiError as exc:
+                last_error = exc
+                self.logger.error("Rate limit error in call_api(%s): %s", method, exc)
+                break
+
+            success = False
+            response_data: Dict[str, Any] = {}
+            attempt_error: Optional[Exception] = None
+            try:
+                payload = {"method": method, "parameters": json.dumps(parameters)}
+                response = requests.post(
+                    self.config.base_url,
+                    headers=self._headers,
+                    data=payload,
+                    timeout=10,
+                )
+                response.raise_for_status()
+                response_data = response.json()
+                success = True
+            except requests.exceptions.HTTPError as exc:
+                attempt_error = exc
+                last_error = exc
+                self.logger.error("HTTP error in call_api(%s): %s", method, exc)
+            except requests.exceptions.RequestException as exc:
+                attempt_error = exc
+                last_error = exc
+                self.logger.error("Request error in call_api(%s): %s", method, exc)
+            except Exception as exc:  # pragma: no cover - defensive
+                attempt_error = exc
+                last_error = exc
+                self.logger.error("Błąd w call_api(%s): %s", method, exc)
+            finally:
+                self._api_calls_total += 1
+                if success:
+                    self._api_calls_success += 1
+                self._maybe_log_api_summary()
+
             if success:
-                self._api_calls_success += 1
-            self._maybe_log_api_summary()
+                return response_data
+
+            if attempts >= max_attempts:
+                break
+
+            delay = backoff_initial * (2 ** (attempts - 1))
+            if delay > backoff_max:
+                delay = backoff_max
+            if delay > 0 and attempt_error is not None:
+                self.logger.warning(
+                    "call_api(%s) retrying in %.1fs (attempt %s/%s)",
+                    method,
+                    delay,
+                    attempts + 1,
+                    max_attempts,
+                )
+                PRINT_AGENT_RETRIES_TOTAL.inc()
+                PRINT_AGENT_DOWNTIME_SECONDS.inc(delay)
+                if self._stop_event.wait(delay):
+                    break
+
+        if raise_on_error and last_error is not None:
+            raise ApiError(str(last_error)) from last_error
         return {}
 
     def get_orders(self) -> List[Dict[str, Any]]:
-        response = self.call_api(
-            "getOrders",
-            {"status_id": self.config.status_id, "include_products": 1},
-            raise_on_error=True,
-        )
-        return response.get("orders", [])
+        marker = self.load_last_success_marker()
+        params: Dict[str, Any] = {
+            "status_id": self.config.status_id,
+            "include_products": 1,
+        }
+        if marker.order_id:
+            params["last_success_order_id"] = marker.order_id
+        if marker.timestamp:
+            params["last_success_timestamp"] = marker.timestamp
+        response = self.call_api("getOrders", params, raise_on_error=True)
+        orders = response.get("orders", [])
+        last_seen = marker.order_id
+        for order in orders:
+            order_id = order.get("order_id")
+            if order_id is not None:
+                last_seen = str(order_id)
+        self.update_last_success_marker(last_seen)
+        return orders
 
     def get_order_packages(self, order_id: str) -> List[Dict[str, Any]]:
         response = self.call_api(
