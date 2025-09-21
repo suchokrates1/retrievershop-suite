@@ -1,9 +1,11 @@
-import os
 from decimal import Decimal
 import re
 
 import pytest
 import requests
+
+import magazyn.allegro_api as allegro_api
+from magazyn.settings_store import settings_store
 
 from magazyn.config import settings
 from magazyn.db import get_session
@@ -209,9 +211,8 @@ def test_offers_without_inventory_are_listed_first(client, login):
     assert linked_titles == sorted(linked_titles)
 
 
-def test_price_check_requires_allegro_authorization(client, login, monkeypatch):
-    monkeypatch.delenv("ALLEGRO_ACCESS_TOKEN", raising=False)
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+def test_price_check_requires_allegro_authorization(client, login, allegro_tokens):
+    allegro_tokens()
 
     response = client.get("/allegro/price-check")
     assert response.status_code == 200
@@ -232,9 +233,8 @@ def test_price_check_requires_allegro_authorization(client, login, monkeypatch):
     }
 
 
-def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh")
+def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_tokens):
+    allegro_tokens("token", "refresh")
     with get_session() as session:
         product = Product(name="Szelki", color="Niebieskie")
         session.add(product)
@@ -346,9 +346,8 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
     assert high["is_lowest"] is False
 
 
-def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh")
+def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatch, allegro_tokens):
+    allegro_tokens("token", "refresh")
     with get_session() as session:
         product = Product(name="Legowisko", color="Szare")
         session.add(product)
@@ -418,7 +417,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
     assert set(called_barcodes) == {"333", "444"}
 
 
-def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
+def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, allegro_tokens):
     class FakeResponse:
         def __init__(self, status_code, data):
             self.status_code = status_code
@@ -431,8 +430,7 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
         def json(self):
             return self._data
 
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")
+    allegro_tokens("expired-token", "refresh-token")
 
     listing_payload = {
         "items": {
@@ -462,14 +460,13 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
     monkeypatch.setattr("magazyn.allegro_api.refresh_token", fake_refresh)
     persisted = []
 
+    original_update = allegro_api.update_allegro_tokens
+
     def capture_tokens(access_token=None, refresh_token=None):
         persisted.append(
             {"access_token": access_token, "refresh_token": refresh_token}
         )
-        if access_token is not None:
-            os.environ["ALLEGRO_ACCESS_TOKEN"] = access_token
-        if refresh_token is not None:
-            os.environ["ALLEGRO_REFRESH_TOKEN"] = refresh_token
+        original_update(access_token, refresh_token)
 
     monkeypatch.setattr(
         "magazyn.allegro_api.update_allegro_tokens", capture_tokens
@@ -480,8 +477,8 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
     assert len(calls) == 2
     assert calls[0]["headers"]["Authorization"] == "Bearer expired-token"
     assert calls[1]["headers"]["Authorization"] == "Bearer new-access"
-    assert os.getenv("ALLEGRO_ACCESS_TOKEN") == "new-access"
-    assert os.getenv("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert persisted == [
         {"access_token": "new-access", "refresh_token": "new-refresh"}
     ]
@@ -494,7 +491,9 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch):
     ]
 
 
-def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(monkeypatch):
+def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(
+    monkeypatch, allegro_tokens
+):
     class FakeResponse:
         def __init__(self, status_code, data):
             self.status_code = status_code
@@ -507,8 +506,7 @@ def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(mon
         def json(self):
             return self._data
 
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    allegro_tokens("expired-token")
 
     responses = [FakeResponse(403, {})]
     calls = []
@@ -526,7 +524,9 @@ def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(mon
     assert calls[0]["headers"]["Authorization"] == "Bearer expired-token"
 
 
-def test_fetch_product_listing_clears_tokens_when_refresh_fails(monkeypatch):
+def test_fetch_product_listing_clears_tokens_when_refresh_fails(
+    monkeypatch, allegro_tokens
+):
     class FakeResponse:
         def __init__(self, status_code, data):
             self.status_code = status_code
@@ -539,8 +539,7 @@ def test_fetch_product_listing_clears_tokens_when_refresh_fails(monkeypatch):
         def json(self):
             return self._data
 
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")
+    allegro_tokens("expired-token", "refresh-token")
 
     responses = [FakeResponse(401, {})]
 
@@ -551,8 +550,7 @@ def test_fetch_product_listing_clears_tokens_when_refresh_fails(monkeypatch):
 
     def fake_clear():
         clear_calls.append(True)
-        os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
-        os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+        allegro_tokens()
 
     def failing_refresh(refresh_value):
         raise requests.exceptions.HTTPError(response=FakeResponse(400, {}))
@@ -565,5 +563,5 @@ def test_fetch_product_listing_clears_tokens_when_refresh_fails(monkeypatch):
         fetch_product_listing("1234567890123")
 
     assert clear_calls == [True]
-    assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
-    assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None

@@ -3,6 +3,7 @@ import sys
 import pytest
 
 import magazyn.config as cfg
+from magazyn.settings_store import settings_store
 
 
 @pytest.fixture
@@ -58,3 +59,45 @@ def login(client):
     with client.session_transaction() as sess:
         sess["username"] = "tester"
     yield
+
+
+_TOKEN_SENTINEL = object()
+
+
+@pytest.fixture
+def allegro_tokens():
+    settings_store.update(
+        {
+            "ALLEGRO_ACCESS_TOKEN": None,
+            "ALLEGRO_REFRESH_TOKEN": None,
+        }
+    )
+
+    def _setter(
+        access: str | None | object = _TOKEN_SENTINEL,
+        refresh: str | None | object = _TOKEN_SENTINEL,
+    ) -> None:
+        updates = {}
+        if access is not _TOKEN_SENTINEL:
+            updates["ALLEGRO_ACCESS_TOKEN"] = access
+        if refresh is not _TOKEN_SENTINEL:
+            updates["ALLEGRO_REFRESH_TOKEN"] = refresh
+        if updates:
+            settings_store.update(updates)
+        elif access is _TOKEN_SENTINEL and refresh is _TOKEN_SENTINEL:
+            settings_store.update(
+                {
+                    "ALLEGRO_ACCESS_TOKEN": None,
+                    "ALLEGRO_REFRESH_TOKEN": None,
+                }
+            )
+
+    yield _setter
+
+    settings_store.update(
+        {
+            "ALLEGRO_ACCESS_TOKEN": None,
+            "ALLEGRO_REFRESH_TOKEN": None,
+        }
+    )
+    settings_store.reload()
