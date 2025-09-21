@@ -39,7 +39,15 @@
                     <option value="{{ env }}" {% if item.value == env %}selected{% endif %}>{{ env }}</option>
                     {% endfor %}
                 </select>
-                {% elif 'password' in lower or 'secret' in lower %}
+                {% else %}
+                {% set is_sensitive =
+                    'password' in lower
+                    or 'secret' in lower
+                    or 'token' in lower
+                    or 'client_secret' in lower
+                    or 'key' in lower
+                %}
+                {% if is_sensitive %}
                 <div class="input-group">
                     <input type="password" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                     <span class="input-group-text toggle-password" data-target="{{ item.key }}">
@@ -48,6 +56,7 @@
                 </div>
                 {% else %}
                 <input type="text" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                {% endif %}
                 {% endif %}
             </td>
         </tr>
