@@ -1,4 +1,5 @@
 from decimal import Decimal
+import os
 
 import pytest
 from requests.exceptions import HTTPError
@@ -7,7 +8,7 @@ import magazyn.allegro_sync as sync_mod
 
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
-from magazyn.settings_store import settings_store
+from magazyn.settings_store import SettingsPersistenceError, settings_store
 
 
 def _set_tokens(access: str | None = None, refresh: str | None = None) -> None:
@@ -811,4 +812,45 @@ def test_refresh_handles_empty_response(client, login, monkeypatch):
 
     with get_session() as session:
         assert session.query(AllegroOffer).count() == 0
+
+
+def test_sync_offers_aborts_when_settings_store_is_read_only(
+    monkeypatch, app_mod
+):
+    monkeypatch.delenv("ALLEGRO_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens(refresh="refresh-token")
+
+    monkeypatch.setattr(
+        sync_mod.allegro_api,
+        "refresh_token",
+        lambda refresh: {
+            "access_token": "new-access-token",
+            "refresh_token": "new-refresh-token",
+        },
+    )
+
+    def unexpected_fetch(*args, **kwargs):
+        raise AssertionError("fetch_offers should not be called when persistence fails")
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", unexpected_fetch)
+
+    def failing_update(values):
+        raise SettingsPersistenceError("read-only")
+
+    monkeypatch.setattr(sync_mod.settings_store, "update", failing_update)
+
+    metric = sync_mod.ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="settings_store")
+    initial_value = metric._value.get()
+
+    with pytest.raises(RuntimeError) as excinfo:
+        sync_mod.sync_offers()
+
+    assert "settings store is read-only" in str(excinfo.value)
+    assert metric._value.get() == initial_value + 1
+    assert os.environ.get("ALLEGRO_ACCESS_TOKEN") == "new-access-token"
+    assert os.environ.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh-token"
+
+    os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
+    os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
 

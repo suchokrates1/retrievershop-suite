@@ -16,7 +16,7 @@ from .parsing import parse_offer_title, normalize_color
 from .env_tokens import clear_allegro_tokens, update_allegro_tokens
 from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
 from .domain import allegro_prices
-from .settings_store import settings_store
+from .settings_store import SettingsPersistenceError, settings_store
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,21 @@ def _normalized_product_color_components(value: str) -> set[str]:
     return components
 
 
+def _raise_settings_store_read_only(exc: SettingsPersistenceError) -> None:
+    guidance = (
+        "Cannot modify Allegro credentials because the settings store is read-only. "
+        "Update them manually in the configuration file and rerun the synchronisation."
+    )
+    ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="settings_store").inc()
+    logger.error(guidance, exc_info=True)
+    raise RuntimeError(guidance) from exc
+
+
 def _clear_cached_tokens():
-    clear_allegro_tokens()
+    try:
+        clear_allegro_tokens()
+    except SettingsPersistenceError as exc:
+        _raise_settings_store_read_only(exc)
 
 
 def sync_offers():
@@ -77,6 +90,8 @@ def sync_offers():
                 refresh = new_refresh
             if token:
                 update_allegro_tokens(token, refresh)
+        except SettingsPersistenceError as exc:
+            _raise_settings_store_read_only(exc)
         except Exception as exc:
             _clear_cached_tokens()
             logger.exception("Failed to refresh Allegro token")
@@ -125,7 +140,10 @@ def sync_offers():
                     new_refresh = token_data.get("refresh_token")
                     if new_refresh:
                         refresh = new_refresh
-                    update_allegro_tokens(token, refresh)
+                    try:
+                        update_allegro_tokens(token, refresh)
+                    except SettingsPersistenceError as persistence_exc:
+                        _raise_settings_store_read_only(persistence_exc)
                     continue
                 if status_code == 401 and not refresh:
                     _clear_cached_tokens()
