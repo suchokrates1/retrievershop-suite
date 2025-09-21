@@ -158,7 +158,7 @@ Additional arguments are passed directly to `pytest`, for example:
 ./run-tests.sh magazyn/tests/test_agent_thread.py
 ```
 
-The project is developed and tested using **Python 3.9**.
+The project is developed and tested using **Python 3.12**.
 
 ## Running with Docker Compose
 
@@ -176,6 +176,16 @@ the application persist on the host:
 
 The compose configuration mounts the host's `/var/run/cups/cups.sock` so the
 printing agent can communicate with the host CUPS server.
+
+The container image now starts the application with Gunicorn using the
+`magazyn.wsgi:app` entrypoint bound to `0.0.0.0:8000`. Traefik and any reverse
+proxy configuration should therefore forward traffic to port `8000` inside the
+container. If you run the image manually, you can use the same command:
+
+```bash
+docker run --env-file=.env retrievershop/magazyn \
+  gunicorn magazyn.wsgi:app --bind 0.0.0.0:8000
+```
 
 The application uses a SQLite database stored in `magazyn/database.db`. This
 file is created automatically on first startup if it does not already exist.
