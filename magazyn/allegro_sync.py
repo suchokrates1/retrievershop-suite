@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-import os
 import logging
 import re
 import unicodedata
@@ -17,6 +16,7 @@ from .parsing import parse_offer_title, normalize_color
 from .env_tokens import clear_allegro_tokens, update_allegro_tokens
 from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
 from .domain import allegro_prices
+from .settings_store import settings_store
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,8 @@ def sync_offers():
             Aggregated price trend entries generated from the stored history
             samples.
     """
-    token = os.getenv("ALLEGRO_ACCESS_TOKEN")
-    refresh = os.getenv("ALLEGRO_REFRESH_TOKEN")
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
     if not token and refresh:
         try:
             token_data = allegro_api.refresh_token(refresh)
@@ -128,7 +128,7 @@ def sync_offers():
                     update_allegro_tokens(token, refresh)
                     continue
                 if status_code == 401 and not refresh:
-                    os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
+                    _clear_cached_tokens()
                     message = (
                         "Failed to fetch Allegro offers at offset "
                         f"{offset}: unauthorized and no refresh token available"

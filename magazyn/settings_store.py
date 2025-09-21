@@ -318,6 +318,13 @@ class SettingsStore:
             self._namespace = self._build_namespace(self._values)
 
 
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Return a configuration value from the persistent store."""
+
+        self._ensure_loaded()
+        return self._values.get(key, default)
+
+
 settings_store = SettingsStore()
 
 __all__ = ["settings_store", "SettingsStore"]
