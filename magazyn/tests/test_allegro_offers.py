@@ -297,15 +297,27 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
 
     rows = re.findall(r"<tr>.*?</tr>", body, re.S)
     data_rows = [row for row in rows if "Oferta" in row and "th" not in row]
-    row_low = next(row for row in data_rows if "Oferta najtańsza" in row)
-    row_high = next(row for row in data_rows if "Oferta droższa" in row)
 
+    def row_by_offer(offer_id: str) -> str:
+        return next(
+            row
+            for row in data_rows
+            if f"href=\"https://allegro.pl/oferta/{offer_id}\"" in row
+        )
+
+    row_low = row_by_offer("offer-low")
+    row_high = row_by_offer("offer-high")
+
+    assert "bi-link-45deg" in row_low
+    assert 'visually-hidden">Oferta najtańsza</span>' in row_low
     assert "90.00 zł" in row_low
     assert "95.00 zł" in row_low
     assert "href=\"https://allegro.pl/oferta/competitor-a-offer\"" in row_low
     assert "aria-label=\"Zobacz ofertę konkurencji\"" in row_low
     assert "text-success" in row_low and "✓" in row_low
 
+    assert "bi-link-45deg" in row_high
+    assert 'visually-hidden">Oferta droższa</span>' in row_high
     assert "120.00 zł" in row_high
     assert "80.00 zł" in row_high
     assert "href=\"https://allegro.pl/oferta/competitor-c-offer\"" in row_high
@@ -371,12 +383,15 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
     assert response.status_code == 200
 
     body = response.data.decode("utf-8")
+    rows = re.findall(r"<tr>.*?</tr>", body, re.S)
     row = next(
         row
-        for row in re.findall(r"<tr>.*?</tr>", body, re.S)
-        if "Oferta produktowa" in row
+        for row in rows
+        if "href=\"https://allegro.pl/oferta/offer-product\"" in row
     )
 
+    assert "bi-link-45deg" in row
+    assert 'visually-hidden">Oferta produktowa</span>' in row
     assert "Legowisko Szare" in row
     assert "85.00 zł" in row
     assert "href=\"https://allegro.pl/oferta/competitor-2-offer\"" in row
