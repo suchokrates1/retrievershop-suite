@@ -26,6 +26,8 @@ from .notifications import send_stock_alert
 
 TWOPLACES = Decimal("0.01")
 
+logger = logging.getLogger(__name__)
+
 
 def to_decimal(value) -> Decimal:
     if isinstance(value, Decimal):
@@ -48,15 +50,37 @@ def _configure_sqlite_connection(dbapi_connection):
 
     cursor = dbapi_connection.cursor()
     try:
-        cursor.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")
-        # ``journal_mode`` returns the active mode as a row, consume it to avoid
-        # leaving the cursor in a pending state.
         try:
-            cursor.fetchone()
-        except sqlite3.Error:  # pragma: no cover - defensive
-            pass
-        cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
-        cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")
+        except sqlite3.OperationalError as exc:
+            logger.warning(
+                "Unable to set SQLite journal_mode to %s; continuing without WAL mode: %s",
+                SQLITE_JOURNAL_MODE,
+                exc,
+            )
+        else:
+            # ``journal_mode`` returns the active mode as a row, consume it to avoid
+            # leaving the cursor in a pending state.
+            try:
+                cursor.fetchone()
+            except sqlite3.Error:  # pragma: no cover - defensive
+                pass
+
+        try:
+            cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        except sqlite3.OperationalError as exc:
+            logger.warning(
+                "Unable to set SQLite busy_timeout; continuing with default timeout: %s",
+                exc,
+            )
+
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        except sqlite3.OperationalError as exc:
+            logger.warning(
+                "Unable to enable SQLite foreign_keys; continuing without enforcement: %s",
+                exc,
+            )
     finally:
         cursor.close()
 
@@ -88,7 +112,6 @@ def configure_engine(db_path):
 
 
 configure_engine(DB_PATH)
-logger = logging.getLogger(__name__)
 
 
 @contextmanager
