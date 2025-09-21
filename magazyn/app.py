@@ -8,14 +8,13 @@ from flask import (
     session,
     flash,
     has_request_context,
+    has_app_context,
 )
 from datetime import datetime
 import os
 import sys
 from werkzeug.security import check_password_hash
-from dotenv import dotenv_values
 from collections import OrderedDict
-from pathlib import Path
 
 from .models import User
 from .forms import LoginForm
@@ -30,14 +29,16 @@ from .db import (
 )
 from .sales import _sales_keys
 from .auth import login_required
-from .config import settings
 from . import print_agent
 from .env_info import ENV_INFO
 from magazyn import DB_PATH
-
-ROOT_DIR = Path(__file__).resolve().parents[1]
-ENV_PATH = ROOT_DIR / ".env"
-EXAMPLE_PATH = ROOT_DIR / ".env.example"
+from .settings_store import settings_store
+from .settings_io import (
+    ENV_PATH,
+    EXAMPLE_PATH,
+    HIDDEN_KEYS,
+    write_env as write_env_file,
+)
 
 # Settings with boolean values represented as "1" or "0"
 BOOLEAN_KEYS = {
@@ -68,6 +69,48 @@ def format_dt(value, fmt="%d/%m/%Y %H:%M"):
 _print_agent_started = False
 
 
+def _make_logger():
+    if has_app_context():
+        return lambda message, error: current_app.logger.exception(
+            message, exc_info=error
+        )
+    return None
+
+
+def _make_error_notifier():
+    if has_request_context():
+        def notifier(message):
+            if "Settings template missing" in message:
+                flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.")
+            else:
+                flash(message)
+
+        return notifier
+    return None
+
+
+def load_settings(include_hidden: bool = False):
+    """Return application settings ordered for display."""
+
+    return settings_store.as_ordered_dict(
+        include_hidden=include_hidden,
+        logger=_make_logger(),
+        on_error=_make_error_notifier(),
+    )
+
+
+def write_env(values):
+    """Persist values to ``.env`` as a fallback when the database is unavailable."""
+
+    write_env_file(
+        values,
+        example_path=EXAMPLE_PATH,
+        env_path=ENV_PATH,
+        logger=_make_logger(),
+        on_error=_make_error_notifier(),
+    )
+
+
 @bp.app_context_processor
 def inject_current_year():
     return {"current_year": datetime.now().year}
@@ -93,71 +136,6 @@ def start_print_agent(app_obj=None):
         app_ctx.logger.error(f"Failed to start print agent: {e}")
     except Exception as e:
         app_ctx.logger.error(f"Failed to start print agent: {e}")
-
-
-def load_settings():
-    """Return OrderedDict combining keys from the example and current .env."""
-    if not EXAMPLE_PATH.exists():
-        current_app.logger.error(f"Settings template missing: {EXAMPLE_PATH}")
-        flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.")
-        return OrderedDict()
-    try:
-        example = dotenv_values(EXAMPLE_PATH)
-        current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
-    except Exception as e:
-        current_app.logger.exception("Failed to load .env files: %s", e)
-        if has_request_context():
-            flash(f"Błąd czytania plików .env: {e}")
-        return OrderedDict()
-    values = OrderedDict()
-
-    # first preserve ordering from .env.example
-    for key in example.keys():
-        values[key] = current.get(key, example[key])
-
-    # append any additional keys from the existing .env
-    for key, val in current.items():
-        if key not in values:
-            values[key] = val
-
-    # remove deprecated/unused keys
-    for hidden in ("ENABLE_HTTP_SERVER", "HTTP_PORT", "DB_PATH"):
-        values.pop(hidden, None)
-
-    return values
-
-
-def write_env(values):
-    """Rewrite .env preserving example order and keeping unknown keys."""
-    try:
-        example = dotenv_values(EXAMPLE_PATH)
-        example_keys = list(example.keys())
-        current = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
-        ordered = example_keys + [
-            k for k in values.keys() if k not in example_keys
-        ]
-    except Exception as e:
-        current_app.logger.exception("Failed to read env template: %s", e)
-        if has_request_context():
-            flash(f"Błąd odczytu {EXAMPLE_PATH}: {e}")
-        return
-    try:
-        with ENV_PATH.open("w") as f:
-            for key in ordered:
-                val = values.get(key, current.get(key, example.get(key, "")))
-                f.write(f"{key}={val}\n")
-    except Exception as e:
-        current_app.logger.exception("Failed to write .env file: %s", e)
-        if has_request_context():
-            flash(f"Błąd zapisu pliku .env: {e}")
-        return
-
-    try:
-        os.chmod(ENV_PATH, 0o600)
-    except (AttributeError, NotImplementedError, OSError, PermissionError) as e:
-        current_app.logger.error(
-            "Failed to set permissions on %s: %s", ENV_PATH, e
-        )
 
 
 def ensure_db_initialized(app_obj=None):
@@ -230,22 +208,29 @@ def logout():
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings_page():
-    values = load_settings()
+    all_values = settings_store.as_ordered_dict(
+        include_hidden=True,
+        logger=_make_logger(),
+        on_error=_make_error_notifier(),
+    )
+    values = OrderedDict(
+        (key, val) for key, val in all_values.items() if key not in HIDDEN_KEYS
+    )
     sales_keys = _sales_keys(values)
-    db_vals = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
-    db_path_notice = "DB_PATH" in db_vals
+    db_path_notice = bool(all_values.get("DB_PATH"))
     if request.method == "POST":
+        updates = {}
         for key in list(values.keys()):
             if key in sales_keys:
                 continue
-            values[key] = request.form.get(key, "")
+            updates[key] = request.form.get(key, values.get(key, ""))
         for tkey in ("QUIET_HOURS_START", "QUIET_HOURS_END"):
             try:
-                print_agent.parse_time_str(values.get(tkey, ""))
+                print_agent.parse_time_str(updates.get(tkey, values.get(tkey, "")))
             except ValueError:
                 flash("Niepoprawny format godziny (hh:mm)")
                 return redirect(url_for("settings_page"))
-        write_env(values)
+        settings_store.update(updates)
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("settings_page"))
@@ -322,4 +307,8 @@ if __name__ == "__main__":
         with cli_app.app_context():
             ensure_db_initialized(cli_app)
     else:
-        cli_app.run(host="0.0.0.0", port=80, debug=settings.FLASK_DEBUG)
+        cli_app.run(
+            host="0.0.0.0",
+            port=80,
+            debug=settings_store.settings.FLASK_DEBUG,
+        )
