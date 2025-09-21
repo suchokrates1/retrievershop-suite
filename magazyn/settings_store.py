@@ -15,6 +15,10 @@ from . import settings_io
 
 LOGGER = logging.getLogger(__name__)
 
+
+class SettingsPersistenceError(RuntimeError):
+    """Raised when settings cannot be persisted to any backing store."""
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
@@ -119,8 +123,15 @@ class SettingsStore:
     def _persist_many(self, values: Mapping[str, str], db_path: Optional[Path] = None) -> bool:
         conn = self._connect(db_path)
         if conn is None:
-            LOGGER.debug("Falling back to .env persistence because database is unavailable")
-            return settings_io.write_env(self._values)
+            LOGGER.debug(
+                "Falling back to .env persistence because database is unavailable"
+            )
+            if settings_io.write_env(self._values):
+                return False
+            raise SettingsPersistenceError(
+                "Failed to persist settings: the database is unavailable and writing"
+                " to the .env fallback failed"
+            )
 
         try:
             cursor = conn.cursor()
@@ -143,7 +154,12 @@ class SettingsStore:
             return True
         except sqlite3.Error as exc:
             LOGGER.exception("Failed to persist settings to database: %s", exc)
-            return settings_io.write_env(self._values)
+            if settings_io.write_env(self._values):
+                return False
+            raise SettingsPersistenceError(
+                "Failed to persist settings: both the database and .env fallback"
+                " are unavailable"
+            ) from exc
         finally:
             conn.close()
 
@@ -151,7 +167,12 @@ class SettingsStore:
         conn = self._connect(db_path)
         if conn is None:
             LOGGER.debug("Falling back to .env persistence because database is unavailable")
-            return settings_io.write_env(self._values)
+            if settings_io.write_env(self._values):
+                return False
+            raise SettingsPersistenceError(
+                "Failed to delete settings: the database is unavailable and writing"
+                " to the .env fallback failed"
+            )
 
         try:
             cursor = conn.cursor()
@@ -161,7 +182,12 @@ class SettingsStore:
             return True
         except sqlite3.Error as exc:
             LOGGER.exception("Failed to delete settings from database: %s", exc)
-            return settings_io.write_env(self._values)
+            if settings_io.write_env(self._values):
+                return False
+            raise SettingsPersistenceError(
+                "Failed to delete settings: both the database and .env fallback"
+                " are unavailable"
+            ) from exc
         finally:
             conn.close()
 
@@ -288,6 +314,7 @@ class SettingsStore:
     def update(self, values: Mapping[str, str]) -> None:
         self._ensure_loaded()
         with self._lock:
+            previous_values = OrderedDict(self._values)
             changed: OrderedDict[str, str] = OrderedDict()
             removed: list[str] = []
             for key, value in values.items():
@@ -306,12 +333,17 @@ class SettingsStore:
             if not changed and not removed:
                 return
 
-            persisted = True
-            if changed:
-                persisted = self._persist_many(changed)
-            if removed:
-                persisted = self._delete_keys(removed) and persisted
-            if not persisted:
+            fallback_used = False
+            try:
+                if changed:
+                    fallback_used = not self._persist_many(changed)
+                if removed:
+                    fallback_used = (not self._delete_keys(removed)) or fallback_used
+            except SettingsPersistenceError:
+                self._values = previous_values
+                self._namespace = self._build_namespace(self._values)
+                raise
+            if fallback_used:
                 LOGGER.warning("Settings stored in .env fallback; database unavailable")
 
             self._apply_environment(changed, removed)
@@ -327,5 +359,5 @@ class SettingsStore:
 
 settings_store = SettingsStore()
 
-__all__ = ["settings_store", "SettingsStore"]
+__all__ = ["settings_store", "SettingsStore", "SettingsPersistenceError"]
 

@@ -70,4 +70,5 @@ ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS.labels(endpoint="listing").inc(0)
 ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="http").inc(0)
 ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc(0)
 ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="unexpected").inc(0)
+ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="settings_store").inc(0)
 
