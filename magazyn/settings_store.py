@@ -70,7 +70,12 @@ class SettingsStore:
                 values = db_values
             elif env_values:
                 values = env_values
-                self._persist_many(values, db_path)
+                try:
+                    self._persist_many(values, db_path)
+                except SettingsPersistenceError as exc:
+                    LOGGER.warning(
+                        "Could not persist initial settings to database: %s", exc
+                    )
             else:
                 values = OrderedDict()
 
@@ -121,16 +126,13 @@ class SettingsStore:
         return data
 
     def _persist_many(self, values: Mapping[str, str], db_path: Optional[Path] = None) -> bool:
+        if not values:
+            return True
+
         conn = self._connect(db_path)
         if conn is None:
-            LOGGER.debug(
-                "Falling back to .env persistence because database is unavailable"
-            )
-            if settings_io.write_env(self._values):
-                return False
             raise SettingsPersistenceError(
-                "Failed to persist settings: the database is unavailable and writing"
-                " to the .env fallback failed"
+                "Failed to persist settings: the database is unavailable"
             )
 
         try:
@@ -154,24 +156,21 @@ class SettingsStore:
             return True
         except sqlite3.Error as exc:
             LOGGER.exception("Failed to persist settings to database: %s", exc)
-            if settings_io.write_env(self._values):
-                return False
             raise SettingsPersistenceError(
-                "Failed to persist settings: both the database and .env fallback"
-                " are unavailable"
+                "Failed to persist settings to the database"
             ) from exc
         finally:
             conn.close()
 
     def _delete_keys(self, keys: Iterable[str], db_path: Optional[Path] = None) -> bool:
+        keys = list(keys)
+        if not keys:
+            return True
+
         conn = self._connect(db_path)
         if conn is None:
-            LOGGER.debug("Falling back to .env persistence because database is unavailable")
-            if settings_io.write_env(self._values):
-                return False
             raise SettingsPersistenceError(
-                "Failed to delete settings: the database is unavailable and writing"
-                " to the .env fallback failed"
+                "Failed to delete settings: the database is unavailable"
             )
 
         try:
@@ -182,11 +181,8 @@ class SettingsStore:
             return True
         except sqlite3.Error as exc:
             LOGGER.exception("Failed to delete settings from database: %s", exc)
-            if settings_io.write_env(self._values):
-                return False
             raise SettingsPersistenceError(
-                "Failed to delete settings: both the database and .env fallback"
-                " are unavailable"
+                "Failed to delete settings from the database"
             ) from exc
         finally:
             conn.close()
@@ -333,18 +329,15 @@ class SettingsStore:
             if not changed and not removed:
                 return
 
-            fallback_used = False
             try:
                 if changed:
-                    fallback_used = not self._persist_many(changed)
+                    self._persist_many(changed)
                 if removed:
-                    fallback_used = (not self._delete_keys(removed)) or fallback_used
+                    self._delete_keys(removed)
             except SettingsPersistenceError:
                 self._values = previous_values
                 self._namespace = self._build_namespace(self._values)
                 raise
-            if fallback_used:
-                LOGGER.warning("Settings stored in .env fallback; database unavailable")
 
             self._apply_environment(changed, removed)
             self._namespace = self._build_namespace(self._values)
