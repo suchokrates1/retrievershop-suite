@@ -42,6 +42,11 @@ This repository contains the code for the RetrieverShop warehouse application an
 | `PRINTED_EXPIRY_DAYS` | Days to keep printed order IDs in the database |
 | `LOG_LEVEL` | Logging level for the printing agent |
 | `LOG_FILE` | Path to the agent log file |
+| `API_RATE_LIMIT_CALLS` | Maximum API calls allowed per rate limiting window |
+| `API_RATE_LIMIT_PERIOD` | Length in seconds of the rate limiting window |
+| `API_RETRY_ATTEMPTS` | Number of attempts performed for failed API calls |
+| `API_RETRY_BACKOFF_INITIAL` | Initial delay in seconds before retrying API calls |
+| `API_RETRY_BACKOFF_MAX` | Maximum delay in seconds between API retries |
 | `DB_PATH` | Path to the SQLite database file |
 | `SECRET_KEY` | Secret key for Flask sessions |
 | `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |

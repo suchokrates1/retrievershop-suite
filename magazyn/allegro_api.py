@@ -87,7 +87,8 @@ def _should_retry(status_code: int) -> bool:
 
 
 def _respect_rate_limits(response: Response, endpoint: str) -> None:
-    delay = _rate_limit_delay(response.headers)
+    headers = getattr(response, "headers", None)
+    delay = _rate_limit_delay(headers)
     if delay > 0:
         _sleep_for_limit(delay, endpoint)
 
@@ -249,45 +250,61 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
     offers = []
     refreshed = False
 
+    def handle_listing_http_error(exc: HTTPError) -> bool:
+        nonlocal token, refresh, refreshed
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        if status_code not in (401, 403):
+            return False
+
+        friendly_message = (
+            "Failed to refresh Allegro access token for product listing; "
+            "please re-authorize the Allegro integration"
+        )
+
+        if refresh and not refreshed:
+            refreshed = True
+            try:
+                token_data = refresh_token(refresh)
+            except Exception as refresh_exc:  # pragma: no cover - defensive
+                clear_allegro_tokens()
+                raise RuntimeError(friendly_message) from refresh_exc
+
+            new_token = token_data.get("access_token")
+            if not new_token:
+                clear_allegro_tokens()
+                raise RuntimeError(friendly_message)
+
+            token = new_token
+            new_refresh = token_data.get("refresh_token")
+            if new_refresh:
+                refresh = new_refresh
+            update_allegro_tokens(token, refresh)
+            return True
+
+        raise RuntimeError(friendly_message) from exc
+
     while True:
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.allegro.public.v1+json",
         }
-        response = _request_with_retry(
-            requests.get,
-            url,
-            endpoint="listing",
-            headers=headers,
-            params=params,
-        )
+        try:
+            response = _request_with_retry(
+                requests.get,
+                url,
+                endpoint="listing",
+                headers=headers,
+                params=params,
+            )
+        except HTTPError as exc:
+            if handle_listing_http_error(exc):
+                continue
+            raise
         try:
             response.raise_for_status()
         except HTTPError as exc:
-            status_code = getattr(getattr(exc, "response", None), "status_code", None)
-            if status_code in (401, 403):
-                friendly_message = (
-                    "Failed to refresh Allegro access token for product listing; "
-                    "please re-authorize the Allegro integration"
-                )
-                if refresh and not refreshed:
-                    refreshed = True
-                    try:
-                        token_data = refresh_token(refresh)
-                    except Exception as refresh_exc:
-                        clear_allegro_tokens()
-                        raise RuntimeError(friendly_message) from refresh_exc
-                    new_token = token_data.get("access_token")
-                    if not new_token:
-                        clear_allegro_tokens()
-                        raise RuntimeError(friendly_message)
-                    token = new_token
-                    new_refresh = token_data.get("refresh_token")
-                    if new_refresh:
-                        refresh = new_refresh
-                    update_allegro_tokens(token, refresh)
-                    continue
-                raise RuntimeError(friendly_message) from exc
+            if handle_listing_http_error(exc):
+                continue
             raise
         data = response.json()
 
