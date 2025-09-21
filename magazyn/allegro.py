@@ -1,4 +1,3 @@
-import os
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
@@ -20,6 +19,7 @@ from .config import settings
 from .db import get_session
 from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
+from .settings_store import settings_store
 
 bp = Blueprint("allegro", __name__)
 
@@ -291,8 +291,8 @@ def build_price_checks() -> list[dict]:
 @bp.route("/allegro/price-check")
 @login_required
 def price_check():
-    ***REMOVED*** = os.getenv("ALLEGRO_ACCESS_TOKEN")
-    refresh_token = os.getenv("ALLEGRO_REFRESH_TOKEN")
+    ***REMOVED*** = ***REMOVED***
+    refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
 
     auth_error = None
     if not ***REMOVED*** or not refresh_token:

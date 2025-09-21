@@ -57,7 +57,9 @@ def test_fetch_offers_retries_on_rate_limit(monkeypatch):
     assert sleep_metric._value.get() == pytest.approx(before_sleep + 0.5)
 
 
-def test_fetch_product_listing_retries_and_preserves_headers(monkeypatch):
+def test_fetch_product_listing_retries_and_preserves_headers(
+    monkeypatch, allegro_tokens
+):
     calls = []
     sleeps = []
     responses = [
@@ -83,8 +85,7 @@ def test_fetch_product_listing_retries_and_preserves_headers(monkeypatch):
         calls.append(kwargs)
         return responses[len(calls) - 1]
 
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    allegro_tokens("token")
     monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
     monkeypatch.setattr("magazyn.allegro_api.time.sleep", lambda value: sleeps.append(value))
 
