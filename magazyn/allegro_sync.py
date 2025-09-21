@@ -15,6 +15,8 @@ from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
 from .parsing import parse_offer_title, normalize_color
 from .env_tokens import clear_allegro_tokens, update_allegro_tokens
+from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
+from .domain import allegro_prices
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,10 @@ def sync_offers():
         ``matched``
             Number of offers that were matched with local products and
             saved or updated in the database.
+
+        ``trend_report``
+            Aggregated price trend entries generated from the stored history
+            samples.
     """
     token = os.getenv("ALLEGRO_ACCESS_TOKEN")
     refresh = os.getenv("ALLEGRO_REFRESH_TOKEN")
@@ -74,6 +80,7 @@ def sync_offers():
         except Exception as exc:
             _clear_cached_tokens()
             logger.exception("Failed to refresh Allegro token")
+            ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
             raise RuntimeError(
                 "Failed to refresh Allegro token before syncing offers; "
                 "please re-authorize the Allegro integration"
@@ -85,6 +92,7 @@ def sync_offers():
     limit = 100
     fetched_count = 0
     matched_count = 0
+    trend_report: list = []
 
     with get_session() as session:
         while True:
@@ -98,6 +106,7 @@ def sync_offers():
                     except Exception as refresh_exc:
                         _clear_cached_tokens()
                         logger.exception("Failed to refresh Allegro token")
+                        ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
                         raise RuntimeError(
                             "Failed to refresh Allegro token after unauthorized response "
                             f"at offset {offset}; please re-authorize the Allegro integration"
@@ -109,6 +118,7 @@ def sync_offers():
                             "Failed to refresh Allegro offers at offset "
                             f"{offset}: missing access token"
                         )
+                        ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
                         logger.error(message)
                         raise RuntimeError(message)
                     token = new_token
@@ -123,6 +133,7 @@ def sync_offers():
                         "Failed to fetch Allegro offers at offset "
                         f"{offset}: unauthorized and no refresh token available"
                     )
+                    ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="http").inc()
                     logger.error(message, exc_info=True)
                     raise RuntimeError(message) from exc
                 detail = f"HTTP status {status_code}" if status_code else "HTTP error"
@@ -130,10 +141,12 @@ def sync_offers():
                     "Failed to fetch Allegro offers at offset "
                     f"{offset}: {detail}"
                 )
+                ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="http").inc()
                 logger.error(message, exc_info=True)
                 raise RuntimeError(message) from exc
             except Exception as exc:
                 message = f"Failed to fetch Allegro offers at offset {offset}"
+                ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="unexpected").inc()
                 logger.error(message, exc_info=True)
                 raise RuntimeError(message) from exc
             if not isinstance(data, Mapping):
@@ -230,7 +243,8 @@ def sync_offers():
                     .filter_by(offer_id=offer.get("id"))
                     .first()
                 )
-                timestamp = datetime.now(timezone.utc).isoformat()
+                timestamp_dt = datetime.now(timezone.utc)
+                timestamp = timestamp_dt.isoformat()
 
                 if existing:
                     existing.title = title
@@ -251,6 +265,14 @@ def sync_offers():
                         )
                     )
 
+                allegro_prices.record_price_point(
+                    session,
+                    offer_id=offer.get("id"),
+                    product_size_id=product_size_id,
+                    price=price,
+                    recorded_at=timestamp_dt,
+                )
+
                 if product_size:
                     matched_count += 1
             next_page = data.get("nextPage") or data.get("links", {}).get("next")
@@ -264,7 +286,13 @@ def sync_offers():
             offset = next_offset
             limit = next_limit
 
-    return {"fetched": fetched_count, "matched": matched_count}
+        session.flush()
+        trend_report = allegro_prices.generate_trend_report(session)
+
+    if trend_report:
+        logger.info("Generated Allegro price trend report with %d entries", len(trend_report))
+
+    return {"fetched": fetched_count, "matched": matched_count, "trend_report": trend_report}
 
 
 def _parse_int(value):

@@ -7,7 +7,7 @@ from requests.exceptions import HTTPError
 import magazyn.allegro_sync as sync_mod
 
 from magazyn.db import get_session
-from magazyn.models import Product, ProductSize, AllegroOffer
+from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
 
 
 def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
@@ -62,6 +62,51 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
         assert offer.title == "Test offer czerwony"
         assert offer.price == Decimal("15.00")
         assert offer.product_id == product_id
+
+
+def test_sync_offers_records_price_history(monkeypatch, app_mod):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        return {
+            "items": {
+                "offers": [
+                    {
+                        "id": "PH1",
+                        "name": "History product czerwony M",
+                        "sellingMode": {"price": {"amount": "11.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+
+    with get_session() as session:
+        product = Product(name="History product", color="Czerwony")
+        size = ProductSize(product=product, size="M")
+        session.add_all([product, size])
+        session.flush()
+        product_size_id = size.id
+
+    result = sync_mod.sync_offers()
+
+    assert result["fetched"] == 1
+    assert result["matched"] == 1
+    assert any(item["offer_id"] == "PH1" for item in result["trend_report"])
+
+    with get_session() as session:
+        history = (
+            session.query(AllegroPriceHistory)
+            .filter(AllegroPriceHistory.offer_id == "PH1")
+            .all()
+        )
+        assert len(history) == 1
+        entry = history[0]
+        assert entry.product_size_id == product_size_id
+        assert entry.price == Decimal("11.00")
 
 
 def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
@@ -131,7 +176,9 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 3, "matched": 3}
+    assert result["fetched"] == 3
+    assert result["matched"] == 3
+    assert isinstance(result["trend_report"], list)
     assert len(calls) == 2
     assert calls[0] == {"offset": 0, "limit": 100}
     assert calls[1] == {"offset": 2, "limit": 2}
@@ -184,7 +231,9 @@ def test_sync_offers_matches_single_color_component(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 1, "matched": 1}
+    assert result["fetched"] == 1
+    assert result["matched"] == 1
+    assert isinstance(result["trend_report"], list)
 
     with get_session() as session:
         offer = (
@@ -229,7 +278,9 @@ def test_sync_offers_matches_keyword_models(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 1, "matched": 1}
+    assert result["fetched"] == 1
+    assert result["matched"] == 1
+    assert isinstance(result["trend_report"], list)
 
     with get_session() as session:
         offer = (
@@ -284,7 +335,9 @@ def test_sync_offers_preserves_manual_link_when_no_match(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 1, "matched": 0}
+    assert result["fetched"] == 1
+    assert result["matched"] == 0
+    assert isinstance(result["trend_report"], list)
 
     with get_session() as session:
         refreshed_offer = (
@@ -337,7 +390,9 @@ def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 2, "matched": 2}
+    assert result["fetched"] == 2
+    assert result["matched"] == 2
+    assert isinstance(result["trend_report"], list)
 
     with get_session() as session:
         offers = (
@@ -405,7 +460,9 @@ def test_sync_offers_matches_alias_variants(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 4, "matched": 4}
+    assert result["fetched"] == 4
+    assert result["matched"] == 4
+    assert isinstance(result["trend_report"], list)
 
     with get_session() as session:
         stored_offers = (
@@ -463,7 +520,9 @@ def test_sync_offers_distinguishes_front_line_variants(monkeypatch, app_mod):
 
     result = sync_mod.sync_offers()
 
-    assert result == {"fetched": 2, "matched": 2}
+    assert result["fetched"] == 2
+    assert result["matched"] == 2
+    assert isinstance(result["trend_report"], list)
 
     with get_session() as session:
         stored_offers = (
