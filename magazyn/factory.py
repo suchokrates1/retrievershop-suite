@@ -63,6 +63,28 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     _register_shutdown_hook()
 
+    @app.after_request
+    def apply_security_headers(response):
+        """Attach security headers to every response."""
+
+        csp = (
+            "default-src 'self'; "
+            "img-src 'self' https://retrievershop.pl data:; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "font-src 'self' https://cdn.jsdelivr.net data:; "
+            "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'self'"
+        )
+        response.headers.setdefault("Content-Security-Policy", csp)
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        return response
+
     @app.cli.command("init-db")
     def init_db_command() -> None:
         """Initialize the application database."""
