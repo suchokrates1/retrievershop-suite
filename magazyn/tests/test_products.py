@@ -1,3 +1,5 @@
+from magazyn.constants import ALL_SIZES
+from magazyn.domain.products import _to_int, create_product, get_product_details
 from magazyn.models import Product, ProductSize
 
 
@@ -188,3 +190,24 @@ def test_add_item_rejects_negative_quantity(app_mod, client, login):
 
     with app_mod.get_session() as db:
         assert db.query(Product).filter_by(name="NegProd").first() is None
+
+
+def test_domain_create_product_persists_sizes(app_mod):
+    quantities = {size: idx for idx, size in enumerate(ALL_SIZES, start=1)}
+    barcodes = {size: f"code-{size}" for size in ALL_SIZES}
+
+    product = create_product("DomainProd", "Niebieski", quantities, barcodes)
+
+    assert product.id is not None
+
+    details, sizes = get_product_details(product.id)
+    assert details == {"id": product.id, "name": "DomainProd", "color": "Niebieski"}
+    for size in ALL_SIZES:
+        assert sizes[size]["quantity"] == quantities[size]
+        assert sizes[size]["barcode"] == barcodes[size]
+
+
+def test_to_int_handles_strings_with_spaces():
+    assert _to_int("1 234") == 1234
+    assert _to_int("12,5") == 125
+    assert _to_int(None) == 0
