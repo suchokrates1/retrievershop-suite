@@ -1,6 +1,11 @@
 import re
 
 
+import re
+
+from magazyn.settings_store import settings_store
+
+
 def _sales_keys():
     return [
         "COMMISSION_ALLEGRO",
@@ -21,8 +26,8 @@ def _extract_input(html, name):
     return match.group(0)
 
 
-def test_sales_settings_list_keys(app_mod, client, login, tmp_path):
-    app_mod.ENV_PATH = tmp_path / ".env"
+def test_sales_settings_list_keys(app_mod, client, login):
+    settings_store.reload()
     resp = client.get("/sales/settings")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
@@ -32,10 +37,7 @@ def test_sales_settings_list_keys(app_mod, client, login, tmp_path):
         assert label in html
 
 
-def test_sales_settings_post_saves(
-    app_mod, client, login, tmp_path, monkeypatch
-):
-    app_mod.ENV_PATH = tmp_path / ".env"
+def test_sales_settings_post_saves(app_mod, client, login, monkeypatch):
     reloaded = {"called": False}
     monkeypatch.setattr(
         app_mod.print_agent,
@@ -45,14 +47,13 @@ def test_sales_settings_post_saves(
     values = {key: str(1.5 + i) for i, key in enumerate(_sales_keys())}
     resp = client.post("/sales/settings", data=values)
     assert resp.status_code == 302
-    env_text = app_mod.ENV_PATH.read_text()
+    stored = settings_store.as_ordered_dict(include_hidden=True)
     for key, val in values.items():
-        assert f"{key}={val}" in env_text
+        assert stored[key] == val
     assert reloaded["called"] is True
 
 
-def test_sales_password_fields_render_as_password(app_mod, client, login, tmp_path):
-    app_mod.ENV_PATH = tmp_path / ".env"
+def test_sales_password_fields_render_as_password(app_mod, client, login):
     resp = client.get("/sales/settings")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
