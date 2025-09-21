@@ -7,8 +7,13 @@
     {{ auth_error }}
 </div>
 {% else %}
-<div class="table-responsive">
-    <table class="table table-striped align-middle">
+<div id="price-check-loading" class="d-flex align-items-center gap-3">
+    <div class="spinner-border" role="status" aria-hidden="true"></div>
+    <span>Pobieramy aktualne ceny konkurencji…</span>
+</div>
+<div id="price-check-error" class="d-none"></div>
+<div id="price-check-table-container" class="table-responsive d-none">
+    <table class="table table-striped align-middle" aria-live="polite">
         <thead class="table-dark">
             <tr>
                 <th scope="col">Oferta</th>
@@ -18,73 +23,9 @@
                 <th scope="col" class="text-center">Najtańsza?</th>
             </tr>
         </thead>
-        <tbody>
-        {% for item in price_checks %}
-            <tr>
-                <td>
-                    {% if item.offer_id %}
-                        <a
-                            href="https://allegro.pl/oferta/{{ item.offer_id }}"
-                            class="link-dark"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="{{ item.title }}"
-                            aria-label="{{ item.title }}"
-                        >
-                            <i class="bi bi-link-45deg" aria-hidden="true"></i>
-                            <span class="visually-hidden">{{ item.title }}</span>
-                        </a>
-                    {% else %}
-                        {{ item.title }}
-                    {% endif %}
-                </td>
-                <td>{{ item.label }}</td>
-                <td>
-                    {% if item.own_price %}
-                        {{ item.own_price }} zł
-                    {% else %}
-                        <span class="text-muted">–</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if item.error %}
-                        <span class="text-muted">{{ item.error }}</span>
-                    {% elif item.competitor_price %}
-                        <div class="d-flex align-items-center gap-2">
-                            <span>{{ item.competitor_price }} zł</span>
-                            {% if item.competitor_offer_url %}
-                                <a
-                                    class="btn btn-outline-secondary btn-sm"
-                                    href="{{ item.competitor_offer_url }}"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label="Zobacz ofertę konkurencji"
-                                >
-                                    <i class="bi bi-diagram-3"></i>
-                                </a>
-                            {% endif %}
-                        </div>
-                    {% else %}
-                        <span class="text-muted">Brak danych</span>
-                    {% endif %}
-                </td>
-                <td class="text-center">
-                    {% if item.is_lowest is none %}
-                        <span class="text-muted">–</span>
-                    {% elif item.is_lowest %}
-                        <span class="text-success" title="Nasza oferta jest najtańsza">✓</span>
-                    {% else %}
-                        <span class="text-danger" title="Konkurencja ma niższą cenę">✗</span>
-                    {% endif %}
-                </td>
-            </tr>
-        {% else %}
-            <tr>
-                <td colspan="5" class="text-center text-muted">Brak powiązanych ofert Allegro.</td>
-            </tr>
-        {% endfor %}
-        </tbody>
+        <tbody id="price-check-table-body"></tbody>
     </table>
 </div>
+<script src="{{ url_for('static', filename='price_check.js') }}" defer></script>
 {% endif %}
 {% endblock %}
