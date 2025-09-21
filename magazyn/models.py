@@ -7,6 +7,8 @@ from sqlalchemy import (
     Text,
     Numeric,
     Index,
+    DateTime,
+    func,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -150,3 +152,12 @@ class AllegroPriceHistory(Base):
     recorded_at = Column(String, nullable=False)
 
     product_size = relationship("ProductSize", back_populates="price_history")
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(
+        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
