@@ -4,7 +4,8 @@ import magazyn.config as cfg
 
 
 def setup_app_missing_agent(tmp_path, monkeypatch):
-    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
+    db_path = tmp_path / "test.db"
+    monkeypatch.setattr(cfg.settings, "DB_PATH", str(db_path))
     monkeypatch.setattr(cfg.settings, "API_TOKEN", "")
     monkeypatch.setattr(cfg.settings, "PAGE_ACCESS_TOKEN", "")
     monkeypatch.setattr(cfg.settings, "RECIPIENT_ID", "")
@@ -26,15 +27,20 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     import magazyn.app as app_mod
 
     importlib.reload(app_mod)
+    from magazyn.factory import create_app
     import magazyn.db as db_mod
 
+    importlib.reload(db_mod)
+    monkeypatch.setattr(db_mod, "apply_migrations", lambda: None)
     db_mod.configure_engine(cfg.settings.DB_PATH)
     from sqlalchemy.orm import sessionmaker
 
     db_mod.SessionLocal = sessionmaker(
         bind=db_mod.engine, autoflush=False, expire_on_commit=False
     )
-    app_mod.app.config["WTF_CSRF_ENABLED"] = False
+
+    app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
+    app_mod.app = app
     app_mod.reset_db()
     return app_mod
 
