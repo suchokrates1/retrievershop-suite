@@ -8,8 +8,12 @@ This repository contains the code for the RetrieverShop warehouse application an
    ```bash
    cp .env.example .env
    ```
-2. Edit `.env` and provide your API credentials. The printing agents require values such as `API_TOKEN`, `PAGE_ACCESS_TOKEN` and `RECIPIENT_ID`.
-3. Configure CUPS access. When mounting the host's CUPS socket you should leave
+2. On POSIX systems restrict the file permissions so the contents stay private:
+   ```bash
+   chmod 600 .env
+   ```
+3. Edit `.env` and provide your API credentials. The printing agents require values such as `API_TOKEN`, `PAGE_ACCESS_TOKEN` and `RECIPIENT_ID`.
+4. Configure CUPS access. When mounting the host's CUPS socket you should leave
    the variables empty:
    ```env
    CUPS_SERVER=
