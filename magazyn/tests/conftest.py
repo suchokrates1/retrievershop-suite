@@ -42,6 +42,9 @@ def app_mod(tmp_path, monkeypatch):
     app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
     app_mod.app = app
     app_mod.reset_db()
+    from magazyn.settings_store import settings_store
+
+    settings_store.reload()
     return app_mod
 
 

@@ -113,3 +113,31 @@ def migrate():
         ).fetchall()
 
     assert final == initial
+
+
+def test_create_app_settings_migration(tmp_path, monkeypatch):
+    db, db_path = _prepare_db(tmp_path, monkeypatch)
+
+    db.init_db()
+
+    from magazyn.db import sqlite_connect
+    with sqlite_connect(db_path) as conn:
+        conn.execute("DROP TABLE IF EXISTS app_settings")
+        conn.execute(
+            "DELETE FROM schema_migrations WHERE filename=?",
+            ("create_app_settings_table.py",),
+        )
+        conn.commit()
+
+    from magazyn.migrations import create_app_settings_table
+
+    create_app_settings_table.migrate()
+
+    with sqlite_connect(db_path) as conn:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='app_settings'"
+        )
+        assert cur.fetchone() is not None
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(app_settings)")}
+
+    assert {"key", "value", "updated_at"}.issubset(columns)

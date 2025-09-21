@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
-from collections.abc import MutableMapping
 from typing import Optional
+
+from .settings_store import settings_store
 
 
 def update_allegro_tokens(
@@ -29,16 +30,13 @@ def update_allegro_tokens(
     if refresh_token is not None:
         os.environ["ALLEGRO_REFRESH_TOKEN"] = refresh_token
 
-    # Import lazily to avoid circular imports with ``magazyn.app``.
-    from .app import load_settings, write_env  # pylint: disable=import-outside-toplevel
-
-    values: MutableMapping[str, str] = load_settings()
+    updates = {}
     if access_token is not None:
-        values["ALLEGRO_ACCESS_TOKEN"] = access_token
+        updates["ALLEGRO_ACCESS_TOKEN"] = access_token
     if refresh_token is not None:
-        values["ALLEGRO_REFRESH_TOKEN"] = refresh_token
-
-    write_env(values)
+        updates["ALLEGRO_REFRESH_TOKEN"] = refresh_token
+    if updates:
+        settings_store.update(updates)
 
 
 def clear_allegro_tokens() -> None:
@@ -47,13 +45,10 @@ def clear_allegro_tokens() -> None:
     os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
     os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
 
-    # Import lazily to avoid circular imports with ``magazyn.app``.
-    from .app import load_settings, write_env  # pylint: disable=import-outside-toplevel
-
-    values: MutableMapping[str, str] = load_settings()
-
-    values.pop("ALLEGRO_ACCESS_TOKEN", None)
-    values.pop("ALLEGRO_REFRESH_TOKEN", None)
-
-    write_env(values)
+    settings_store.update(
+        {
+            "ALLEGRO_ACCESS_TOKEN": None,
+            "ALLEGRO_REFRESH_TOKEN": None,
+        }
+    )
 
