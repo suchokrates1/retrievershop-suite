@@ -659,6 +659,15 @@ def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
     monkeypatch.delenv("ALLEGRO_ACCESS_TOKEN", raising=False)
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-token")
 
+    clear_calls: list[bool] = []
+
+    def fake_clear():
+        clear_calls.append(True)
+        os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
+        os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+    monkeypatch.setattr(sync_mod, "clear_allegro_tokens", fake_clear)
+
     def failing_refresh(token):
         class DummyResponse:
             status_code = 401
@@ -674,11 +683,21 @@ def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
     assert "please re-authorize" in message
     assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
     assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+    assert clear_calls == [True]
 
 
 def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
     monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-refresh")
+
+    clear_calls: list[bool] = []
+
+    def fake_clear():
+        clear_calls.append(True)
+        os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
+        os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+    monkeypatch.setattr(sync_mod, "clear_allegro_tokens", fake_clear)
 
     def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
@@ -707,6 +726,7 @@ def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, mon
     )
     assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
     assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+    assert clear_calls == [True]
 
 
 def test_refresh_handles_empty_response(client, login, monkeypatch):

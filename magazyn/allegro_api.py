@@ -4,7 +4,7 @@ from typing import Optional
 import requests
 from requests.exceptions import HTTPError
 
-from .env_tokens import update_allegro_tokens
+from .env_tokens import clear_allegro_tokens, update_allegro_tokens
 
 AUTH_URL = "https://allegro.pl/auth/oauth/token"
 API_BASE_URL = "https://api.allegro.pl"
@@ -143,9 +143,11 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
                     try:
                         token_data = refresh_token(refresh)
                     except Exception as refresh_exc:
+                        clear_allegro_tokens()
                         raise RuntimeError(friendly_message) from refresh_exc
                     new_token = token_data.get("access_token")
                     if not new_token:
+                        clear_allegro_tokens()
                         raise RuntimeError(friendly_message)
                     token = new_token
                     new_refresh = token_data.get("refresh_token")
