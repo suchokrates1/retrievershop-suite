@@ -32,7 +32,7 @@ from .auth import login_required
 from . import print_agent
 from .env_info import ENV_INFO
 from magazyn import DB_PATH
-from .settings_store import settings_store
+from .settings_store import SettingsPersistenceError, settings_store
 from .settings_io import (
     ENV_PATH,
     EXAMPLE_PATH,
@@ -230,7 +230,16 @@ def settings_page():
             except ValueError:
                 flash("Niepoprawny format godziny (hh:mm)")
                 return redirect(url_for("settings_page"))
-        settings_store.update(updates)
+        try:
+            settings_store.update(updates)
+        except SettingsPersistenceError as exc:
+            current_app.logger.error(
+                "Failed to persist settings submitted via the admin panel", exc_info=exc
+            )
+            flash(
+                "Nie można zapisać ustawień, ponieważ baza konfiguracji jest w trybie tylko do odczytu."
+            )
+            return redirect(url_for("settings_page"))
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("settings_page"))

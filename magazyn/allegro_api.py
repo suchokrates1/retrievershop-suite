@@ -9,7 +9,7 @@ from requests import Response
 from requests.exceptions import HTTPError, RequestException
 
 from .env_tokens import clear_allegro_tokens, update_allegro_tokens
-from .settings_store import settings_store
+from .settings_store import SettingsPersistenceError, settings_store
 from .metrics import (
     ALLEGRO_API_ERRORS_TOTAL,
     ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS,
@@ -279,7 +279,14 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
             new_refresh = token_data.get("refresh_token")
             if new_refresh:
                 refresh = new_refresh
-            update_allegro_tokens(token, refresh)
+            try:
+                update_allegro_tokens(token, refresh)
+            except SettingsPersistenceError as exc:
+                friendly_message = (
+                    "Cannot refresh Allegro access token because the settings store is "
+                    "read-only; please update the credentials manually"
+                )
+                raise RuntimeError(friendly_message) from exc
             return True
 
         raise RuntimeError(friendly_message) from exc
