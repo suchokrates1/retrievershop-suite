@@ -81,10 +81,11 @@ def start_print_agent(app_obj=None):
         return
     _print_agent_started = True
     app_ctx = app_obj or current_app
+    agent = print_agent.agent
     try:
-        print_agent.validate_env()
-        print_agent.ensure_db_init()
-        started = print_agent.start_agent_thread()
+        agent.validate_env()
+        agent.ensure_db_init()
+        started = agent.start_agent_thread()
         if not started:
             app_ctx.logger.info("Print agent already running")
             _print_agent_started = False
