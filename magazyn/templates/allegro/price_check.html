@@ -2,6 +2,11 @@
 
 {% block content %}
 <h1 class="mb-4">Monitor cen Allegro</h1>
+{% if auth_error %}
+<div class="alert alert-warning" role="alert">
+    {{ auth_error }}
+</div>
+{% else %}
 <div class="table-responsive">
     <table class="table table-striped align-middle">
         <thead class="table-dark">
@@ -81,4 +86,5 @@
         </tbody>
     </table>
 </div>
+{% endif %}
 {% endblock %}
