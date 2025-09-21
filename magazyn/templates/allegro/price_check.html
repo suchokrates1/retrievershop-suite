@@ -16,7 +16,23 @@
         <tbody>
         {% for item in price_checks %}
             <tr>
-                <td>{{ item.title }}</td>
+                <td>
+                    {% if item.offer_id %}
+                        <a
+                            href="https://allegro.pl/oferta/{{ item.offer_id }}"
+                            class="link-dark"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="{{ item.title }}"
+                            aria-label="{{ item.title }}"
+                        >
+                            <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                            <span class="visually-hidden">{{ item.title }}</span>
+                        </a>
+                    {% else %}
+                        {{ item.title }}
+                    {% endif %}
+                </td>
                 <td>{{ item.label }}</td>
                 <td>
                     {% if item.own_price %}
