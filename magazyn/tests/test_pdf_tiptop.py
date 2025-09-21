@@ -42,7 +42,9 @@ def _run_fake_pdf(texts, monkeypatch):
         def __init__(self, *_args, **_kwargs):
             self.pages = [FakePage(t) for t in texts]
 
-    monkeypatch.setattr(services, "PdfReader", FakePdfReader)
+    from magazyn.domain import invoice_import
+
+    monkeypatch.setattr(invoice_import, "PdfReader", FakePdfReader)
     return _parse_pdf(io.BytesIO(b"dummy"))
 
 
