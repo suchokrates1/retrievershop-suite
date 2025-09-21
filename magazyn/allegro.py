@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
@@ -206,6 +207,20 @@ def price_check():
                 }
             )
 
+    access_token = os.getenv("ALLEGRO_ACCESS_TOKEN")
+    refresh_token = os.getenv("ALLEGRO_REFRESH_TOKEN")
+
+    if not access_token or not refresh_token:
+        auth_error = (
+            "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, "
+            "aby ponownie autoryzować aplikację."
+        )
+        return render_template(
+            "allegro/price_check.html",
+            price_checks=[],
+            auth_error=auth_error,
+        )
+
     price_checks = []
     for offer in offers:
         competitor_min_price: Optional[Decimal] = None
@@ -285,7 +300,11 @@ def price_check():
             }
         )
 
-    return render_template("allegro/price_check.html", price_checks=price_checks)
+    return render_template(
+        "allegro/price_check.html",
+        price_checks=price_checks,
+        auth_error=None,
+    )
 
 
 @bp.route("/allegro/refresh", methods=["POST"])

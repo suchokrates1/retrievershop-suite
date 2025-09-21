@@ -209,7 +209,25 @@ def test_offers_without_inventory_are_listed_first(client, login):
     assert linked_titles == sorted(linked_titles)
 
 
+def test_price_check_requires_allegro_authorization(client, login, monkeypatch):
+    monkeypatch.delenv("ALLEGRO_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+
+    response = client.get("/allegro/price-check")
+    assert response.status_code == 200
+
+    body = response.data.decode("utf-8")
+    assert (
+        "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację."
+        in body
+    )
+    assert "Missing Allegro access token" not in body
+    assert "<table" not in body
+
+
 def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh")
     with get_session() as session:
         product = Product(name="Szelki", color="Niebieskie")
         session.add(product)
@@ -325,6 +343,8 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
 
 
 def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatch):
+    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh")
     with get_session() as session:
         product = Product(name="Legowisko", color="Szare")
         session.add(product)
