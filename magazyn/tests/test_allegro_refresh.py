@@ -1,4 +1,3 @@
-import os
 from decimal import Decimal
 
 import pytest
@@ -8,10 +7,27 @@ import magazyn.allegro_sync as sync_mod
 
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
+from magazyn.settings_store import settings_store
+
+
+def _set_tokens(access: str | None = None, refresh: str | None = None) -> None:
+    settings_store.update(
+        {
+            "ALLEGRO_ACCESS_TOKEN": None,
+            "ALLEGRO_REFRESH_TOKEN": None,
+        }
+    )
+    updates = {}
+    if access is not None:
+        updates["ALLEGRO_ACCESS_TOKEN"] = access
+    if refresh is not None:
+        updates["ALLEGRO_REFRESH_TOKEN"] = refresh
+    if updates:
+        settings_store.update(updates)
 
 
 def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
@@ -65,8 +81,7 @@ def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
 
 
 def test_sync_offers_records_price_history(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         return {
@@ -110,8 +125,7 @@ def test_sync_offers_records_price_history(monkeypatch, app_mod):
 
 
 def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     responses = [
         {
@@ -199,8 +213,7 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
 
 
 def test_sync_offers_matches_single_color_component(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
@@ -246,8 +259,7 @@ def test_sync_offers_matches_single_color_component(monkeypatch, app_mod):
 
 
 def test_sync_offers_matches_keyword_models(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
@@ -293,8 +305,7 @@ def test_sync_offers_matches_keyword_models(monkeypatch, app_mod):
 
 
 def test_sync_offers_preserves_manual_link_when_no_match(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
@@ -351,8 +362,7 @@ def test_sync_offers_preserves_manual_link_when_no_match(monkeypatch, app_mod):
 
 
 def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
@@ -409,8 +419,7 @@ def test_sync_offers_handles_non_mapping_selling_mode(monkeypatch, app_mod):
 
 
 def test_sync_offers_matches_alias_variants(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     offers = [
         {
@@ -480,8 +489,7 @@ def test_sync_offers_matches_alias_variants(monkeypatch, app_mod):
 
 
 def test_sync_offers_distinguishes_front_line_variants(monkeypatch, app_mod):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     offers = [
         {
@@ -540,8 +548,7 @@ def test_sync_offers_distinguishes_front_line_variants(monkeypatch, app_mod):
 
 
 def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "refresh-token")
+    _set_tokens("expired-token", "refresh-token")
 
     attempts = {"count": 0}
 
@@ -580,14 +587,13 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", fake_refresh)
     persisted = []
 
+    original_update = sync_mod.update_allegro_tokens
+
     def capture_tokens(access_token=None, refresh_token=None):
         persisted.append(
             {"access_token": access_token, "refresh_token": refresh_token}
         )
-        if access_token is not None:
-            os.environ["ALLEGRO_ACCESS_TOKEN"] = access_token
-        if refresh_token is not None:
-            os.environ["ALLEGRO_REFRESH_TOKEN"] = refresh_token
+        original_update(access_token, refresh_token)
 
     monkeypatch.setattr("magazyn.allegro_sync.update_allegro_tokens", capture_tokens)
 
@@ -604,8 +610,8 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
     assert attempts["count"] == 2
     assert refresh_calls["count"] == 1
-    assert os.getenv("ALLEGRO_ACCESS_TOKEN") == "new-access"
-    assert os.getenv("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert persisted == [
         {"access_token": "new-access", "refresh_token": "new-refresh"}
     ]
@@ -621,7 +627,7 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
 
 def test_refresh_reports_counts_when_no_matches(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
+    _set_tokens("token")
 
     def fake_fetch_offers(token, offset=0, limit=100):
         assert token == "token"
@@ -673,8 +679,7 @@ def test_refresh_reports_counts_when_no_matches(client, login, monkeypatch):
 
 
 def test_sync_offers_raises_on_unrecoverable_error(monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
@@ -691,8 +696,7 @@ def test_sync_offers_raises_on_unrecoverable_error(monkeypatch):
 
 
 def test_refresh_flashes_error_on_sync_failure(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
@@ -715,15 +719,13 @@ def test_refresh_flashes_error_on_sync_failure(client, login, monkeypatch):
 
 
 def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
-    monkeypatch.delenv("ALLEGRO_ACCESS_TOKEN", raising=False)
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-token")
+    _set_tokens(None, "bad-token")
 
     clear_calls: list[bool] = []
 
     def fake_clear():
         clear_calls.append(True)
-        os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
-        os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+        _set_tokens()
 
     monkeypatch.setattr(sync_mod, "clear_allegro_tokens", fake_clear)
 
@@ -740,21 +742,19 @@ def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
 
     message = str(excinfo.value)
     assert "please re-authorize" in message
-    assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
-    assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
     assert clear_calls == [True]
 
 
 def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "expired-token")
-    monkeypatch.setenv("ALLEGRO_REFRESH_TOKEN", "bad-refresh")
+    _set_tokens("expired-token", "bad-refresh")
 
     clear_calls: list[bool] = []
 
     def fake_clear():
         clear_calls.append(True)
-        os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
-        os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+        _set_tokens()
 
     monkeypatch.setattr(sync_mod, "clear_allegro_tokens", fake_clear)
 
@@ -783,14 +783,13 @@ def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, mon
         "Błąd synchronizacji ofert" in message and "please re-authorize" in message
         for _, message in flashes
     )
-    assert os.getenv("ALLEGRO_ACCESS_TOKEN") is None
-    assert os.getenv("ALLEGRO_REFRESH_TOKEN") is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
     assert clear_calls == [True]
 
 
 def test_refresh_handles_empty_response(client, login, monkeypatch):
-    monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
-    monkeypatch.delenv("ALLEGRO_REFRESH_TOKEN", raising=False)
+    _set_tokens("token")
 
     def empty_fetch(token, offset=0, limit=100):
         return None
