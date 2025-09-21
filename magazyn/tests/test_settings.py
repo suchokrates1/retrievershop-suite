@@ -1,4 +1,5 @@
 import importlib
+import re
 from collections import OrderedDict
 from dotenv import load_dotenv
 
@@ -20,6 +21,31 @@ def test_settings_list_all_keys(app_mod, client, login, tmp_path):
             assert label not in text
         else:
             assert label in text
+
+
+def _extract_input(html, name):
+    pattern = re.compile(
+        rf"<input[^>]*name=\"{re.escape(name)}\"[^>]*>", re.IGNORECASE | re.DOTALL
+    )
+    match = pattern.search(html)
+    assert match is not None, f"Input for {name} not found in HTML"
+    return match.group(0)
+
+
+def test_sensitive_tokens_render_as_password(app_mod, client, login, tmp_path):
+    app_mod.ENV_PATH = tmp_path / ".env"
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    for key in [
+        "API_TOKEN",
+        "PAGE_ACCESS_TOKEN",
+        "ALLEGRO_CLIENT_SECRET",
+        "ALLEGRO_ACCESS_TOKEN",
+        "ALLEGRO_REFRESH_TOKEN",
+    ]:
+        field_html = _extract_input(html, key)
+        assert "type=\"password\"" in field_html.lower()
 
 
 def test_settings_post_saves_and_reloads(
@@ -110,6 +136,8 @@ def test_extra_keys_display_and_save(
     from magazyn.env_info import ENV_INFO
     label = ENV_INFO.get("EXTRA_KEY", ("EXTRA_KEY", None))[0]
     assert label in html
+    extra_field = _extract_input(html, "EXTRA_KEY")
+    assert "type=\"password\"" in extra_field.lower()
 
     values = app_mod.load_settings()
     assert values.get("EXTRA_KEY") == "foo"
