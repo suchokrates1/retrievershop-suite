@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libsqlite3-dev \
     cups-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY magazyn/requirements.txt /tmp/requirements.txt
@@ -30,6 +31,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cups-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
