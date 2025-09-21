@@ -14,7 +14,7 @@ from . import allegro_api
 from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
 from .parsing import parse_offer_title, normalize_color
-from .env_tokens import update_allegro_tokens
+from .env_tokens import clear_allegro_tokens, update_allegro_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,7 @@ def _normalized_product_color_components(value: str) -> set[str]:
 
 
 def _clear_cached_tokens():
-    os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
-    os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+    clear_allegro_tokens()
 
 
 def sync_offers():
