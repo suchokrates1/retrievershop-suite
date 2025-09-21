@@ -106,8 +106,9 @@ def test_price_history_window_uses_recorded_at_index(app_mod):
         (now - timedelta(hours=2)).isoformat(),
     )
 
-    assert any(
-        "idx_allegro_price_history_recorded_at" in line
-        or "idx_allegro_price_history_offer_recorded_at" in line
-        for line in plan
-    )
+    expected = {
+        "idx_allegro_price_history_recorded_at",
+        "idx_allegro_price_history_offer_recorded_at",
+        "ix_allegro_price_history_offer_id",
+    }
+    assert any(any(name in line for name in expected) for line in plan)

@@ -9,6 +9,7 @@ from requests import Response
 from requests.exceptions import HTTPError, RequestException
 
 from .env_tokens import clear_allegro_tokens, update_allegro_tokens
+from .settings_store import settings_store
 from .metrics import (
     ALLEGRO_API_ERRORS_TOTAL,
     ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS,
@@ -235,8 +236,8 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
         ``sellingMode.price.amount`` for an offer.
     """
 
-    token = os.getenv("ALLEGRO_ACCESS_TOKEN")
-    refresh = os.getenv("ALLEGRO_REFRESH_TOKEN")
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
     if not token:
         raise RuntimeError("Missing Allegro access token")
 
