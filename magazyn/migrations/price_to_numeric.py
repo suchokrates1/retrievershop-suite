@@ -1,5 +1,5 @@
-import sqlite3
 from magazyn import DB_PATH
+from magazyn.db import sqlite_connect
 
 
 def _needs_numeric(cur, table, column):
@@ -10,7 +10,7 @@ def _needs_numeric(cur, table, column):
 
 
 def migrate():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite_connect(DB_PATH) as conn:
         cur = conn.cursor()
 
         if _needs_numeric(cur, "purchase_batches", "price"):

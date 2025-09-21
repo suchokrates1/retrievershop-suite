@@ -5,7 +5,6 @@ import fcntl
 import json
 import logging
 import os
-import sqlite3
 import subprocess
 import threading
 from dataclasses import dataclass, replace
@@ -18,6 +17,7 @@ import requests
 from magazyn import DB_PATH
 
 from .config import load_config, settings
+from .db import sqlite_connect
 from .notifications import send_report
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
@@ -181,7 +181,7 @@ class LabelAgent:
             raise ConfigError("Missing environment variables: " + ", ".join(missing))
 
     def ensure_db(self) -> None:
-        conn = sqlite3.connect(self.config.db_file)
+        conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
             "CREATE TABLE IF NOT EXISTS printed_orders("  # noqa: S608 - static SQL
@@ -233,7 +233,7 @@ class LabelAgent:
 
     def load_printed_orders(self) -> List[Dict[str, Any]]:
         self.ensure_db()
-        conn = sqlite3.connect(self.config.db_file)
+        conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
             "SELECT order_id, printed_at, last_order_data FROM printed_orders ORDER BY printed_at DESC"
@@ -258,7 +258,7 @@ class LabelAgent:
     def mark_as_printed(
         self, order_id: str, last_order_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        conn = sqlite3.connect(self.config.db_file)
+        conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         data_json = json.dumps(last_order_data or {})
         cur.execute(
@@ -274,7 +274,7 @@ class LabelAgent:
 
     def clean_old_printed_orders(self) -> None:
         threshold = datetime.now() - timedelta(days=self.config.printed_expiry_days)
-        conn = sqlite3.connect(self.config.db_file)
+        conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
             "DELETE FROM printed_orders WHERE printed_at < ?",
@@ -285,7 +285,7 @@ class LabelAgent:
 
     def load_queue(self) -> List[Dict[str, Any]]:
         self.ensure_db()
-        conn = sqlite3.connect(self.config.db_file)
+        conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
             "SELECT order_id, label_data, ext, last_order_data FROM label_queue"
@@ -309,7 +309,7 @@ class LabelAgent:
         return items
 
     def save_queue(self, items: Iterable[Dict[str, Any]]) -> None:
-        conn = sqlite3.connect(self.config.db_file)
+        conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute("DELETE FROM label_queue")
         for item in items:
