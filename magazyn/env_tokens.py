@@ -40,3 +40,20 @@ def update_allegro_tokens(
 
     write_env(values)
 
+
+def clear_allegro_tokens() -> None:
+    """Remove Allegro OAuth tokens from the environment and persisted settings."""
+
+    os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
+    os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+    # Import lazily to avoid circular imports with ``magazyn.app``.
+    from .app import load_settings, write_env  # pylint: disable=import-outside-toplevel
+
+    values: MutableMapping[str, str] = load_settings()
+
+    values.pop("ALLEGRO_ACCESS_TOKEN", None)
+    values.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+    write_env(values)
+
