@@ -9,7 +9,7 @@ import subprocess
 import threading
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, time as dt_time
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
 import requests
@@ -22,7 +22,9 @@ from .notifications import send_report
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
 from .metrics import (
+    PRINT_AGENT_DOWNTIME_SECONDS,
     PRINT_AGENT_ITERATION_SECONDS,
+    PRINT_AGENT_RETRIES_TOTAL,
     PRINT_LABEL_ERRORS_TOTAL,
     PRINT_LABELS_TOTAL,
     PRINT_QUEUE_OLDEST_AGE_SECONDS,
@@ -32,6 +34,17 @@ from .metrics import (
 
 class ConfigError(Exception):
     """Raised when required configuration is missing."""
+
+
+class ApiError(Exception):
+    """Raised when the Baselinker API call fails."""
+
+
+class PrintError(Exception):
+    """Raised when sending data to the printer fails."""
+
+
+T = TypeVar("T")
 
 
 def parse_time_str(value: str) -> dt_time:
@@ -126,6 +139,10 @@ class LabelAgent:
         self._configure_logging(initial=True)
         self._configure_db_engine()
 
+    @property
+    def _heartbeat_path(self) -> str:
+        return f"{self.config.lock_file}.heartbeat"
+
     # ------------------------------------------------------------------
     # Configuration helpers
     # ------------------------------------------------------------------
@@ -174,6 +191,101 @@ class LabelAgent:
     # ------------------------------------------------------------------
     # Validation and persistence helpers
     # ------------------------------------------------------------------
+    def _read_heartbeat(self) -> Optional[datetime]:
+        try:
+            with open(self._heartbeat_path, "r", encoding="utf-8") as handle:
+                raw = handle.read().strip()
+        except OSError:
+            return None
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+
+    def _write_heartbeat(self) -> None:
+        try:
+            with open(self._heartbeat_path, "w", encoding="utf-8") as handle:
+                handle.write(datetime.now().isoformat())
+        except OSError as exc:  # pragma: no cover - best effort logging only
+            self.logger.debug("Nie można zapisać heartbeat: %s", exc)
+
+    def _clear_heartbeat(self) -> None:
+        try:
+            os.remove(self._heartbeat_path)
+        except OSError:
+            pass
+
+    def _cleanup_orphaned_lock(self) -> None:
+        heartbeat = self._read_heartbeat()
+        if heartbeat is None:
+            return
+        grace = max(1, self.config.poll_interval)
+        max_age = timedelta(seconds=grace * 4)
+        if datetime.now() - heartbeat <= max_age:
+            return
+
+        try:
+            with open(self.config.lock_file, "a+", encoding="utf-8") as handle:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except OSError:
+                    return
+        except OSError:
+            self._clear_heartbeat()
+            return
+
+        try:
+            os.remove(self.config.lock_file)
+        except OSError:
+            pass
+        else:
+            self.logger.warning("Wyczyszczono porzuconą blokadę agenta drukowania")
+        self._clear_heartbeat()
+
+    def _restore_in_progress(self, queue: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        restored = False
+        for item in queue:
+            if item.get("status") == "in_progress":
+                item["status"] = "queued"
+                restored = True
+        if restored:
+            self.save_queue(queue)
+        return queue
+
+    def _retry(
+        self,
+        func: Callable[..., T],
+        *args: Any,
+        stage: str,
+        retry_exceptions: Tuple[Type[BaseException], ...] = (Exception,),
+        max_attempts: int = 3,
+        base_delay: float = 1.0,
+        **kwargs: Any,
+    ) -> T:
+        attempts = 0
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except retry_exceptions as exc:
+                attempts += 1
+                if attempts >= max_attempts or self._stop_event.is_set():
+                    raise
+                delay = base_delay * (2 ** (attempts - 1))
+                self.logger.warning(
+                    "%s failed (%s). Retrying in %.1fs (attempt %s/%s)",
+                    stage,
+                    exc,
+                    delay,
+                    attempts + 1,
+                    max_attempts,
+                )
+                PRINT_AGENT_RETRIES_TOTAL.inc()
+                PRINT_AGENT_DOWNTIME_SECONDS.inc(delay)
+                if self._stop_event.wait(delay):
+                    raise
+
     def validate_env(self) -> None:
         required = {
             "API_TOKEN": self.config.api_token,
@@ -203,12 +315,15 @@ class LabelAgent:
             conn.commit()
         cur.execute(
             "CREATE TABLE IF NOT EXISTS label_queue("  # noqa: S608 - static SQL
-            "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT, queued_at TEXT)"
+            "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT, queued_at TEXT, status TEXT)"
         )
         cur.execute("PRAGMA table_info(label_queue)")
         queue_cols = [row[1] for row in cur.fetchall()]
         if "queued_at" not in queue_cols:
             cur.execute("ALTER TABLE label_queue ADD COLUMN queued_at TEXT")
+            conn.commit()
+        if "status" not in queue_cols:
+            cur.execute("ALTER TABLE label_queue ADD COLUMN status TEXT DEFAULT 'queued'")
             conn.commit()
         conn.commit()
 
@@ -325,12 +440,12 @@ class LabelAgent:
         conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
-            "SELECT order_id, label_data, ext, last_order_data, queued_at FROM label_queue"
+            "SELECT order_id, label_data, ext, last_order_data, queued_at, status FROM label_queue"
         )
         rows = cur.fetchall()
         conn.close()
         items: List[Dict[str, Any]] = []
-        for order_id, label_data, ext, last_order_json, queued_at in rows:
+        for order_id, label_data, ext, last_order_json, queued_at, status in rows:
             try:
                 last_data = json.loads(last_order_json) if last_order_json else {}
             except Exception:  # pragma: no cover - defensive
@@ -344,6 +459,7 @@ class LabelAgent:
                     "ext": ext,
                     "last_order_data": last_data,
                     "queued_at": queued_at,
+                    "status": status or "queued",
                 }
             )
         return items
@@ -356,13 +472,15 @@ class LabelAgent:
         cur.execute("DELETE FROM label_queue")
         for item in items_list:
             cur.execute(
-                "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at, status)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     item.get("order_id"),
                     item.get("label_data"),
                     item.get("ext"),
                     json.dumps(item.get("last_order_data", {})),
                     item.get("queued_at"),
+                    item.get("status", "queued"),
                 ),
             )
         conn.commit()
@@ -383,7 +501,13 @@ class LabelAgent:
             self._api_calls_success = 0
             self._last_api_log = now
 
-    def call_api(self, method: str, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def call_api(
+        self,
+        method: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        *,
+        raise_on_error: bool = False,
+    ) -> Dict[str, Any]:
         parameters = parameters or {}
         success = False
         try:
@@ -396,10 +520,16 @@ class LabelAgent:
             return response.json()
         except requests.exceptions.HTTPError as exc:
             self.logger.error("HTTP error in call_api(%s): %s", method, exc)
+            if raise_on_error:
+                raise ApiError(str(exc)) from exc
         except requests.exceptions.RequestException as exc:
             self.logger.error("Request error in call_api(%s): %s", method, exc)
+            if raise_on_error:
+                raise ApiError(str(exc)) from exc
         except Exception as exc:  # pragma: no cover - defensive
             self.logger.error("Błąd w call_api(%s): %s", method, exc)
+            if raise_on_error:
+                raise ApiError(str(exc)) from exc
         finally:
             self._api_calls_total += 1
             if success:
@@ -409,23 +539,31 @@ class LabelAgent:
 
     def get_orders(self) -> List[Dict[str, Any]]:
         response = self.call_api(
-            "getOrders", {"status_id": self.config.status_id, "include_products": 1}
+            "getOrders",
+            {"status_id": self.config.status_id, "include_products": 1},
+            raise_on_error=True,
         )
         return response.get("orders", [])
 
     def get_order_packages(self, order_id: str) -> List[Dict[str, Any]]:
-        response = self.call_api("getOrderPackages", {"order_id": order_id})
+        response = self.call_api(
+            "getOrderPackages",
+            {"order_id": order_id},
+            raise_on_error=True,
+        )
         return response.get("packages", [])
 
     def get_label(self, courier_code: str, package_id: str) -> Tuple[str, str]:
         response = self.call_api(
-            "getLabel", {"courier_code": courier_code, "package_id": package_id}
+            "getLabel",
+            {"courier_code": courier_code, "package_id": package_id},
+            raise_on_error=True,
         )
         return response.get("label"), response.get("extension", "pdf")
 
     def print_label(self, base64_data: str, extension: str, order_id: str) -> None:
+        file_path = f"/tmp/label_{order_id}.{extension}"
         try:
-            file_path = f"/tmp/label_{order_id}.{extension}"
             pdf_data = base64.b64decode(base64_data)
             with open(file_path, "wb") as handle:
                 handle.write(pdf_data)
@@ -442,20 +580,29 @@ class LabelAgent:
                 cmd.extend(["-h", host])
             cmd.extend(["-d", self.config.printer_name, file_path])
             result = subprocess.run(cmd, capture_output=True, check=False)
-            os.remove(file_path)
             if result.returncode != 0:
+                message = result.stderr.decode().strip()
                 self.logger.error(
                     "Błąd drukowania (kod %s): %s",
                     result.returncode,
-                    result.stderr.decode().strip(),
+                    message,
                 )
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
-            else:
-                self.logger.info("📨 Label printed")
-                PRINT_LABELS_TOTAL.inc()
+                raise PrintError(message or str(result.returncode))
+            self.logger.info("📨 Label printed")
+            PRINT_LABELS_TOTAL.inc()
+        except PrintError:
+            raise
         except Exception as exc:
             self.logger.error("Błąd drukowania: %s", exc)
             PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
+            raise PrintError(str(exc)) from exc
+        finally:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except OSError:  # pragma: no cover - defensive
+                pass
 
     def print_test_page(self) -> bool:
         try:
@@ -563,12 +710,24 @@ class LabelAgent:
         for oid, items in grouped.items():
             try:
                 for it in items:
-                    self.print_label(it["label_data"], it.get("ext", "pdf"), it["order_id"])
+                    it["status"] = "in_progress"
+                self.save_queue(queue)
+                for it in items:
+                    self._retry(
+                        self.print_label,
+                        it["label_data"],
+                        it.get("ext", "pdf"),
+                        it["order_id"],
+                        stage="print",
+                        retry_exceptions=(PrintError,),
+                    )
                 consume_order_stock(items[0].get("last_order_data", {}).get("products", []))
                 self.mark_as_printed(oid, items[0].get("last_order_data"))
                 printed[oid] = datetime.now()
             except Exception as exc:
                 self.logger.error("Błąd przetwarzania z kolejki: %s", exc)
+                for it in items:
+                    it["status"] = "queued"
                 new_queue.extend(items)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue").inc()
         return new_queue
@@ -576,17 +735,29 @@ class LabelAgent:
     def _agent_loop(self) -> None:
         while not self._stop_event.is_set():
             loop_start = datetime.now()
+            self._write_heartbeat()
             self._send_periodic_reports()
             self.clean_old_printed_orders()
             printed_entries = self.load_printed_orders()
             printed = {entry["order_id"]: entry["printed_at"] for entry in printed_entries}
             queue = self.load_queue()
 
+            queue = self._restore_in_progress(queue)
+
             queue = self._process_queue(queue, printed)
             self.save_queue(queue)
 
             try:
-                orders = self.get_orders()
+                try:
+                    orders = self._retry(
+                        self.get_orders,
+                        stage="orders",
+                        retry_exceptions=(ApiError,),
+                    )
+                except ApiError as exc:
+                    self.logger.error("Błąd pobierania zamówień: %s", exc)
+                    PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                    orders = []
                 for order in orders:
                     order_id = str(order["order_id"])
                     prod_name, size, color = parse_product_info(
@@ -607,7 +778,19 @@ class LabelAgent:
                     if order_id in printed:
                         continue
 
-                    packages = self.get_order_packages(order_id)
+                    try:
+                        packages = self._retry(
+                            self.get_order_packages,
+                            order_id,
+                            stage="packages",
+                            retry_exceptions=(ApiError,),
+                        )
+                    except ApiError as exc:
+                        self.logger.error(
+                            "Błąd pobierania paczek dla %s: %s", order_id, exc
+                        )
+                        PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                        continue
                     labels: List[Tuple[str, str]] = []
                     courier_code = ""
 
@@ -619,7 +802,23 @@ class LabelAgent:
                         if not package_id or not code:
                             self.logger.warning("  Brak danych: package_id lub courier_code")
                             continue
-                        label_data, ext = self.get_label(courier_code, package_id)
+                        try:
+                            label_data, ext = self._retry(
+                                self.get_label,
+                                courier_code,
+                                package_id,
+                                stage="label",
+                                retry_exceptions=(ApiError,),
+                            )
+                        except ApiError as exc:
+                            self.logger.error(
+                                "Błąd pobierania etykiety %s/%s: %s",
+                                courier_code,
+                                package_id,
+                                exc,
+                            )
+                            PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                            continue
                         if label_data:
                             labels.append((label_data, ext))
 
@@ -636,18 +835,52 @@ class LabelAgent:
                                         "ext": ext,
                                         "last_order_data": self.last_order_data,
                                         "queued_at": datetime.now().isoformat(),
+                                        "status": "queued",
                                     }
                                 )
                             self.send_messenger_message(self.last_order_data)
                             self.mark_as_printed(order_id, self.last_order_data)
                             printed[order_id] = datetime.now()
                         else:
+                            entries: List[Dict[str, Any]] = []
                             for label_data, ext in labels:
-                                self.print_label(label_data, ext, order_id)
-                            consume_order_stock(self.last_order_data.get("products", []))
-                            self.send_messenger_message(self.last_order_data)
-                            self.mark_as_printed(order_id, self.last_order_data)
-                            printed[order_id] = datetime.now()
+                                entry = {
+                                    "order_id": order_id,
+                                    "label_data": label_data,
+                                    "ext": ext,
+                                    "last_order_data": self.last_order_data,
+                                    "queued_at": datetime.now().isoformat(),
+                                    "status": "in_progress",
+                                }
+                                queue.append(entry)
+                                entries.append(entry)
+                            self.save_queue(queue)
+                            try:
+                                for entry in entries:
+                                    self._retry(
+                                        self.print_label,
+                                        entry["label_data"],
+                                        entry.get("ext", "pdf"),
+                                        entry["order_id"],
+                                        stage="print",
+                                        retry_exceptions=(PrintError,),
+                                    )
+                                consume_order_stock(
+                                    self.last_order_data.get("products", [])
+                                )
+                                self.send_messenger_message(self.last_order_data)
+                                self.mark_as_printed(order_id, self.last_order_data)
+                                printed[order_id] = datetime.now()
+                                for entry in entries:
+                                    if entry in queue:
+                                        queue.remove(entry)
+                            except Exception as exc:
+                                self.logger.error(
+                                    "Błąd drukowania zamówienia %s: %s", order_id, exc
+                                )
+                                for entry in entries:
+                                    entry["status"] = "queued"
+                                self.save_queue(queue)
             except Exception as exc:
                 self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
@@ -655,11 +888,13 @@ class LabelAgent:
             self.save_queue(queue)
             duration = (datetime.now() - loop_start).total_seconds()
             PRINT_AGENT_ITERATION_SECONDS.observe(duration)
+            self._write_heartbeat()
             self._stop_event.wait(self.config.poll_interval)
 
     def start_agent_thread(self) -> bool:
         if self._agent_thread and self._agent_thread.is_alive():
             return False
+        self._cleanup_orphaned_lock()
         if self._lock_handle is None:
             try:
                 self._lock_handle = open(self.config.lock_file, "w")
@@ -670,6 +905,7 @@ class LabelAgent:
                     self._lock_handle = None
                 self.logger.info("Print agent already running, skipping startup")
                 return False
+        self._write_heartbeat()
         self._stop_event = threading.Event()
         self._agent_thread = threading.Thread(target=self._agent_loop, daemon=True)
         self._agent_thread.start()
@@ -680,6 +916,7 @@ class LabelAgent:
             self._stop_event.set()
             self._agent_thread.join()
             self._agent_thread = None
+        self._clear_heartbeat()
         if self._lock_handle:
             try:
                 fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
@@ -718,6 +955,8 @@ __all__ = [
     "AgentConfig",
     "LabelAgent",
     "ConfigError",
+    "ApiError",
+    "PrintError",
     "agent",
     "logger",
     "parse_time_str",
