@@ -1,7 +1,8 @@
 import pandas as pd
 from pathlib import Path
 from sqlalchemy.sql import text
-from magazyn.models import Product, ProductSize
+from magazyn.domain.invoice_import import import_invoice_rows
+from magazyn.models import Product, ProductSize, PurchaseBatch
 
 
 def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
@@ -296,3 +297,71 @@ def test_import_invoice_alias_matches_existing(app_mod, client, login, tmp_path)
             .first()
         )
         assert ps.quantity == 3
+
+
+def test_import_invoice_rows_updates_existing_by_barcode(app_mod):
+    with app_mod.get_session() as db:
+        product = Product(name="Existing", color="Red")
+        db.add(product)
+        db.flush()
+        db.add(
+            ProductSize(
+                product_id=product.id, size="M", quantity=1, barcode="inv-1"
+            )
+        )
+
+    import_invoice_rows(
+        [
+            {
+                "Nazwa": "Existing",
+                "Kolor": "Red",
+                "Rozmiar": "M",
+                "Ilość": 2,
+                "Cena": "5.50",
+                "Barcode": "inv-1",
+            }
+        ]
+    )
+
+    with app_mod.get_session() as db:
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=product.id, size="M")
+            .first()
+        )
+        assert ps.quantity == 3
+        batch = (
+            db.query(PurchaseBatch)
+            .filter_by(product_id=product.id, size="M")
+            .one()
+        )
+        assert float(batch.price) == 5.5
+
+
+def test_import_invoice_rows_creates_new_product(app_mod):
+    import_invoice_rows(
+        [
+            {
+                "Nazwa": "NewProd",
+                "Kolor": "Blue",
+                "Rozmiar": "L",
+                "Ilość": 4,
+                "Cena": "7.25",
+                "Barcode": "",
+            }
+        ]
+    )
+
+    with app_mod.get_session() as db:
+        product = (
+            db.query(Product)
+            .filter_by(name="NewProd", color="Blue")
+            .one()
+        )
+        ps = (
+            db.query(ProductSize)
+            .filter_by(product_id=product.id, size="L")
+            .one()
+        )
+        assert ps.quantity == 4
+        assert ps.barcode is None
