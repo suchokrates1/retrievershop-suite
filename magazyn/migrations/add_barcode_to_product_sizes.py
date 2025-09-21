@@ -14,6 +14,12 @@ def migrate():
         else:
             print("barcode column already exists")
 
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_sizes_barcode "
+            "ON product_sizes(barcode)"
+        )
+        conn.commit()
+
 
 if __name__ == "__main__":
     migrate()
