@@ -16,10 +16,30 @@ import tempfile
 import os
 import io
 
-from . import services
+from .db import get_session, record_purchase
+from .domain.inventory import (
+    export_rows,
+    get_product_sizes,
+    get_products_for_delivery,
+    import_from_dataframe,
+    record_delivery,
+    update_quantity as inventory_update_quantity,
+)
+from .domain.invoice_import import _parse_pdf, import_invoice_rows
+from .domain.products import (
+    _to_decimal,
+    _to_int,
+    create_product,
+    delete_product,
+    find_by_barcode,
+    get_product_details,
+    list_products,
+    update_product,
+)
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
+from .models import ProductSize
 
 bp = Blueprint("products", __name__)
 
@@ -33,7 +53,7 @@ def add_item():
         color = form.color.data
         sizes = ALL_SIZES
         quantities = {
-            size: services._to_int(getattr(form, f"quantity_{size}").data or 0)
+            size: _to_int(getattr(form, f"quantity_{size}").data or 0)
             for size in sizes
         }
         barcodes = {
@@ -42,7 +62,7 @@ def add_item():
         }
 
         try:
-            services.create_product(name, color, quantities, barcodes)
+            create_product(name, color, quantities, barcodes)
         except Exception as e:
             flash(f"B\u0142\u0105d podczas dodawania przedmiotu: {e}")
         return redirect(url_for("products.items"))
@@ -55,7 +75,7 @@ def add_item():
 def update_quantity(product_id, size):
     action = request.form["action"]
     try:
-        services.update_quantity(product_id, size, action)
+        inventory_update_quantity(product_id, size, action)
     except Exception as e:
         flash(f"B\u0142\u0105d podczas aktualizacji ilo\u015bci: {e}")
     return redirect(url_for("products.items"))
@@ -65,7 +85,7 @@ def update_quantity(product_id, size):
 @login_required
 def delete_item(item_id):
     try:
-        deleted = services.delete_product(item_id)
+        deleted = delete_product(item_id)
     except Exception as e:
         flash(f"B\u0142ąd podczas usuwania przedmiotu: {e}")
         return redirect(url_for("products.items"))
@@ -84,14 +104,14 @@ def edit_item(product_id):
         color = request.form["color"]
         sizes = ALL_SIZES
         quantities = {
-            size: services._to_int(request.form.get(f"quantity_{size}", 0))
+            size: _to_int(request.form.get(f"quantity_{size}", 0))
             for size in sizes
         }
         barcodes = {
             size: request.form.get(f"barcode_{size}") or None for size in sizes
         }
         try:
-            updated = services.update_product(
+            updated = update_product(
                 product_id, name, color, quantities, barcodes
             )
         except Exception as e:
@@ -103,7 +123,7 @@ def edit_item(product_id):
         flash("Przedmiot został zaktualizowany")
         return redirect(url_for("products.items"))
 
-    product, product_sizes = services.get_product_details(product_id)
+    product, product_sizes = get_product_details(product_id)
     if not product:
         flash("Nie znaleziono produktu o podanym identyfikatorze")
         abort(404)
@@ -115,7 +135,7 @@ def edit_item(product_id):
 @bp.route("/items")
 @login_required
 def items():
-    result = services.list_products()
+    result = list_products()
     return render_template("items.html", products=result)
 
 
@@ -126,7 +146,7 @@ def barcode_scan():
     barcode = (data.get("barcode") or "").strip()
     if not barcode:
         return ("", 400)
-    result = services.find_by_barcode(barcode)
+    result = find_by_barcode(barcode)
     if result:
         flash(f'Znaleziono produkt: {result["name"]}')
         return jsonify(result)
@@ -144,7 +164,7 @@ def barcode_scan_page():
 @bp.route("/export_products")
 @login_required
 def export_products():
-    rows = services.export_rows()
+    rows = export_rows()
     data = []
     for row in rows:
         data.append(
@@ -181,7 +201,7 @@ def import_products():
         if file:
             try:
                 df = pd.read_excel(file)
-                services.import_from_dataframe(df)
+                import_from_dataframe(df)
             except Exception as e:
                 flash(
                     f"B\u0142\u0105d podczas importowania produkt\u00f3w: {e}"
@@ -204,7 +224,7 @@ def import_invoice():
                 if ext in {"xlsx", "xls"}:
                     df = pd.read_excel(io.BytesIO(data))
                 elif ext == "pdf":
-                    df = services._parse_pdf(io.BytesIO(data))
+                    df = _parse_pdf(io.BytesIO(data))
                     tmp = tempfile.NamedTemporaryFile(
                         delete=False, suffix=".pdf"
                     )
@@ -220,7 +240,7 @@ def import_invoice():
                     session["invoice_pdf"] = pdf_path
                 else:
                     session.pop("invoice_pdf", None)
-                ps_list = services.get_product_sizes()
+                ps_list = get_product_sizes()
                 return render_template(
                     "review_invoice.html",
                     rows=rows,
@@ -257,18 +277,18 @@ def confirm_invoice():
         qty_val = request.form.get(f"quantity_{idx}", base.get("Ilość"))
         price_val = request.form.get(f"price_{idx}", base.get("Cena"))
         if ps_id:
-            with services.get_session() as db:
+            with get_session() as db:
                 ps = (
-                    db.query(services.ProductSize)
+                    db.query(ProductSize)
                     .filter_by(id=int(ps_id))
                     .first()
                 )
                 if ps:
-                    services.record_purchase(
+                    record_purchase(
                         ps.product_id,
                         ps.size,
-                        services._to_int(qty_val),
-                        services._to_decimal(price_val),
+                        _to_int(qty_val),
+                        _to_decimal(price_val),
                     )
             continue
         confirmed.append(
@@ -287,7 +307,7 @@ def confirm_invoice():
         )
     if confirmed:
         try:
-            services.import_invoice_rows(confirmed)
+            import_invoice_rows(confirmed)
             flash("Zaimportowano fakturę")
         except Exception as e:
             flash(f"Błąd podczas importu faktury: {e}")
@@ -311,12 +331,12 @@ def add_delivery():
         prices = request.form.getlist("price")
         for pid, sz, qty, pr in zip(ids, sizes, quantities, prices):
             try:
-                services.record_delivery(
-                    int(pid), sz, services._to_int(qty), services._to_decimal(pr)
+                record_delivery(
+                    int(pid), sz, _to_int(qty), _to_decimal(pr)
                 )
             except Exception as e:
                 flash(f"Błąd podczas dodawania dostawy: {e}")
         flash("Dodano dostawę")
         return redirect(url_for("products.items"))
-    products = services.get_products_for_delivery()
+    products = get_products_for_delivery()
     return render_template("add_delivery.html", products=products)
