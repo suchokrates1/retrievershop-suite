@@ -9,7 +9,7 @@ services:
       - ./.env.example:/app/.env.example:ro
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     env_file: .env
-    command: ["python", "-m", "magazyn.app"]
+    command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     networks:
       - proxy
@@ -18,7 +18,7 @@ services:
       - "traefik.http.routers.magazyn2.rule=Host(`magazyn2.retrievershop.pl`)"
       - "traefik.http.routers.magazyn2.entrypoints=https"
       - "traefik.http.routers.magazyn2.tls=true"
-      - "traefik.http.services.magazyn2.loadbalancer.server.port=80"
+      - "traefik.http.services.magazyn2.loadbalancer.server.port=8000"
       - "traefik.http.services.magazyn2.loadbalancer.server.scheme=http"
 
 
