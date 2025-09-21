@@ -7,7 +7,7 @@ import sqlite3
 from datetime import timezone
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
@@ -38,11 +38,52 @@ SessionLocal = None
 
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 
+SQLITE_CONNECT_ARGS = {"check_same_thread": False, "timeout": 5}
+SQLITE_JOURNAL_MODE = "WAL"
+SQLITE_BUSY_TIMEOUT_MS = 5000
+
+
+def _configure_sqlite_connection(dbapi_connection):
+    """Apply common SQLite PRAGMA settings to the given connection."""
+
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")
+        # ``journal_mode`` returns the active mode as a row, consume it to avoid
+        # leaving the cursor in a pending state.
+        try:
+            cursor.fetchone()
+        except sqlite3.Error:  # pragma: no cover - defensive
+            pass
+        cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
+
+
+def sqlite_connect(db_path=DB_PATH, *, apply_pragmas=True, **kwargs):
+    """Return a SQLite connection with standard settings applied."""
+
+    params = {**SQLITE_CONNECT_ARGS, **kwargs}
+    conn = sqlite3.connect(str(db_path), **params)
+    if apply_pragmas:
+        _configure_sqlite_connection(conn)
+    return conn
+
 
 def configure_engine(db_path):
     """Create SQLAlchemy engine and session factory for ``db_path``."""
     global engine, SessionLocal
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        future=True,
+        connect_args=SQLITE_CONNECT_ARGS,
+    )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _record):  # pragma: no cover - SQLAlchemy hook
+        _configure_sqlite_connection(dbapi_connection)
+
     SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
 
@@ -80,14 +121,14 @@ def _ensure_schema_migrations_table(conn):
 
 
 def _get_applied_migrations():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite_connect(DB_PATH) as conn:
         _ensure_schema_migrations_table(conn)
         cur = conn.execute("SELECT filename FROM schema_migrations")
         return {row[0] for row in cur.fetchall()}
 
 
 def _record_migration(filename):
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite_connect(DB_PATH) as conn:
         _ensure_schema_migrations_table(conn)
         conn.execute(
             "INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
@@ -125,7 +166,7 @@ def reset_db():
     clean database state without losing the ability of :func:`init_db`
     to preserve existing data."""
     Base.metadata.drop_all(engine)
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite_connect(DB_PATH) as conn:
         conn.execute("DROP TABLE IF EXISTS schema_migrations")
         conn.commit()
     Base.metadata.create_all(engine)
