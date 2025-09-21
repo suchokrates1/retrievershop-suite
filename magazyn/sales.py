@@ -10,6 +10,7 @@ from .auth import login_required
 from .env_info import ENV_INFO
 from . import print_agent
 from .db import get_session
+from .settings_store import settings_store
 from .models import Sale, Product, ShippingThreshold
 from decimal import Decimal
 
@@ -81,15 +82,14 @@ def _sales_keys(values):
 @bp.route("/sales/settings", methods=["GET", "POST"])
 @login_required
 def sales_settings():
-    from .app import load_settings, write_env
+    from .app import load_settings
 
-    values = load_settings()
+    values = load_settings(include_hidden=True)
     keys = _sales_keys(values)
 
     if request.method == "POST":
-        for key in keys:
-            values[key] = request.form.get(key, "")
-        write_env(values)
+        updates = {key: request.form.get(key, values.get(key, "")) for key in keys}
+        settings_store.update(updates)
         print_agent.reload_config()
         flash("Zapisano ustawienia.")
         return redirect(url_for("sales.sales_settings"))
