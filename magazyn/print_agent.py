@@ -21,6 +21,13 @@ from .db import sqlite_connect
 from .notifications import send_report
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
+from .metrics import (
+    PRINT_AGENT_ITERATION_SECONDS,
+    PRINT_LABEL_ERRORS_TOTAL,
+    PRINT_LABELS_TOTAL,
+    PRINT_QUEUE_OLDEST_AGE_SECONDS,
+    PRINT_QUEUE_SIZE,
+)
 
 
 class ConfigError(Exception):
@@ -196,8 +203,13 @@ class LabelAgent:
             conn.commit()
         cur.execute(
             "CREATE TABLE IF NOT EXISTS label_queue("  # noqa: S608 - static SQL
-            "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT)"
+            "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT, queued_at TEXT)"
         )
+        cur.execute("PRAGMA table_info(label_queue)")
+        queue_cols = [row[1] for row in cur.fetchall()]
+        if "queued_at" not in queue_cols:
+            cur.execute("ALTER TABLE label_queue ADD COLUMN queued_at TEXT")
+            conn.commit()
         conn.commit()
 
         # clean entries where product name was replaced with customer name
@@ -283,43 +295,74 @@ class LabelAgent:
         conn.commit()
         conn.close()
 
+    def _update_queue_metrics(self, queue: Iterable[Dict[str, Any]]) -> None:
+        queue_list = list(queue)
+        size = len(queue_list)
+        PRINT_QUEUE_SIZE.set(size)
+
+        oldest = None
+        for item in queue_list:
+            queued_at = item.get("queued_at")
+            if not queued_at:
+                continue
+            try:
+                queued_time = datetime.fromisoformat(queued_at)
+            except ValueError:  # pragma: no cover - defensive
+                continue
+            if oldest is None or queued_time < oldest:
+                oldest = queued_time
+
+        if oldest is not None:
+            age = max(0.0, (datetime.now() - oldest).total_seconds())
+            PRINT_QUEUE_OLDEST_AGE_SECONDS.set(age)
+        else:
+            PRINT_QUEUE_OLDEST_AGE_SECONDS.set(0)
+
+        return queue_list
+
     def load_queue(self) -> List[Dict[str, Any]]:
         self.ensure_db()
         conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
-            "SELECT order_id, label_data, ext, last_order_data FROM label_queue"
+            "SELECT order_id, label_data, ext, last_order_data, queued_at FROM label_queue"
         )
         rows = cur.fetchall()
         conn.close()
         items: List[Dict[str, Any]] = []
-        for order_id, label_data, ext, last_order_json in rows:
+        for order_id, label_data, ext, last_order_json, queued_at in rows:
             try:
                 last_data = json.loads(last_order_json) if last_order_json else {}
             except Exception:  # pragma: no cover - defensive
                 last_data = {}
+            if not queued_at:
+                queued_at = datetime.now().isoformat()
             items.append(
                 {
                     "order_id": order_id,
                     "label_data": label_data,
                     "ext": ext,
                     "last_order_data": last_data,
+                    "queued_at": queued_at,
                 }
             )
         return items
 
     def save_queue(self, items: Iterable[Dict[str, Any]]) -> None:
+        items_list = self._update_queue_metrics(items)
+
         conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute("DELETE FROM label_queue")
-        for item in items:
+        for item in items_list:
             cur.execute(
-                "INSERT INTO label_queue(order_id, label_data, ext, last_order_data) VALUES (?, ?, ?, ?)",
+                "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at) VALUES (?, ?, ?, ?, ?)",
                 (
                     item.get("order_id"),
                     item.get("label_data"),
                     item.get("ext"),
                     json.dumps(item.get("last_order_data", {})),
+                    item.get("queued_at"),
                 ),
             )
         conn.commit()
@@ -406,10 +449,13 @@ class LabelAgent:
                     result.returncode,
                     result.stderr.decode().strip(),
                 )
+                PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
             else:
                 self.logger.info("📨 Label printed")
+                PRINT_LABELS_TOTAL.inc()
         except Exception as exc:
             self.logger.error("Błąd drukowania: %s", exc)
+            PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
 
     def print_test_page(self) -> bool:
         try:
@@ -524,10 +570,12 @@ class LabelAgent:
             except Exception as exc:
                 self.logger.error("Błąd przetwarzania z kolejki: %s", exc)
                 new_queue.extend(items)
+                PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue").inc()
         return new_queue
 
     def _agent_loop(self) -> None:
         while not self._stop_event.is_set():
+            loop_start = datetime.now()
             self._send_periodic_reports()
             self.clean_old_printed_orders()
             printed_entries = self.load_printed_orders()
@@ -587,6 +635,7 @@ class LabelAgent:
                                         "label_data": label_data,
                                         "ext": ext,
                                         "last_order_data": self.last_order_data,
+                                        "queued_at": datetime.now().isoformat(),
                                     }
                                 )
                             self.send_messenger_message(self.last_order_data)
@@ -601,8 +650,11 @@ class LabelAgent:
                             printed[order_id] = datetime.now()
             except Exception as exc:
                 self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
+                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
 
             self.save_queue(queue)
+            duration = (datetime.now() - loop_start).total_seconds()
+            PRINT_AGENT_ITERATION_SECONDS.observe(duration)
             self._stop_event.wait(self.config.poll_interval)
 
     def start_agent_thread(self) -> bool:
