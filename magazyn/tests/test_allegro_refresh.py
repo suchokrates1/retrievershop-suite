@@ -848,8 +848,8 @@ def test_sync_offers_aborts_when_settings_store_is_read_only(
 
     assert "settings store is read-only" in str(excinfo.value)
     assert metric._value.get() == initial_value + 1
-    assert os.environ.get("ALLEGRO_ACCESS_TOKEN") == "new-access-token"
-    assert os.environ.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh-token"
+    assert os.environ.get("ALLEGRO_ACCESS_TOKEN") is None
+    assert os.environ.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
 
     os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
     os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
