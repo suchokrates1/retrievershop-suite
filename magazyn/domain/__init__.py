@@ -5,4 +5,5 @@ __all__ = [
     "inventory",
     "reports",
     "invoice_import",
+    "allegro_prices",
 ]
