@@ -1,14 +1,16 @@
 from decimal import Decimal
 import os
+from types import SimpleNamespace
 
 import pytest
 from requests.exceptions import HTTPError
 
 import magazyn.allegro_sync as sync_mod
+import magazyn.config as cfg
 
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
-from magazyn.settings_store import SettingsPersistenceError, settings_store
+from magazyn.settings_store import SettingsPersistenceError, SettingsStore, settings_store
 
 
 def _set_tokens(access: str | None = None, refresh: str | None = None) -> None:
@@ -853,4 +855,46 @@ def test_sync_offers_aborts_when_settings_store_is_read_only(
 
     os.environ.pop("ALLEGRO_ACCESS_TOKEN", None)
     os.environ.pop("ALLEGRO_REFRESH_TOKEN", None)
+
+
+def test_sync_offers_uses_tokens_from_external_process(
+    app_mod, monkeypatch, allegro_tokens
+):
+    allegro_tokens("expired-token", "refresh-token")
+    settings_store.reload()
+
+    monkeypatch.setenv("DB_PATH", cfg.settings.DB_PATH)
+    external_store = SettingsStore()
+    assert external_store.get("ALLEGRO_ACCESS_TOKEN") == "expired-token"
+
+    calls = {"fetch": 0}
+
+    def fake_fetch_offers(token, offset=0, limit=100):
+        calls["fetch"] += 1
+        if calls["fetch"] == 1:
+            assert token == "expired-token"
+            external_store.update(
+                {
+                    "ALLEGRO_ACCESS_TOKEN": "fresh-token",
+                    "ALLEGRO_REFRESH_TOKEN": "fresh-refresh",
+                }
+            )
+            error = HTTPError("401 Unauthorized")
+            error.response = SimpleNamespace(status_code=401)
+            raise error
+        assert token == "fresh-token"
+        return {"items": {"offers": []}, "links": {}}
+
+    def fail_refresh_token(refresh):
+        raise AssertionError("refresh_token should not be called")
+
+    monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
+    monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", fail_refresh_token)
+
+    result = sync_mod.sync_offers()
+
+    assert result["fetched"] == 0
+    assert result["matched"] == 0
+    assert isinstance(result["trend_report"], list)
+    assert calls["fetch"] == 2
 
