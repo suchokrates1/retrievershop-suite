@@ -262,6 +262,15 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
             "please re-authorize the Allegro integration"
         )
 
+        latest_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        latest_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
+        if latest_token and latest_token != token:
+            token = latest_token
+            refresh = latest_refresh
+            return True
+        if latest_refresh and latest_refresh != refresh:
+            refresh = latest_refresh
+
         if refresh and not refreshed:
             refreshed = True
             try:

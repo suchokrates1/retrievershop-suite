@@ -115,37 +115,45 @@ def sync_offers():
                 data = allegro_api.fetch_offers(token, offset=offset, limit=limit)
             except HTTPError as exc:
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
-                if status_code == 401 and refresh:
-                    try:
-                        token_data = allegro_api.refresh_token(refresh)
-                    except Exception as refresh_exc:
-                        _clear_cached_tokens()
-                        logger.exception("Failed to refresh Allegro token")
-                        ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
-                        raise RuntimeError(
-                            "Failed to refresh Allegro token after unauthorized response "
-                            f"at offset {offset}; please re-authorize the Allegro integration"
-                        ) from refresh_exc
-                    new_token = token_data.get("access_token")
-                    if not new_token:
-                        _clear_cached_tokens()
-                        message = (
-                            "Failed to refresh Allegro offers at offset "
-                            f"{offset}: missing access token"
-                        )
-                        ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
-                        logger.error(message)
-                        raise RuntimeError(message)
-                    token = new_token
-                    new_refresh = token_data.get("refresh_token")
-                    if new_refresh:
-                        refresh = new_refresh
-                    try:
-                        update_allegro_tokens(token, refresh)
-                    except SettingsPersistenceError as persistence_exc:
-                        _raise_settings_store_read_only(persistence_exc)
-                    continue
-                if status_code == 401 and not refresh:
+                if status_code == 401:
+                    latest_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+                    latest_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
+                    if latest_token and latest_token != token:
+                        token = latest_token
+                        refresh = latest_refresh
+                        continue
+                    if latest_refresh and latest_refresh != refresh:
+                        refresh = latest_refresh
+                    if refresh:
+                        try:
+                            token_data = allegro_api.refresh_token(refresh)
+                        except Exception as refresh_exc:
+                            _clear_cached_tokens()
+                            logger.exception("Failed to refresh Allegro token")
+                            ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
+                            raise RuntimeError(
+                                "Failed to refresh Allegro token after unauthorized response "
+                                f"at offset {offset}; please re-authorize the Allegro integration"
+                            ) from refresh_exc
+                        new_token = token_data.get("access_token")
+                        if not new_token:
+                            _clear_cached_tokens()
+                            message = (
+                                "Failed to refresh Allegro offers at offset "
+                                f"{offset}: missing access token"
+                            )
+                            ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
+                            logger.error(message)
+                            raise RuntimeError(message)
+                        token = new_token
+                        new_refresh = token_data.get("refresh_token")
+                        if new_refresh:
+                            refresh = new_refresh
+                        try:
+                            update_allegro_tokens(token, refresh)
+                        except SettingsPersistenceError as persistence_exc:
+                            _raise_settings_store_read_only(persistence_exc)
+                        continue
                     _clear_cached_tokens()
                     message = (
                         "Failed to fetch Allegro offers at offset "
