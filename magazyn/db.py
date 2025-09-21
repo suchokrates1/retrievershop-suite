@@ -2,8 +2,9 @@ import datetime
 from contextlib import contextmanager
 import logging
 from pathlib import Path
-import datetime
 import importlib.util
+import sqlite3
+from datetime import timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import create_engine
@@ -35,6 +36,9 @@ engine = None
 SessionLocal = None
 
 
+MIGRATIONS_DIR = Path(__file__).with_name("migrations")
+
+
 def configure_engine(db_path):
     """Create SQLAlchemy engine and session factory for ``db_path``."""
     global engine, SessionLocal
@@ -64,16 +68,48 @@ def get_session():
 get_db_connection = get_session
 
 
+def _ensure_schema_migrations_table(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            filename TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _get_applied_migrations():
+    with sqlite3.connect(DB_PATH) as conn:
+        _ensure_schema_migrations_table(conn)
+        cur = conn.execute("SELECT filename FROM schema_migrations")
+        return {row[0] for row in cur.fetchall()}
+
+
+def _record_migration(filename):
+    with sqlite3.connect(DB_PATH) as conn:
+        _ensure_schema_migrations_table(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
+            (filename, datetime.datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+
+
 def apply_migrations():
-    """Execute all migration scripts in the migrations directory."""
-    migrations_dir = Path(__file__).with_name("migrations")
-    for path in sorted(migrations_dir.glob("*.py")):
+    """Execute migration scripts that have not been run yet."""
+
+    applied = _get_applied_migrations()
+    for path in sorted(MIGRATIONS_DIR.glob("*.py")):
+        if path.name in applied:
+            continue
         spec = importlib.util.spec_from_file_location(path.stem, path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         migrate = getattr(module, "migrate", None)
         if callable(migrate):
             migrate()
+            _record_migration(path.name)
 
 
 def init_db():
@@ -89,63 +125,11 @@ def reset_db():
     clean database state without losing the ability of :func:`init_db`
     to preserve existing data."""
     Base.metadata.drop_all(engine)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("DROP TABLE IF EXISTS schema_migrations")
+        conn.commit()
     Base.metadata.create_all(engine)
     apply_migrations()
-
-
-def ensure_schema():
-    """Add missing columns to existing tables if necessary."""
-    conn = engine.raw_connection()
-    try:
-        cur = conn.execute("PRAGMA table_info(product_sizes)")
-        if "barcode" not in [row[1] for row in cur.fetchall()]:
-            conn.execute(
-                "ALTER TABLE product_sizes ADD COLUMN barcode TEXT"
-            )
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_sizes_barcode "
-                "ON product_sizes(barcode)"
-            )
-            conn.commit()
-
-        cur = conn.execute("PRAGMA table_info(sales)")
-        cols = [row[1] for row in cur.fetchall()]
-        if "purchase_cost" not in cols:
-            conn.execute(
-                "ALTER TABLE sales ADD COLUMN purchase_cost "
-                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
-            )
-        if "sale_price" not in cols:
-            conn.execute(
-                "ALTER TABLE sales ADD COLUMN sale_price "
-                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
-            )
-        if "shipping_cost" not in cols:
-            conn.execute(
-                "ALTER TABLE sales ADD COLUMN shipping_cost "
-                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
-            )
-        if "commission_fee" not in cols:
-            conn.execute(
-                "ALTER TABLE sales ADD COLUMN commission_fee "
-                "NUMERIC(10,2) DEFAULT 0.0 NOT NULL"
-            )
-        conn.commit()
-
-        cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-            " AND name='shipping_thresholds'"
-        )
-        if not cur.fetchone():
-            conn.execute(
-                "CREATE TABLE shipping_thresholds ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "min_order_value REAL NOT NULL, "
-                "shipping_cost NUMERIC(10,2) NOT NULL)"
-            )
-            conn.commit()
-    finally:
-        conn.close()
 
 
 def register_default_user():
