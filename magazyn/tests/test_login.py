@@ -7,7 +7,8 @@ import magazyn.config as cfg
 
 
 def setup_app_default_session(tmp_path, monkeypatch):
-    monkeypatch.setattr(cfg.settings, "DB_PATH", ":memory:")
+    db_path = tmp_path / "test.db"
+    monkeypatch.setattr(cfg.settings, "DB_PATH", str(db_path))
     import werkzeug
 
     monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
@@ -22,11 +23,16 @@ def setup_app_default_session(tmp_path, monkeypatch):
     import magazyn.app as app_mod
 
     importlib.reload(app_mod)
+    from magazyn.factory import create_app
     import magazyn.db as db_mod
     from sqlalchemy.orm import sessionmaker
 
+    importlib.reload(db_mod)
+    monkeypatch.setattr(db_mod, "apply_migrations", lambda: None)
     db_mod.SessionLocal = sessionmaker(bind=db_mod.engine, autoflush=False)
-    app_mod.app.config["WTF_CSRF_ENABLED"] = False
+
+    app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
+    app_mod.app = app
     app_mod.reset_db()
     return app_mod
 
