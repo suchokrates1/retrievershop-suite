@@ -72,6 +72,18 @@ file (`agent.lock` next to the log file) to ensure additional processes skip
 starting the agent. When multiple workers load the application, only the first
 one obtains the lock and launches the background thread.
 
+## Front-end security
+
+The base HTML template loads Bootstrap and Bootstrap Icons exclusively from
+jsDelivr using Subresource Integrity (SRI) hashes with the `crossorigin`
+attribute, ensuring the assets cannot be tampered with in transit. Responses
+are additionally protected with a Content Security Policy limiting scripts and
+styles to application assets and jsDelivr, locking frames to the application
+itself, and restricting image sources to the Retriever Shop domain. The
+application also emits the `Strict-Transport-Security` and
+`X-Content-Type-Options` headers so browsers enforce HTTPS transport and avoid
+MIME type sniffing.
+
 ## Modifying settings via the web interface
 
 After starting the application you can modify the values stored in your `.env` file without touching the filesystem. Log in to the web interface and open the **Ustawienia** tab from the navigation bar.
