@@ -224,6 +224,13 @@ def test_price_check_requires_allegro_authorization(client, login, monkeypatch):
     assert "Missing Allegro access token" not in body
     assert "<table" not in body
 
+    json_response = client.get("/allegro/price-check?format=json")
+    assert json_response.status_code == 200
+    assert json_response.get_json() == {
+        "price_checks": [],
+        "auth_error": "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację.",
+    }
+
 
 def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
     monkeypatch.setenv("ALLEGRO_ACCESS_TOKEN", "token")
@@ -311,35 +318,32 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch):
 
     body = response.data.decode("utf-8")
     assert "Monitor cen Allegro" in body
-    assert "Najniższa cena konkurencji" in body
+    assert 'id="price-check-loading"' in body
+    assert 'id="price-check-table-body"' in body
+    assert 'price_check.js' in body
 
-    rows = re.findall(r"<tr>.*?</tr>", body, re.S)
-    data_rows = [row for row in rows if "Oferta" in row and "th" not in row]
+    json_response = client.get("/allegro/price-check?format=json")
+    assert json_response.status_code == 200
 
-    def row_by_offer(offer_id: str) -> str:
-        return next(
-            row
-            for row in data_rows
-            if f"href=\"https://allegro.pl/oferta/{offer_id}\"" in row
-        )
+    payload = json_response.get_json()
+    assert payload["auth_error"] is None
+    assert len(payload["price_checks"]) == 2
 
-    row_low = row_by_offer("offer-low")
-    row_high = row_by_offer("offer-high")
+    by_offer = {item["offer_id"]: item for item in payload["price_checks"]}
 
-    assert "bi-link-45deg" in row_low
-    assert 'visually-hidden">Oferta najtańsza</span>' in row_low
-    assert "90.00 zł" in row_low
-    assert "95.00 zł" in row_low
-    assert "href=\"https://allegro.pl/oferta/competitor-a-offer\"" in row_low
-    assert "aria-label=\"Zobacz ofertę konkurencji\"" in row_low
-    assert "text-success" in row_low and "✓" in row_low
+    low = by_offer["offer-low"]
+    assert low["title"] == "Oferta najtańsza"
+    assert low["own_price"] == "90.00"
+    assert low["competitor_price"] == "95.00"
+    assert low["competitor_offer_url"] == "https://allegro.pl/oferta/competitor-a-offer"
+    assert low["is_lowest"] is True
 
-    assert "bi-link-45deg" in row_high
-    assert 'visually-hidden">Oferta droższa</span>' in row_high
-    assert "120.00 zł" in row_high
-    assert "80.00 zł" in row_high
-    assert "href=\"https://allegro.pl/oferta/competitor-c-offer\"" in row_high
-    assert "text-danger" in row_high and "✗" in row_high
+    high = by_offer["offer-high"]
+    assert high["title"] == "Oferta droższa"
+    assert high["own_price"] == "120.00"
+    assert high["competitor_price"] == "80.00"
+    assert high["competitor_offer_url"] == "https://allegro.pl/oferta/competitor-c-offer"
+    assert high["is_lowest"] is False
 
 
 def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatch):
@@ -399,22 +403,18 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
 
     monkeypatch.setattr("magazyn.allegro.fetch_product_listing", fake_listing)
 
-    response = client.get("/allegro/price-check")
-    assert response.status_code == 200
+    json_response = client.get("/allegro/price-check?format=json")
+    assert json_response.status_code == 200
 
-    body = response.data.decode("utf-8")
-    rows = re.findall(r"<tr>.*?</tr>", body, re.S)
-    row = next(
-        row
-        for row in rows
-        if "href=\"https://allegro.pl/oferta/offer-product\"" in row
-    )
+    payload = json_response.get_json()
+    assert payload["auth_error"] is None
+    assert len(payload["price_checks"]) == 1
 
-    assert "bi-link-45deg" in row
-    assert 'visually-hidden">Oferta produktowa</span>' in row
-    assert "Legowisko Szare" in row
-    assert "85.00 zł" in row
-    assert "href=\"https://allegro.pl/oferta/competitor-2-offer\"" in row
+    item = payload["price_checks"][0]
+    assert item["offer_id"] == "offer-product"
+    assert item["label"] == "Legowisko Szare"
+    assert item["competitor_price"] == "85.00"
+    assert item["competitor_offer_url"] == "https://allegro.pl/oferta/competitor-2-offer"
     assert set(called_barcodes) == {"333", "444"}
 
 
