@@ -187,19 +187,24 @@ def refresh_token(refresh_token: str) -> dict:
     def _normalize(value: Optional[str]) -> Optional[str]:
         return value or None
 
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
+    client_id = _normalize(os.getenv("ALLEGRO_CLIENT_ID"))
+    client_secret = _normalize(os.getenv("ALLEGRO_CLIENT_SECRET"))
 
-    try:
-        client_id = _normalize(settings_store.get("ALLEGRO_CLIENT_ID"))
-        client_secret = _normalize(settings_store.get("ALLEGRO_CLIENT_SECRET"))
-    except SettingsPersistenceError:
-        client_id = client_secret = None
+    if not client_id or not client_secret:
+        store_client_id: Optional[str] = None
+        store_client_secret: Optional[str] = None
+        try:
+            store_client_id = _normalize(settings_store.get("ALLEGRO_CLIENT_ID"))
+            store_client_secret = _normalize(
+                settings_store.get("ALLEGRO_CLIENT_SECRET")
+            )
+        except SettingsPersistenceError:
+            store_client_id = store_client_secret = None
 
-    if not client_id:
-        client_id = _normalize(os.getenv("ALLEGRO_CLIENT_ID"))
-    if not client_secret:
-        client_secret = _normalize(os.getenv("ALLEGRO_CLIENT_SECRET"))
+        if not client_id:
+            client_id = store_client_id
+        if not client_secret:
+            client_secret = store_client_secret
 
     if not client_id or not client_secret:
         raise ValueError(
@@ -259,6 +264,50 @@ def _describe_token(token: Optional[str]) -> str:
     if len(token) <= 8:
         return token
     return f"{token[:4]}…{token[-4:]}"
+
+
+def _extract_allegro_error_details(response) -> dict:
+    details = {}
+    if response is None:
+        return details
+
+    payload = None
+    try:
+        payload = response.json()
+    except ValueError:
+        text = getattr(response, "text", None)
+        if text:
+            snippet = str(text).strip()
+            if snippet:
+                details["body"] = snippet[:500]
+        return details
+
+    if isinstance(payload, dict):
+        errors = payload.get("errors")
+        if isinstance(errors, list):
+            for entry in errors:
+                if not isinstance(entry, dict):
+                    continue
+                code = entry.get("code") or entry.get("error")
+                if code and "error_code" not in details:
+                    details["error_code"] = str(code)
+                message = entry.get("message") or entry.get("userMessage")
+                if message and "error_message" not in details:
+                    details["error_message"] = str(message)
+                details_value = entry.get("details") or entry.get("path")
+                if details_value and "error_details" not in details:
+                    details["error_details"] = str(details_value)
+                if "error_code" in details and "error_message" in details:
+                    break
+        else:
+            code = payload.get("code") or payload.get("error")
+            if code:
+                details["error_code"] = str(code)
+            message = payload.get("message") or payload.get("error_description")
+            if message:
+                details["error_message"] = str(message)
+
+    return details
 
 
 def fetch_product_listing(
@@ -329,10 +378,9 @@ def fetch_product_listing(
             "please re-authorize the Allegro integration"
         )
 
-        record(
-            "Listing Allegro: otrzymano błąd HTTP",
-            {"status_code": status_code},
-        )
+        error_payload = {"status_code": status_code}
+        error_payload.update(_extract_allegro_error_details(getattr(exc, "response", None)))
+        record("Listing Allegro: otrzymano błąd HTTP", error_payload)
 
         latest_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
         latest_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
