@@ -70,6 +70,8 @@ def allegro_tokens():
         {
             "ALLEGRO_ACCESS_TOKEN": None,
             "ALLEGRO_REFRESH_TOKEN": None,
+            "ALLEGRO_TOKEN_EXPIRES_IN": None,
+            "ALLEGRO_TOKEN_METADATA": None,
         }
     )
 
@@ -89,6 +91,8 @@ def allegro_tokens():
                 {
                     "ALLEGRO_ACCESS_TOKEN": None,
                     "ALLEGRO_REFRESH_TOKEN": None,
+                    "ALLEGRO_TOKEN_EXPIRES_IN": None,
+                    "ALLEGRO_TOKEN_METADATA": None,
                 }
             )
 
@@ -98,6 +102,8 @@ def allegro_tokens():
         {
             "ALLEGRO_ACCESS_TOKEN": None,
             "ALLEGRO_REFRESH_TOKEN": None,
+            "ALLEGRO_TOKEN_EXPIRES_IN": None,
+            "ALLEGRO_TOKEN_METADATA": None,
         }
     )
     settings_store.reload()
