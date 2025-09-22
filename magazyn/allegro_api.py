@@ -16,6 +16,13 @@ from .metrics import (
     ALLEGRO_API_RETRIES_TOTAL,
 )
 
+
+def _safe_int(value) -> Optional[int]:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
 AUTH_URL = "https://allegro.pl/auth/oauth/token"
 API_BASE_URL = "https://api.allegro.pl"
 DEFAULT_TIMEOUT = 10
@@ -288,8 +295,9 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
             new_refresh = token_data.get("refresh_token")
             if new_refresh:
                 refresh = new_refresh
+            expires_in = _safe_int(token_data.get("expires_in")) if token_data else None
             try:
-                update_allegro_tokens(token, refresh)
+                update_allegro_tokens(token, refresh, expires_in)
             except SettingsPersistenceError as exc:
                 friendly_message = (
                     "Cannot refresh Allegro access token because the settings store is "

@@ -2,6 +2,8 @@ from decimal import Decimal
 import os
 from types import SimpleNamespace
 import json
+import threading
+import time
 
 import pytest
 from requests.exceptions import HTTPError
@@ -11,6 +13,12 @@ import magazyn.config as cfg
 
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
+from magazyn.allegro_token_refresher import AllegroTokenRefresher
+from magazyn.env_tokens import update_allegro_tokens
+from magazyn.metrics import (
+    ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL,
+    ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL,
+)
 from magazyn.settings_store import SettingsPersistenceError, SettingsStore, settings_store
 
 
@@ -730,7 +738,11 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     def fake_refresh(token):
         refresh_calls["count"] += 1
         assert token == "refresh-token"
-        return {"access_token": "new-access", "refresh_token": "new-refresh"}
+        return {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 3600,
+        }
 
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
     monkeypatch.setattr(sync_mod.allegro_api, "refresh_token", fake_refresh)
@@ -738,7 +750,9 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
     original_update = sync_mod.update_allegro_tokens
 
-    def capture_tokens(access_token=None, refresh_token=None, expires_in=None):
+    def capture_tokens(
+        access_token=None, refresh_token=None, expires_in=None, metadata=None
+    ):
         persisted.append(
             {
                 "access_token": access_token,
@@ -746,7 +760,7 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
                 "expires_in": expires_in,
             }
         )
-        original_update(access_token, refresh_token, expires_in)
+        original_update(access_token, refresh_token, expires_in, metadata)
 
     monkeypatch.setattr("magazyn.allegro_sync.update_allegro_tokens", capture_tokens)
 
@@ -769,7 +783,7 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
         {
             "access_token": "new-access",
             "refresh_token": "new-refresh",
-            "expires_in": None,
+            "expires_in": 3600,
         }
     ]
 
@@ -1051,4 +1065,112 @@ def test_sync_offers_uses_tokens_from_external_process(
     assert result["matched"] == 0
     assert isinstance(result["trend_report"], list)
     assert calls["fetch"] == 2
+
+
+def test_token_refresher_refreshes_tokens_automatically(monkeypatch):
+    _set_tokens("initial-token", "refresh-token")
+    update_allegro_tokens("initial-token", "refresh-token", 1)
+
+    refresh_called = threading.Event()
+
+    def fake_refresh(token):
+        assert token == "refresh-token"
+        refresh_called.set()
+        return {
+            "access_token": "refreshed-access",
+            "refresh_token": "refreshed-refresh",
+            "expires_in": 1800,
+            "scope": "sale:orders",
+        }
+
+    monkeypatch.setattr("magazyn.allegro_api.refresh_token", fake_refresh)
+
+    success_metric = ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="success")
+    success_start = success_metric._value.get()
+
+    refresher = AllegroTokenRefresher(
+        margin_seconds=5,
+        idle_interval_seconds=0.05,
+        error_backoff_initial=0.05,
+        error_backoff_max=0.1,
+    )
+
+    try:
+        refresher.start()
+        assert refresh_called.wait(2.0)
+    finally:
+        refresher.stop()
+
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "refreshed-access"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refreshed-refresh"
+
+    metadata_raw = settings_store.get("ALLEGRO_TOKEN_METADATA")
+    assert metadata_raw is not None
+    metadata = json.loads(metadata_raw)
+    assert metadata["expires_in"] == 1800
+    assert metadata["scope"] == "sale:orders"
+    assert "expires_at" in metadata
+    assert "obtained_at" in metadata
+
+    success_end = success_metric._value.get()
+    assert success_end == success_start + 1
+
+    _set_tokens()
+
+
+def test_token_refresher_retries_after_failure(monkeypatch):
+    _set_tokens("initial-token", "refresh-token")
+    update_allegro_tokens("initial-token", "refresh-token", 1)
+
+    call_times: list[float] = []
+    refresh_complete = threading.Event()
+
+    class DummyResponse:
+        status_code = 500
+
+    def flaky_refresh(token):
+        assert token == "refresh-token"
+        call_times.append(time.monotonic())
+        if len(call_times) == 1:
+            raise HTTPError(response=DummyResponse())
+        refresh_complete.set()
+        return {
+            "access_token": "final-access",
+            "refresh_token": "refresh-token",
+            "expires_in": 900,
+        }
+
+    monkeypatch.setattr("magazyn.allegro_api.refresh_token", flaky_refresh)
+
+    error_metric = ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="error")
+    success_metric = ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="success")
+    retries_metric = ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL
+    error_start = error_metric._value.get()
+    success_start = success_metric._value.get()
+    retries_start = retries_metric._value.get()
+
+    refresher = AllegroTokenRefresher(
+        margin_seconds=5,
+        idle_interval_seconds=0.05,
+        error_backoff_initial=0.2,
+        error_backoff_max=0.2,
+    )
+
+    try:
+        refresher.start()
+        assert refresh_complete.wait(3.0)
+    finally:
+        refresher.stop()
+
+    assert len(call_times) >= 2
+    assert call_times[1] - call_times[0] >= 0.18
+
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "final-access"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
+
+    assert error_metric._value.get() == error_start + 1
+    assert success_metric._value.get() == success_start + 1
+    assert retries_metric._value.get() == retries_start + 1
+
+    _set_tokens()
 
