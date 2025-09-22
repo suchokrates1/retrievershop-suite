@@ -11,10 +11,8 @@ from flask import (
     has_app_context,
 )
 from datetime import datetime
-import secrets
 import os
 import sys
-from urllib.parse import urlencode
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 
@@ -32,6 +30,7 @@ from .db import (
 from .sales import _sales_keys
 from .auth import login_required
 from . import print_agent
+from .allegro import ALLEGRO_AUTHORIZATION_URL
 from .allegro_token_refresher import token_refresher
 from .env_info import ENV_INFO
 from magazyn import DB_PATH
@@ -52,8 +51,6 @@ BOOLEAN_KEYS = {
 
 
 bp = Blueprint("main", __name__)
-
-ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 
 # Backward compatibility placeholder populated in tests and scripts
 app = None
@@ -275,28 +272,6 @@ def settings_page():
         db_path_notice=db_path_notice,
         boolean_keys=BOOLEAN_KEYS,
     )
-
-
-@bp.post("/allegro/authorize")
-@login_required
-def allegro_authorize():
-    client_id = settings_store.get("ALLEGRO_CLIENT_ID")
-    redirect_uri = settings_store.get("ALLEGRO_REDIRECT_URI")
-    if not client_id or not redirect_uri:
-        flash("Uzupełnij konfigurację Allegro, aby rozpocząć autoryzację.")
-        return redirect(url_for("settings_page"))
-
-    state = secrets.token_urlsafe(16)
-    session["allegro_oauth_state"] = state
-
-    params = {
-        "response_type": "code",
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "state": state,
-    }
-    authorization_url = f"{ALLEGRO_AUTHORIZATION_URL}?{urlencode(params)}"
-    return redirect(authorization_url)
 
 
 @bp.route("/logs")
