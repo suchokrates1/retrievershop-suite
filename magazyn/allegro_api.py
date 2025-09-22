@@ -187,12 +187,15 @@ def refresh_token(refresh_token: str) -> dict:
     def _normalize(value: Optional[str]) -> Optional[str]:
         return value or None
 
-    client_id = _normalize(os.getenv("ALLEGRO_CLIENT_ID"))
-    client_secret = _normalize(os.getenv("ALLEGRO_CLIENT_SECRET"))
+    env_client_id = _normalize(os.getenv("ALLEGRO_CLIENT_ID"))
+    env_client_secret = _normalize(os.getenv("ALLEGRO_CLIENT_SECRET"))
 
-    if not client_id or not client_secret:
-        store_client_id: Optional[str] = None
-        store_client_secret: Optional[str] = None
+    credentials: Optional[tuple[str, str]] = None
+    if env_client_id and env_client_secret:
+        credentials = (env_client_id, env_client_secret)
+    else:
+        store_client_id: Optional[str]
+        store_client_secret: Optional[str]
         try:
             store_client_id = _normalize(settings_store.get("ALLEGRO_CLIENT_ID"))
             store_client_secret = _normalize(
@@ -201,12 +204,10 @@ def refresh_token(refresh_token: str) -> dict:
         except SettingsPersistenceError:
             store_client_id = store_client_secret = None
 
-        if not client_id:
-            client_id = store_client_id
-        if not client_secret:
-            client_secret = store_client_secret
+        if store_client_id and store_client_secret:
+            credentials = (store_client_id, store_client_secret)
 
-    if not client_id or not client_secret:
+    if credentials is None:
         raise ValueError(
             "Brak danych uwierzytelniających Allegro. Uzupełnij ALLEGRO_CLIENT_ID i "
             "ALLEGRO_CLIENT_SECRET w ustawieniach lub zmiennych środowiskowych."
@@ -216,7 +217,7 @@ def refresh_token(refresh_token: str) -> dict:
     response = requests.post(
         AUTH_URL,
         data=data,
-        auth=(client_id, client_secret),
+        auth=credentials,
         timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
