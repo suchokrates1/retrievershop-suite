@@ -227,10 +227,16 @@ def test_price_check_requires_allegro_authorization(client, login, allegro_token
 
     json_response = client.get("/allegro/price-check?format=json")
     assert json_response.status_code == 200
-    assert json_response.get_json() == {
-        "price_checks": [],
-        "auth_error": "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację.",
-    }
+    payload = json_response.get_json()
+    assert payload["price_checks"] == []
+    assert (
+        payload["auth_error"]
+        == "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację."
+    )
+    assert isinstance(payload["debug_steps"], list)
+    labels = [step["label"] for step in payload["debug_steps"]]
+    assert "Czy dostępny access token Allegro" in labels
+    assert "Żądany format odpowiedzi" in labels
 
 
 def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_tokens):
@@ -277,7 +283,7 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
     monkeypatch.setattr(settings, "ALLEGRO_SELLER_ID", "our-seller")
     monkeypatch.setattr(settings, "ALLEGRO_EXCLUDED_SELLERS", set())
 
-    def fake_listing(barcode):
+    def fake_listing(barcode, *, debug=None):
         if barcode == "111":
             return [
                 {
@@ -327,6 +333,10 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
 
     payload = json_response.get_json()
     assert payload["auth_error"] is None
+    assert isinstance(payload["debug_steps"], list)
+    assert any(
+        step["label"] == "Sprawdzanie listingu Allegro dla EAN" for step in payload["debug_steps"]
+    )
     assert len(payload["price_checks"]) == 2
 
     by_offer = {item["offer_id"]: item for item in payload["price_checks"]}
@@ -380,7 +390,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
 
     called_barcodes: list[str] = []
 
-    def fake_listing(barcode):
+    def fake_listing(barcode, *, debug=None):
         called_barcodes.append(barcode)
         if barcode == "333":
             return [
@@ -407,6 +417,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
 
     payload = json_response.get_json()
     assert payload["auth_error"] is None
+    assert isinstance(payload["debug_steps"], list)
     assert len(payload["price_checks"]) == 1
 
     item = payload["price_checks"][0]
