@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Allegro OAuth – logi testowe</h1>
+<p class="lead {% if success %}text-success{% else %}text-danger{% endif %}">{{ message }}</p>
+<ul class="list-group mb-4">
+    {% for step in debug_steps %}
+    <li class="list-group-item">
+        <strong>{{ step.label }}:</strong>
+        <pre class="mb-0">{{ step.value }}</pre>
+    </li>
+    {% endfor %}
+</ul>
+<a class="btn btn-secondary" href="{{ url_for('settings_page') }}">Powrót do ustawień</a>
+{% endblock %}
