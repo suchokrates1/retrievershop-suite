@@ -141,3 +141,85 @@ def test_create_app_settings_migration(tmp_path, monkeypatch):
         columns = {row[1] for row in conn.execute("PRAGMA table_info(app_settings)")}
 
     assert {"key", "value", "updated_at"}.issubset(columns)
+
+
+def test_fix_allegro_price_history_migration(tmp_path, monkeypatch):
+    db, db_path = _prepare_db(tmp_path, monkeypatch)
+
+    with sqlite_connect(db_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                filename TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+            CREATE TABLE product_sizes (
+                id INTEGER PRIMARY KEY,
+                product_id INTEGER,
+                size TEXT NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                barcode TEXT UNIQUE
+            );
+            CREATE TABLE product_sizes_old (
+                id INTEGER PRIMARY KEY,
+                product_id INTEGER,
+                size TEXT NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE allegro_price_history (
+                id INTEGER PRIMARY KEY,
+                offer_id TEXT,
+                product_size_id INTEGER REFERENCES product_sizes_old(id),
+                price NUMERIC(10,2) NOT NULL,
+                recorded_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO product_sizes (id, product_id, size, quantity, barcode) VALUES (?, ?, ?, ?, ?)",
+            (1, 1, "M", 5, None),
+        )
+        conn.execute(
+            "INSERT INTO product_sizes_old (id, product_id, size, quantity) VALUES (?, ?, ?, ?)",
+            (1, 1, "M", 5),
+        )
+        conn.execute(
+            "INSERT INTO allegro_price_history (offer_id, product_size_id, price, recorded_at) VALUES (?, ?, ?, ?)",
+            ("offer-1", 1, 100.0, "2024-01-01T00:00:00"),
+        )
+        conn.commit()
+
+    migration = importlib.import_module(
+        "magazyn.migrations.fix_allegro_price_history_foreign_key"
+    )
+    migration = importlib.reload(migration)
+    migration.migrate()
+
+    from pathlib import Path
+
+    with sqlite_connect(db_path) as conn:
+        fk_info = {
+            row[3]: row[2]
+            for row in conn.execute("PRAGMA foreign_key_list('allegro_price_history')")
+        }
+        assert fk_info.get("product_size_id") == "product_sizes"
+
+        row = conn.execute(
+            "SELECT offer_id, product_size_id, price FROM allegro_price_history"
+        ).fetchone()
+        assert row == ("offer-1", 1, 100.0)
+
+        tables = {
+            result[0]
+            for result in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "product_sizes_old" not in tables
+
+        migration_name = Path(migration.__file__).name
+        cur = conn.execute(
+            "SELECT filename FROM schema_migrations WHERE filename=?",
+            (migration_name,),
+        )
+        assert cur.fetchone() is not None
