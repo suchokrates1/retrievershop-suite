@@ -154,7 +154,7 @@ def _record_migration(filename):
     with sqlite_connect(DB_PATH) as conn:
         _ensure_schema_migrations_table(conn)
         conn.execute(
-            "INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
             (filename, datetime.datetime.now(timezone.utc).isoformat()),
         )
         conn.commit()
