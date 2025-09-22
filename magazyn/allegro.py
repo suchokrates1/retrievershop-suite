@@ -35,6 +35,141 @@ ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 bp = Blueprint("allegro", __name__)
 
 
+def _format_debug_value(value: object) -> str:
+    if value is None:
+        return "None"
+    if isinstance(value, (dict, list, tuple)):
+        try:
+            return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+        except TypeError:
+            return str(value)
+    return str(value)
+
+
+def _record_debug_step(steps: list[dict[str, str]], label: str, value: object) -> None:
+    steps.append({"label": label, "value": _format_debug_value(value)})
+
+
+def _process_oauth_response() -> dict[str, object]:
+    debug_steps: list[dict[str, str]] = []
+
+    expected_state = session.pop("allegro_oauth_state", None)
+    _record_debug_step(debug_steps, "Oczekiwany state z sesji", expected_state)
+
+    state = request.args.get("state")
+    _record_debug_step(debug_steps, "State otrzymany z odpowiedzi", state)
+    if not state or not expected_state or state != expected_state:
+        current_app.logger.warning(
+            "Allegro OAuth callback with invalid state",
+            extra={"expected": expected_state, "received": state},
+        )
+        message = "Nieprawidłowy parametr state w odpowiedzi Allegro."
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
+    code = request.args.get("code")
+    _record_debug_step(debug_steps, "Kod autoryzacyjny Allegro", code)
+    if not code:
+        current_app.logger.warning("Allegro OAuth callback without authorization code")
+        message = "Brak kodu autoryzacyjnego w odpowiedzi Allegro."
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
+    client_id = settings_store.get("ALLEGRO_CLIENT_ID")
+    client_secret = settings_store.get("ALLEGRO_CLIENT_SECRET")
+    redirect_uri = settings_store.get("ALLEGRO_REDIRECT_URI")
+    _record_debug_step(debug_steps, "ALLEGRO_CLIENT_ID", client_id)
+    _record_debug_step(debug_steps, "ALLEGRO_CLIENT_SECRET", client_secret)
+    _record_debug_step(debug_steps, "ALLEGRO_REDIRECT_URI", redirect_uri)
+    if not client_id or not client_secret or not redirect_uri:
+        current_app.logger.error(
+            "Allegro OAuth callback missing configuration",
+            extra={
+                "has_client_id": bool(client_id),
+                "has_client_secret": bool(client_secret),
+                "has_redirect_uri": bool(redirect_uri),
+            },
+        )
+        message = "Niekompletna konfiguracja Allegro."
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
+    try:
+        token_payload = allegro_api.get_access_token(
+            client_id,
+            client_secret,
+            code,
+            redirect_uri=redirect_uri,
+        )
+        _record_debug_step(debug_steps, "Odpowiedź Allegro z tokenami", token_payload)
+    except HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        error_payload = {
+            "status_code": status_code,
+            "details": str(exc),
+        }
+        _record_debug_step(debug_steps, "Błąd HTTP podczas pobierania tokenu", error_payload)
+        if status_code:
+            current_app.logger.exception(
+                "Allegro access token request failed",
+                extra={"status_code": status_code},
+            )
+            message = f"Nie udało się uzyskać tokenów Allegro: HTTP status {status_code}."
+        else:
+            current_app.logger.exception(
+                "Allegro access token request failed with HTTP error"
+            )
+            message = "Nie udało się uzyskać tokenów Allegro: błąd HTTP."
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+    except RequestException as exc:
+        _record_debug_step(
+            debug_steps,
+            "Wyjątek podczas wywołania Allegro",
+            {"exception": str(exc)},
+        )
+        current_app.logger.exception("Allegro access token request raised exception")
+        message = f"Nie udało się uzyskać tokenów Allegro: {exc}"
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
+    access_token = token_payload.get("access_token")
+    refresh_token = token_payload.get("refresh_token")
+    expires_in_raw = token_payload.get("expires_in")
+    _record_debug_step(debug_steps, "Access token", access_token)
+    _record_debug_step(debug_steps, "Refresh token", refresh_token)
+    _record_debug_step(debug_steps, "Wartość expires_in z odpowiedzi", expires_in_raw)
+    if not access_token or not refresh_token:
+        message = "Nieprawidłowa odpowiedź Allegro: brak tokenów."
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
+    expires_in: Optional[int]
+    try:
+        expires_in = int(expires_in_raw) if expires_in_raw is not None else None
+    except (TypeError, ValueError):
+        expires_in = None
+    _record_debug_step(debug_steps, "Przetworzony expires_in", expires_in)
+
+    metadata: dict[str, object] = {}
+    if token_payload.get("scope"):
+        metadata["scope"] = token_payload["scope"]
+    if token_payload.get("token_type"):
+        metadata["token_type"] = token_payload["token_type"]
+    if expires_in is not None:
+        metadata["expires_in"] = expires_in
+    _record_debug_step(debug_steps, "Metadane tokenu", metadata)
+
+    try:
+        update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
+        _record_debug_step(debug_steps, "Wynik zapisu tokenów", "Sukces")
+    except SettingsPersistenceError:
+        _record_debug_step(debug_steps, "Błąd zapisu tokenów", "SettingsPersistenceError")
+        current_app.logger.exception(
+            "Failed to persist Allegro OAuth tokens", exc_info=True
+        )
+        message = "Nie udało się zapisać tokenów Allegro. Spróbuj ponownie."
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
+    current_app.logger.info("Successfully obtained Allegro OAuth tokens")
+    message = "Autoryzacja Allegro zakończona sukcesem."
+    return {"ok": True, "message": message, "debug_steps": debug_steps}
+
+
 @bp.post("/allegro/authorize")
 @login_required
 def authorize():
@@ -61,107 +196,25 @@ def authorize():
     return redirect(authorization_url)
 
 
-def _process_allegro_oauth_callback() -> object:
-    expected_state = session.pop("allegro_oauth_state", None)
-    state = request.args.get("state")
-    if not state or not expected_state or state != expected_state:
-        current_app.logger.warning(
-            "Allegro OAuth callback with invalid state",
-            extra={"expected": expected_state, "received": state},
-        )
-        flash("Nieprawidłowy parametr state w odpowiedzi Allegro.")
-        return redirect(url_for("settings_page"))
-
-    code = request.args.get("code")
-    if not code:
-        current_app.logger.warning("Allegro OAuth callback without authorization code")
-        flash("Brak kodu autoryzacyjnego w odpowiedzi Allegro.")
-        return redirect(url_for("settings_page"))
-
-    client_id = settings_store.get("ALLEGRO_CLIENT_ID")
-    client_secret = settings_store.get("ALLEGRO_CLIENT_SECRET")
-    redirect_uri = settings_store.get("ALLEGRO_REDIRECT_URI")
-    if not client_id or not client_secret or not redirect_uri:
-        current_app.logger.error(
-            "Allegro OAuth callback missing configuration",
-            extra={
-                "has_client_id": bool(client_id),
-                "has_client_secret": bool(client_secret),
-                "has_redirect_uri": bool(redirect_uri),
-            },
-        )
-        flash("Niekompletna konfiguracja Allegro.")
-        return redirect(url_for("settings_page"))
-
-    try:
-        token_payload = allegro_api.get_access_token(
-            client_id,
-            client_secret,
-            code,
-            redirect_uri=redirect_uri,
-        )
-    except HTTPError as exc:
-        status_code = getattr(getattr(exc, "response", None), "status_code", None)
-        if status_code:
-            current_app.logger.exception(
-                "Allegro access token request failed",
-                extra={"status_code": status_code},
-            )
-            flash(f"Nie udało się uzyskać tokenów Allegro: HTTP status {status_code}.")
-        else:
-            current_app.logger.exception(
-                "Allegro access token request failed with HTTP error"
-            )
-            flash("Nie udało się uzyskać tokenów Allegro: błąd HTTP.")
-        return redirect(url_for("settings_page"))
-    except RequestException as exc:
-        current_app.logger.exception("Allegro access token request raised exception")
-        flash(f"Nie udało się uzyskać tokenów Allegro: {exc}")
-        return redirect(url_for("settings_page"))
-
-    access_token = token_payload.get("access_token")
-    refresh_token = token_payload.get("refresh_token")
-    expires_in_raw = token_payload.get("expires_in")
-    if not access_token or not refresh_token:
-        flash("Nieprawidłowa odpowiedź Allegro: brak tokenów.")
-        return redirect(url_for("settings_page"))
-
-    expires_in: Optional[int]
-    try:
-        expires_in = int(expires_in_raw) if expires_in_raw is not None else None
-    except (TypeError, ValueError):
-        expires_in = None
-
-    metadata: dict[str, object] = {}
-    if token_payload.get("scope"):
-        metadata["scope"] = token_payload["scope"]
-    if token_payload.get("token_type"):
-        metadata["token_type"] = token_payload["token_type"]
-
-    try:
-        update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
-    except SettingsPersistenceError:
-        current_app.logger.exception(
-            "Failed to persist Allegro OAuth tokens", exc_info=True
-        )
-        flash("Nie udało się zapisać tokenów Allegro. Spróbuj ponownie.")
-        return redirect(url_for("settings_page"))
-
-    current_app.logger.info("Successfully obtained Allegro OAuth tokens")
-    flash("Autoryzacja Allegro zakończona sukcesem.")
-    return redirect(url_for("settings_page"))
-
-
 @bp.get("/allegro/oauth/callback")
 @login_required
 def allegro_oauth_callback():
-    return _process_allegro_oauth_callback()
+    result = _process_oauth_response()
+    if message := result.get("message"):
+        flash(message)
+    return redirect(url_for("settings_page"))
 
 
 @bp.get("/allegro")
 @login_required
-def allegro_oauth_entrypoint():
-    return _process_allegro_oauth_callback()
+def allegro_oauth_debug():
+    result = _process_oauth_response()
+    return render_template(
+        "allegro/oauth_debug.html",
+        success=result.get("ok", False),
+        message=result.get("message"),
+        debug_steps=result.get("debug_steps", []),
+    )
 
 
 @bp.route("/allegro/offers")
