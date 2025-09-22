@@ -1,6 +1,8 @@
 from decimal import Decimal
 import re
 
+import json
+
 import pytest
 import requests
 
@@ -590,3 +592,59 @@ def test_fetch_product_listing_clears_tokens_when_refresh_fails(
     assert clear_calls == [True]
     assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
+
+
+def test_fetch_product_listing_debug_logs_include_allegro_error_code(
+    monkeypatch, allegro_tokens
+):
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+            self.headers = {}
+            self.text = json.dumps(payload)
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(response=self)
+
+        def json(self):
+            return self._payload
+
+    allegro_tokens("expired-token", None)
+
+    responses = [
+        FakeResponse(
+            403,
+            {
+                "errors": [
+                    {
+                        "code": "ACCESS_DENIED",
+                        "message": "Forbidden",
+                        "details": "insufficient_scope",
+                    }
+                ]
+            },
+        )
+    ]
+
+    def fake_get(url, headers, params, timeout):
+        return responses.pop(0)
+
+    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
+
+    debug_calls: list[tuple[str, object]] = []
+
+    def debug(label, value):
+        debug_calls.append((label, value))
+
+    with pytest.raises(RuntimeError, match="please re-authorize"):
+        fetch_product_listing("1234567890123", debug=debug)
+
+    debug_map = {label: value for label, value in debug_calls}
+    error_payload = debug_map.get("Listing Allegro: otrzymano błąd HTTP")
+    assert error_payload is not None
+    assert error_payload["status_code"] == 403
+    assert error_payload["error_code"] == "ACCESS_DENIED"
+    assert error_payload["error_message"] == "Forbidden"
+    assert error_payload["error_details"] == "insufficient_scope"
