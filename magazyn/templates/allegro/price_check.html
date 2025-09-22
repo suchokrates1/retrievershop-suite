@@ -12,6 +12,16 @@
     <span>Pobieramy aktualne ceny konkurencji…</span>
 </div>
 <div id="price-check-error" class="d-none"></div>
+<div id="price-check-debug-container" class="mb-4{% if not debug_steps %} d-none{% endif %}">
+    <h2 class="h4 mb-3">Szczegóły diagnostyczne</h2>
+    <dl id="price-check-debug-list" class="mb-0">
+        {% for step in debug_steps %}
+        <dt class="fw-semibold">{{ step.label }}</dt>
+        <dd class="mb-2 text-break"><pre class="mb-0">{{ step.value }}</pre></dd>
+        {% else %}
+        {% endfor %}
+    </dl>
+</div>
 <div id="price-check-table-container" class="table-responsive d-none">
     <table class="table table-striped align-middle" aria-live="polite">
         <thead class="table-dark">

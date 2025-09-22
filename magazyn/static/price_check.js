@@ -25,6 +25,40 @@
         return link;
     }
 
+    function renderDebugSteps(steps) {
+        const debugContainer = document.getElementById('price-check-debug-container');
+        const debugList = document.getElementById('price-check-debug-list');
+
+        if (!debugContainer || !debugList) {
+            return;
+        }
+
+        const items = Array.isArray(steps) ? steps : [];
+        debugList.innerHTML = '';
+
+        if (!items.length) {
+            debugContainer.classList.add('d-none');
+            return;
+        }
+
+        debugContainer.classList.remove('d-none');
+
+        items.forEach((step) => {
+            const label = document.createElement('dt');
+            label.className = 'fw-semibold';
+            label.textContent = step && step.label ? step.label : '';
+            debugList.appendChild(label);
+
+            const valueWrapper = document.createElement('dd');
+            valueWrapper.className = 'mb-2 text-break';
+            const pre = document.createElement('pre');
+            pre.className = 'mb-0';
+            pre.textContent = step && step.value ? step.value : '';
+            valueWrapper.appendChild(pre);
+            debugList.appendChild(valueWrapper);
+        });
+    }
+
     function renderPriceChecks(data) {
         const loading = document.getElementById('price-check-loading');
         const tableContainer = document.getElementById('price-check-table-container');
@@ -36,6 +70,7 @@
         }
 
         loading.classList.add('d-none');
+        renderDebugSteps(data.debug_steps);
 
         if (data.auth_error) {
             errorContainer.className = 'alert alert-warning';

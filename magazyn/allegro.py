@@ -339,7 +339,13 @@ def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
     return f"{value:.2f}"
 
 
-def build_price_checks() -> list[dict]:
+def build_price_checks(
+    debug_steps: Optional[list[dict[str, str]]] = None,
+) -> list[dict]:
+    def record_debug(label: str, value: object) -> None:
+        if debug_steps is not None:
+            _record_debug_step(debug_steps, label, value)
+
     with get_session() as db:
         rows = (
             db.query(AllegroOffer, ProductSize, Product)
@@ -396,6 +402,8 @@ def build_price_checks() -> list[dict]:
                 }
             )
 
+    record_debug("Liczba powiązanych ofert", len(offers))
+
     price_checks: list[dict] = []
     for offer in offers:
         competitor_min_price: Optional[Decimal] = None
@@ -409,11 +417,27 @@ def build_price_checks() -> list[dict]:
 
         if unique_barcodes:
             for barcode in unique_barcodes:
+                record_debug(
+                    "Sprawdzanie listingu Allegro dla EAN",
+                    {"offer_id": offer["offer_id"], "ean": barcode},
+                )
                 try:
-                    listing = fetch_product_listing(barcode)
+                    listing = fetch_product_listing(barcode, debug=record_debug)
                 except Exception as exc:  # pragma: no cover - network errors
                     error = str(exc)
+                    record_debug(
+                        "Błąd pobierania listingu Allegro",
+                        {"offer_id": offer["offer_id"], "ean": barcode, "error": str(exc)},
+                    )
                     continue
+                record_debug(
+                    "Listing Allegro – liczba ofert",
+                    {
+                        "offer_id": offer["offer_id"],
+                        "ean": barcode,
+                        "offers": len(listing),
+                    },
+                )
                 for item in listing:
                     offer_id = item.get("id")
                     seller = item.get("seller") or {}
@@ -447,6 +471,10 @@ def build_price_checks() -> list[dict]:
                 error = None
         else:
             error = "Brak kodu EAN"
+            record_debug(
+                "Brak EAN dla oferty",
+                {"offer_id": offer["offer_id"], "title": offer["title"]},
+            )
 
         competitor_min = competitor_min_price
         is_lowest = None
@@ -481,8 +509,20 @@ def build_price_checks() -> list[dict]:
 @bp.route("/allegro/price-check")
 @login_required
 def price_check():
+    debug_steps: list[dict[str, str]] = []
     access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
+
+    _record_debug_step(
+        debug_steps,
+        "Czy dostępny access token Allegro",
+        bool(access_token),
+    )
+    _record_debug_step(
+        debug_steps,
+        "Czy dostępny refresh token Allegro",
+        bool(refresh_token),
+    )
 
     auth_error = None
     if not access_token or not refresh_token:
@@ -496,13 +536,35 @@ def price_check():
         or request.accept_mimetypes.best == "application/json"
     )
 
+    _record_debug_step(
+        debug_steps,
+        "Żądany format odpowiedzi",
+        "json" if wants_json else "html",
+    )
+
     if wants_json:
         if auth_error:
-            return jsonify({"price_checks": [], "auth_error": auth_error})
-        price_checks = build_price_checks()
-        return jsonify({"price_checks": price_checks, "auth_error": None})
+            return jsonify(
+                {
+                    "price_checks": [],
+                    "auth_error": auth_error,
+                    "debug_steps": debug_steps,
+                }
+            )
+        price_checks = build_price_checks(debug_steps)
+        return jsonify(
+            {
+                "price_checks": price_checks,
+                "auth_error": None,
+                "debug_steps": debug_steps,
+            }
+        )
 
-    return render_template("allegro/price_check.html", auth_error=auth_error)
+    return render_template(
+        "allegro/price_check.html",
+        auth_error=auth_error,
+        debug_steps=debug_steps,
+    )
 
 
 @bp.route("/allegro/refresh", methods=["POST"])

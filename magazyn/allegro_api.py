@@ -2,7 +2,7 @@ import os
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 from requests import Response
@@ -253,7 +253,20 @@ def fetch_offers(access_token: str, offset: int = 0, limit: int = 100) -> dict:
     return response.json()
 
 
-def fetch_product_listing(ean: str, page: int = 1) -> list:
+def _describe_token(token: Optional[str]) -> str:
+    if not token:
+        return "brak"
+    if len(token) <= 8:
+        return token
+    return f"{token[:4]}…{token[-4:]}"
+
+
+def fetch_product_listing(
+    ean: str,
+    page: int = 1,
+    *,
+    debug: Optional[Callable[[str, object], None]] = None,
+) -> list:
     """Return offers for a product identified by its EAN.
 
     Parameters
@@ -270,9 +283,29 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
         ``sellingMode.price.amount`` for an offer.
     """
 
+    def record(label: str, value: object) -> None:
+        if debug is None:
+            return
+        try:
+            debug(label, value)
+        except Exception:  # pragma: no cover - defensive
+            pass
+
     token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
+    record(
+        "Listing Allegro: używany access token",
+        _describe_token(token),
+    )
+    record(
+        "Listing Allegro: używany refresh token",
+        _describe_token(refresh),
+    )
     if not token:
+        record(
+            "Listing Allegro: błąd przed pobraniem",
+            "Missing Allegro access token",
+        )
         raise RuntimeError("Missing Allegro access token")
 
     params = {"page": page}
@@ -296,26 +329,47 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
             "please re-authorize the Allegro integration"
         )
 
+        record(
+            "Listing Allegro: otrzymano błąd HTTP",
+            {"status_code": status_code},
+        )
+
         latest_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
         latest_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
         if latest_token and latest_token != token:
             token = latest_token
             refresh = latest_refresh
+            record(
+                "Listing Allegro: znaleziono zaktualizowany access token",
+                _describe_token(token),
+            )
             return True
         if latest_refresh and latest_refresh != refresh:
             refresh = latest_refresh
 
         if refresh and not refreshed:
             refreshed = True
+            record(
+                "Listing Allegro: odświeżanie tokenu",
+                _describe_token(refresh),
+            )
             try:
                 token_data = refresh_token(refresh)
             except Exception as refresh_exc:  # pragma: no cover - defensive
                 clear_allegro_tokens()
+                record(
+                    "Listing Allegro: odświeżanie nieudane",
+                    str(refresh_exc),
+                )
                 raise RuntimeError(friendly_message) from refresh_exc
 
             new_token = token_data.get("access_token")
             if not new_token:
                 clear_allegro_tokens()
+                record(
+                    "Listing Allegro: brak tokenu po odświeżeniu",
+                    token_data,
+                )
                 raise RuntimeError(friendly_message)
 
             token = new_token
@@ -330,7 +384,18 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
                     "Cannot refresh Allegro access token because the settings store is "
                     "read-only; please update the credentials manually"
                 )
+                record(
+                    "Listing Allegro: zapis tokenów nieudany",
+                    str(exc),
+                )
                 raise RuntimeError(friendly_message) from exc
+            record(
+                "Listing Allegro: odświeżanie zakończone",
+                {
+                    "access_token": _describe_token(token),
+                    "refresh_token": _describe_token(refresh),
+                },
+            )
             return True
 
         raise RuntimeError(friendly_message) from exc
@@ -341,6 +406,10 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
             "Accept": "application/vnd.allegro.public.v1+json",
         }
         try:
+            record(
+                "Listing Allegro: pobieranie strony",
+                {"page": page},
+            )
             response = _request_with_retry(
                 requests.get,
                 url,
@@ -359,6 +428,14 @@ def fetch_product_listing(ean: str, page: int = 1) -> list:
                 continue
             raise
         data = response.json()
+        record(
+            "Listing Allegro: odpowiedź strony",
+            {
+                "page": page,
+                "items": len(data.get("items", {}) or {}),
+                "links": list((data.get("links") or {}).keys()),
+            },
+        )
 
         items = data.get("items", {})
         page_offers = []
