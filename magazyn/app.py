@@ -32,6 +32,7 @@ from .db import (
 from .sales import _sales_keys
 from .auth import login_required
 from . import print_agent
+from .allegro_token_refresher import token_refresher
 from .env_info import ENV_INFO
 from magazyn import DB_PATH
 from .settings_store import SettingsPersistenceError, settings_store
@@ -128,18 +129,31 @@ def start_print_agent(app_obj=None):
     _print_agent_started = True
     app_ctx = app_obj or current_app
     agent = print_agent.agent
+    started = False
+    failed = False
     try:
         agent.validate_env()
         agent.ensure_db_init()
         started = agent.start_agent_thread()
-        if not started:
-            app_ctx.logger.info("Print agent already running")
-            _print_agent_started = False
-            return
     except print_agent.ConfigError as e:
         app_ctx.logger.error(f"Failed to start print agent: {e}")
+        failed = True
     except Exception as e:
         app_ctx.logger.error(f"Failed to start print agent: {e}")
+        failed = True
+    finally:
+        try:
+            token_refresher.start()
+        except Exception as exc:  # pragma: no cover - defensive
+            app_ctx.logger.error(
+                "Failed to start Allegro token refresher: %s", exc
+            )
+    if failed:
+        _print_agent_started = False
+        return
+    if not started:
+        app_ctx.logger.info("Print agent already running")
+        _print_agent_started = False
 
 
 def ensure_db_initialized(app_obj=None):

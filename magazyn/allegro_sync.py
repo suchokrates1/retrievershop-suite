@@ -88,8 +88,9 @@ def sync_offers():
             new_refresh = token_data.get("refresh_token")
             if new_refresh:
                 refresh = new_refresh
+            expires_in = _parse_int(token_data.get("expires_in")) if token_data else None
             if token:
-                update_allegro_tokens(token, refresh)
+                update_allegro_tokens(token, refresh, expires_in)
         except SettingsPersistenceError as exc:
             _raise_settings_store_read_only(exc)
         except Exception as exc:
@@ -149,8 +150,9 @@ def sync_offers():
                         new_refresh = token_data.get("refresh_token")
                         if new_refresh:
                             refresh = new_refresh
+                        expires_in = _parse_int(token_data.get("expires_in")) if token_data else None
                         try:
-                            update_allegro_tokens(token, refresh)
+                            update_allegro_tokens(token, refresh, expires_in)
                         except SettingsPersistenceError as persistence_exc:
                             _raise_settings_store_read_only(persistence_exc)
                         continue

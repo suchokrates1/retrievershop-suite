@@ -53,6 +53,19 @@ ALLEGRO_SYNC_ERRORS_TOTAL = Counter(
     "Total number of unrecoverable Allegro synchronisation errors.",
     ["reason"],
 )
+ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL = Counter(
+    "magazyn_allegro_token_refresh_attempts_total",
+    "Total number of automatic Allegro token refresh attempts grouped by result.",
+    ["result"],
+)
+ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL = Counter(
+    "magazyn_allegro_token_refresh_retries_total",
+    "Total number of retry attempts performed after refresh failures.",
+)
+ALLEGRO_TOKEN_REFRESH_LAST_SUCCESS = Gauge(
+    "magazyn_allegro_token_refresh_last_success_timestamp",
+    "Unix timestamp of the last successful automatic Allegro token refresh.",
+)
 
 PRINT_QUEUE_SIZE.set(0)
 PRINT_QUEUE_OLDEST_AGE_SECONDS.set(0)
@@ -71,4 +84,9 @@ ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="http").inc(0)
 ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc(0)
 ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="unexpected").inc(0)
 ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="settings_store").inc(0)
+ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="success").inc(0)
+ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="error").inc(0)
+ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="skipped").inc(0)
+ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL.inc(0)
+ALLEGRO_TOKEN_REFRESH_LAST_SUCCESS.set(0)
 
