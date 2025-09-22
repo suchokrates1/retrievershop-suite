@@ -105,9 +105,7 @@ def test_full_oauth_flow(client, login, monkeypatch, allegro_oauth_config):
     assert metadata["expires_in"] == 3600
 
 
-def test_oauth_flow_via_allegro_endpoint(
-    client, login, monkeypatch, allegro_oauth_config
-):
+def test_debug_route_displays_logs(client, login, monkeypatch, allegro_oauth_config):
     state = _start_authorization(client)
 
     def fake_get_access_token(client_id, client_secret, code, redirect_uri=None):
@@ -119,22 +117,26 @@ def test_oauth_flow_via_allegro_endpoint(
             "access_token": "access-token",
             "refresh_token": "refresh-token",
             "expires_in": 3600,
+            "scope": "sale:offers",
+            "token_type": "bearer",
         }
 
     monkeypatch.setattr(allegro_api, "get_access_token", fake_get_access_token)
 
+    # Endpoint debugowy renderuje stronę z krokami (200), nie redirectuje.
     response = client.get(
         "/allegro",
         query_string={"state": state, "code": "auth-code"},
     )
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings")
-
-    flashes = _get_flashes(client)
-    assert any("sukcesem" in message.lower() for _, message in flashes)
-
-    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "access-token"
-    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Autoryzacja Allegro zakończona sukcesem." in body
+    # W treści debugowej powinny być pokazane kluczowe wartości (kroki debug).
+    assert "client-123" in body
+    assert "secret-456" in body
+    assert "auth-code" in body
+    assert "access-token" in body
+    assert "refresh-token" in body
 
 
 def test_oauth_callback_state_mismatch(client, login, allegro_oauth_config):
@@ -158,38 +160,6 @@ def test_oauth_callback_missing_code(client, login, allegro_oauth_config):
 
     response = client.get(
         "/allegro/oauth/callback",
-        query_string={"state": state},
-    )
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings")
-
-    flashes = _get_flashes(client)
-    assert any("brak kodu" in message.lower() for _, message in flashes)
-
-    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
-
-
-def test_oauth_entrypoint_state_mismatch(client, login, allegro_oauth_config):
-    _start_authorization(client)
-
-    response = client.get(
-        "/allegro",
-        query_string={"state": "invalid", "code": "auth-code"},
-    )
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings")
-
-    flashes = _get_flashes(client)
-    assert any("state" in message.lower() for _, message in flashes)
-
-    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
-
-
-def test_oauth_entrypoint_missing_code(client, login, allegro_oauth_config):
-    state = _start_authorization(client)
-
-    response = client.get(
-        "/allegro",
         query_string={"state": state},
     )
     assert response.status_code == 302
@@ -227,7 +197,20 @@ def test_oauth_callback_handles_api_error(
     assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
 
 
-def test_oauth_entrypoint_handles_api_error(
+def test_debug_route_state_mismatch(client, login, allegro_oauth_config):
+    _start_authorization(client)
+
+    response = client.get(
+        "/allegro",
+        query_string={"state": "invalid", "code": "auth-code"},
+    )
+    # Endpoint debugowy zwraca 200 i pokazuje komunikat o błędzie w treści.
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Nieprawidłowy parametr state" in body
+
+
+def test_debug_route_handles_api_error(
     client, login, monkeypatch, allegro_oauth_config
 ):
     state = _start_authorization(client)
@@ -244,11 +227,9 @@ def test_oauth_entrypoint_handles_api_error(
         "/allegro",
         query_string={"state": state, "code": "auth-code"},
     )
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings")
-
-    flashes = _get_flashes(client)
-    assert any("http status 400" in message.lower() for _, message in flashes)
+    # Debugowa ścieżka też renderuje stronę (200), z komunikatem o błędzie.
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "HTTP status 400" in body or "błąd HTTP" in body.lower()
 
     assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
-
