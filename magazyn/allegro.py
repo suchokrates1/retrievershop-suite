@@ -91,13 +91,6 @@ def _process_oauth_response() -> dict[str, object]:
         message = "Niekompletna konfiguracja Allegro."
         return {"ok": False, "message": message, "debug_steps": debug_steps}
 
-    token_request_payload = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": redirect_uri,
-    }
-    _record_debug_step(debug_steps, "Payload zapytania o token", token_request_payload)
-
     try:
         token_payload = allegro_api.get_access_token(
             client_id,

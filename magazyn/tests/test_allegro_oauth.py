@@ -109,6 +109,10 @@ def test_debug_route_displays_logs(client, login, monkeypatch, allegro_oauth_con
     state = _start_authorization(client)
 
     def fake_get_access_token(client_id, client_secret, code, redirect_uri=None):
+        assert client_id == "client-123"
+        assert client_secret == "secret-456"
+        assert code == "auth-code"
+        assert redirect_uri == "https://example.com/callback"
         return {
             "access_token": "access-token",
             "refresh_token": "refresh-token",
@@ -119,6 +123,7 @@ def test_debug_route_displays_logs(client, login, monkeypatch, allegro_oauth_con
 
     monkeypatch.setattr(allegro_api, "get_access_token", fake_get_access_token)
 
+    # Endpoint debugowy renderuje stronę z krokami (200), nie redirectuje.
     response = client.get(
         "/allegro",
         query_string={"state": state, "code": "auth-code"},
@@ -126,6 +131,7 @@ def test_debug_route_displays_logs(client, login, monkeypatch, allegro_oauth_con
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Autoryzacja Allegro zakończona sukcesem." in body
+    # W treści debugowej powinny być pokazane kluczowe wartości (kroki debug).
     assert "client-123" in body
     assert "secret-456" in body
     assert "auth-code" in body
@@ -198,7 +204,32 @@ def test_debug_route_state_mismatch(client, login, allegro_oauth_config):
         "/allegro",
         query_string={"state": "invalid", "code": "auth-code"},
     )
+    # Endpoint debugowy zwraca 200 i pokazuje komunikat o błędzie w treści.
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Nieprawidłowy parametr state" in body
 
+
+def test_debug_route_handles_api_error(
+    client, login, monkeypatch, allegro_oauth_config
+):
+    state = _start_authorization(client)
+
+    class DummyResponse:
+        status_code = 400
+
+    def failing_get_access_token(*_, **__):
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(allegro_api, "get_access_token", failing_get_access_token)
+
+    response = client.get(
+        "/allegro",
+        query_string={"state": state, "code": "auth-code"},
+    )
+    # Debugowa ścieżka też renderuje stronę (200), z komunikatem o błędzie.
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "HTTP status 400" in body or "błąd HTTP" in body.lower()
+
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
