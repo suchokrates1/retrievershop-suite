@@ -1262,3 +1262,119 @@ def test_refresh_token_uses_settings_store_when_env_missing(monkeypatch):
 
     assert result == {"access_token": "new-token", "refresh_token": "new-refresh"}
 
+
+def test_price_check_refreshes_tokens_with_settings_store_credentials(
+    client, login, monkeypatch, allegro_tokens
+):
+    allegro_tokens("expired-token", "refresh-token")
+
+    with get_session() as session:
+        product = Product(name="Szelki", color="Zielone")
+        session.add(product)
+        session.flush()
+        size = ProductSize(product_id=product.id, size="M", barcode="789")
+        session.add(size)
+        session.flush()
+        session.add(
+            AllegroOffer(
+                offer_id="offer-123",
+                title="Oferta testowa",
+                price=Decimal("100.00"),
+                product_size_id=size.id,
+            )
+        )
+
+    for env_key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
+        monkeypatch.delenv(env_key, raising=False)
+
+    original_values = {}
+    for key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
+        try:
+            original_values[key] = settings_store.get(key)
+        except SettingsPersistenceError:
+            original_values[key] = None
+
+    settings_store.update(
+        {
+            "ALLEGRO_CLIENT_ID": "settings-client-id",
+            "ALLEGRO_CLIENT_SECRET": "settings-client-secret",
+        }
+    )
+
+    class DummyGetResponse:
+        def __init__(self, status_code, data=None):
+            self.status_code = status_code
+            self._data = data or {}
+            self.headers = {}
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise HTTPError(response=self)
+
+        def json(self):
+            return self._data
+
+    get_calls = {"count": 0}
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        get_calls["count"] += 1
+        if get_calls["count"] == 1:
+            assert headers["Authorization"] == "Bearer expired-token"
+            return DummyGetResponse(401)
+
+        assert headers["Authorization"] == "Bearer new-access"
+        data = {
+            "items": {
+                "regular": [
+                    {
+                        "id": "competitor-offer",
+                        "seller": {"id": "competitor"},
+                        "sellingMode": {"price": {"amount": "50.00"}},
+                    }
+                ]
+            },
+            "links": {},
+        }
+        return DummyGetResponse(200, data)
+
+    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
+
+    def fake_post(url, data, auth=None, timeout=None):
+        assert url == AUTH_URL
+        assert auth == ("settings-client-id", "settings-client-secret")
+        assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}
+
+        class DummyPostResponse:
+            headers = {}
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "access_token": "new-access",
+                    "refresh_token": "new-refresh",
+                    "expires_in": 3600,
+                }
+
+        return DummyPostResponse()
+
+    monkeypatch.setattr("magazyn.allegro_api.requests.post", fake_post)
+
+    try:
+        response = client.get("/allegro/price-check?format=json")
+    finally:
+        cleanup = {}
+        for key, value in original_values.items():
+            cleanup[key] = value if value is not None else None
+        settings_store.update(cleanup)
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["auth_error"] is None
+    assert payload["price_checks"]
+    item = payload["price_checks"][0]
+    assert item["competitor_price"] == "50.00"
+    assert get_calls["count"] == 2
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
