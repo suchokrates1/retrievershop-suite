@@ -1,5 +1,6 @@
 import importlib
 import re
+from urllib.parse import parse_qs, urlparse
 
 import magazyn.config as cfg
 from magazyn.settings_store import settings_store
@@ -163,3 +164,36 @@ def test_missing_example_file(app_mod, client, login, tmp_path, monkeypatch):
         flashes = get_flashed_messages()
         assert any("plik .env.example" in msg.lower() for msg in flashes)
         assert values  # fallback still provides stored values
+
+
+def test_settings_page_shows_allegro_authorize_button(app_mod, client, login):
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Połącz z Allegro" in html
+    assert "action=\"/allegro/authorize\"" in html
+
+
+def test_allegro_authorize_redirects_to_provider(app_mod, client, login):
+    settings_store.update(
+        {
+            "ALLEGRO_CLIENT_ID": "client-123",
+            "ALLEGRO_REDIRECT_URI": "https://example.com/callback",
+        }
+    )
+
+    resp = client.post("/allegro/authorize")
+    assert resp.status_code == 302
+    location = resp.headers["Location"]
+    assert location.startswith(app_mod.ALLEGRO_AUTHORIZATION_URL)
+
+    parsed = urlparse(location)
+    params = parse_qs(parsed.query)
+    assert params["client_id"] == ["client-123"]
+    assert params["redirect_uri"] == ["https://example.com/callback"]
+    assert params["response_type"] == ["code"]
+    state = params.get("state", [""])[0]
+    assert state
+
+    with client.session_transaction() as sess:
+        assert sess.get("allegro_oauth_state") == state
