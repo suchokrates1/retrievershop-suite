@@ -462,11 +462,15 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
 
     original_update = allegro_api.update_allegro_tokens
 
-    def capture_tokens(access_token=None, refresh_token=None):
+    def capture_tokens(access_token=None, refresh_token=None, expires_in=None):
         persisted.append(
-            {"access_token": access_token, "refresh_token": refresh_token}
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_in": expires_in,
+            }
         )
-        original_update(access_token, refresh_token)
+        original_update(access_token, refresh_token, expires_in)
 
     monkeypatch.setattr(
         "magazyn.allegro_api.update_allegro_tokens", capture_tokens
@@ -480,7 +484,11 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
     assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert persisted == [
-        {"access_token": "new-access", "refresh_token": "new-refresh"}
+        {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": None,
+        }
     ]
     assert offers == [
         {

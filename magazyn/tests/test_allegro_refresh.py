@@ -1,6 +1,7 @@
 from decimal import Decimal
 import os
 from types import SimpleNamespace
+import json
 
 import pytest
 from requests.exceptions import HTTPError
@@ -18,6 +19,8 @@ def _set_tokens(access: str | None = None, refresh: str | None = None) -> None:
         {
             "ALLEGRO_ACCESS_TOKEN": None,
             "ALLEGRO_REFRESH_TOKEN": None,
+            "ALLEGRO_TOKEN_EXPIRES_IN": None,
+            "ALLEGRO_TOKEN_METADATA": None,
         }
     )
     updates = {}
@@ -27,7 +30,150 @@ def _set_tokens(access: str | None = None, refresh: str | None = None) -> None:
         updates["ALLEGRO_REFRESH_TOKEN"] = refresh
     if updates:
         settings_store.update(updates)
+    else:
+        settings_store.update(
+            {
+                "ALLEGRO_TOKEN_EXPIRES_IN": None,
+                "ALLEGRO_TOKEN_METADATA": None,
+            }
+        )
 
+
+def test_allegro_oauth_callback_persists_tokens(client, login, monkeypatch):
+    _set_tokens()
+
+    original_values = {
+        key: settings_store.get(key)
+        for key in (
+            "ALLEGRO_CLIENT_ID",
+            "ALLEGRO_CLIENT_SECRET",
+            "ALLEGRO_REDIRECT_URI",
+        )
+    }
+    settings_store.update(
+        {
+            "ALLEGRO_CLIENT_ID": "client-123",
+            "ALLEGRO_CLIENT_SECRET": "secret-456",
+            "ALLEGRO_REDIRECT_URI": "https://example.com/callback",
+        }
+    )
+
+    def fake_get_access_token(client_id, client_secret, code, redirect_uri=None):
+        assert client_id == "client-123"
+        assert client_secret == "secret-456"
+        assert code == "auth-code"
+        assert redirect_uri == "https://example.com/callback"
+        return {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 3600,
+            "scope": "sale:offers",
+            "token_type": "bearer",
+        }
+
+    monkeypatch.setattr(
+        "magazyn.allegro_api.get_access_token", fake_get_access_token
+    )
+
+    state = "state-token"
+    with client.session_transaction() as session:
+        session["allegro_oauth_state"] = state
+
+    try:
+        response = client.get(
+            "/allegro/oauth/callback",
+            query_string={"state": state, "code": "auth-code"},
+        )
+    finally:
+        cleanup = {}
+        for key, value in original_values.items():
+            cleanup[key] = value if value is not None else None
+        settings_store.update(cleanup)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings")
+
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+        assert "allegro_oauth_state" not in session
+
+    assert any("Autoryzacja Allegro zakończona sukcesem." in message for _, message in flashes)
+
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
+    assert settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN") == "3600"
+
+    metadata_raw = settings_store.get("ALLEGRO_TOKEN_METADATA")
+    assert metadata_raw is not None
+    metadata = json.loads(metadata_raw)
+    assert metadata["expires_in"] == 3600
+    assert metadata["scope"] == "sale:offers"
+    assert metadata["token_type"] == "bearer"
+    assert "obtained_at" in metadata
+    assert "expires_at" in metadata
+
+    _set_tokens()
+
+
+def test_allegro_oauth_callback_handles_allegro_error(client, login, monkeypatch):
+    _set_tokens()
+
+    original_values = {
+        key: settings_store.get(key)
+        for key in (
+            "ALLEGRO_CLIENT_ID",
+            "ALLEGRO_CLIENT_SECRET",
+            "ALLEGRO_REDIRECT_URI",
+        )
+    }
+    settings_store.update(
+        {
+            "ALLEGRO_CLIENT_ID": "client-123",
+            "ALLEGRO_CLIENT_SECRET": "secret-456",
+            "ALLEGRO_REDIRECT_URI": "https://example.com/callback",
+        }
+    )
+
+    class DummyResponse:
+        status_code = 400
+
+    def failing_get_access_token(*_, **__):
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(
+        "magazyn.allegro_api.get_access_token", failing_get_access_token
+    )
+
+    state = "state-token"
+    with client.session_transaction() as session:
+        session["allegro_oauth_state"] = state
+
+    try:
+        response = client.get(
+            "/allegro/oauth/callback",
+            query_string={"state": state, "code": "auth-code"},
+        )
+    finally:
+        cleanup = {}
+        for key, value in original_values.items():
+            cleanup[key] = value if value is not None else None
+        settings_store.update(cleanup)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings")
+
+    with client.session_transaction() as session:
+        flashes = session.get("_flashes") or []
+        assert "allegro_oauth_state" not in session
+
+    assert any("HTTP status 400" in message for _, message in flashes)
+
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
+    assert settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN") is None
+    assert settings_store.get("ALLEGRO_TOKEN_METADATA") is None
+
+    _set_tokens()
 
 def test_refresh_fetches_and_saves_offers(client, login, monkeypatch):
     _set_tokens("token")
@@ -592,11 +738,15 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
     original_update = sync_mod.update_allegro_tokens
 
-    def capture_tokens(access_token=None, refresh_token=None):
+    def capture_tokens(access_token=None, refresh_token=None, expires_in=None):
         persisted.append(
-            {"access_token": access_token, "refresh_token": refresh_token}
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_in": expires_in,
+            }
         )
-        original_update(access_token, refresh_token)
+        original_update(access_token, refresh_token, expires_in)
 
     monkeypatch.setattr("magazyn.allegro_sync.update_allegro_tokens", capture_tokens)
 
@@ -616,7 +766,11 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert persisted == [
-        {"access_token": "new-access", "refresh_token": "new-refresh"}
+        {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": None,
+        }
     ]
 
     with get_session() as session:

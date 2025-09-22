@@ -1,3 +1,5 @@
+import json
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
@@ -9,19 +11,105 @@ from flask import (
     url_for,
     flash,
     jsonify,
+    session,
 )
 
 from sqlalchemy import case, or_
 
+from requests.exceptions import HTTPError, RequestException
+
+from . import allegro_api
 from .allegro_price_monitor import fetch_product_listing
 from .auth import login_required
 from .config import settings
 from .db import get_session
 from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
-from .settings_store import settings_store
+from .settings_store import SettingsPersistenceError, settings_store
+from .env_tokens import update_allegro_tokens
 
 bp = Blueprint("allegro", __name__)
+
+
+@bp.get("/allegro/oauth/callback")
+@login_required
+def allegro_oauth_callback():
+    expected_state = session.pop("allegro_oauth_state", None)
+    state = request.args.get("state")
+    if not state or not expected_state or state != expected_state:
+        flash("Nieprawidłowy parametr state w odpowiedzi Allegro.")
+        return redirect(url_for("settings_page"))
+
+    code = request.args.get("code")
+    if not code:
+        flash("Brak kodu autoryzacyjnego w odpowiedzi Allegro.")
+        return redirect(url_for("settings_page"))
+
+    client_id = settings_store.get("ALLEGRO_CLIENT_ID")
+    client_secret = settings_store.get("ALLEGRO_CLIENT_SECRET")
+    redirect_uri = settings_store.get("ALLEGRO_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        flash("Niekompletna konfiguracja Allegro.")
+        return redirect(url_for("settings_page"))
+
+    try:
+        token_payload = allegro_api.get_access_token(
+            client_id,
+            client_secret,
+            code,
+            redirect_uri=redirect_uri,
+        )
+    except HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        if status_code:
+            flash(f"Nie udało się uzyskać tokenów Allegro: HTTP status {status_code}.")
+        else:
+            flash("Nie udało się uzyskać tokenów Allegro: błąd HTTP.")
+        return redirect(url_for("settings_page"))
+    except RequestException as exc:
+        flash(f"Nie udało się uzyskać tokenów Allegro: {exc}")
+        return redirect(url_for("settings_page"))
+
+    access_token = token_payload.get("access_token")
+    refresh_token = token_payload.get("refresh_token")
+    expires_in_raw = token_payload.get("expires_in")
+    if not access_token or not refresh_token:
+        flash("Nieprawidłowa odpowiedź Allegro: brak tokenów.")
+        return redirect(url_for("settings_page"))
+
+    expires_in: Optional[int]
+    try:
+        expires_in = int(expires_in_raw) if expires_in_raw is not None else None
+    except (TypeError, ValueError):
+        expires_in = None
+
+    try:
+        update_allegro_tokens(access_token, refresh_token, expires_in)
+    except SettingsPersistenceError:
+        flash("Nie udało się zapisać tokenów Allegro. Spróbuj ponownie.")
+        return redirect(url_for("settings_page"))
+
+    metadata: dict[str, object] = {}
+    now = datetime.now(timezone.utc)
+    if expires_in is not None:
+        metadata["expires_in"] = expires_in
+        metadata["expires_at"] = (now + timedelta(seconds=expires_in)).isoformat()
+    metadata["obtained_at"] = now.isoformat()
+    if token_payload.get("scope"):
+        metadata["scope"] = token_payload["scope"]
+    if token_payload.get("token_type"):
+        metadata["token_type"] = token_payload["token_type"]
+
+    try:
+        settings_store.update(
+            {"ALLEGRO_TOKEN_METADATA": json.dumps(metadata, ensure_ascii=False)}
+        )
+    except SettingsPersistenceError:
+        flash("Tokeny zapisano, lecz nie udało się zapisać metadanych Allegro.")
+        return redirect(url_for("settings_page"))
+
+    flash("Autoryzacja Allegro zakończona sukcesem.")
+    return redirect(url_for("settings_page"))
 
 
 @bp.route("/allegro/offers")
