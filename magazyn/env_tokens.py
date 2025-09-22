@@ -8,7 +8,9 @@ from .settings_store import settings_store
 
 
 def update_allegro_tokens(
-    access_token: Optional[str] = None, refresh_token: Optional[str] = None
+    access_token: Optional[str] = None,
+    refresh_token: Optional[str] = None,
+    expires_in: Optional[int] = None,
 ) -> None:
     """Persist new Allegro OAuth tokens and update ``os.environ``.
 
@@ -19,9 +21,12 @@ def update_allegro_tokens(
         modified.
     refresh_token:
         The accompanying refresh token. If ``None`` the previous value is kept.
+    expires_in:
+        Lifetime of the access token in seconds. When provided the value is
+        stored alongside the tokens for later reference.
     """
 
-    if access_token is None and refresh_token is None:
+    if access_token is None and refresh_token is None and expires_in is None:
         return
 
     updates = {}
@@ -29,6 +34,8 @@ def update_allegro_tokens(
         updates["ALLEGRO_ACCESS_TOKEN"] = access_token
     if refresh_token is not None:
         updates["ALLEGRO_REFRESH_TOKEN"] = refresh_token
+    if expires_in is not None:
+        updates["ALLEGRO_TOKEN_EXPIRES_IN"] = expires_in
     if updates:
         settings_store.update(updates)
 
@@ -40,6 +47,8 @@ def clear_allegro_tokens() -> None:
         {
             "ALLEGRO_ACCESS_TOKEN": None,
             "ALLEGRO_REFRESH_TOKEN": None,
+            "ALLEGRO_TOKEN_EXPIRES_IN": None,
+            "ALLEGRO_TOKEN_METADATA": None,
         }
     )
 
