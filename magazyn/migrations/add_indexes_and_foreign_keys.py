@@ -47,14 +47,14 @@ def _foreign_keys_disabled(conn):
         cur.close()
 
 
-def _foreign_key_actions(conn, table: str) -> dict[str, str]:
+def _foreign_key_actions(conn, table: str) -> dict[str, tuple[str | None, str]]:
     cur = conn.cursor()
     try:
         cur.execute(f"PRAGMA foreign_key_list({table})")
-        result: dict[str, str] = {}
+        result: dict[str, tuple[str | None, str]] = {}
         for row in cur.fetchall():
             # row[3] -> column name, row[6] -> on_delete
-            result[row[3]] = (row[6] or "").upper()
+            result[row[3]] = (row[2], (row[6] or "").upper())
         return result
     finally:
         cur.close()
@@ -94,7 +94,8 @@ def _rebuild_table(conn, table: str, create_sql: str, columns: tuple[str, ...]):
 
 def _ensure_product_sizes(conn):
     actions = _foreign_key_actions(conn, "product_sizes")
-    if actions.get("product_id") == "CASCADE":
+    fk = actions.get("product_id")
+    if fk and fk[0] == "products" and fk[1] == "CASCADE":
         return
 
     _rebuild_table(
@@ -115,7 +116,8 @@ def _ensure_product_sizes(conn):
 
 def _ensure_purchase_batches(conn):
     actions = _foreign_key_actions(conn, "purchase_batches")
-    if actions.get("product_id") == "CASCADE":
+    fk = actions.get("product_id")
+    if fk and fk[0] == "products" and fk[1] == "CASCADE":
         return
 
     _rebuild_table(
@@ -138,7 +140,8 @@ def _ensure_purchase_batches(conn):
 def _ensure_sales(conn):
     actions = _foreign_key_actions(conn, "sales")
     allows_null = _column_allows_null(conn, "sales", "product_id")
-    if actions.get("product_id") == "SET NULL" and allows_null:
+    fk = actions.get("product_id")
+    if fk and fk[0] == "products" and fk[1] == "SET NULL" and allows_null:
         return
 
     _rebuild_table(
@@ -174,9 +177,15 @@ def _ensure_sales(conn):
 def _ensure_allegro_offers(conn):
     actions = _foreign_key_actions(conn, "allegro_offers")
     allows_null = _column_allows_null(conn, "allegro_offers", "product_id")
+    product_fk = actions.get("product_id")
+    size_fk = actions.get("product_size_id")
     if (
-        actions.get("product_id") == "SET NULL"
-        and actions.get("product_size_id") == "SET NULL"
+        product_fk
+        and size_fk
+        and product_fk[0] == "products"
+        and product_fk[1] == "SET NULL"
+        and size_fk[0] == "product_sizes"
+        and size_fk[1] == "SET NULL"
         and allows_null
     ):
         return
@@ -209,7 +218,8 @@ def _ensure_allegro_offers(conn):
 
 def _ensure_price_history(conn):
     actions = _foreign_key_actions(conn, "allegro_price_history")
-    if actions.get("product_size_id") == "SET NULL":
+    fk = actions.get("product_size_id")
+    if fk and fk[0] == "product_sizes" and fk[1] == "SET NULL":
         return
 
     _rebuild_table(
