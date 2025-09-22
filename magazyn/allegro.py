@@ -61,9 +61,7 @@ def authorize():
     return redirect(authorization_url)
 
 
-@bp.get("/allegro/oauth/callback")
-@login_required
-def allegro_oauth_callback():
+def _process_allegro_oauth_callback() -> object:
     expected_state = session.pop("allegro_oauth_state", None)
     state = request.args.get("state")
     if not state or not expected_state or state != expected_state:
@@ -152,6 +150,18 @@ def allegro_oauth_callback():
     current_app.logger.info("Successfully obtained Allegro OAuth tokens")
     flash("Autoryzacja Allegro zakończona sukcesem.")
     return redirect(url_for("settings_page"))
+
+
+@bp.get("/allegro/oauth/callback")
+@login_required
+def allegro_oauth_callback():
+    return _process_allegro_oauth_callback()
+
+
+@bp.get("/allegro")
+@login_required
+def allegro_oauth_entrypoint():
+    return _process_allegro_oauth_callback()
 
 
 @bp.route("/allegro/offers")
