@@ -187,19 +187,24 @@ def refresh_token(refresh_token: str) -> dict:
     def _normalize(value: Optional[str]) -> Optional[str]:
         return value or None
 
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
+    client_id = _normalize(os.getenv("ALLEGRO_CLIENT_ID"))
+    client_secret = _normalize(os.getenv("ALLEGRO_CLIENT_SECRET"))
 
-    try:
-        client_id = _normalize(settings_store.get("ALLEGRO_CLIENT_ID"))
-        client_secret = _normalize(settings_store.get("ALLEGRO_CLIENT_SECRET"))
-    except SettingsPersistenceError:
-        client_id = client_secret = None
+    if not client_id or not client_secret:
+        store_client_id: Optional[str] = None
+        store_client_secret: Optional[str] = None
+        try:
+            store_client_id = _normalize(settings_store.get("ALLEGRO_CLIENT_ID"))
+            store_client_secret = _normalize(
+                settings_store.get("ALLEGRO_CLIENT_SECRET")
+            )
+        except SettingsPersistenceError:
+            store_client_id = store_client_secret = None
 
-    if not client_id:
-        client_id = _normalize(os.getenv("ALLEGRO_CLIENT_ID"))
-    if not client_secret:
-        client_secret = _normalize(os.getenv("ALLEGRO_CLIENT_SECRET"))
+        if not client_id:
+            client_id = store_client_id
+        if not client_secret:
+            client_secret = store_client_secret
 
     if not client_id or not client_secret:
         raise ValueError(
