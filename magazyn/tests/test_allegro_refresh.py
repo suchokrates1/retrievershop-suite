@@ -15,6 +15,7 @@ from magazyn.db import get_session
 from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
 from magazyn.allegro_token_refresher import AllegroTokenRefresher
 from magazyn.env_tokens import update_allegro_tokens
+from magazyn.allegro_api import AUTH_URL, refresh_token as api_refresh_token
 from magazyn.metrics import (
     ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL,
     ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL,
@@ -1173,4 +1174,47 @@ def test_token_refresher_retries_after_failure(monkeypatch):
     assert retries_metric._value.get() == retries_start + 1
 
     _set_tokens()
+
+def test_refresh_token_prefers_settings_store(monkeypatch):
+    original_values = {}
+    for key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
+        try:
+            original_values[key] = settings_store.get(key)
+        except SettingsPersistenceError:
+            original_values[key] = None
+
+    for env_key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
+        monkeypatch.delenv(env_key, raising=False)
+
+    settings_store.update(
+        {
+            "ALLEGRO_CLIENT_ID": "settings-client-id",
+            "ALLEGRO_CLIENT_SECRET": "settings-client-secret",
+        }
+    )
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"access_token": "new-token", "refresh_token": "new-refresh"}
+
+    def fake_post(url, data, auth=None, timeout=None):
+        assert url == AUTH_URL
+        assert auth == ("settings-client-id", "settings-client-secret")
+        assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}
+        return DummyResponse()
+
+    monkeypatch.setattr("magazyn.allegro_api.requests.post", fake_post)
+
+    try:
+        result = api_refresh_token("refresh-token")
+    finally:
+        cleanup = {}
+        for key, value in original_values.items():
+            cleanup[key] = value if value is not None else None
+        settings_store.update(cleanup)
+
+    assert result == {"access_token": "new-token", "refresh_token": "new-refresh"}
 
