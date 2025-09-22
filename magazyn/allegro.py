@@ -1,5 +1,4 @@
 import json
-from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
@@ -83,29 +82,16 @@ def allegro_oauth_callback():
     except (TypeError, ValueError):
         expires_in = None
 
-    try:
-        update_allegro_tokens(access_token, refresh_token, expires_in)
-    except SettingsPersistenceError:
-        flash("Nie udało się zapisać tokenów Allegro. Spróbuj ponownie.")
-        return redirect(url_for("settings_page"))
-
     metadata: dict[str, object] = {}
-    now = datetime.now(timezone.utc)
-    if expires_in is not None:
-        metadata["expires_in"] = expires_in
-        metadata["expires_at"] = (now + timedelta(seconds=expires_in)).isoformat()
-    metadata["obtained_at"] = now.isoformat()
     if token_payload.get("scope"):
         metadata["scope"] = token_payload["scope"]
     if token_payload.get("token_type"):
         metadata["token_type"] = token_payload["token_type"]
 
     try:
-        settings_store.update(
-            {"ALLEGRO_TOKEN_METADATA": json.dumps(metadata, ensure_ascii=False)}
-        )
+        update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
     except SettingsPersistenceError:
-        flash("Tokeny zapisano, lecz nie udało się zapisać metadanych Allegro.")
+        flash("Nie udało się zapisać tokenów Allegro. Spróbuj ponownie.")
         return redirect(url_for("settings_page"))
 
     flash("Autoryzacja Allegro zakończona sukcesem.")
