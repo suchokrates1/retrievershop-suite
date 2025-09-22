@@ -1,4 +1,3 @@
-import os
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -176,48 +175,35 @@ def get_***REMOVED***(client_id: str, client_secret: str, code: str, redirect_ur
 
 
 def refresh_token(refresh_token: str) -> dict:
-    """Refresh the access token using a refresh token.
+    """Refresh the access token using credentials stored in ``settings_store``.
 
-    The client identifier and secret can be provided via the settings store or
-    via the environment variables ``ALLEGRO_CLIENT_ID`` and
-    ``ALLEGRO_CLIENT_SECRET``. If neither source provides valid credentials,
-    an informative error is raised and the request is not executed.
+    Both the Allegro client identifier and secret must be persisted in the
+    settings store. If either value is missing or cannot be retrieved, a
+    ``ValueError`` is raised and the request is not executed.
     """
 
     def ***REMOVED***value: ***REMOVED***) -> ***REMOVED***:
         return value or None
 
-    env_client_id = ***REMOVED***os.getenv("ALLEGRO_CLIENT_ID"))
-    env_client_secret = ***REMOVED***
+    try:
+        store_client_id = ***REMOVED***settings_store.get("ALLEGRO_CLIENT_ID"))
+        ***REMOVED*** = ***REMOVED***
+    except SettingsPersistenceError as exc:
+        raise ValueError(
+            "Brak danych uwierzytelniających Allegro. Nie można odczytać ustawień."
+        ) from exc
 
-    credentials: Optional[tuple[str, str]] = None
-    if env_client_id and env_client_secret:
-        credentials = (env_client_id, env_client_secret)
-    else:
-        store_client_id: ***REMOVED***
-        ***REMOVED***: ***REMOVED***
-        try:
-            store_client_id = ***REMOVED***settings_store.get("ALLEGRO_CLIENT_ID"))
-            ***REMOVED*** = ***REMOVED***
-                settings_store.get("ALLEGRO_CLIENT_SECRET")
-            )
-        except SettingsPersistenceError:
-            store_client_id = ***REMOVED*** = None
-
-        if store_client_id and ***REMOVED***:
-            credentials = (store_client_id, ***REMOVED***)
-
-    if credentials is None:
+    if not (store_client_id and ***REMOVED***):
         raise ValueError(
             "Brak danych uwierzytelniających Allegro. Uzupełnij ALLEGRO_CLIENT_ID i "
-            "ALLEGRO_CLIENT_SECRET w ustawieniach lub zmiennych środowiskowych."
+            "ALLEGRO_CLIENT_SECRET w ustawieniach."
         )
 
     data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
     response = requests.post(
         AUTH_URL,
         data=data,
-        auth=credentials,
+        auth=(store_client_id, ***REMOVED***),
         timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
