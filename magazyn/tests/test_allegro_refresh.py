@@ -1175,7 +1175,7 @@ def test_token_refresher_retries_after_failure(monkeypatch):
 
     _set_tokens()
 
-def test_refresh_token_prefers_environment(monkeypatch):
+def test_refresh_token_uses_settings_store_even_if_env_present(monkeypatch):
     original_values = {}
     for key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
         try:
@@ -1202,7 +1202,7 @@ def test_refresh_token_prefers_environment(monkeypatch):
 
     def fake_post(url, data, auth=None, timeout=None):
         assert url == AUTH_URL
-        assert auth == ("env-client-id", "env-client-secret")
+        assert auth == ("settings-client-id", "settings-client-secret")
         assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}
         return DummyResponse()
 
