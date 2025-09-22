@@ -105,6 +105,38 @@ def test_full_oauth_flow(client, login, monkeypatch, allegro_oauth_config):
     assert metadata["expires_in"] == 3600
 
 
+def test_oauth_flow_via_allegro_endpoint(
+    client, login, monkeypatch, allegro_oauth_config
+):
+    state = _start_authorization(client)
+
+    def fake_get_***REMOVED***(client_id, client_secret, code, redirect_uri=None):
+        assert client_id == "client-123"
+        assert client_secret == "secret-456"
+        assert code == "auth-code"
+        assert redirect_uri == "https://example.com/callback"
+        return {
+            "***REMOVED***": "access-token",
+            "refresh_token": "refresh-token",
+            "expires_in": 3600,
+        }
+
+    monkeypatch.setattr(allegro_api, "get_***REMOVED***", fake_get_***REMOVED***)
+
+    response = client.get(
+        "/allegro",
+        query_string={"state": state, "code": "auth-code"},
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings")
+
+    flashes = _get_flashes(client)
+    assert any("sukcesem" in message.lower() for _, message in flashes)
+
+    assert ***REMOVED*** == "access-token"
+    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
+
+
 def test_oauth_callback_state_mismatch(client, login, allegro_oauth_config):
     _start_authorization(client)
 
@@ -137,6 +169,38 @@ def test_oauth_callback_missing_code(client, login, allegro_oauth_config):
     assert ***REMOVED*** is None
 
 
+def test_oauth_entrypoint_state_mismatch(client, login, allegro_oauth_config):
+    _start_authorization(client)
+
+    response = client.get(
+        "/allegro",
+        query_string={"state": "invalid", "code": "auth-code"},
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings")
+
+    flashes = _get_flashes(client)
+    assert any("state" in message.lower() for _, message in flashes)
+
+    assert ***REMOVED*** is None
+
+
+def test_oauth_entrypoint_missing_code(client, login, allegro_oauth_config):
+    state = _start_authorization(client)
+
+    response = client.get(
+        "/allegro",
+        query_string={"state": state},
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings")
+
+    flashes = _get_flashes(client)
+    assert any("brak kodu" in message.lower() for _, message in flashes)
+
+    assert ***REMOVED*** is None
+
+
 def test_oauth_callback_handles_api_error(
     client, login, monkeypatch, allegro_oauth_config
 ):
@@ -152,6 +216,32 @@ def test_oauth_callback_handles_api_error(
 
     response = client.get(
         "/allegro/oauth/callback",
+        query_string={"state": state, "code": "auth-code"},
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings")
+
+    flashes = _get_flashes(client)
+    assert any("http status 400" in message.lower() for _, message in flashes)
+
+    assert ***REMOVED*** is None
+
+
+def test_oauth_entrypoint_handles_api_error(
+    client, login, monkeypatch, allegro_oauth_config
+):
+    state = _start_authorization(client)
+
+    class DummyResponse:
+        status_code = 400
+
+    def failing_get_***REMOVED***(*_, **__):
+        raise HTTPError(response=DummyResponse())
+
+    monkeypatch.setattr(allegro_api, "get_***REMOVED***", failing_get_***REMOVED***)
+
+    response = client.get(
+        "/allegro",
         query_string={"state": state, "code": "auth-code"},
     )
     assert response.status_code == 302
