@@ -359,6 +359,10 @@ class SettingsStore:
         on_error=None,
     ) -> "OrderedDict[str, str]":
         self._ensure_loaded()
+        self._refresh_if_stale()
+        # _refresh_if_stale() may trigger reload() which resets the loaded flag.
+        # Ensure the values are available before reading from the cached mapping.
+        self._ensure_loaded()
         ordered = settings_io.load_settings(
             include_hidden=include_hidden,
             logger=logger,
