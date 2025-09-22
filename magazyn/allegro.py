@@ -209,12 +209,9 @@ def allegro_oauth_callback():
 @login_required
 def allegro_oauth_debug():
     result = _process_oauth_response()
-    return render_template(
-        "allegro/oauth_debug.html",
-        success=result.get("ok", False),
-        message=result.get("message"),
-        debug_steps=result.get("debug_steps", []),
-    )
+    if message := result.get("message"):
+        flash(message)
+    return redirect(url_for("settings_page"))
 
 
 @bp.route("/allegro/offers")
