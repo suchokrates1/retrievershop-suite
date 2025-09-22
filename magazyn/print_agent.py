@@ -24,6 +24,7 @@ from .db import sqlite_connect
 from .notifications import send_report
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
+from .allegro_token_refresher import token_refresher
 from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
     PRINT_AGENT_ITERATION_SECONDS,
@@ -1146,6 +1147,7 @@ class LabelAgent:
                 os.remove(self.config.lock_file)
             except OSError:
                 pass
+        token_refresher.stop()
 
 
 def shorten_product_name(full_name: str) -> str:
