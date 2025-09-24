@@ -1,11 +1,14 @@
 import json
 import secrets
 from decimal import Decimal
-from typing import Optional
+from typing import Callable, Optional
+from queue import Queue
+from threading import Thread
 from urllib.parse import urlencode
 
 from flask import (
     Blueprint,
+    Response,
     current_app,
     render_template,
     request,
@@ -14,6 +17,7 @@ from flask import (
     flash,
     jsonify,
     session,
+    stream_with_context,
 )
 
 from sqlalchemy import case, or_
@@ -54,14 +58,22 @@ def _record_debug_step(steps: list[dict[str, str]], label: str, value: object) -
     steps.append({"label": label, "value": _format_debug_value(value)})
 
 
-def _append_debug_log(logs: Optional[list[str]], label: str, value: object) -> None:
-    if logs is None:
-        return
+def _append_debug_log(
+    logs: Optional[list[str]], label: str, value: object
+) -> tuple[str, str]:
     formatted = _format_debug_value(value)
     if formatted:
-        logs.append(f"{label}: {formatted}")
+        line = f"{label}: {formatted}"
     else:
-        logs.append(label)
+        line = label
+    if logs is not None:
+        logs.append(line)
+    return formatted, line
+
+
+def _sse_event(event: str, payload: dict[str, object]) -> str:
+    data = json.dumps(payload, ensure_ascii=False)
+    return f"event: {event}\ndata: {data}\n\n"
 
 
 def _process_oauth_response() -> dict[str, object]:
@@ -356,11 +368,14 @@ def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
 def build_price_checks(
     debug_steps: Optional[list[dict[str, str]]] = None,
     debug_logs: Optional[list[str]] = None,
+    log_callback: Optional[Callable[[str, str], None]] = None,
 ) -> list[dict]:
     def record_debug(label: str, value: object) -> None:
         if debug_steps is not None:
             _record_debug_step(debug_steps, label, value)
-        _append_debug_log(debug_logs, label, value)
+        formatted, _ = _append_debug_log(debug_logs, label, value)
+        if log_callback is not None:
+            log_callback(label, formatted)
 
     with get_session() as db:
         rows = (
@@ -473,10 +488,19 @@ def build_price_checks(
         competitor_min_url: Optional[str] = None
         error: Optional[str] = None
 
+        def stream_scrape_log(message: str) -> None:
+            log_context = {"offer_id": offer_id, "message": message}
+            if barcode:
+                log_context["barcode"] = barcode
+            record_debug("Log Selenium", log_context)
+
+        scraper_callback = stream_scrape_log if log_callback is not None else None
+
         try:
             competitor_offers, scrape_logs = fetch_competitors_for_offer(
                 offer_id,
                 stop_seller=settings.ALLEGRO_SELLER_NAME,
+                log_callback=scraper_callback,
             )
         except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
             error = str(exc)
@@ -495,11 +519,12 @@ def build_price_checks(
             competitor_offers = []
             scrape_logs = []
 
-        for entry in scrape_logs:
-            log_context = {"offer_id": offer_id, "message": entry}
-            if barcode:
-                log_context["barcode"] = barcode
-            record_debug("Log Selenium", log_context)
+        if log_callback is None:
+            for entry in scrape_logs:
+                log_context = {"offer_id": offer_id, "message": entry}
+                if barcode:
+                    log_context["barcode"] = barcode
+                record_debug("Log Selenium", log_context)
 
         count_context = {"offer_id": offer_id, "offers": len(competitor_offers)}
         if barcode:
@@ -614,16 +639,6 @@ def price_check():
         _record_debug_step(debug_steps, label, value)
         _append_debug_log(debug_log_lines, label, value)
 
-    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
-    refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
-
-    auth_error = None
-    if not access_token or not refresh_token:
-        auth_error = (
-            "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, "
-            "aby ponownie autoryzować aplikację."
-        )
-
     wants_json = (
         request.args.get("format") == "json"
         or request.accept_mimetypes.best == "application/json"
@@ -632,15 +647,6 @@ def price_check():
     record_debug("Żądany format odpowiedzi", "json" if wants_json else "html")
 
     if wants_json:
-        if auth_error:
-            return jsonify(
-                {
-                    "price_checks": [],
-                    "auth_error": auth_error,
-                    "debug_steps": debug_steps,
-                    "debug_log": "\n".join(debug_log_lines),
-                }
-            )
         price_checks = build_price_checks(debug_steps, debug_log_lines)
         return jsonify(
             {
@@ -653,10 +659,75 @@ def price_check():
 
     return render_template(
         "allegro/price_check.html",
-        auth_error=auth_error,
+        auth_error=None,
         debug_steps=debug_steps,
         debug_log="\n".join(debug_log_lines),
     )
+
+
+@bp.route("/allegro/price-check/stream")
+@login_required
+def price_check_stream():
+    def event_stream():
+        queue: "Queue[Optional[str]]" = Queue()
+        debug_steps: list[dict[str, str]] = []
+        debug_log_lines: list[str] = []
+
+        def push_log(label: str, value: str) -> None:
+            line = f"{label}: {value}" if value else label
+            queue.put(
+                _sse_event(
+                    "log",
+                    {
+                        "label": label,
+                        "value": value,
+                        "line": line,
+                    },
+                )
+            )
+
+        def run_price_check() -> None:
+            try:
+                price_checks = build_price_checks(
+                    debug_steps,
+                    debug_log_lines,
+                    log_callback=push_log,
+                )
+                queue.put(
+                    _sse_event(
+                        "result",
+                        {
+                            "price_checks": price_checks,
+                            "auth_error": None,
+                            "debug_steps": debug_steps,
+                            "debug_log": "\n".join(debug_log_lines),
+                        },
+                    )
+                )
+            except Exception as exc:  # pragma: no cover - unexpected errors
+                current_app.logger.exception("Price check stream failed")
+                queue.put(
+                    _sse_event("error", {"message": str(exc)})
+                )
+            finally:
+                queue.put(None)
+
+        worker = Thread(target=run_price_check, daemon=True)
+        worker.start()
+
+        while True:
+            item = queue.get()
+            if item is None:
+                break
+            yield item
+
+    response = Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+    )
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
 
 
 @bp.route("/allegro/refresh", methods=["POST"])
