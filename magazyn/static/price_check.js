@@ -1,4 +1,7 @@
 (function () {
+    const logLines = [];
+    const debugStepsBuffer = [];
+
     function renderLogs(logText) {
         const logContainer = document.getElementById('price-check-log-container');
         const logContent = document.getElementById('price-check-log-content');
@@ -16,6 +19,25 @@
 
         logContent.textContent = text;
         logContainer.classList.remove('d-none');
+    }
+
+    function appendDebugStep(label, value, line) {
+        const normalizedLabel = typeof label === 'string' ? label : '';
+        const normalizedValue = typeof value === 'string' ? value : '';
+        const normalizedLine =
+            typeof line === 'string' && line
+                ? line
+                : normalizedValue
+                ? normalizedLabel + ': ' + normalizedValue
+                : normalizedLabel;
+
+        debugStepsBuffer.push({ label: normalizedLabel, value: normalizedValue });
+        renderDebugSteps(debugStepsBuffer);
+
+        if (normalizedLine) {
+            logLines.push(normalizedLine);
+            renderLogs(logLines.join('\n'));
+        }
     }
 
     function createLink(url, label, visuallyHiddenText, extraClasses) {
@@ -191,7 +213,7 @@
         });
     }
 
-    function handleFetchError() {
+    function handleStreamError() {
         const loading = document.getElementById('price-check-loading');
         const errorContainer = document.getElementById('price-check-error');
 
@@ -206,13 +228,35 @@
         }
     }
 
-    function fetchPriceChecks() {
-        const url = window.location.pathname + '?format=json';
-        fetch(url, { headers: { Accept: 'application/json' } })
-            .then((response) => response.json())
-            .then(renderPriceChecks)
-            .catch(handleFetchError);
+    function startPriceCheckStream() {
+        const streamUrl = window.location.pathname + '/stream';
+        const source = new EventSource(streamUrl);
+
+        source.addEventListener('log', (event) => {
+            try {
+                const payload = JSON.parse(event.data || '{}');
+                appendDebugStep(payload.label, payload.value, payload.line);
+            } catch (err) {
+                // Ignore malformed events
+            }
+        });
+
+        source.addEventListener('result', (event) => {
+            try {
+                const payload = JSON.parse(event.data || '{}');
+                renderPriceChecks(payload);
+            } catch (err) {
+                handleStreamError();
+            } finally {
+                source.close();
+            }
+        });
+
+        source.addEventListener('error', () => {
+            source.close();
+            handleStreamError();
+        });
     }
 
-    document.addEventListener('DOMContentLoaded', fetchPriceChecks);
+    document.addEventListener('DOMContentLoaded', startPriceCheckStream);
 })();

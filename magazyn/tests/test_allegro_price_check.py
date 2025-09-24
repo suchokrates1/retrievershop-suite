@@ -119,3 +119,39 @@ class TestAllegroPriceCheckDebug:
         assert "Log Selenium" in labels
         assert "Błąd pobierania ofert Allegro" in payload["debug_log"]
         assert "Start Selenium" in payload["debug_log"]
+
+    def test_price_check_stream_emits_events(
+        self, client, allegro_tokens, monkeypatch
+    ) -> None:
+        allegro_tokens("token", "refresh")
+        with get_session() as session:
+            product = Product(name="Smycz")
+            session.add(product)
+            session.flush()
+            size = ProductSize(product_id=product.id, size="XL", barcode="987")
+            session.add(size)
+            session.flush()
+            session.add(
+                AllegroOffer(
+                    offer_id="offer-stream",
+                    title="Oferta stream",
+                    price=Decimal("75.00"),
+                    product_size_id=size.id,
+                )
+            )
+
+        def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+            return (
+                [],
+                ["Stream log"],
+            )
+
+        monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
+
+        response = client.get("/allegro/price-check/stream")
+        assert response.status_code == 200
+        assert response.mimetype == "text/event-stream"
+        body = response.get_data(as_text=True)
+        assert "event: log" in body
+        assert "Stream log" in body
+        assert "event: result" in body
