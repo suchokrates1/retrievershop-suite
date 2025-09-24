@@ -605,9 +605,6 @@ def price_check():
     ***REMOVED*** = ***REMOVED***
     refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
 
-    record_debug("Czy dostępny access token Allegro", bool(***REMOVED***))
-    record_debug("Czy dostępny refresh token Allegro", bool(refresh_token))
-
     auth_error = None
     if not ***REMOVED*** or not refresh_token:
         auth_error = (
