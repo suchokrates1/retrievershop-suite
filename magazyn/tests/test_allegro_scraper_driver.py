@@ -5,6 +5,16 @@ import types
 from magazyn import allegro_scraper
 
 
+def test_log_step_records_logger(caplog) -> None:
+    caplog.set_level("DEBUG", logger="magazyn.allegro_scraper")
+    buffer: list[str] = []
+
+    allegro_scraper._log_step(buffer, "Testowy krok")
+
+    assert buffer == ["Testowy krok"]
+    assert any("Testowy krok" in record.message for record in caplog.records)
+
+
 def test_find_chromedriver_prefers_env(monkeypatch) -> None:
     path = "/opt/selenium/custom-chromedriver"
     monkeypatch.setenv("CHROMEDRIVER_PATH", path)
