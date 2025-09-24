@@ -80,3 +80,57 @@ def test_check_prices_grouped(monkeypatch, app_mod):
         assert "o1" in recorded_ids
         assert f"o1{COMPETITOR_SUFFIX}" in recorded_ids
         assert any(item["offer_id"] == f"o1{COMPETITOR_SUFFIX}" for item in result["trend_report"])
+
+
+def test_check_prices_readonly_db(monkeypatch, app_mod, caplog):
+    def fake_fetch(offer_id, *, stop_seller=None, limit=30, headless=True):
+        return [Offer("Oferta", "40,00 zł", "Sprzedawca", "https://allegro.pl/oferta/other")], []
+
+    messages: list[str] = []
+
+    monkeypatch.setattr(
+        "magazyn.allegro_price_monitor.fetch_competitors_for_offer",
+        fake_fetch,
+    )
+    monkeypatch.setattr(
+        "magazyn.allegro_price_monitor.send_messenger",
+        lambda msg: messages.append(msg),
+    )
+
+    with get_session() as session:
+        product = Product(name="Readonly")
+        session.add(product)
+        session.flush()
+        size = ProductSize(product_id=product.id, size="M", barcode="123")
+        session.add(size)
+        session.flush()
+        session.add(
+            AllegroOffer(
+                offer_id="o-readonly",
+                title="o-readonly",
+                price=Decimal("50.0"),
+                product_id=product.id,
+                product_size_id=size.id,
+            )
+        )
+
+    def forbid_record(*args, **kwargs):  # pragma: no cover - sanity check
+        raise AssertionError("record_price_point should not be called when DB is read-only")
+
+    monkeypatch.setattr(
+        "magazyn.allegro_price_monitor.allegro_prices.record_price_point",
+        forbid_record,
+    )
+
+    monkeypatch.setattr(
+        "magazyn.allegro_price_monitor._is_db_writable",
+        lambda path: False,
+    )
+
+    caplog.set_level("WARNING", logger="magazyn.allegro_price_monitor")
+
+    result = check_prices()
+
+    assert result["alerts"] == 1
+    assert messages and "Niższa cena" in messages[0]
+    assert any("read-only" in rec.message.lower() for rec in caplog.records)
