@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import re
 import time
 from dataclasses import dataclass
@@ -16,12 +17,14 @@ try:  # pragma: no cover - optional dependency during import time
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import WebDriverWait
 except ImportError:  # pragma: no cover - handled at runtime
     webdriver = None  # type: ignore[assignment]
     Options = None  # type: ignore[assignment]
     By = None  # type: ignore[assignment]
+    Service = None  # type: ignore[assignment]
     EC = None  # type: ignore[assignment]
     WebDriverWait = None  # type: ignore[assignment]
 
@@ -44,6 +47,28 @@ def _require_selenium() -> None:
         )
 
 
+def _find_chromedriver() -> Optional[str]:
+    """Return a path to a ChromeDriver binary if one is available."""
+
+    env_path = os.environ.get("CHROMEDRIVER_PATH")
+    if env_path:
+        return env_path
+
+    detected = shutil.which("chromedriver")
+    if detected:
+        return detected
+
+    common_paths = (
+        "/usr/bin/chromedriver",
+        "/usr/lib/chromium-browser/chromedriver",
+        "/usr/lib/chromium/chromedriver",
+    )
+    for candidate in common_paths:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def _mk_driver(headless: bool = True) -> "webdriver.Chrome":
     _require_selenium()
     opts = Options()
@@ -55,7 +80,13 @@ def _mk_driver(headless: bool = True) -> "webdriver.Chrome":
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,1600")
     opts.add_argument("--lang=pl-PL")
-    return webdriver.Chrome(options=opts)
+    driver_kwargs = {"options": opts}
+
+    driver_path = _find_chromedriver()
+    if driver_path and Service is not None:
+        logger.debug("Using ChromeDriver binary at %s", driver_path)
+        driver_kwargs["service"] = Service(executable_path=driver_path)
+    return webdriver.Chrome(**driver_kwargs)
 
 
 def _click_any(driver: "webdriver.Chrome", xpaths: Sequence[str], wait: int = 8) -> bool:
