@@ -28,7 +28,11 @@ from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
-from .allegro_scraper import fetch_competitors_for_offer, parse_price_amount
+from .allegro_scraper import (
+    AllegroScrapeError,
+    fetch_competitors_for_offer,
+    parse_price_amount,
+)
 
 ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 
@@ -474,6 +478,14 @@ def build_price_checks(
                 offer_id,
                 stop_seller=settings.ALLEGRO_SELLER_NAME,
             )
+        except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
+            error = str(exc)
+            error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
+            if barcode:
+                error_context["barcode"] = barcode
+            record_debug("Błąd pobierania ofert Allegro", error_context)
+            competitor_offers = []
+            scrape_logs = exc.logs
         except Exception as exc:  # pragma: no cover - selenium/network errors
             error = str(exc)
             error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
@@ -482,12 +494,12 @@ def build_price_checks(
             record_debug("Błąd pobierania ofert Allegro", error_context)
             competitor_offers = []
             scrape_logs = []
-        else:
-            for entry in scrape_logs:
-                log_context = {"offer_id": offer_id, "message": entry}
-                if barcode:
-                    log_context["barcode"] = barcode
-                record_debug("Log Selenium", log_context)
+
+        for entry in scrape_logs:
+            log_context = {"offer_id": offer_id, "message": entry}
+            if barcode:
+                log_context["barcode"] = barcode
+            record_debug("Log Selenium", log_context)
 
         count_context = {"offer_id": offer_id, "offers": len(competitor_offers)}
         if barcode:
