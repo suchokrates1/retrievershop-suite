@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import re
 import time
 from dataclasses import dataclass
@@ -16,12 +17,14 @@ try:  # pragma: no cover - optional dependency during import time
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import WebDriverWait
 except ImportError:  # pragma: no cover - handled at runtime
     webdriver = None  # type: ignore[assignment]
     Options = None  # type: ignore[assignment]
     By = None  # type: ignore[assignment]
+    Service = None  # type: ignore[assignment]
     EC = None  # type: ignore[assignment]
     WebDriverWait = None  # type: ignore[assignment]
 
@@ -44,34 +47,79 @@ def _require_selenium() -> None:
         )
 
 
-def _mk_driver(headless: bool = True) -> "webdriver.Chrome":
+def _log_step(logs: Optional[List[str]], message: str) -> None:
+    if logs is not None:
+        logs.append(message)
+
+
+def _find_chromedriver() -> Optional[str]:
+    """Return a path to a ChromeDriver binary if one is available."""
+
+    env_path = os.environ.get("CHROMEDRIVER_PATH")
+    if env_path:
+        return env_path
+
+    detected = shutil.which("chromedriver")
+    if detected:
+        return detected
+
+    common_paths = (
+        "/usr/bin/chromedriver",
+        "/usr/lib/chromium-browser/chromedriver",
+        "/usr/lib/chromium/chromedriver",
+    )
+    for candidate in common_paths:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def _mk_driver(headless: bool = True, logs: Optional[List[str]] = None) -> "webdriver.Chrome":
     _require_selenium()
     opts = Options()
     if os.path.exists("/usr/bin/chromium"):
         opts.binary_location = "/usr/bin/chromium"
     if headless:
         opts.add_argument("--headless=new")
+        _log_step(logs, "Uruchamianie ChromeDriver w trybie headless")
+    else:
+        _log_step(logs, "Uruchamianie ChromeDriver z widocznym oknem")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,1600")
     opts.add_argument("--lang=pl-PL")
-    return webdriver.Chrome(options=opts)
+    driver_kwargs = {"options": opts}
+
+    driver_path = _find_chromedriver()
+    if driver_path and Service is not None:
+        logger.debug("Using ChromeDriver binary at %s", driver_path)
+        _log_step(logs, f"Używany chromedriver: {driver_path}")
+        driver_kwargs["service"] = Service(executable_path=driver_path)
+    return webdriver.Chrome(**driver_kwargs)
 
 
-def _click_any(driver: "webdriver.Chrome", xpaths: Sequence[str], wait: int = 8) -> bool:
+def _click_any(
+    driver: "webdriver.Chrome",
+    xpaths: Sequence[str],
+    wait: int = 8,
+    logs: Optional[List[str]] = None,
+) -> bool:
     for xp in xpaths:
         try:
+            _log_step(logs, f"Oczekiwanie na element do kliknięcia: {xp}")
             element = WebDriverWait(driver, wait).until(EC.element_to_be_clickable((By.XPATH, xp)))
             driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
             time.sleep(0.15)
             element.click()
+            _log_step(logs, f"Kliknięto element: {xp}")
             return True
         except Exception:  # pragma: no cover - defensive, depends on live DOM
+            _log_step(logs, f"Nie udało się kliknąć elementu: {xp}")
             continue
     return False
 
 
-def _accept_cookies(driver: "webdriver.Chrome") -> None:
+def _accept_cookies(driver: "webdriver.Chrome", logs: Optional[List[str]] = None) -> None:
     labels = [
         "Przejdź do serwisu",
         "Akceptuj",
@@ -86,6 +134,7 @@ def _accept_cookies(driver: "webdriver.Chrome") -> None:
             for button in driver.find_elements(By.XPATH, f"//button[contains(., '{text}')]"):
                 if button.is_displayed():
                     button.click()
+                    _log_step(logs, f"Zamknięto baner cookies przyciskiem: {text}")
                     time.sleep(0.1)
         except Exception:  # pragma: no cover - depends on cookie banners
             continue
@@ -100,8 +149,9 @@ def _extract_price(text: str) -> str:
     return clean or "(brak ceny)"
 
 
-def _wait_modal(driver: "webdriver.Chrome") -> None:
+def _wait_modal(driver: "webdriver.Chrome", logs: Optional[List[str]] = None) -> None:
     try:
+        _log_step(logs, "Oczekiwanie na pojawienie się listy ofert konkurencji")
         WebDriverWait(driver, 12).until(
             EC.presence_of_element_located(
                 (
@@ -112,6 +162,7 @@ def _wait_modal(driver: "webdriver.Chrome") -> None:
             )
         )
     except Exception:  # pragma: no cover - depends on live DOM timing
+        _log_step(logs, "Modal z ofertami nie pojawił się w czasie oczekiwania")
         pass
     time.sleep(0.6)
 
@@ -153,11 +204,13 @@ def fetch_competitors(
     """Scrape competitor offers displayed on an Allegro product page."""
 
     logs: List[str] = []
-    driver = _mk_driver(headless=headless)
+    _log_step(logs, f"Inicjalizacja Selenium dla URL: {product_url}")
+    driver = _mk_driver(headless=headless, logs=logs)
     try:
+        _log_step(logs, f"Przejście na stronę produktu: {product_url}")
         driver.get(product_url)
         time.sleep(1.5)
-        _accept_cookies(driver)
+        _accept_cookies(driver, logs=logs)
 
         clicked = _click_any(
             driver,
@@ -166,6 +219,7 @@ def fetch_competitors(
                 "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::a",
                 "//button[.//text()[contains(., 'Najtańsze')]]",
             ],
+            logs=logs,
         )
         if not clicked:
             clicked = _click_any(
@@ -175,14 +229,16 @@ def fetch_competitors(
                     "//button[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
                     "//a[contains(., 'Inne oferty produktu') or contains(., 'Wszystkie oferty')]",
                 ],
+                logs=logs,
             )
         if not clicked:
             logs.append("Nie znaleziono 'Najtańsze' ani 'WSZYSTKIE OFERTY'.")
             return [], logs
 
-        _wait_modal(driver)
+        _wait_modal(driver, logs=logs)
         offers: List[Offer] = []
         rows = _rows_in_modal(driver)
+        _log_step(logs, f"Liczba znalezionych wierszy w modalu: {len(rows)}")
         seen: set[str] = set()
 
         for row in rows:
@@ -258,11 +314,18 @@ def fetch_competitors(
                 continue
 
             offers.append(Offer(title=title, price=price, seller=seller_clean or seller_text, url=href))
+            _log_step(
+                logs,
+                "Znaleziono ofertę konkurencji: "
+                f"tytuł='{title}', cena='{price}', sprzedawca='{seller_clean or seller_text}'",
+            )
             if len(offers) >= limit:
+                _log_step(logs, f"Osiągnięto limit {limit} ofert, zakończenie skanowania")
                 break
 
         return offers, logs
     finally:
+        _log_step(logs, "Zamykanie przeglądarki Selenium")
         driver.quit()
 
 
