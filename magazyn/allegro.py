@@ -488,10 +488,19 @@ def build_price_checks(
         competitor_min_url: Optional[str] = None
         error: Optional[str] = None
 
+        def stream_scrape_log(message: str) -> None:
+            log_context = {"offer_id": offer_id, "message": message}
+            if barcode:
+                log_context["barcode"] = barcode
+            record_debug("Log Selenium", log_context)
+
+        scraper_callback = stream_scrape_log if log_callback is not None else None
+
         try:
             competitor_offers, scrape_logs = fetch_competitors_for_offer(
                 offer_id,
                 stop_seller=settings.ALLEGRO_SELLER_NAME,
+                log_callback=scraper_callback,
             )
         except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
             error = str(exc)
@@ -510,11 +519,12 @@ def build_price_checks(
             competitor_offers = []
             scrape_logs = []
 
-        for entry in scrape_logs:
-            log_context = {"offer_id": offer_id, "message": entry}
-            if barcode:
-                log_context["barcode"] = barcode
-            record_debug("Log Selenium", log_context)
+        if log_callback is None:
+            for entry in scrape_logs:
+                log_context = {"offer_id": offer_id, "message": entry}
+                if barcode:
+                    log_context["barcode"] = barcode
+                record_debug("Log Selenium", log_context)
 
         count_context = {"offer_id": offer_id, "offers": len(competitor_offers)}
         if barcode:
