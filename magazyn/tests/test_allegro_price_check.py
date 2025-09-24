@@ -151,8 +151,10 @@ class TestAllegroPriceCheckDebug:
         def fake_competitors(
             offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
         ):
+            # Używamy log_callback, aby zasymulować dopisywanie do logów w trakcie działania
             if log_callback is not None:
                 log_callback("Stream log")
+            # Zwracamy pustą listę ofert i listę logów, które endpoint powinien wypuścić jako eventy SSE
             return (
                 [],
                 ["Stream log"],
