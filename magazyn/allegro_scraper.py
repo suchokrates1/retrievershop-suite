@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import os
 import re
@@ -9,9 +10,15 @@ import shutil
 import time
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+_LOG_CALLBACK: "contextvars.ContextVar[Optional[Callable[[str], None]]]" = contextvars.ContextVar(
+    "allegro_scraper_log_callback",
+    default=None,
+)
 
 
 class AllegroScrapeError(RuntimeError):
@@ -62,6 +69,12 @@ def _log_step(logs: Optional[List[str]], message: str) -> None:
         logger.debug("[Selenium] %s", message)
     if logs is not None:
         logs.append(message)
+    callback = _LOG_CALLBACK.get()
+    if callback is not None:
+        try:
+            callback(message)
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception("Selenium log callback failed", exc_info=True)
 
 
 def _find_chromedriver() -> Optional[str]:
@@ -327,198 +340,204 @@ def fetch_competitors(
     stop_seller: Optional[str] = None,
     limit: int = 30,
     headless: bool = True,
+    log_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[Offer], List[str]]:
     """Scrape competitor offers displayed on an Allegro product page."""
 
     logs: List[str] = []
-    _log_step(logs, f"Inicjalizacja Selenium dla URL: {product_url}")
-    driver = _mk_driver(headless=headless, logs=logs)
+    token = _LOG_CALLBACK.set(log_callback) if log_callback is not None else None
     try:
-        _log_step(logs, f"Przejście na stronę produktu: {product_url}")
-        driver.get(product_url)
-        time.sleep(1.5)
-        _dismiss_overlays(driver, logs=logs)
-        _detect_antibot_screen(driver, logs=logs)
-
-        link = _find_cheapest_link(driver)
-        clicked = False
-        if link is not None:
-            try:
-                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link)
-            except Exception:  # pragma: no cover - scroll failures ignored
-                pass
-            time.sleep(0.2)
-            try:
-                driver.execute_script("arguments[0].focus();", link)
-            except Exception:  # pragma: no cover - focus may fail silently
-                pass
-            try:
-                link.click()
-                clicked = True
-                _log_step(logs, "Kliknięto odnośnik 'Najtańsze'")
-            except Exception:
-                _log_step(logs, "Bezpośrednie kliknięcie odnośnika 'Najtańsze' nie powiodło się")
-
-        if not clicked:
-            clicked = _click_any(
-                driver,
-                [
-                    "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::a[@href='#inne-oferty-produktu']",
-                    "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::button",
-                    "//a[contains(@class,'other-offers-link-cheapest') and @href='#inne-oferty-produktu']",
-                    "//a[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
-                    "//button[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
-                    "//a[contains(., 'Inne oferty produktu') or contains(., 'Wszystkie oferty')]",
-                ],
-                logs=logs,
-            )
-        if not clicked:
-            logs.append("Nie znaleziono odnośnika do sekcji 'Najtańsze' ani alternatywnych ofert.")
-            return [], logs
-
+        _log_step(logs, f"Inicjalizacja Selenium dla URL: {product_url}")
+        driver = _mk_driver(headless=headless, logs=logs)
         try:
-            section = driver.find_element(By.CSS_SELECTOR, "#inne-oferty-produktu")
-            driver.execute_script("arguments[0].scrollIntoView({block:'start'});", section)
-        except Exception:
-            pass
-
-        _dismiss_overlays(driver, logs=logs)
-        _detect_antibot_screen(driver, logs=logs)
-
-        listing = _wait_for_listing(driver, logs=logs)
-        try:
-            if not listing.is_displayed():
-                _dismiss_overlays(driver, logs=logs)
-        except Exception:
+            _log_step(logs, f"Przejście na stronę produktu: {product_url}")
+            driver.get(product_url)
+            time.sleep(1.5)
             _dismiss_overlays(driver, logs=logs)
-        rows = _wait_for_offers(driver, logs=logs)
-        _log_step(logs, f"Liczba znalezionych wierszy w arkuszu: {len(rows)}")
-        offers: List[Offer] = []
-        seen: set[str] = set()
+            _detect_antibot_screen(driver, logs=logs)
 
-        for row in rows:
-            try:
-                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", row)
-            except Exception:  # pragma: no cover - scroll failures ignored
-                pass
-            time.sleep(0.05)
-
-            anchor = None
-            try:
-                anchor = row.find_element(By.XPATH, ".//a[contains(@href,'/oferta/')]")
-            except Exception:
+            link = _find_cheapest_link(driver)
+            clicked = False
+            if link is not None:
                 try:
-                    href = row.get_attribute("href")
-                    if href and "/oferta/" in href:
-                        anchor = row
-                except Exception:  # pragma: no cover - defensive
-                    anchor = None
-            if anchor is None:
-                continue
-
-            href = anchor.get_attribute("href") or ""
-            if not href or "/oferta/" not in href:
-                continue
-            if href.startswith("//"):
-                href = f"https:{href}"
-            elif href.startswith("/"):
-                href = f"https://allegro.pl{href}"
-            if href in seen:
-                continue
-            seen.add(href)
-
-            title = anchor.text.strip() or "(brak tytułu)"
-            if title == "(brak tytułu)":
-                try:
-                    title = row.find_element(By.XPATH, ".//h2|.//h3|.//h4").text.strip()
-                except Exception:  # pragma: no cover - fallback
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link)
+                except Exception:  # pragma: no cover - scroll failures ignored
                     pass
-
-            price_text = ""
-            for px in (
-                ".//*[@data-role='price']",
-                ".//*[@data-testid='price']",
-                ".//*[contains(@class,'price')]",
-                ".//*[@aria-label and contains(@aria-label,'zł')]",
-                ".//*[@data-price]",
-                ".//*[@data-analytics-interaction-label='price']",
-                ".//*[@data-analytics-interaction-label and contains(@data-analytics-interaction-label,'price')]",
-                ".//span[contains(text(),'zł')]",
-                ".//div[contains(text(),'zł')]",
-            ):
+                time.sleep(0.2)
                 try:
-                    price_text = row.find_element(By.XPATH, px).text.strip()
-                    if price_text:
-                        break
+                    driver.execute_script("arguments[0].focus();", link)
+                except Exception:  # pragma: no cover - focus may fail silently
+                    pass
+                try:
+                    link.click()
+                    clicked = True
+                    _log_step(logs, "Kliknięto odnośnik 'Najtańsze'")
                 except Exception:
-                    continue
-            if not price_text:
-                for attr in ("aria-label", "data-analytics-click-label", "data-analytics-interaction-label"):
+                    _log_step(logs, "Bezpośrednie kliknięcie odnośnika 'Najtańsze' nie powiodło się")
+
+            if not clicked:
+                clicked = _click_any(
+                    driver,
+                    [
+                        "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::a[@href='#inne-oferty-produktu']",
+                        "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::button",
+                        "//a[contains(@class,'other-offers-link-cheapest') and @href='#inne-oferty-produktu']",
+                        "//a[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
+                        "//button[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
+                        "//a[contains(., 'Inne oferty produktu') or contains(., 'Wszystkie oferty')]",
+                    ],
+                    logs=logs,
+                )
+            if not clicked:
+                logs.append("Nie znaleziono odnośnika do sekcji 'Najtańsze' ani alternatywnych ofert.")
+                return [], logs
+
+            try:
+                section = driver.find_element(By.CSS_SELECTOR, "#inne-oferty-produktu")
+                driver.execute_script("arguments[0].scrollIntoView({block:'start'});", section)
+            except Exception:
+                pass
+
+            _dismiss_overlays(driver, logs=logs)
+            _detect_antibot_screen(driver, logs=logs)
+
+            listing = _wait_for_listing(driver, logs=logs)
+            try:
+                if not listing.is_displayed():
+                    _dismiss_overlays(driver, logs=logs)
+            except Exception:
+                _dismiss_overlays(driver, logs=logs)
+            rows = _wait_for_offers(driver, logs=logs)
+            _log_step(logs, f"Liczba znalezionych wierszy w arkuszu: {len(rows)}")
+            offers: List[Offer] = []
+            seen: set[str] = set()
+
+            for row in rows:
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", row)
+                except Exception:  # pragma: no cover - scroll failures ignored
+                    pass
+                time.sleep(0.05)
+
+                anchor = None
+                try:
+                    anchor = row.find_element(By.XPATH, ".//a[contains(@href,'/oferta/')]")
+                except Exception:
                     try:
-                        value = anchor.get_attribute(attr) or ""
-                        if "zł" in value:
-                            price_text = value
+                        href = row.get_attribute("href")
+                        if href and "/oferta/" in href:
+                            anchor = row
+                    except Exception:  # pragma: no cover - defensive
+                        anchor = None
+                if anchor is None:
+                    continue
+
+                href = anchor.get_attribute("href") or ""
+                if not href or "/oferta/" not in href:
+                    continue
+                if href.startswith("//"):
+                    href = f"https:{href}"
+                elif href.startswith("/"):
+                    href = f"https://allegro.pl{href}"
+                if href in seen:
+                    continue
+                seen.add(href)
+
+                title = anchor.text.strip() or "(brak tytułu)"
+                if title == "(brak tytułu)":
+                    try:
+                        title = row.find_element(By.XPATH, ".//h2|.//h3|.//h4").text.strip()
+                    except Exception:  # pragma: no cover - fallback
+                        pass
+
+                price_text = ""
+                for px in (
+                    ".//*[@data-role='price']",
+                    ".//*[@data-testid='price']",
+                    ".//*[contains(@class,'price')]",
+                    ".//*[@aria-label and contains(@aria-label,'zł')]",
+                    ".//*[@data-price]",
+                    ".//*[@data-analytics-interaction-label='price']",
+                    ".//*[@data-analytics-interaction-label and contains(@data-analytics-interaction-label,'price')]",
+                    ".//span[contains(text(),'zł')]",
+                    ".//div[contains(text(),'zł')]",
+                ):
+                    try:
+                        price_text = row.find_element(By.XPATH, px).text.strip()
+                        if price_text:
                             break
                     except Exception:
                         continue
-            price = _extract_price(price_text)
+                if not price_text:
+                    for attr in ("aria-label", "data-analytics-click-label", "data-analytics-interaction-label"):
+                        try:
+                            value = anchor.get_attribute(attr) or ""
+                            if "zł" in value:
+                                price_text = value
+                                break
+                        except Exception:
+                            continue
+                price = _extract_price(price_text)
 
-            seller_text = ""
-            for sx in (
-                ".//*[@data-role='seller-name']",
-                ".//*[@data-testid='seller-name']",
-                ".//*[@data-analytics-interaction-label='sellerName']",
-                ".//*[@data-analytics-click-label='sellerName']",
-                ".//*[contains(@class,'seller') or contains(.,'Poleca sprzedający')]/..",
-                ".//*[contains(., 'Poleca sprzedający')]",
-                ".//a[contains(@href, '/uzytkownik/') or contains(@href, '/strefa_sprzedawcy/')]",
-                ".//a[contains(@data-analytics-interaction-label,'sellerProfile')]",
-                ".//*[@aria-label and contains(@aria-label,'sprzedaw')]",
-            ):
-                try:
-                    st = row.find_element(By.XPATH, sx).text.strip()
-                    if st:
-                        seller_text = st
-                        break
-                except Exception:
-                    continue
-            if not seller_text:
-                try:
-                    seller_text = anchor.get_attribute("data-analytics-seller-name") or ""
-                except Exception:
-                    seller_text = ""
-            if not seller_text:
-                try:
-                    seller_text = anchor.get_attribute("data-seller-name") or ""
-                except Exception:
-                    seller_text = ""
+                seller_text = ""
+                for sx in (
+                    ".//*[@data-role='seller-name']",
+                    ".//*[@data-testid='seller-name']",
+                    ".//*[@data-analytics-interaction-label='sellerName']",
+                    ".//*[@data-analytics-click-label='sellerName']",
+                    ".//*[contains(@class,'seller') or contains(.,'Poleca sprzedający')]/..",
+                    ".//*[contains(., 'Poleca sprzedający')]",
+                    ".//a[contains(@href, '/uzytkownik/') or contains(@href, '/strefa_sprzedawcy/')]",
+                    ".//a[contains(@data-analytics-interaction-label,'sellerProfile')]",
+                    ".//*[@aria-label and contains(@aria-label,'sprzedaw')]",
+                ):
+                    try:
+                        st = row.find_element(By.XPATH, sx).text.strip()
+                        if st:
+                            seller_text = st
+                            break
+                    except Exception:
+                        continue
+                if not seller_text:
+                    try:
+                        seller_text = anchor.get_attribute("data-analytics-seller-name") or ""
+                    except Exception:
+                        seller_text = ""
+                if not seller_text:
+                    try:
+                        seller_text = anchor.get_attribute("data-seller-name") or ""
+                    except Exception:
+                        seller_text = ""
 
-            seller_clean = re.sub(r"\s*Poleca.*$", "", seller_text).strip()
-            seller_clean = re.sub(r"\s+Firma.*$", "", seller_clean).strip()
-            seller_clean = re.sub(r"\s+Oficjalny sklep.*$", "", seller_clean).strip()
+                seller_clean = re.sub(r"\s*Poleca.*$", "", seller_text).strip()
+                seller_clean = re.sub(r"\s+Firma.*$", "", seller_clean).strip()
+                seller_clean = re.sub(r"\s+Oficjalny sklep.*$", "", seller_clean).strip()
 
-            # zbieraj oferty do momentu trafienia wskazanego sprzedawcy; jego już nie dodawaj
-            if stop_seller and seller_clean.lower() == stop_seller.lower():
-                _log_step(logs, f"Zatrzymano na sprzedawcy: {seller_clean}")
-                break
+                # zbieraj oferty do momentu trafienia wskazanego sprzedawcy; jego już nie dodawaj
+                if stop_seller and seller_clean.lower() == stop_seller.lower():
+                    _log_step(logs, f"Zatrzymano na sprzedawcy: {seller_clean}")
+                    break
 
-            offers.append(Offer(title=title, price=price, seller=seller_clean or seller_text, url=href))
-            _log_step(
-                logs,
-                "Znaleziono ofertę konkurencji: "
-                f"tytuł='{title}', cena='{price}', sprzedawca='{seller_clean or seller_text}'",
-            )
-            if len(offers) >= limit:
-                _log_step(logs, f"Osiągnięto limit {limit} ofert, zakończenie skanowania")
-                break
+                offers.append(Offer(title=title, price=price, seller=seller_clean or seller_text, url=href))
+                _log_step(
+                    logs,
+                    "Znaleziono ofertę konkurencji: "
+                    f"tytuł='{title}', cena='{price}', sprzedawca='{seller_clean or seller_text}'",
+                )
+                if len(offers) >= limit:
+                    _log_step(logs, f"Osiągnięto limit {limit} ofert, zakończenie skanowania")
+                    break
 
-        return offers, logs
-    except Exception as exc:
-        _log_step(logs, f"Błąd Selenium: {exc}")
-        raise AllegroScrapeError(str(exc), logs) from exc
+            return offers, logs
+        except Exception as exc:
+            _log_step(logs, f"Błąd Selenium: {exc}")
+            raise AllegroScrapeError(str(exc), logs) from exc
+        finally:
+            _log_step(logs, "Zamykanie przeglądarki Selenium")
+            driver.quit()
     finally:
-        _log_step(logs, "Zamykanie przeglądarki Selenium")
-        driver.quit()
+        if token is not None:
+            _LOG_CALLBACK.reset(token)
 
 
 def fetch_competitors_for_offer(
@@ -527,6 +546,7 @@ def fetch_competitors_for_offer(
     stop_seller: Optional[str] = None,
     limit: int = 30,
     headless: bool = True,
+    log_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[Offer], List[str]]:
     """Convenience wrapper for :func:`fetch_competitors` using an offer identifier."""
 
@@ -536,6 +556,7 @@ def fetch_competitors_for_offer(
         stop_seller=stop_seller,
         limit=limit,
         headless=headless,
+        log_callback=log_callback,
     )
 
 

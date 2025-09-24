@@ -214,7 +214,9 @@ def test_offers_without_inventory_are_listed_first(client, login):
     assert linked_titles == sorted(linked_titles)
 
 
-def test_price_check_requires_allegro_authorization(client, login, allegro_tokens):
+def test_price_check_does_not_require_allegro_authorization(
+    client, login, allegro_tokens
+):
     allegro_tokens()
 
     response = client.get("/allegro/price-check")
@@ -223,19 +225,16 @@ def test_price_check_requires_allegro_authorization(client, login, allegro_token
     body = response.data.decode("utf-8")
     assert (
         "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację."
-        in body
+        not in body
     )
-    assert "Missing Allegro access token" not in body
-    assert "<table" not in body
+    assert 'id="price-check-loading"' in body
+    assert 'id="price-check-table-body"' in body
 
     json_response = client.get("/allegro/price-check?format=json")
     assert json_response.status_code == 200
     payload = json_response.get_json()
     assert payload["price_checks"] == []
-    assert (
-        payload["auth_error"]
-        == "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację."
-    )
+    assert payload["auth_error"] is None
     assert isinstance(payload["debug_steps"], list)
     labels = [step["label"] for step in payload["debug_steps"]]
     assert "Żądany format odpowiedzi" in labels
@@ -284,8 +283,12 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
 
     monkeypatch.setattr(settings, "ALLEGRO_SELLER_NAME", "Retriever Shop")
 
-    def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+    def fake_competitors(
+        offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+    ):
         if offer_id == "offer-low":
+            if log_callback is not None:
+                log_callback("Zatrzymano na sprzedawcy: Retriever Shop")
             return (
                 [
                     Offer("Nasza oferta", "90,00 zł", "Retriever Shop", "https://allegro.pl/oferta/offer-low"),
@@ -399,9 +402,14 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
 
     called_offers: list[str] = []
 
-    def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+    def fake_competitors(
+        offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+    ):
         called_offers.append(offer_id)
         if offer_id == "offer-product":
+            if log_callback is not None:
+                log_callback("Log dla 333")
+                log_callback("Log dla 444")
             return (
                 [
                     Offer(
