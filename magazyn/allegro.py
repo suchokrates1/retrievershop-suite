@@ -50,6 +50,16 @@ def _record_debug_step(steps: list[dict[str, str]], label: str, value: object) -
     steps.append({"label": label, "value": _format_debug_value(value)})
 
 
+def _append_debug_log(logs: Optional[list[str]], label: str, value: object) -> None:
+    if logs is None:
+        return
+    formatted = _format_debug_value(value)
+    if formatted:
+        logs.append(f"{label}: {formatted}")
+    else:
+        logs.append(label)
+
+
 def _process_oauth_response() -> dict[str, object]:
     debug_steps: list[dict[str, str]] = []
 
@@ -341,10 +351,12 @@ def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
 
 def build_price_checks(
     debug_steps: Optional[list[dict[str, str]]] = None,
+    debug_logs: Optional[list[str]] = None,
 ) -> list[dict]:
     def record_debug(label: str, value: object) -> None:
         if debug_steps is not None:
             _record_debug_step(debug_steps, label, value)
+        _append_debug_log(debug_logs, label, value)
 
     with get_session() as db:
         rows = (
@@ -584,19 +596,17 @@ def build_price_checks(
 @login_required
 def price_check():
     debug_steps: list[dict[str, str]] = []
+    debug_log_lines: list[str] = []
+
+    def record_debug(label: str, value: object) -> None:
+        _record_debug_step(debug_steps, label, value)
+        _append_debug_log(debug_log_lines, label, value)
+
     access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
 
-    _record_debug_step(
-        debug_steps,
-        "Czy dostępny access token Allegro",
-        bool(access_token),
-    )
-    _record_debug_step(
-        debug_steps,
-        "Czy dostępny refresh token Allegro",
-        bool(refresh_token),
-    )
+    record_debug("Czy dostępny access token Allegro", bool(access_token))
+    record_debug("Czy dostępny refresh token Allegro", bool(refresh_token))
 
     auth_error = None
     if not access_token or not refresh_token:
@@ -610,11 +620,7 @@ def price_check():
         or request.accept_mimetypes.best == "application/json"
     )
 
-    _record_debug_step(
-        debug_steps,
-        "Żądany format odpowiedzi",
-        "json" if wants_json else "html",
-    )
+    record_debug("Żądany format odpowiedzi", "json" if wants_json else "html")
 
     if wants_json:
         if auth_error:
@@ -623,14 +629,16 @@ def price_check():
                     "price_checks": [],
                     "auth_error": auth_error,
                     "debug_steps": debug_steps,
+                    "debug_log": "\n".join(debug_log_lines),
                 }
             )
-        price_checks = build_price_checks(debug_steps)
+        price_checks = build_price_checks(debug_steps, debug_log_lines)
         return jsonify(
             {
                 "price_checks": price_checks,
                 "auth_error": None,
                 "debug_steps": debug_steps,
+                "debug_log": "\n".join(debug_log_lines),
             }
         )
 
@@ -638,6 +646,7 @@ def price_check():
         "allegro/price_check.html",
         auth_error=auth_error,
         debug_steps=debug_steps,
+        debug_log="\n".join(debug_log_lines),
     )
 
 
