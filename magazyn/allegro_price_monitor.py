@@ -11,7 +11,11 @@ from .db import get_session
 from .domain import allegro_prices
 from .models import ProductSize, AllegroOffer
 from .notifications import send_messenger
-from .allegro_scraper import fetch_competitors_for_offer, parse_price_amount
+from .allegro_scraper import (
+    AllegroScrapeError,
+    fetch_competitors_for_offer,
+    parse_price_amount,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +116,15 @@ def check_prices() -> dict:
                         price=own_price,
                         recorded_at=timestamp_dt,
                     )
+            scrape_logs: list[str] = []
             try:
                 first_offer_id = offers[0][1]
                 competitor_offers, scrape_logs = fetch_competitors_for_offer(
                     first_offer_id,
                     stop_seller=settings.ALLEGRO_SELLER_NAME,
                 )
+            except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
+                scrape_logs = exc.logs
                 for entry in scrape_logs:
                     logger.debug(
                         "Selenium log for %s (EAN %s): %s",
@@ -125,6 +132,13 @@ def check_prices() -> dict:
                         barcode,
                         entry,
                     )
+                logger.error(
+                    "Failed to fetch competitor listing for %s (%s): %s",
+                    barcode,
+                    offers[0][1],
+                    exc,
+                )
+                continue
             except Exception as exc:  # pragma: no cover - network errors
                 logger.error(
                     "Failed to fetch competitor listing for %s (%s): %s",
@@ -133,6 +147,14 @@ def check_prices() -> dict:
                     exc,
                 )
                 continue
+
+            for entry in scrape_logs:
+                logger.debug(
+                    "Selenium log for %s (EAN %s): %s",
+                    first_offer_id,
+                    barcode,
+                    entry,
+                )
 
             competitor_prices = []
             for offer_data in competitor_offers:

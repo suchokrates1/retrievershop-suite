@@ -5,7 +5,7 @@ import pytest
 from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
-from magazyn.allegro_scraper import Offer
+from magazyn.allegro_scraper import Offer, AllegroScrapeError
 
 
 @pytest.mark.usefixtures("login")
@@ -99,7 +99,10 @@ class TestAllegroPriceCheckDebug:
             )
 
         def failing_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
-            raise RuntimeError("Selenium error: brak danych")
+            raise AllegroScrapeError(
+                "Selenium error: brak danych",
+                ["Start Selenium", "Zamykanie przeglądarki Selenium"],
+            )
 
         monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", failing_competitors)
 
@@ -113,4 +116,6 @@ class TestAllegroPriceCheckDebug:
         assert "Selenium error" in item["error"]
         labels = [step["label"] for step in payload["debug_steps"]]
         assert "Błąd pobierania ofert Allegro" in labels
+        assert "Log Selenium" in labels
         assert "Błąd pobierania ofert Allegro" in payload["debug_log"]
+        assert "Start Selenium" in payload["debug_log"]
