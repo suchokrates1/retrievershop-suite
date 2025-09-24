@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div id="price-check-log-container" class="mb-4{% if not debug_log %} d-none{% endif %}">
+    <h2 class="h4 mb-3">Pełne logi price-check</h2>
+    <pre id="price-check-log-content" class="bg-dark text-white p-3 rounded small mb-0">{{ debug_log }}</pre>
+</div>
 <h1 class="mb-4">Monitor cen Allegro</h1>
 {% if auth_error %}
 <div class="alert alert-warning" role="alert">
