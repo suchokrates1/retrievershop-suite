@@ -1,6 +1,6 @@
 import json
 import secrets
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -21,7 +21,6 @@ from sqlalchemy import case, or_
 from requests.exceptions import HTTPError, RequestException
 
 from . import allegro_api
-from .allegro_price_monitor import fetch_product_listing
 from .auth import login_required
 from .config import settings
 from .db import get_session
@@ -29,6 +28,7 @@ from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
+from .allegro_scraper import fetch_competitors_for_offer, parse_price_amount
 
 ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 
@@ -407,74 +407,61 @@ def build_price_checks(
     price_checks: list[dict] = []
     for offer in offers:
         competitor_min_price: Optional[Decimal] = None
-        competitor_min_offer_id: Optional[str] = None
+        competitor_min_url: Optional[str] = None
         error: Optional[str] = None
-        barcodes = offer.get("barcodes", [])
-        unique_barcodes: list[str] = []
-        for barcode in barcodes:
-            if barcode and barcode not in unique_barcodes:
-                unique_barcodes.append(barcode)
 
-        if unique_barcodes:
-            for barcode in unique_barcodes:
-                record_debug(
-                    "Sprawdzanie listingu Allegro dla EAN",
-                    {"offer_id": offer["offer_id"], "ean": barcode},
-                )
-                try:
-                    listing = fetch_product_listing(barcode, debug=record_debug)
-                except Exception as exc:  # pragma: no cover - network errors
-                    error = str(exc)
-                    record_debug(
-                        "Błąd pobierania listingu Allegro",
-                        {"offer_id": offer["offer_id"], "ean": barcode, "error": str(exc)},
-                    )
-                    continue
-                record_debug(
-                    "Listing Allegro – liczba ofert",
-                    {
-                        "offer_id": offer["offer_id"],
-                        "ean": barcode,
-                        "offers": len(listing),
-                    },
-                )
-                for item in listing:
-                    offer_id = item.get("id")
-                    seller = item.get("seller") or {}
-                    seller_id = seller.get("id")
-                    if (
-                        not seller_id
-                        or seller_id == settings.ALLEGRO_SELLER_ID
-                        or seller_id in settings.ALLEGRO_EXCLUDED_SELLERS
-                    ):
-                        continue
-                    price_str = (
-                        item.get("sellingMode", {})
-                        .get("price", {})
-                        .get("amount")
-                    )
-                    try:
-                        price = Decimal(price_str).quantize(Decimal("0.01"))
-                    except (TypeError, ValueError, InvalidOperation):
-                        continue
-                    if (
-                        competitor_min_price is None
-                        or price < competitor_min_price
-                        or (
-                            price == competitor_min_price
-                            and competitor_min_offer_id is None
-                        )
-                    ):
-                        competitor_min_price = price
-                        competitor_min_offer_id = offer_id
-            if competitor_min_price is not None:
-                error = None
-        else:
-            error = "Brak kodu EAN"
-            record_debug(
-                "Brak EAN dla oferty",
-                {"offer_id": offer["offer_id"], "title": offer["title"]},
+        offer_id = offer["offer_id"]
+        offer_url = f"https://allegro.pl/oferta/{offer_id}"
+        record_debug(
+            "Sprawdzanie oferty Allegro",
+            {"offer_id": offer_id, "url": offer_url},
+        )
+        try:
+            competitor_offers, scrape_logs = fetch_competitors_for_offer(
+                offer_id,
+                stop_seller=settings.ALLEGRO_SELLER_NAME,
             )
+        except Exception as exc:  # pragma: no cover - selenium/network errors
+            error = str(exc)
+            record_debug(
+                "Błąd pobierania ofert Allegro",
+                {"offer_id": offer_id, "url": offer_url, "error": str(exc)},
+            )
+            competitor_offers = []
+            scrape_logs = []
+        else:
+            for entry in scrape_logs:
+                record_debug(
+                    "Log Selenium",
+                    {"offer_id": offer_id, "message": entry},
+                )
+
+        record_debug(
+            "Oferty konkurencji – liczba ofert",
+            {"offer_id": offer_id, "offers": len(competitor_offers)},
+        )
+        for competitor in competitor_offers:
+            seller_name = (competitor.seller or "").strip().lower()
+            if (
+                settings.ALLEGRO_SELLER_NAME
+                and seller_name
+                and seller_name == settings.ALLEGRO_SELLER_NAME.lower()
+            ):
+                continue
+            price_value = parse_price_amount(competitor.price)
+            if price_value is None:
+                continue
+            if (
+                competitor_min_price is None
+                or price_value < competitor_min_price
+                or (
+                    price_value == competitor_min_price and competitor_min_url is None
+                )
+            ):
+                competitor_min_price = price_value
+                competitor_min_url = competitor.url
+        if competitor_min_price is not None:
+            error = None
 
         competitor_min = competitor_min_price
         is_lowest = None
@@ -484,11 +471,7 @@ def build_price_checks(
             else:
                 is_lowest = offer["price"] <= competitor_min
 
-        competitor_offer_url = (
-            f"https://allegro.pl/oferta/{competitor_min_offer_id}"
-            if competitor_min_offer_id
-            else None
-        )
+        competitor_offer_url = competitor_min_url
 
         price_checks.append(
             {
