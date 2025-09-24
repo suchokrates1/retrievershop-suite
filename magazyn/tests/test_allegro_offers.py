@@ -13,6 +13,7 @@ from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
 from magazyn.allegro_api import fetch_product_listing
+from magazyn.allegro_scraper import Offer
 
 
 def test_offers_page_shows_manual_mapping_dropdown(client, login):
@@ -282,44 +283,51 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
             ]
         )
 
-    monkeypatch.setattr(settings, "ALLEGRO_SELLER_ID", "our-seller")
-    monkeypatch.setattr(settings, "ALLEGRO_EXCLUDED_SELLERS", set())
+    monkeypatch.setattr(settings, "ALLEGRO_SELLER_NAME", "Retriever Shop")
 
-    def fake_listing(barcode, *, debug=None):
-        if barcode == "111":
-            return [
-                {
-                    "id": "our-offer",
-                    "seller": {"id": "our-seller"},
-                    "sellingMode": {"price": {"amount": "90.00"}},
-                },
-                {
-                    "id": "competitor-a-offer",
-                    "seller": {"id": "competitor-a"},
-                    "sellingMode": {"price": {"amount": "95.00"}},
-                },
-                {
-                    "id": "competitor-b-offer",
-                    "seller": {"id": "competitor-b"},
-                    "sellingMode": {"price": {"amount": "110.00"}},
-                },
-            ]
-        if barcode == "222":
-            return [
-                {
-                    "id": "competitor-c-offer",
-                    "seller": {"id": "competitor-c"},
-                    "sellingMode": {"price": {"amount": "80.00"}},
-                },
-                {
-                    "id": "competitor-d-offer",
-                    "seller": {"id": "competitor-d"},
-                    "sellingMode": {"price": {"amount": "125.00"}},
-                },
-            ]
-        return []
+    def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+        if offer_id == "offer-low":
+            return (
+                [
+                    Offer("Nasza oferta", "90,00 zł", "Retriever Shop", "https://allegro.pl/oferta/offer-low"),
+                    Offer(
+                        "Konkurent A",
+                        "95,00 zł",
+                        "A Sklep",
+                        "https://allegro.pl/oferta/competitor-a-offer",
+                    ),
+                    Offer(
+                        "Konkurent B",
+                        "110,00 zł",
+                        "B Sklep",
+                        "https://allegro.pl/oferta/competitor-b-offer",
+                    ),
+                ],
+                [
+                    "Zatrzymano na sprzedawcy: Retriever Shop"
+                ],
+            )
+        if offer_id == "offer-high":
+            return (
+                [
+                    Offer(
+                        "Konkurent C",
+                        "80,00 zł",
+                        "C Sklep",
+                        "https://allegro.pl/oferta/competitor-c-offer",
+                    ),
+                    Offer(
+                        "Konkurent D",
+                        "125,00 zł",
+                        "D Sklep",
+                        "https://allegro.pl/oferta/competitor-d-offer",
+                    ),
+                ],
+                [],
+            )
+        return ([], [])
 
-    monkeypatch.setattr("magazyn.allegro.fetch_product_listing", fake_listing)
+    monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
 
     response = client.get("/allegro/price-check")
     assert response.status_code == 200
@@ -337,7 +345,7 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
     assert payload["auth_error"] is None
     assert isinstance(payload["debug_steps"], list)
     assert any(
-        step["label"] == "Sprawdzanie listingu Allegro dla EAN" for step in payload["debug_steps"]
+        step["label"] == "Sprawdzanie oferty Allegro" for step in payload["debug_steps"]
     )
     assert len(payload["price_checks"]) == 2
 
@@ -387,32 +395,33 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
             )
         )
 
-    monkeypatch.setattr(settings, "ALLEGRO_SELLER_ID", "our-seller")
-    monkeypatch.setattr(settings, "ALLEGRO_EXCLUDED_SELLERS", set())
+    monkeypatch.setattr(settings, "ALLEGRO_SELLER_NAME", None)
 
-    called_barcodes: list[str] = []
+    called_offers: list[str] = []
 
-    def fake_listing(barcode, *, debug=None):
-        called_barcodes.append(barcode)
-        if barcode == "333":
-            return [
-                {
-                    "id": "competitor-1-offer",
-                    "seller": {"id": "competitor-1"},
-                    "sellingMode": {"price": {"amount": "120.00"}},
-                }
-            ]
-        if barcode == "444":
-            return [
-                {
-                    "id": "competitor-2-offer",
-                    "seller": {"id": "competitor-2"},
-                    "sellingMode": {"price": {"amount": "85.00"}},
-                }
-            ]
-        return []
+    def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+        called_offers.append(offer_id)
+        if offer_id == "offer-product":
+            return (
+                [
+                    Offer(
+                        "Konkurent 1",
+                        "120,00 zł",
+                        "Sklep 1",
+                        "https://allegro.pl/oferta/competitor-1-offer",
+                    ),
+                    Offer(
+                        "Konkurent 2",
+                        "85,00 zł",
+                        "Sklep 2",
+                        "https://allegro.pl/oferta/competitor-2-offer",
+                    ),
+                ],
+                [],
+            )
+        return ([], [])
 
-    monkeypatch.setattr("magazyn.allegro.fetch_product_listing", fake_listing)
+    monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
 
     json_response = client.get("/allegro/price-check?format=json")
     assert json_response.status_code == 200
@@ -427,7 +436,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
     assert item["label"] == "Legowisko Szare"
     assert item["competitor_price"] == "85.00"
     assert item["competitor_offer_url"] == "https://allegro.pl/oferta/competitor-2-offer"
-    assert set(called_barcodes) == {"333", "444"}
+    assert called_offers == ["offer-product"]
 
 
 def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, allegro_tokens):
