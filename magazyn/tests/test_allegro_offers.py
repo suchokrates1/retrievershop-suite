@@ -345,7 +345,8 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
     assert payload["auth_error"] is None
     assert isinstance(payload["debug_steps"], list)
     assert any(
-        step["label"] == "Sprawdzanie oferty Allegro" for step in payload["debug_steps"]
+        step["label"] == "Sprawdzanie ofert Allegro dla kodu kreskowego"
+        for step in payload["debug_steps"]
     )
     assert len(payload["price_checks"]) == 2
 
