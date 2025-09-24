@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div id="price-check-preview-container" class="mb-4 d-none">
+    <h2 class="h4 mb-3">Podgląd Selenium</h2>
+    <div class="border rounded overflow-hidden bg-black">
+        <img
+            id="price-check-preview-image"
+            src=""
+            alt="Podgląd pracy Selenium"
+            class="img-fluid w-100"
+        />
+    </div>
+</div>
 <div id="price-check-log-container" class="mb-4{% if not debug_log %} d-none{% endif %}">
     <h2 class="h4 mb-3">Pełne logi price-check</h2>
     <pre id="price-check-log-content" class="bg-dark text-white p-3 rounded small mb-0">{{ debug_log }}</pre>
@@ -16,15 +27,6 @@
     <span>Pobieramy aktualne ceny konkurencji…</span>
 </div>
 <div id="price-check-error" class="d-none"></div>
-<div id="price-check-debug-container" class="mb-4{% if not debug_steps %} d-none{% endif %}">
-    <dl id="price-check-debug-list" class="mb-0">
-        {% for step in debug_steps %}
-        <dt class="fw-semibold">{{ step.label }}</dt>
-        <dd class="mb-2 text-break"><pre class="mb-0">{{ step.value }}</pre></dd>
-        {% else %}
-        {% endfor %}
-    </dl>
-</div>
 <div id="price-check-table-container" class="table-responsive d-none">
     <table class="table table-striped align-middle" aria-live="polite">
         <thead class="table-dark">

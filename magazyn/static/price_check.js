@@ -1,4 +1,6 @@
 (function () {
+    const logLines = [];
+
     function renderLogs(logText) {
         const logContainer = document.getElementById('price-check-log-container');
         const logContent = document.getElementById('price-check-log-content');
@@ -16,6 +18,30 @@
 
         logContent.textContent = text;
         logContainer.classList.remove('d-none');
+    }
+
+    function appendLogLine(line) {
+        if (typeof line !== 'string' || !line) {
+            return;
+        }
+        logLines.push(line);
+        renderLogs(logLines.join('\n'));
+    }
+
+    function updatePreview(screenshot) {
+        if (typeof screenshot !== 'string' || !screenshot) {
+            return;
+        }
+
+        const previewContainer = document.getElementById('price-check-preview-container');
+        const previewImage = document.getElementById('price-check-preview-image');
+
+        if (!previewContainer || !previewImage) {
+            return;
+        }
+
+        previewImage.src = 'data:image/png;base64,' + screenshot;
+        previewContainer.classList.remove('d-none');
     }
 
     function createLink(url, label, visuallyHiddenText, extraClasses) {
@@ -44,40 +70,6 @@
         return link;
     }
 
-    function renderDebugSteps(steps) {
-        const debugContainer = document.getElementById('price-check-debug-container');
-        const debugList = document.getElementById('price-check-debug-list');
-
-        if (!debugContainer || !debugList) {
-            return;
-        }
-
-        const items = Array.isArray(steps) ? steps : [];
-        debugList.innerHTML = '';
-
-        if (!items.length) {
-            debugContainer.classList.add('d-none');
-            return;
-        }
-
-        debugContainer.classList.remove('d-none');
-
-        items.forEach((step) => {
-            const label = document.createElement('dt');
-            label.className = 'fw-semibold';
-            label.textContent = step && step.label ? step.label : '';
-            debugList.appendChild(label);
-
-            const valueWrapper = document.createElement('dd');
-            valueWrapper.className = 'mb-2 text-break';
-            const pre = document.createElement('pre');
-            pre.className = 'mb-0';
-            pre.textContent = step && step.value ? step.value : '';
-            valueWrapper.appendChild(pre);
-            debugList.appendChild(valueWrapper);
-        });
-    }
-
     function renderPriceChecks(data) {
         const loading = document.getElementById('price-check-loading');
         const tableContainer = document.getElementById('price-check-table-container');
@@ -89,8 +81,18 @@
         }
 
         loading.classList.add('d-none');
-        renderLogs(data.debug_log);
-        renderDebugSteps(data.debug_steps);
+
+        if (typeof data.debug_log === 'string') {
+            logLines.length = 0;
+            if (data.debug_log.trim()) {
+                data.debug_log.split('\n').forEach((line) => {
+                    if (line !== undefined) {
+                        logLines.push(line);
+                    }
+                });
+            }
+            renderLogs(data.debug_log);
+        }
 
         if (data.auth_error) {
             errorContainer.className = 'alert alert-warning';
@@ -191,7 +193,7 @@
         });
     }
 
-    function handleFetchError() {
+    function handleStreamError() {
         const loading = document.getElementById('price-check-loading');
         const errorContainer = document.getElementById('price-check-error');
 
@@ -206,13 +208,40 @@
         }
     }
 
-    function fetchPriceChecks() {
-        const url = window.location.pathname + '?format=json';
-        fetch(url, { headers: { Accept: 'application/json' } })
-            .then((response) => response.json())
-            .then(renderPriceChecks)
-            .catch(handleFetchError);
+    function startPriceCheckStream() {
+        const streamUrl = window.location.pathname + '/stream';
+        const source = new EventSource(streamUrl);
+
+        source.addEventListener('log', (event) => {
+            try {
+                const payload = JSON.parse(event.data || '{}');
+                if (payload.line) {
+                    appendLogLine(payload.line);
+                }
+                if (payload.screenshot) {
+                    updatePreview(payload.screenshot);
+                }
+            } catch (err) {
+                // Ignore malformed events
+            }
+        });
+
+        source.addEventListener('result', (event) => {
+            try {
+                const payload = JSON.parse(event.data || '{}');
+                renderPriceChecks(payload);
+            } catch (err) {
+                handleStreamError();
+            } finally {
+                source.close();
+            }
+        });
+
+        source.addEventListener('error', () => {
+            source.close();
+            handleStreamError();
+        });
     }
 
-    document.addEventListener('DOMContentLoaded', fetchPriceChecks);
+    document.addEventListener('DOMContentLoaded', startPriceCheckStream);
 })();
