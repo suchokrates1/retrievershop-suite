@@ -399,23 +399,64 @@ def build_price_checks(
                     "price": Decimal(offer.price).quantize(Decimal("0.01")),
                     "barcodes": barcodes,
                     "label": label,
+                    "product_size_id": offer.product_size_id,
                 }
             )
 
     record_debug("Liczba powiązanych ofert", len(offers))
 
-    price_checks: list[dict] = []
+    offers_by_barcode: dict[str, list[dict]] = {}
+    offers_without_barcode: list[dict] = []
     for offer in offers:
+        barcode_list = [code for code in offer["barcodes"] if code]
+        if barcode_list and offer["product_size_id"] is not None:
+            for barcode in barcode_list:
+                offers_by_barcode.setdefault(barcode, []).append(offer)
+        else:
+            offers_without_barcode.append(offer)
+
+    record_debug(
+        "Liczba grup kodów kreskowych",
+        {"grupy": len(offers_by_barcode), "bez_kodu": len(offers_without_barcode)},
+    )
+    if offers_without_barcode:
+        record_debug(
+            "Oferty bez kodu kreskowego",
+            [
+                {
+                    "offer_id": offer["offer_id"],
+                    "title": offer["title"],
+                    "barcodes": offer["barcodes"],
+                }
+                for offer in offers_without_barcode
+            ],
+        )
+
+    results_by_offer: dict[str, dict[str, object]] = {}
+
+    def process_competitor_lookup(
+        *,
+        reference_offer: dict,
+        barcode: Optional[str],
+        target_offers: list[dict],
+    ) -> None:
+        offer_id = reference_offer["offer_id"]
+        offer_url = f"https://allegro.pl/oferta/{offer_id}"
+
+        context = {"offer_id": offer_id, "url": offer_url}
+        if barcode:
+            context["barcode"] = barcode
+            record_debug(
+                "Sprawdzanie ofert Allegro dla kodu kreskowego",
+                context,
+            )
+        else:
+            record_debug("Sprawdzanie oferty Allegro", context)
+
         competitor_min_price: Optional[Decimal] = None
         competitor_min_url: Optional[str] = None
         error: Optional[str] = None
 
-        offer_id = offer["offer_id"]
-        offer_url = f"https://allegro.pl/oferta/{offer_id}"
-        record_debug(
-            "Sprawdzanie oferty Allegro",
-            {"offer_id": offer_id, "url": offer_url},
-        )
         try:
             competitor_offers, scrape_logs = fetch_competitors_for_offer(
                 offer_id,
@@ -423,23 +464,24 @@ def build_price_checks(
             )
         except Exception as exc:  # pragma: no cover - selenium/network errors
             error = str(exc)
-            record_debug(
-                "Błąd pobierania ofert Allegro",
-                {"offer_id": offer_id, "url": offer_url, "error": str(exc)},
-            )
+            error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
+            if barcode:
+                error_context["barcode"] = barcode
+            record_debug("Błąd pobierania ofert Allegro", error_context)
             competitor_offers = []
             scrape_logs = []
         else:
             for entry in scrape_logs:
-                record_debug(
-                    "Log Selenium",
-                    {"offer_id": offer_id, "message": entry},
-                )
+                log_context = {"offer_id": offer_id, "message": entry}
+                if barcode:
+                    log_context["barcode"] = barcode
+                record_debug("Log Selenium", log_context)
 
-        record_debug(
-            "Oferty konkurencji – liczba ofert",
-            {"offer_id": offer_id, "offers": len(competitor_offers)},
-        )
+        count_context = {"offer_id": offer_id, "offers": len(competitor_offers)}
+        if barcode:
+            count_context["barcode"] = barcode
+        record_debug("Oferty konkurencji – liczba ofert", count_context)
+
         for competitor in competitor_offers:
             seller_name = (competitor.seller or "").strip().lower()
             if (
@@ -460,18 +502,67 @@ def build_price_checks(
             ):
                 competitor_min_price = price_value
                 competitor_min_url = competitor.url
+
+        if barcode:
+            record_debug(
+                "Najniższa cena konkurencji dla kodu",
+                {
+                    "barcode": barcode,
+                    "price": _format_decimal(competitor_min_price),
+                    "url": competitor_min_url,
+                },
+            )
+
         if competitor_min_price is not None:
             error = None
 
-        competitor_min = competitor_min_price
+        for offer in target_offers:
+            results_by_offer[offer["offer_id"]] = {
+                "competitor_price": competitor_min_price,
+                "competitor_url": competitor_min_url,
+                "error": error,
+            }
+
+    for barcode, grouped_offers in offers_by_barcode.items():
+        record_debug(
+            "Grupa ofert dla kodu kreskowego",
+            {
+                "barcode": barcode,
+                "offers": [
+                    {
+                        "offer_id": offer["offer_id"],
+                        "price": _format_decimal(offer["price"]),
+                    }
+                    for offer in grouped_offers
+                ],
+            },
+        )
+        process_competitor_lookup(
+            reference_offer=grouped_offers[0],
+            barcode=barcode,
+            target_offers=grouped_offers,
+        )
+
+    for offer in offers_without_barcode:
+        process_competitor_lookup(
+            reference_offer=offer,
+            barcode=None,
+            target_offers=[offer],
+        )
+
+    price_checks: list[dict] = []
+    for offer in offers:
+        result = results_by_offer.get(
+            offer["offer_id"],
+            {"competitor_price": None, "competitor_url": None, "error": None},
+        )
+        competitor_min = result["competitor_price"]
         is_lowest = None
         if offer["price"] is not None:
             if competitor_min is None:
                 is_lowest = True
             else:
                 is_lowest = offer["price"] <= competitor_min
-
-        competitor_offer_url = competitor_min_url
 
         price_checks.append(
             {
@@ -481,8 +572,8 @@ def build_price_checks(
                 "own_price": _format_decimal(offer["price"]),
                 "competitor_price": _format_decimal(competitor_min),
                 "is_lowest": is_lowest,
-                "error": error,
-                "competitor_offer_url": competitor_offer_url,
+                "error": result["error"],
+                "competitor_offer_url": result["competitor_url"],
             }
         )
 
