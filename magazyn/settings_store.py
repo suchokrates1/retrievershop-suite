@@ -299,6 +299,7 @@ class SettingsStore:
             FLASK_ENV=get("FLASK_ENV", "production"),
             COMMISSION_ALLEGRO=float(get("COMMISSION_ALLEGRO", "0") or 0),
             ALLEGRO_SELLER_ID=get("ALLEGRO_SELLER_ID"),
+            ALLEGRO_SELLER_NAME=get("ALLEGRO_SELLER_NAME"),
             ALLEGRO_EXCLUDED_SELLERS=excluded,
             LOW_STOCK_THRESHOLD=_int("LOW_STOCK_THRESHOLD", "1"),
             ALERT_EMAIL=get("ALERT_EMAIL"),
