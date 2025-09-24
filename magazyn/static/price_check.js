@@ -1,4 +1,23 @@
 (function () {
+    function renderLogs(logText) {
+        const logContainer = document.getElementById('price-check-log-container');
+        const logContent = document.getElementById('price-check-log-content');
+
+        if (!logContainer || !logContent) {
+            return;
+        }
+
+        const text = typeof logText === 'string' ? logText : '';
+        if (!text.trim()) {
+            logContent.textContent = '';
+            logContainer.classList.add('d-none');
+            return;
+        }
+
+        logContent.textContent = text;
+        logContainer.classList.remove('d-none');
+    }
+
     function createLink(url, label, visuallyHiddenText, extraClasses) {
         if (!url) {
             return label || '';
@@ -70,11 +89,20 @@
         }
 
         loading.classList.add('d-none');
+        renderLogs(data.debug_log);
         renderDebugSteps(data.debug_steps);
+        errorContainer.className = 'd-none';
+        errorContainer.textContent = '';
 
         if (data.auth_error) {
             errorContainer.className = 'alert alert-warning';
             errorContainer.textContent = data.auth_error;
+            return;
+        }
+
+        if (data.error) {
+            errorContainer.className = 'alert alert-danger';
+            errorContainer.textContent = data.error;
             return;
         }
 
@@ -177,6 +205,7 @@
             .then((response) => response.json())
             .then(renderPriceChecks)
             .catch(() => {
+                renderLogs('');
                 renderPriceChecks({
                     price_checks: [],
                     auth_error: 'Nie udało się pobrać danych cenowych. Odśwież stronę i spróbuj ponownie.',

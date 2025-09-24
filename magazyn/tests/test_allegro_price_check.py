@@ -19,6 +19,8 @@ class TestAllegroPriceCheckDebug:
         assert response.status_code == 200
 
         body = response.data.decode("utf-8")
+        assert "Pełne logi price-check" in body
+        assert "id=\"price-check-log-content\"" in body
         assert "Szczegóły diagnostyczne" in body
         assert "Czy dostępny access token Allegro" in body
         # Value rendered within <pre> tag
@@ -70,10 +72,13 @@ class TestAllegroPriceCheckDebug:
 
         payload = response.get_json()
         assert payload["auth_error"] is None
+        assert payload["error"] is None
         assert payload["price_checks"]
         labels = [step["label"] for step in payload["debug_steps"]]
         assert "Log Selenium" in labels
         assert "Oferty konkurencji – liczba ofert" in labels
+        assert "Log Selenium" in payload["debug_log"]
+        assert "Testowy listing" in payload["debug_log"]
 
     def test_price_check_json_reports_refresh_error_steps(
         self, client, allegro_tokens, monkeypatch
@@ -105,8 +110,33 @@ class TestAllegroPriceCheckDebug:
 
         payload = response.get_json()
         assert payload["auth_error"] is None
+        assert payload["error"] is None
         assert payload["price_checks"]
         item = payload["price_checks"][0]
         assert "Selenium error" in item["error"]
         labels = [step["label"] for step in payload["debug_steps"]]
         assert "Błąd pobierania ofert Allegro" in labels
+        assert "Błąd pobierania ofert Allegro" in payload["debug_log"]
+
+    def test_price_check_json_returns_logs_on_internal_error(
+        self, client, allegro_tokens, monkeypatch
+    ) -> None:
+        allegro_tokens("token", "refresh")
+
+        def failing_builder(*args, **kwargs):
+            raise RuntimeError("chromedriver not found")
+
+        monkeypatch.setattr("magazyn.allegro.build_price_checks", failing_builder)
+
+        response = client.get("/allegro/price-check?format=json")
+        assert response.status_code == 500
+
+        payload = response.get_json()
+        assert payload["price_checks"] == []
+        assert payload["auth_error"] is None
+        assert payload["error"] == (
+            "Nie udało się pobrać danych cenowych. Sprawdź logi i spróbuj ponownie."
+        )
+        labels = [step["label"] for step in payload["debug_steps"]]
+        assert "Błąd podczas budowania price-check" in labels
+        assert "Błąd podczas budowania price-check" in payload["debug_log"]
