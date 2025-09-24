@@ -8,25 +8,23 @@ from magazyn.models import (
     Product,
     ProductSize,
 )
+from magazyn.allegro_scraper import Offer
 
 
 def test_check_prices_grouped(monkeypatch, app_mod):
     calls = {}
 
-    def fake_fetch(barcode):
-        calls[barcode] = calls.get(barcode, 0) + 1
-        if barcode == "123":
-            return [
-                {"seller": {"id": "comp"}, "sellingMode": {"price": {"amount": "40"}}}
-            ]
-        return [
-            {"seller": {"id": "comp"}, "sellingMode": {"price": {"amount": "80"}}}
-        ]
+    def fake_fetch(offer_id, *, stop_seller=None, limit=30, headless=True):
+        calls[offer_id] = calls.get(offer_id, 0) + 1
+        if offer_id == "o1":
+            return [Offer("Oferta", "40,00 zł", "Sprzedawca", "https://allegro.pl/oferta/other")], []
+        return [Offer("Oferta", "80,00 zł", "Sprzedawca", "https://allegro.pl/oferta/another")], []
 
     messages = []
 
     monkeypatch.setattr(
-        "magazyn.allegro_price_monitor.fetch_product_listing", fake_fetch
+        "magazyn.allegro_price_monitor.fetch_competitors_for_offer",
+        fake_fetch,
     )
     monkeypatch.setattr(
         "magazyn.allegro_price_monitor.send_messenger", lambda msg: messages.append(msg)
@@ -68,7 +66,7 @@ def test_check_prices_grouped(monkeypatch, app_mod):
 
     result = check_prices()
 
-    assert calls == {"123": 1, "456": 1}
+    assert calls == {"o1": 1, "o3": 1}
     assert len(messages) == 2
     assert any("oferta o1" in m for m in messages)
     assert any("oferta o2" in m for m in messages)
