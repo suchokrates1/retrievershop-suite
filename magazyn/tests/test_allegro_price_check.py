@@ -2,8 +2,10 @@ import re
 from decimal import Decimal
 
 import pytest
+from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
+from magazyn.allegro_scraper import Offer
 
 
 @pytest.mark.usefixtures("login")
@@ -46,18 +48,22 @@ class TestAllegroPriceCheckDebug:
                 )
             )
 
-        def fake_listing(barcode, *, debug=None):
-            if debug is not None:
-                debug("Testowy listing", {"ean": barcode})
-            return [
-                {
-                    "id": "competitor-offer",
-                    "seller": {"id": "competitor"},
-                    "sellingMode": {"price": {"amount": "120.00"}},
-                }
-            ]
+        def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+            if stop_seller:
+                assert stop_seller == settings.ALLEGRO_SELLER_NAME
+            return (
+                [
+                    Offer(
+                        "Konkurent",
+                        "120,00 zł",
+                        "Sklep",
+                        "https://allegro.pl/oferta/competitor-offer",
+                    )
+                ],
+                ["Testowy listing"],
+            )
 
-        monkeypatch.setattr("magazyn.allegro.fetch_product_listing", fake_listing)
+        monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
 
         response = client.get("/allegro/price-check?format=json")
         assert response.status_code == 200
@@ -66,8 +72,8 @@ class TestAllegroPriceCheckDebug:
         assert payload["auth_error"] is None
         assert payload["price_checks"]
         labels = [step["label"] for step in payload["debug_steps"]]
-        assert "Testowy listing" in labels
-        assert "Listing Allegro – liczba ofert" in labels
+        assert "Log Selenium" in labels
+        assert "Oferty konkurencji – liczba ofert" in labels
 
     def test_price_check_json_reports_refresh_error_steps(
         self, client, allegro_tokens, monkeypatch
@@ -89,15 +95,10 @@ class TestAllegroPriceCheckDebug:
                 )
             )
 
-        def failing_listing(barcode, *, debug=None):
-            if debug is not None:
-                debug("Listing Allegro: odświeżanie nieudane", "Błąd testowy")
-            raise RuntimeError(
-                "Failed to refresh Allegro access token for product listing; "
-                "please re-authorize the Allegro integration"
-            )
+        def failing_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+            raise RuntimeError("Selenium error: brak danych")
 
-        monkeypatch.setattr("magazyn.allegro.fetch_product_listing", failing_listing)
+        monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", failing_competitors)
 
         response = client.get("/allegro/price-check?format=json")
         assert response.status_code == 200
@@ -106,7 +107,6 @@ class TestAllegroPriceCheckDebug:
         assert payload["auth_error"] is None
         assert payload["price_checks"]
         item = payload["price_checks"][0]
-        assert "Failed to refresh Allegro access token" in item["error"]
+        assert "Selenium error" in item["error"]
         labels = [step["label"] for step in payload["debug_steps"]]
-        assert "Listing Allegro: odświeżanie nieudane" in labels
-        assert "Błąd pobierania listingu Allegro" in labels
+        assert "Błąd pobierania ofert Allegro" in labels
