@@ -283,8 +283,12 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
 
     monkeypatch.setattr(settings, "ALLEGRO_SELLER_NAME", "Retriever Shop")
 
-    def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+    def fake_competitors(
+        offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+    ):
         if offer_id == "offer-low":
+            if log_callback is not None:
+                log_callback("Zatrzymano na sprzedawcy: Retriever Shop")
             return (
                 [
                     Offer("Nasza oferta", "90,00 zł", "Retriever Shop", "https://allegro.pl/oferta/offer-low"),
@@ -398,9 +402,14 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
 
     called_offers: list[str] = []
 
-    def fake_competitors(offer_id, *, stop_seller=None, limit=30, headless=True):
+    def fake_competitors(
+        offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+    ):
         called_offers.append(offer_id)
         if offer_id == "offer-product":
+            if log_callback is not None:
+                log_callback("Log dla 333")
+                log_callback("Log dla 444")
             return (
                 [
                     Offer(
