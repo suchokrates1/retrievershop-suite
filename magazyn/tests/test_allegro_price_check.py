@@ -19,6 +19,8 @@ class TestAllegroPriceCheckDebug:
         assert response.status_code == 200
 
         body = response.data.decode("utf-8")
+        assert "Pełne logi price-check" in body
+        assert "id=\"price-check-log-content\"" in body
         assert "Szczegóły diagnostyczne" in body
         assert "Czy dostępny access token Allegro" in body
         # Value rendered within <pre> tag
@@ -74,6 +76,8 @@ class TestAllegroPriceCheckDebug:
         labels = [step["label"] for step in payload["debug_steps"]]
         assert "Log Selenium" in labels
         assert "Oferty konkurencji – liczba ofert" in labels
+        assert "Log Selenium" in payload["debug_log"]
+        assert "Testowy listing" in payload["debug_log"]
 
     def test_price_check_json_reports_refresh_error_steps(
         self, client, allegro_tokens, monkeypatch
@@ -110,3 +114,4 @@ class TestAllegroPriceCheckDebug:
         assert "Selenium error" in item["error"]
         labels = [step["label"] for step in payload["debug_steps"]]
         assert "Błąd pobierania ofert Allegro" in labels
+        assert "Błąd pobierania ofert Allegro" in payload["debug_log"]
