@@ -297,10 +297,12 @@ def fetch_competitors(
             for sx in (
                 ".//*[contains(@class,'seller') or contains(.,'Poleca sprzedający')]/..",
                 ".//*[contains(., 'Poleca sprzedający')]",
-                ".//a[contains(@href, '/uzytkownik/') or contains(@href, '/strefa_sprzedawcy/')]"):
+                ".//a[contains(@href, '/uzytkownik/') or contains(@href, '/strefa_sprzedawcy/')]",
+            ):
                 try:
-                    seller_text = row.find_element(By.XPATH, sx).text.strip()
-                    if seller_text:
+                    st = row.find_element(By.XPATH, sx).text.strip()
+                    if st:
+                        seller_text = st
                         break
                 except Exception:
                     continue
@@ -309,9 +311,10 @@ def fetch_competitors(
             seller_clean = re.sub(r"\s+Firma.*$", "", seller_clean).strip()
             seller_clean = re.sub(r"\s+Oficjalny sklep.*$", "", seller_clean).strip()
 
+            # zbieraj oferty do momentu trafienia wskazanego sprzedawcy; jego już nie dodawaj
             if stop_seller and seller_clean.lower() == stop_seller.lower():
-                logs.append(f"Pominięto ofertę sprzedawcy: {seller_clean}")
-                continue
+                _log_step(logs, f"Zatrzymano na sprzedawcy: {seller_clean}")
+                break
 
             offers.append(Offer(title=title, price=price, seller=seller_clean or seller_text, url=href))
             _log_step(
@@ -353,4 +356,3 @@ __all__ = [
     "fetch_competitors_for_offer",
     "parse_price_amount",
 ]
-
