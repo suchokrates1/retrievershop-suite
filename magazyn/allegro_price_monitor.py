@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
-from .allegro_api import fetch_product_listing
 from .config import settings
 from .db import get_session
 from .domain import allegro_prices
 from .models import ProductSize, AllegroOffer
 from .notifications import send_messenger
+from .allegro_scraper import fetch_competitors_for_offer, parse_price_amount
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +17,11 @@ COMPETITOR_SUFFIX = "::competitor"
 def check_prices() -> dict:
     """Check Allegro listings for lower competitor prices.
 
-    For each locally known offer, fetch public listings from Allegro based on
-    its EAN barcode.  If a competitor offers the product at a lower price than
-    ours, send an alert via :func:`notifications.send_messenger` and record
-    price history samples for subsequent trend analysis.
+    For each locally known offer, fetch public listings from Allegro by
+    inspecting the public offer page with Selenium. If a competitor offers the
+    product at a lower price than ours, send an alert via
+    :func:`notifications.send_messenger` and record price history samples for
+    subsequent trend analysis.
     """
     alerts: list[tuple[str, Decimal, Decimal]] = []
 
@@ -52,31 +53,40 @@ def check_prices() -> dict:
                     recorded_at=timestamp_dt,
                 )
             try:
-                listing = fetch_product_listing(barcode)
+                first_offer_id = offers[0][1]
+                competitor_offers, scrape_logs = fetch_competitors_for_offer(
+                    first_offer_id,
+                    stop_seller=settings.ALLEGRO_SELLER_NAME,
+                )
+                for entry in scrape_logs:
+                    logger.debug(
+                        "Selenium log for %s (EAN %s): %s",
+                        first_offer_id,
+                        barcode,
+                        entry,
+                    )
             except Exception as exc:  # pragma: no cover - network errors
-                logger.error("Failed to fetch listing for %s: %s", barcode, exc)
+                logger.error(
+                    "Failed to fetch competitor listing for %s (%s): %s",
+                    barcode,
+                    offers[0][1],
+                    exc,
+                )
                 continue
 
             competitor_prices = []
-            for item in listing:
-                seller = item.get("seller") or {}
-                seller_id = seller.get("id")
+            for offer_data in competitor_offers:
+                seller_name = (offer_data.seller or "").strip().lower()
                 if (
-                    not seller_id
-                    or seller_id == settings.ALLEGRO_SELLER_ID
-                    or seller_id in settings.ALLEGRO_EXCLUDED_SELLERS
+                    settings.ALLEGRO_SELLER_NAME
+                    and seller_name
+                    and seller_name == settings.ALLEGRO_SELLER_NAME.lower()
                 ):
                     continue
-                price_str = (
-                    item.get("sellingMode", {})
-                    .get("price", {})
-                    .get("amount")
-                )
-                try:
-                    price = Decimal(price_str).quantize(Decimal("0.01"))
-                except (TypeError, ValueError, InvalidOperation):
+                price_value = parse_price_amount(offer_data.price)
+                if price_value is None:
                     continue
-                competitor_prices.append(price)
+                competitor_prices.append(price_value)
 
             if not competitor_prices:
                 continue
