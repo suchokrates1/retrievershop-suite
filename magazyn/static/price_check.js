@@ -191,18 +191,27 @@
         });
     }
 
+    function handleFetchError() {
+        const loading = document.getElementById('price-check-loading');
+        const errorContainer = document.getElementById('price-check-error');
+
+        if (loading) {
+            loading.classList.add('d-none');
+        }
+
+        if (errorContainer) {
+            errorContainer.className = 'alert alert-warning';
+            errorContainer.textContent =
+                'Nie udało się pobrać danych cenowych. Odśwież stronę i spróbuj ponownie.';
+        }
+    }
+
     function fetchPriceChecks() {
         const url = window.location.pathname + '?format=json';
         fetch(url, { headers: { Accept: 'application/json' } })
             .then((response) => response.json())
             .then(renderPriceChecks)
-            .catch(() => {
-                renderLogs('');
-                renderPriceChecks({
-                    price_checks: [],
-                    auth_error: 'Nie udało się pobrać danych cenowych. Odśwież stronę i spróbuj ponownie.',
-                });
-            });
+            .catch(handleFetchError);
     }
 
     document.addEventListener('DOMContentLoaded', fetchPriceChecks);
