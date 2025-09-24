@@ -13,6 +13,14 @@ from typing import List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
+
+class AllegroScrapeError(RuntimeError):
+    """Raised when scraping Allegro listings fails and carries Selenium logs."""
+
+    def __init__(self, message: str, logs: Sequence[str]):
+        super().__init__(message)
+        self.logs = list(logs)
+
 try:  # pragma: no cover - optional dependency during import time
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
@@ -501,6 +509,9 @@ def fetch_competitors(
                 break
 
         return offers, logs
+    except Exception as exc:
+        _log_step(logs, f"Błąd Selenium: {exc}")
+        raise AllegroScrapeError(str(exc), logs) from exc
     finally:
         _log_step(logs, "Zamykanie przeglądarki Selenium")
         driver.quit()
