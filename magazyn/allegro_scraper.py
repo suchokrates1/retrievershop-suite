@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import re
+import shutil
 import time
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -86,8 +86,16 @@ def _mk_driver(headless: bool = True, logs: Optional[List[str]] = None) -> "webd
         _log_step(logs, "Uruchamianie ChromeDriver z widocznym oknem")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--window-size=1280,1600")
+    opts.add_argument("--window-size=1365,900")
     opts.add_argument("--lang=pl-PL")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    opts.add_argument(
+        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    )
+    opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
+    opts.add_experimental_option("useAutomationExtension", False)
     driver_kwargs = {"options": opts}
 
     driver_path = _find_chromedriver()
@@ -95,7 +103,22 @@ def _mk_driver(headless: bool = True, logs: Optional[List[str]] = None) -> "webd
         logger.debug("Using ChromeDriver binary at %s", driver_path)
         _log_step(logs, f"Używany chromedriver: {driver_path}")
         driver_kwargs["service"] = Service(executable_path=driver_path)
-    return webdriver.Chrome(**driver_kwargs)
+    driver = webdriver.Chrome(**driver_kwargs)
+    try:
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {
+                "source": (
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                    "window.chrome = {runtime: {}};"
+                    "Object.defineProperty(navigator, 'languages', {get: () => ['pl-PL', 'pl']});"
+                    "Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3]});"
+                )
+            },
+        )
+    except Exception:  # pragma: no cover - depends on CDP support
+        _log_step(logs, "Nie udało się zastosować ustawień anty-bot w CDP")
+    return driver
 
 
 def _click_any(
@@ -119,7 +142,7 @@ def _click_any(
     return False
 
 
-def _accept_cookies(driver: "webdriver.Chrome", logs: Optional[List[str]] = None) -> None:
+def _dismiss_overlays(driver: "webdriver.Chrome", logs: Optional[List[str]] = None) -> None:
     labels = [
         "Przejdź do serwisu",
         "Akceptuj",
@@ -128,15 +151,61 @@ def _accept_cookies(driver: "webdriver.Chrome", logs: Optional[List[str]] = None
         "Rozumiem",
         "Zamknij",
         "Akceptuję",
+        "Przejdź dalej",
+        "Kontynuuj",
     ]
-    for text in labels:
+    xpath_variants = [
+        "//button[contains(@data-role,'accept')]",
+        "//button[contains(@id,'accept')]",
+        "//button[contains(@class,'accept')]",
+        "//a[contains(@class,'dismiss')]",
+        "//button[contains(@class,'rodo')]",
+    ]
+    frames = [None]
+    try:
+        frames.extend(driver.find_elements(By.TAG_NAME, "iframe"))
+    except Exception:  # pragma: no cover - iframe enumeration may fail silently
+        pass
+
+    for frame in frames:
         try:
-            for button in driver.find_elements(By.XPATH, f"//button[contains(., '{text}')]"):
-                if button.is_displayed():
-                    button.click()
-                    _log_step(logs, f"Zamknięto baner cookies przyciskiem: {text}")
+            if frame is not None:
+                try:
+                    driver.switch_to.frame(frame)
+                except Exception:
+                    continue
+            for text in labels:
+                try:
+                    for button in driver.find_elements(By.XPATH, f"//button[contains(., '{text}')]"):
+                        if button.is_displayed():
+                            button.click()
+                            _log_step(logs, f"Zamknięto baner przyciskiem: {text}")
+                            time.sleep(0.1)
+                except Exception:
+                    continue
+            for xp in xpath_variants:
+                try:
+                    for el in driver.find_elements(By.XPATH, xp):
+                        if el.is_displayed():
+                            el.click()
+                            _log_step(logs, f"Zamknięto overlay selektorem: {xp}")
+                            time.sleep(0.1)
+                except Exception:
+                    continue
+        finally:
+            driver.switch_to.default_content()
+
+    for selector in [
+        "//div[contains(@class,'overlay')]//button[contains(@class,'close')]",
+        "//button[contains(@aria-label,'zamknij') or contains(@aria-label,'Zamknij')]",
+    ]:
+        try:
+            for el in driver.find_elements(By.XPATH, selector):
+                if el.is_displayed():
+                    el.click()
+                    _log_step(logs, f"Zamknięto overlay po kliknięciu: {selector}")
                     time.sleep(0.1)
-        except Exception:  # pragma: no cover - depends on cookie banners
+        except Exception:
             continue
 
 
@@ -149,29 +218,75 @@ def _extract_price(text: str) -> str:
     return clean or "(brak ceny)"
 
 
-def _wait_modal(driver: "webdriver.Chrome", logs: Optional[List[str]] = None) -> None:
+def _locate_listing(driver: "webdriver.Chrome"):
+    containers = driver.find_elements(By.CSS_SELECTOR, "div.opbox-sheet-wrapper, div[class*='opbox-sheet']")
+    for container in containers:
+        try:
+            listing = container.find_element(By.CSS_SELECTOR, "div[data-box-name='ProductListingContent']")
+            if listing.is_displayed():
+                return listing
+        except Exception:
+            continue
+    return None
+
+
+def _wait_for_listing(driver: "webdriver.Chrome", logs: Optional[List[str]] = None):
+    _log_step(logs, "Oczekiwanie na arkusz z ofertami konkurencji")
+    listing = WebDriverWait(driver, 18).until(lambda d: _locate_listing(d) or False)
     try:
-        _log_step(logs, "Oczekiwanie na pojawienie się listy ofert konkurencji")
-        WebDriverWait(driver, 12).until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//div[@role='dialog'] | "
-                    "//section[.//text()[contains(., 'Inne oferty produktu')]]",
-                )
-            )
-        )
-    except Exception:  # pragma: no cover - depends on live DOM timing
-        _log_step(logs, "Modal z ofertami nie pojawił się w czasie oczekiwania")
+        driver.execute_script("arguments[0].scrollIntoView({block:'start'});", listing)
+    except Exception:  # pragma: no cover - scroll failures ignored
         pass
-    time.sleep(0.6)
+    return listing
 
 
-def _rows_in_modal(driver: "webdriver.Chrome"):
-    rows = driver.find_elements(By.XPATH, "//div[@role='dialog']//article | //div[@role='dialog']//li")
-    if not rows:
-        rows = driver.find_elements(By.XPATH, "//div[@role='dialog']//a[contains(@href,'/oferta/')]")
-    return rows
+def _wait_for_offers(driver: "webdriver.Chrome", logs: Optional[List[str]] = None):
+    def _offers(drv: "webdriver.Chrome"):
+        listing = _locate_listing(drv)
+        if listing is None:
+            return False
+        rows = listing.find_elements(
+            By.XPATH,
+            ".//article[.//a[contains(@href,'/oferta/')]] | "
+            ".//div[.//a[contains(@href,'/oferta/')]]",
+        )
+        visible = [row for row in rows if row.is_displayed()]
+        return visible if visible else False
+
+    _log_step(logs, "Oczekiwanie na pojawienie się co najmniej jednej oferty")
+    return WebDriverWait(driver, 18).until(_offers)
+
+
+def _detect_antibot_screen(driver: "webdriver.Chrome", logs: Optional[List[str]] = None) -> None:
+    try:
+        body_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    except Exception:
+        body_text = ""
+    patterns = [
+        "wyglądasz jak bot",
+        "zabezpieczamy się przed botami",
+        "captcha",
+        "ochrona kupujących",
+    ]
+    if any(pattern in body_text for pattern in patterns):
+        message = "Wykryto ekran anty-botowy Allegro, przerwano skanowanie"
+        _log_step(logs, message)
+        raise RuntimeError(message)
+
+
+def _find_cheapest_link(driver: "webdriver.Chrome"):
+    selectors = [
+        "a[data-analytics-click-label='cheapest'][href='#inne-oferty-produktu']",
+        "a[class*='other-offers-link-cheapest'][href='#inne-oferty-produktu']",
+    ]
+    for selector in selectors:
+        try:
+            for element in driver.find_elements(By.CSS_SELECTOR, selector):
+                if element.is_displayed():
+                    return element
+        except Exception:
+            continue
+    return None
 
 
 def parse_price_amount(price_text: str) -> Optional[Decimal]:
@@ -210,21 +325,35 @@ def fetch_competitors(
         _log_step(logs, f"Przejście na stronę produktu: {product_url}")
         driver.get(product_url)
         time.sleep(1.5)
-        _accept_cookies(driver, logs=logs)
+        _dismiss_overlays(driver, logs=logs)
+        _detect_antibot_screen(driver, logs=logs)
 
-        clicked = _click_any(
-            driver,
-            [
-                "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::button",
-                "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::a",
-                "//button[.//text()[contains(., 'Najtańsze')]]",
-            ],
-            logs=logs,
-        )
+        link = _find_cheapest_link(driver)
+        clicked = False
+        if link is not None:
+            try:
+                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link)
+            except Exception:  # pragma: no cover - scroll failures ignored
+                pass
+            time.sleep(0.2)
+            try:
+                driver.execute_script("arguments[0].focus();", link)
+            except Exception:  # pragma: no cover - focus may fail silently
+                pass
+            try:
+                link.click()
+                clicked = True
+                _log_step(logs, "Kliknięto odnośnik 'Najtańsze'")
+            except Exception:
+                _log_step(logs, "Bezpośrednie kliknięcie odnośnika 'Najtańsze' nie powiodło się")
+
         if not clicked:
             clicked = _click_any(
                 driver,
                 [
+                    "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::a[@href='#inne-oferty-produktu']",
+                    "//div[.//text()[contains(., 'Najtańsze')]]//ancestor::button",
+                    "//a[contains(@class,'other-offers-link-cheapest') and @href='#inne-oferty-produktu']",
                     "//a[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
                     "//button[.//text()[contains(., 'WSZYSTKIE OFERTY')]]",
                     "//a[contains(., 'Inne oferty produktu') or contains(., 'Wszystkie oferty')]",
@@ -232,13 +361,27 @@ def fetch_competitors(
                 logs=logs,
             )
         if not clicked:
-            logs.append("Nie znaleziono 'Najtańsze' ani 'WSZYSTKIE OFERTY'.")
+            logs.append("Nie znaleziono odnośnika do sekcji 'Najtańsze' ani alternatywnych ofert.")
             return [], logs
 
-        _wait_modal(driver, logs=logs)
+        try:
+            section = driver.find_element(By.CSS_SELECTOR, "#inne-oferty-produktu")
+            driver.execute_script("arguments[0].scrollIntoView({block:'start'});", section)
+        except Exception:
+            pass
+
+        _dismiss_overlays(driver, logs=logs)
+        _detect_antibot_screen(driver, logs=logs)
+
+        listing = _wait_for_listing(driver, logs=logs)
+        try:
+            if not listing.is_displayed():
+                _dismiss_overlays(driver, logs=logs)
+        except Exception:
+            _dismiss_overlays(driver, logs=logs)
+        rows = _wait_for_offers(driver, logs=logs)
+        _log_step(logs, f"Liczba znalezionych wierszy w arkuszu: {len(rows)}")
         offers: List[Offer] = []
-        rows = _rows_in_modal(driver)
-        _log_step(logs, f"Liczba znalezionych wierszy w modalu: {len(rows)}")
         seen: set[str] = set()
 
         for row in rows:
@@ -281,9 +424,15 @@ def fetch_competitors(
 
             price_text = ""
             for px in (
-                ".//span[contains(@class,'price')]",
-                ".//div[contains(@class,'price')]",
-                ".//*[contains(text(),'zł')]",
+                ".//*[@data-role='price']",
+                ".//*[@data-testid='price']",
+                ".//*[contains(@class,'price')]",
+                ".//*[@aria-label and contains(@aria-label,'zł')]",
+                ".//*[@data-price]",
+                ".//*[@data-analytics-interaction-label='price']",
+                ".//*[@data-analytics-interaction-label and contains(@data-analytics-interaction-label,'price')]",
+                ".//span[contains(text(),'zł')]",
+                ".//div[contains(text(),'zł')]",
             ):
                 try:
                     price_text = row.find_element(By.XPATH, px).text.strip()
@@ -291,13 +440,28 @@ def fetch_competitors(
                         break
                 except Exception:
                     continue
+            if not price_text:
+                for attr in ("aria-label", "data-analytics-click-label", "data-analytics-interaction-label"):
+                    try:
+                        value = anchor.get_attribute(attr) or ""
+                        if "zł" in value:
+                            price_text = value
+                            break
+                    except Exception:
+                        continue
             price = _extract_price(price_text)
 
             seller_text = ""
             for sx in (
+                ".//*[@data-role='seller-name']",
+                ".//*[@data-testid='seller-name']",
+                ".//*[@data-analytics-interaction-label='sellerName']",
+                ".//*[@data-analytics-click-label='sellerName']",
                 ".//*[contains(@class,'seller') or contains(.,'Poleca sprzedający')]/..",
                 ".//*[contains(., 'Poleca sprzedający')]",
                 ".//a[contains(@href, '/uzytkownik/') or contains(@href, '/strefa_sprzedawcy/')]",
+                ".//a[contains(@data-analytics-interaction-label,'sellerProfile')]",
+                ".//*[@aria-label and contains(@aria-label,'sprzedaw')]",
             ):
                 try:
                     st = row.find_element(By.XPATH, sx).text.strip()
@@ -306,6 +470,16 @@ def fetch_competitors(
                         break
                 except Exception:
                     continue
+            if not seller_text:
+                try:
+                    seller_text = anchor.get_attribute("data-analytics-seller-name") or ""
+                except Exception:
+                    seller_text = ""
+            if not seller_text:
+                try:
+                    seller_text = anchor.get_attribute("data-seller-name") or ""
+                except Exception:
+                    seller_text = ""
 
             seller_clean = re.sub(r"\s*Poleca.*$", "", seller_text).strip()
             seller_clean = re.sub(r"\s+Firma.*$", "", seller_clean).strip()
