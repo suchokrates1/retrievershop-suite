@@ -605,9 +605,6 @@ def price_check():
     access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
 
-    record_debug("Czy dostępny access token Allegro", bool(access_token))
-    record_debug("Czy dostępny refresh token Allegro", bool(refresh_token))
-
     auth_error = None
     if not access_token or not refresh_token:
         auth_error = (
