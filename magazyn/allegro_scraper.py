@@ -56,6 +56,10 @@ def _require_selenium() -> None:
 
 
 def _log_step(logs: Optional[List[str]], message: str) -> None:
+    """Record a Selenium interaction both in-memory and in application logs."""
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("[Selenium] %s", message)
     if logs is not None:
         logs.append(message)
 
