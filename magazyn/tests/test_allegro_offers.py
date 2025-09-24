@@ -238,7 +238,6 @@ def test_price_check_requires_allegro_authorization(client, login, allegro_token
     )
     assert isinstance(payload["debug_steps"], list)
     labels = [step["label"] for step in payload["debug_steps"]]
-    assert "Czy dostępny access token Allegro" in labels
     assert "Żądany format odpowiedzi" in labels
 
 

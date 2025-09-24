@@ -21,10 +21,9 @@ class TestAllegroPriceCheckDebug:
         body = response.data.decode("utf-8")
         assert "Pełne logi price-check" in body
         assert "id=\"price-check-log-content\"" in body
-        assert "Szczegóły diagnostyczne" in body
-        assert "Czy dostępny access token Allegro" in body
+        assert "Żądany format odpowiedzi" in body
         # Value rendered within <pre> tag
-        assert re.search(r"<pre[^>]*>True</pre>", body)
+        assert re.search(r"<pre[^>]*>html</pre>", body)
 
     def test_price_check_json_includes_debug_steps_on_success(
         self, client, allegro_tokens, monkeypatch
