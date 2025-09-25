@@ -1286,7 +1286,13 @@ def test_price_check_uses_selenium_listing(client, login, monkeypatch, allegro_t
     calls: list[str] = []
 
     def fake_competitors(
-        offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+        offer_id,
+        *,
+        stop_seller=None,
+        limit=30,
+        headless=True,
+        log_callback=None,
+        screenshot_callback=None,
     ):
         calls.append(offer_id)
         if log_callback is not None:
