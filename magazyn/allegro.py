@@ -1,6 +1,7 @@
+import base64
+from decimal import Decimal
 import json
 import secrets
-from decimal import Decimal
 from typing import Callable, Optional
 from queue import Queue
 from threading import Thread
@@ -369,6 +370,7 @@ def build_price_checks(
     debug_steps: Optional[list[dict[str, str]]] = None,
     debug_logs: Optional[list[str]] = None,
     log_callback: Optional[Callable[[str, str], None]] = None,
+    screenshot_callback: Optional[Callable[[dict], None]] = None,
 ) -> list[dict]:
     def record_debug(label: str, value: object) -> None:
         if debug_steps is not None:
@@ -496,11 +498,26 @@ def build_price_checks(
 
         scraper_callback = stream_scrape_log if log_callback is not None else None
 
+        def stream_screenshot(image: bytes, stage: str) -> None:
+            if screenshot_callback is None:
+                return
+            payload = {
+                "offer_id": offer_id,
+                "stage": stage,
+                "image": base64.b64encode(image).decode("ascii"),
+            }
+            if barcode:
+                payload["barcode"] = barcode
+            screenshot_callback(payload)
+
+        screenshot_handler = stream_screenshot if screenshot_callback is not None else None
+
         try:
             competitor_offers, scrape_logs = fetch_competitors_for_offer(
                 offer_id,
                 stop_seller=settings.ALLEGRO_SELLER_NAME,
                 log_callback=scraper_callback,
+                screenshot_callback=screenshot_handler,
             )
         except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
             error = str(exc)
@@ -686,12 +703,16 @@ def price_check_stream():
                 )
             )
 
+        def push_screenshot(data: dict) -> None:
+            queue.put(_sse_event("screenshot", data))
+
         def run_price_check() -> None:
             try:
                 price_checks = build_price_checks(
                     debug_steps,
                     debug_log_lines,
                     log_callback=push_log,
+                    screenshot_callback=push_screenshot,
                 )
                 queue.put(
                     _sse_event(

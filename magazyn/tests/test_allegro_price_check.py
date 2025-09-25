@@ -23,7 +23,7 @@ class TestAllegroPriceCheckDebug:
         assert "id=\"price-check-log-content\"" in body
         assert "Żądany format odpowiedzi" in body
         # Value rendered within <pre> tag
-        assert re.search(r"<pre[^>]*>html</pre>", body)
+        assert "Żądany format odpowiedzi: html" in body
 
     def test_price_check_json_includes_debug_steps_on_success(
         self, client, allegro_tokens, monkeypatch
@@ -50,12 +50,20 @@ class TestAllegroPriceCheckDebug:
             )
 
         def fake_competitors(
-            offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+            offer_id,
+            *,
+            stop_seller=None,
+            limit=30,
+            headless=True,
+            log_callback=None,
+            screenshot_callback=None,
         ):
             if stop_seller:
                 assert stop_seller == settings.ALLEGRO_SELLER_NAME
             if log_callback is not None:
                 log_callback("Testowy listing")
+            if screenshot_callback is not None:
+                screenshot_callback(b"fake", "listing")
             return (
                 [
                     Offer(
@@ -103,7 +111,13 @@ class TestAllegroPriceCheckDebug:
             )
 
         def failing_competitors(
-            offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+            offer_id,
+            *,
+            stop_seller=None,
+            limit=30,
+            headless=True,
+            log_callback=None,
+            screenshot_callback=None,
         ):
             if log_callback is not None:
                 log_callback("Start Selenium")
@@ -149,11 +163,19 @@ class TestAllegroPriceCheckDebug:
             )
 
         def fake_competitors(
-            offer_id, *, stop_seller=None, limit=30, headless=True, log_callback=None
+            offer_id,
+            *,
+            stop_seller=None,
+            limit=30,
+            headless=True,
+            log_callback=None,
+            screenshot_callback=None,
         ):
             # Używamy log_callback, aby zasymulować dopisywanie do logów w trakcie działania
             if log_callback is not None:
                 log_callback("Stream log")
+            if screenshot_callback is not None:
+                screenshot_callback(b"stream", "initial")
             # Zwracamy pustą listę ofert i listę logów, które endpoint powinien wypuścić jako eventy SSE
             return (
                 [],
@@ -167,5 +189,6 @@ class TestAllegroPriceCheckDebug:
         assert response.mimetype == "text/event-stream"
         body = response.get_data(as_text=True)
         assert "event: log" in body
+        assert "event: screenshot" in body
         assert "Stream log" in body
         assert "event: result" in body
