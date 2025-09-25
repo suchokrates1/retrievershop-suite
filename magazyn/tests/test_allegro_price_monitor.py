@@ -14,7 +14,15 @@ from magazyn.allegro_scraper import Offer
 def test_check_prices_grouped(monkeypatch, app_mod):
     calls = {}
 
-    def fake_fetch(offer_id, *, stop_seller=None, limit=30, headless=True):
+    def fake_fetch(
+        offer_id,
+        *,
+        stop_seller=None,
+        limit=30,
+        headless=True,
+        log_callback=None,
+        screenshot_callback=None,
+    ):
         calls[offer_id] = calls.get(offer_id, 0) + 1
         if offer_id == "o1":
             return [Offer("Oferta", "40,00 zł", "Sprzedawca", "https://allegro.pl/oferta/other")], []
@@ -83,7 +91,15 @@ def test_check_prices_grouped(monkeypatch, app_mod):
 
 
 def test_check_prices_readonly_db(monkeypatch, app_mod, caplog):
-    def fake_fetch(offer_id, *, stop_seller=None, limit=30, headless=True):
+    def fake_fetch(
+        offer_id,
+        *,
+        stop_seller=None,
+        limit=30,
+        headless=True,
+        log_callback=None,
+        screenshot_callback=None,
+    ):
         return [Offer("Oferta", "40,00 zł", "Sprzedawca", "https://allegro.pl/oferta/other")], []
 
     messages: list[str] = []

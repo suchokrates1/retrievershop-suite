@@ -341,8 +341,13 @@ def fetch_competitors(
     limit: int = 30,
     headless: bool = True,
     log_callback: Optional[Callable[[str], None]] = None,
+    screenshot_callback: Optional[Callable[[bytes, str], None]] = None,
 ) -> Tuple[List[Offer], List[str]]:
-    """Scrape competitor offers displayed on an Allegro product page."""
+    """Scrape competitor offers displayed on an Allegro product page.
+
+    When ``screenshot_callback`` is provided, Selenium screenshots captured during
+    the scraping process are forwarded as raw PNG bytes together with a stage name.
+    """
 
     logs: List[str] = []
     token = _LOG_CALLBACK.set(log_callback) if log_callback is not None else None
@@ -353,6 +358,12 @@ def fetch_competitors(
             _log_step(logs, f"Przejście na stronę produktu: {product_url}")
             driver.get(product_url)
             time.sleep(1.5)
+            if screenshot_callback is not None:
+                try:
+                    screenshot_callback(driver.get_screenshot_as_png(), "initial")
+                    _log_step(logs, "Przesłano zrzut ekranu Selenium (initial)")
+                except Exception as exc:  # pragma: no cover - screenshot failures ignored
+                    _log_step(logs, f"Nie udało się wykonać zrzutu ekranu (initial): {exc}")
             _dismiss_overlays(driver, logs=logs)
             _detect_antibot_screen(driver, logs=logs)
 
@@ -408,6 +419,12 @@ def fetch_competitors(
             except Exception:
                 _dismiss_overlays(driver, logs=logs)
             rows = _wait_for_offers(driver, logs=logs)
+            if screenshot_callback is not None:
+                try:
+                    screenshot_callback(driver.get_screenshot_as_png(), "listing")
+                    _log_step(logs, "Przesłano zrzut ekranu Selenium (listing)")
+                except Exception as exc:  # pragma: no cover - screenshot failures ignored
+                    _log_step(logs, f"Nie udało się wykonać zrzutu ekranu (listing): {exc}")
             _log_step(logs, f"Liczba znalezionych wierszy w arkuszu: {len(rows)}")
             offers: List[Offer] = []
             seen: set[str] = set()
@@ -547,6 +564,7 @@ def fetch_competitors_for_offer(
     limit: int = 30,
     headless: bool = True,
     log_callback: Optional[Callable[[str], None]] = None,
+    screenshot_callback: Optional[Callable[[bytes, str], None]] = None,
 ) -> Tuple[List[Offer], List[str]]:
     """Convenience wrapper for :func:`fetch_competitors` using an offer identifier."""
 
@@ -557,6 +575,7 @@ def fetch_competitors_for_offer(
         limit=limit,
         headless=headless,
         log_callback=log_callback,
+        screenshot_callback=screenshot_callback,
     )
 
 
