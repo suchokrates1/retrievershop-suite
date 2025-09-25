@@ -1,6 +1,10 @@
 (function () {
     const logLines = [];
-    const debugStepsBuffer = [];
+    const screenshotMeta = {
+        offerId: null,
+        stage: null,
+        barcode: null,
+    };
 
     function renderLogs(logText) {
         const logContainer = document.getElementById('price-check-log-container');
@@ -30,9 +34,6 @@
                 : normalizedValue
                 ? normalizedLabel + ': ' + normalizedValue
                 : normalizedLabel;
-
-        debugStepsBuffer.push({ label: normalizedLabel, value: normalizedValue });
-        renderDebugSteps(debugStepsBuffer);
 
         if (normalizedLine) {
             logLines.push(normalizedLine);
@@ -66,40 +67,6 @@
         return link;
     }
 
-    function renderDebugSteps(steps) {
-        const debugContainer = document.getElementById('price-check-debug-container');
-        const debugList = document.getElementById('price-check-debug-list');
-
-        if (!debugContainer || !debugList) {
-            return;
-        }
-
-        const items = Array.isArray(steps) ? steps : [];
-        debugList.innerHTML = '';
-
-        if (!items.length) {
-            debugContainer.classList.add('d-none');
-            return;
-        }
-
-        debugContainer.classList.remove('d-none');
-
-        items.forEach((step) => {
-            const label = document.createElement('dt');
-            label.className = 'fw-semibold';
-            label.textContent = step && step.label ? step.label : '';
-            debugList.appendChild(label);
-
-            const valueWrapper = document.createElement('dd');
-            valueWrapper.className = 'mb-2 text-break';
-            const pre = document.createElement('pre');
-            pre.className = 'mb-0';
-            pre.textContent = step && step.value ? step.value : '';
-            valueWrapper.appendChild(pre);
-            debugList.appendChild(valueWrapper);
-        });
-    }
-
     function renderPriceChecks(data) {
         const loading = document.getElementById('price-check-loading');
         const tableContainer = document.getElementById('price-check-table-container');
@@ -112,7 +79,6 @@
 
         loading.classList.add('d-none');
         renderLogs(data.debug_log);
-        renderDebugSteps(data.debug_steps);
 
         if (data.auth_error) {
             errorContainer.className = 'alert alert-warning';
@@ -228,6 +194,39 @@
         }
     }
 
+    function renderScreenshot(eventPayload) {
+        const visualContainer = document.getElementById('price-check-visual-container');
+        const imageEl = document.getElementById('price-check-visual-image');
+        const metaEl = document.getElementById('price-check-visual-meta');
+
+        if (!visualContainer || !imageEl || !metaEl) {
+            return;
+        }
+
+        if (!eventPayload || typeof eventPayload.image !== 'string') {
+            return;
+        }
+
+        imageEl.src = 'data:image/png;base64,' + eventPayload.image;
+        screenshotMeta.offerId = eventPayload.offer_id || null;
+        screenshotMeta.stage = eventPayload.stage || null;
+        screenshotMeta.barcode = eventPayload.barcode || null;
+
+        const parts = [];
+        if (screenshotMeta.offerId) {
+            parts.push('Oferta: ' + screenshotMeta.offerId);
+        }
+        if (screenshotMeta.stage) {
+            parts.push('Etap: ' + screenshotMeta.stage);
+        }
+        if (screenshotMeta.barcode) {
+            parts.push('Kod kreskowy: ' + screenshotMeta.barcode);
+        }
+        metaEl.textContent = parts.join(' · ');
+
+        visualContainer.classList.remove('d-none');
+    }
+
     function startPriceCheckStream() {
         const streamUrl = window.location.pathname + '/stream';
         const source = new EventSource(streamUrl);
@@ -249,6 +248,15 @@
                 handleStreamError();
             } finally {
                 source.close();
+            }
+        });
+
+        source.addEventListener('screenshot', (event) => {
+            try {
+                const payload = JSON.parse(event.data || '{}');
+                renderScreenshot(payload);
+            } catch (err) {
+                // ignore invalid payloads
             }
         });
 
