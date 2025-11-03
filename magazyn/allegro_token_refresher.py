@@ -13,7 +13,6 @@ from requests.exceptions import HTTPError, RequestException
 
 from . import allegro_api
 from .env_tokens import update_allegro_tokens
-from .print_agent import agent
 from .metrics import (
     ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL,
     ALLEGRO_TOKEN_REFRESH_LAST_SUCCESS,
@@ -198,6 +197,7 @@ class AllegroTokenRefresher:
             "Successfully refreshed Allegro access token automatically (expires in %s seconds)",
             expires_in if expires_in is not None else "unknown",
         )
+        from .print_agent import agent
         agent.reload_config()
         return True
 
