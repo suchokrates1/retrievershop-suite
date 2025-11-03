@@ -173,3 +173,23 @@ class AllegroRepliedDiscussion(Base):
     __tablename__ = "allegro_replied_discussions"
     discussion_id = Column(String, primary_key=True)
     replied_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class Thread(Base):
+    __tablename__ = "threads"
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    author = Column(String, nullable=False)
+    last_message_at = Column(DateTime, nullable=False, server_default=func.now())
+    type = Column(String, nullable=False)  # "wiadomość" or "dyskusja"
+    messages = relationship("Message", back_populates="thread", cascade="all, delete-orphan")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    id = Column(Integer, primary_key=True)
+    thread_id = Column(Integer, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False)
+    author = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    thread = relationship("Thread", back_populates="messages")
