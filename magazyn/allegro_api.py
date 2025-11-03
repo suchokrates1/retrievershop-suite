@@ -245,6 +245,132 @@ def fetch_offers(access_token: str, offset: int = 0, limit: int = 100) -> dict:
     return response.json()
 
 
+def fetch_discussions(access_token: str, offset: int = 0, limit: int = 20) -> dict:
+    """Fetch discussions from Allegro using a valid access token.
+
+    Parameters
+    ----------
+    access_token : str
+        OAuth access token for Allegro API.
+    offset : int
+        Zero-based offset describing where to start fetching results.
+        Defaults to ``0``.
+    limit : int
+        Number of results to fetch per request. Defaults to ``20``.
+
+    Returns
+    -------
+    dict
+        JSON response with the list of discussions.
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+    }
+    params = {"offset": offset, "limit": limit, "status": "DISPUTE_ONGOING"}
+    url = f"{API_BASE_URL}/sale/issues"
+
+    response = _request_with_retry(
+        requests.get,
+        url,
+        endpoint="discussions",
+        headers=headers,
+        params=params,
+    )
+    return response.json()
+
+
+def fetch_message_threads(access_token: str, offset: int = 0, limit: int = 20) -> dict:
+    """Fetch message threads from Allegro using a valid access token.
+
+    Parameters
+    ----------
+    access_token : str
+        OAuth access token for Allegro API.
+    offset : int
+        Zero-based offset describing where to start fetching results.
+        Defaults to ``0``.
+    limit : int
+        Number of results to fetch per request. Defaults to ``20``.
+
+    Returns
+    -------
+    dict
+        JSON response with the list of message threads.
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    params = {"offset": offset, "limit": limit}
+    url = f"{API_BASE_URL}/messaging/threads"
+
+    response = _request_with_retry(
+        requests.get,
+        url,
+        endpoint="message_threads",
+        headers=headers,
+        params=params,
+    )
+    return response.json()
+
+
+def fetch_discussions(access_token: str, offset: int = 0, limit: int = 20) -> dict:
+    """Fetch discussions from Allegro using a valid access token."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+    }
+    params = {"offset": offset, "limit": limit, "status": "DISPUTE_ONGOING"}
+    url = f"{API_BASE_URL}/sale/issues"
+    response = _request_with_retry(
+        requests.get, url, endpoint="discussions", headers=headers, params=params
+    )
+    return response.json()
+
+
+def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 1) -> dict:
+    """Fetch chat messages for a specific discussion."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+    }
+    params = {"limit": limit}
+    url = f"{API_BASE_URL}/sale/issues/{issue_id}/chat"
+    response = _request_with_retry(
+        requests.get, url, endpoint="discussion_chat", headers=headers, params=params
+    )
+    return response.json()
+
+
+def fetch_message_threads(access_token: str, offset: int = 0, limit: int = 20) -> dict:
+    """Fetch message threads from Allegro using a valid access token."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    params = {"offset": offset, "limit": limit}
+    url = f"{API_BASE_URL}/messaging/threads"
+    response = _request_with_retry(
+        requests.get, url, endpoint="message_threads", headers=headers, params=params
+    )
+    return response.json()
+
+
+def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 1) -> dict:
+    """Fetch messages for a specific thread."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    params = {"limit": limit}
+    url = f"{API_BASE_URL}/messaging/threads/{thread_id}/messages"
+    response = _request_with_retry(
+        requests.get, url, endpoint="thread_messages", headers=headers, params=params
+    )
+    return response.json()
+
+
 def _describe_token(token: Optional[str]) -> str:
     if not token:
         return "brak"
