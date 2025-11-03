@@ -4,5 +4,9 @@ __pycache__/
 *.log
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
+agent.lock
+agent.lock.heartbeat
 .idea/
 .vscode/
