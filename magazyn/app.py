@@ -16,7 +16,7 @@ import sys
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 
-from .models import User
+from .models import User, Thread, Message
 from .forms import LoginForm
 
 from .db import (
@@ -205,7 +205,7 @@ def login():
 
         if valid:
             session["username"] = username
-            return redirect(url_for("home"))
+            return redirect(url_for("main.home"))
         else:
             flash("Niepoprawna nazwa użytkownika lub hasło")
         return redirect(url_for("login"))
@@ -309,6 +309,79 @@ def test_message():
         else:
             msg = "Brak danych ostatniego zamówienia."
     return render_template("test.html", message=msg)
+
+
+@bp.route("/discussions")
+@login_required
+def discussions():
+    with get_session() as db:
+        threads = db.query(Thread).order_by(Thread.last_message_at.desc()).all()
+    return render_template("discussions.html", threads=threads)
+
+
+@bp.route("/discussions/<int:thread_id>")
+@login_required
+def get_messages(thread_id):
+    with get_session() as db:
+        messages = db.query(Message).filter_by(thread_id=thread_id).order_by(Message.created_at.asc()).all()
+        return {
+            "messages": [
+                {
+                    "author": message.author,
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat(),
+                }
+                for message in messages
+            ]
+        }
+
+
+@bp.route("/discussions/create", methods=["POST"])
+@login_required
+def create_thread():
+    with get_session() as db:
+        new_thread = Thread(
+            title=request.json["title"],
+            author=session["username"],
+            type=request.json["type"],
+        )
+        db.add(new_thread)
+        db.commit()
+
+        new_message = Message(
+            thread_id=new_thread.id,
+            author=session["username"],
+            content=request.json["message"],
+        )
+        db.add(new_message)
+        new_thread.last_message_at = new_message.created_at
+        db.commit()
+
+        return {"id": new_thread.id}
+
+
+@bp.route("/discussions/<int:thread_id>/send", methods=["POST"])
+@login_required
+def send_message(thread_id):
+    with get_session() as db:
+        thread = db.query(Thread).filter_by(id=thread_id).first()
+        if not thread:
+            return {"error": "Thread not found"}, 404
+
+        new_message = Message(
+            thread_id=thread_id,
+            author=session["username"],
+            content=request.json["content"],
+        )
+        db.add(new_message)
+        thread.last_message_at = new_message.created_at
+        db.commit()
+
+        return {
+            "author": new_message.author,
+            "content": new_message.content,
+            "created_at": new_message.created_at.isoformat(),
+        }
 
 
 @bp.app_errorhandler(404)
