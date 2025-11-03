@@ -1004,6 +1004,9 @@ class LabelAgent:
         allegro_check_interval = timedelta(minutes=5)
         last_allegro_check = datetime.now() - allegro_check_interval
 
+        # Wait a moment for settings to fully load
+        time.sleep(60)
+
         while not self._stop_event.is_set():
             loop_start = datetime.now()
             self._write_heartbeat()
