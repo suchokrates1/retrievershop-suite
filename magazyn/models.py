@@ -161,3 +161,15 @@ class AppSetting(Base):
     updated_at = Column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class AllegroRepliedThread(Base):
+    __tablename__ = "allegro_replied_threads"
+    thread_id = Column(String, primary_key=True)
+    replied_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class AllegroRepliedDiscussion(Base):
+    __tablename__ = "allegro_replied_discussions"
+    discussion_id = Column(String, primary_key=True)
+    replied_at = Column(DateTime, nullable=False, server_default=func.now())
