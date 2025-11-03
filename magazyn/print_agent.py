@@ -1010,16 +1010,13 @@ class LabelAgent:
             self._send_periodic_reports()
 
             if datetime.now() - last_allegro_check >= allegro_check_interval:
-                while True:
-                    token_valid = hasattr(self.settings, 'ALLEGRO_ACCESS_TOKEN') and self.settings.ALLEGRO_ACCESS_TOKEN
-                    expires_at = getattr(self.settings, 'ALLEGRO_TOKEN_EXPIRES_AT', 0)
-                    if token_valid and expires_at > time.time():
-                        break
-                    if self._stop_event.wait(5):
-                        return
+                token_valid = hasattr(self.settings, 'ALLEGRO_ACCESS_TOKEN') and self.settings.ALLEGRO_ACCESS_TOKEN
+                expires_at = getattr(self.settings, 'ALLEGRO_TOKEN_EXPIRES_AT', 0)
 
-                access_token = self.settings.ALLEGRO_ACCESS_TOKEN
-                if access_token:
+                if not token_valid or expires_at <= time.time():
+                    self.logger.info("Token Allegro niedostępny lub nieważny, pomijam sprawdzanie.")
+                else:
+                    access_token = self.settings.ALLEGRO_ACCESS_TOKEN
                     self._check_allegro_discussions(access_token)
                     self._check_allegro_messages(access_token)
                 last_allegro_check = datetime.now()
