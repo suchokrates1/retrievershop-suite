@@ -349,14 +349,6 @@ class SettingsStore:
         assert self._namespace is not None
         return self._namespace
 
-    def reload(self) -> SimpleNamespace:
-        with self._lock:
-            self._loaded = False
-            self._namespace = None
-            self._values = OrderedDict()
-            self._db_last_updated_at = None
-        return self.settings
-
     def as_ordered_dict(
         self,
         *,
@@ -431,7 +423,30 @@ class SettingsStore:
         """Return a configuration value from the persistent store."""
 
         self._ensure_loaded()
+        self._refresh_if_stale()
         return self._values.get(key, default)
+
+    def _refresh_if_stale(self) -> None:
+        if not self._loaded or not self._db_path:
+            return
+        latest = self._fetch_last_updated_at()
+        if latest is None:
+            return
+        with self._lock:
+            if not self._loaded:
+                return
+            current = self._db_last_updated_at
+        if current is not None and latest <= current:
+            return
+
+        db_result = self._load_from_db(self._db_path)
+        if db_result is not None:
+            db_values, db_updated_at = db_result
+            if db_values:
+                with self._lock:
+                    self._values.update(db_values)
+                    self._namespace = self._build_namespace(self._values)
+                    self._db_last_updated_at = db_updated_at
 
 
 settings_store = SettingsStore()
