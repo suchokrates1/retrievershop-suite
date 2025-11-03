@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Mapping, Optional
 
 from .settings_store import settings_store
-from .print_agent import agent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +94,6 @@ def update_allegro_tokens(
 
     if updates:
         settings_store.update(updates)
-        agent.reload_config()
 
 
 def clear_allegro_tokens() -> None:
