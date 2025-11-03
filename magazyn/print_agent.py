@@ -21,10 +21,16 @@ from magazyn import DB_PATH
 
 from .config import load_config, settings
 from .db import sqlite_connect
-from .notifications import send_report
+from .notifications import send_report, send_messenger
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
 from .allegro_token_refresher import token_refresher
+from .allegro_api import (
+    fetch_discussions,
+    fetch_discussion_chat,
+    fetch_message_threads,
+    fetch_thread_messages,
+)
 from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
     PRINT_AGENT_ITERATION_SECONDS,
@@ -951,11 +957,65 @@ class LabelAgent:
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue").inc()
         return new_queue
 
+    def _check_allegro_discussions(self, access_token: str) -> None:
+        last_checked = self._load_state_value("last_discussion_check") or ""
+        try:
+            discussions = fetch_discussions(access_token).get("issues", [])
+            for discussion in discussions:
+                if discussion["id"] <= last_checked:
+                    continue
+                chat = fetch_discussion_chat(access_token, discussion["id"])
+                last_message = chat.get("chat", [{}])[0]
+                if last_message.get("author", {}).get("role") == "BUYER":
+                    buyer = discussion.get("buyer", {}).get("login", "Nieznany")
+                    text = last_message.get("text", "")[:50]
+                    link = f"https://allegro.pl/dyskusje/z-kupujacym/{discussion['id']}"
+                    message = f"💬 Nowa wiadomość w dyskusji od kupującego: {buyer}. Treść: \"{text}...\". Link: {link}"
+                    send_messenger(message)
+                last_checked = discussion["id"]
+        except Exception as e:
+            self.logger.error("Błąd podczas sprawdzania dyskusji Allegro: %s", e)
+        finally:
+            self._save_state_value("last_discussion_check", last_checked)
+
+    def _check_allegro_messages(self, access_token: str) -> None:
+        last_checked = self._load_state_value("last_message_check") or ""
+        try:
+            threads = fetch_message_threads(access_token).get("threads", [])
+            for thread in threads:
+                if thread["id"] <= last_checked:
+                    continue
+                if not thread.get("read"):
+                    messages = fetch_thread_messages(access_token, thread["id"])
+                    last_message = messages.get("messages", [{}])[0]
+                    if last_message.get("author", {}).get("isInterlocutor"):
+                        interlocutor = thread.get("interlocutor", {}).get("login", "Nieznany")
+                        text = last_message.get("text", "")[:50]
+                        link = f"https://allegro.pl/wiadomosci/{thread['id']}"
+                        message = f"✉️ Nowa wiadomość w Centrum Wiadomości od: {interlocutor}. Treść: \"{text}...\". Link: {link}"
+                        send_messenger(message)
+                last_checked = thread["id"]
+        except Exception as e:
+            self.logger.error("Błąd podczas sprawdzania wiadomości Allegro: %s", e)
+        finally:
+            self._save_state_value("last_message_check", last_checked)
+
     def _agent_loop(self) -> None:
+        allegro_check_interval = timedelta(minutes=5)
+        last_allegro_check = datetime.now() - allegro_check_interval
+
         while not self._stop_event.is_set():
             loop_start = datetime.now()
             self._write_heartbeat()
             self._send_periodic_reports()
+
+            if datetime.now() - last_allegro_check >= allegro_check_interval:
+                access_token = self.settings.ALLEGRO_ACCESS_TOKEN
+                if access_token:
+                    self._check_allegro_discussions(access_token)
+                    self._check_allegro_messages(access_token)
+                last_allegro_check = datetime.now()
+
             self.clean_old_printed_orders()
             printed_entries = self.load_printed_orders()
             printed = {entry["order_id"]: entry["printed_at"] for entry in printed_entries}
