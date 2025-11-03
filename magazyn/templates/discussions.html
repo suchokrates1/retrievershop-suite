@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Wiadomości / Dyskusje{% endblock %}
+
+{% block styles %}
+<style>
+    .discussions-container {
+        display: flex;
+        height: calc(100vh - 80px);
+    }
+    .threads-list {
+        width: 30%;
+        border-right: 1px solid #ccc;
+        padding: 1rem;
+        overflow-y: auto;
+    }
+    .chat-window {
+        width: 70%;
+        display: flex;
+        flex-direction: column;
+    }
+    .thread-item {
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+    }
+    .thread-item:hover {
+        background-color: #f5f5f5;
+    }
+    .thread-item.active {
+        background-color: #e0e0e0;
+    }
+    .chat-header {
+        padding: 1rem;
+        border-bottom: 1px solid #ccc;
+    }
+    .messages-area {
+        flex-grow: 1;
+        padding: 1rem;
+        overflow-y: auto;
+    }
+    .message {
+        margin-bottom: 1rem;
+    }
+    .message .author {
+        font-weight: bold;
+    }
+    .message .timestamp {
+        font-size: 0.8rem;
+        color: #888;
+    }
+    .message-form {
+        padding: 1rem;
+        border-top: 1px solid #ccc;
+    }
+    #search-threads {
+        width: 100%;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="discussions-container">
+    <div class="threads-list">
+        <input type="text" id="search-threads" placeholder="Wyszukaj wątek...">
+        <button id="new-thread-btn" class="btn btn-primary mb-3">Nowy wątek</button>
+        <div id="threads-container">
+            {% for thread in threads %}
+            <div class="thread-item" data-thread-id="{{ thread.id }}">
+                <div class="thread-title">{{ thread.title }}</div>
+                <div class="thread-author">Autor: {{ thread.author }}</div>
+                <div class="thread-date">Ostatnia wiadomość: {{ thread.last_message_at|format_dt }}</div>
+                <div class="thread-type">{{ thread.type }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="chat-window">
+        <div class="chat-header" id="chat-header">
+            Wybierz wątek, aby rozpocząć rozmowę
+        </div>
+        <div class="messages-area" id="messages-area">
+            <!-- Wiadomości pojawią się tutaj -->
+        </div>
+        <div class="message-form">
+            <form id="message-form" style="display: none;">
+                <textarea id="message-input" style="width: 100%;" rows="3" required></textarea>
+                <button type="submit">Wyślij</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newThreadModal" tabindex="-1" aria-labelledby="newThreadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newThreadModalLabel">Nowy wątek</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="new-thread-form">
+                    <div class="mb-3">
+                        <label for="thread-title" class="form-label">Tytuł</label>
+                        <input type="text" class="form-control" id="thread-title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="thread-type" class="form-label">Typ</label>
+                        <select class="form-select" id="thread-type" required>
+                            <option value="wiadomość">Wiadomość</option>
+                            <option value="dyskusja">Dyskusja</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="thread-message" class="form-label">Wiadomość</label>
+                        <textarea class="form-control" id="thread-message" rows="3" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-primary" id="create-thread-btn">Utwórz</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const threadsContainer = document.getElementById('threads-container');
+        const messagesArea = document.getElementById('messages-area');
+        const chatHeader = document.getElementById('chat-header');
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+        const searchInput = document.getElementById('search-threads');
+        const newThreadBtn = document.getElementById('new-thread-btn');
+        const newThreadModal = new bootstrap.Modal(document.getElementById('newThreadModal'));
+        const createThreadBtn = document.getElementById('create-thread-btn');
+        let currentThreadId = null;
+
+        threadsContainer.addEventListener('click', async (event) => {
+            const threadItem = event.target.closest('.thread-item');
+            if (threadItem) {
+                // Remove active class from all items
+                document.querySelectorAll('.thread-item').forEach(item => item.classList.remove('active'));
+                // Add active class to the clicked one
+                threadItem.classList.add('active');
+
+                currentThreadId = threadItem.dataset.threadId;
+                const threadTitle = threadItem.querySelector('.thread-title').innerText;
+
+                chatHeader.innerText = threadTitle;
+                messagesArea.innerHTML = 'Ładowanie wiadomości...';
+                messageForm.style.display = 'block';
+
+                const response = await fetch(`/discussions/${currentThreadId}`);
+                const data = await response.json();
+
+                messagesArea.innerHTML = '';
+                data.messages.forEach(msg => {
+                    appendMessage(msg.author, msg.content, msg.created_at);
+                });
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+            }
+        });
+
+        messageForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const content = messageInput.value.trim();
+            if (content && currentThreadId) {
+                const response = await fetch(`/discussions/${currentThreadId}/send`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: content })
+                });
+                const newMessage = await response.json();
+                appendMessage(newMessage.author, newMessage.content, newMessage.created_at);
+                messageInput.value = '';
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+            }
+        });
+
+        searchInput.addEventListener('keyup', () => {
+            const filter = searchInput.value.toLowerCase();
+            const threads = threadsContainer.querySelectorAll('.thread-item');
+            threads.forEach(thread => {
+                const text = thread.innerText.toLowerCase();
+                if (text.includes(filter)) {
+                    thread.style.display = '';
+                } else {
+                    thread.style.display = 'none';
+                }
+            });
+        });
+
+        newThreadBtn.addEventListener('click', () => {
+            newThreadModal.show();
+        });
+
+        createThreadBtn.addEventListener('click', async () => {
+            const title = document.getElementById('thread-title').value.trim();
+            const type = document.getElementById('thread-type').value;
+            const message = document.getElementById('thread-message').value.trim();
+
+            if (title && type && message) {
+                const response = await fetch('/discussions/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        type: type,
+                        message: message
+                    })
+                });
+                const newThread = await response.json();
+                if (newThread.id) {
+                    location.reload();
+                } else {
+                    alert('Wystąpił błąd podczas tworzenia wątku.');
+                }
+            }
+        });
+
+        function appendMessage(author, content, timestamp) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+
+            const formattedTimestamp = new Date(timestamp).toLocaleString('pl-PL');
+
+            messageElement.innerHTML = `
+                <div class="author">${author}</div>
+                <div class="content">${content}</div>
+                <div class="timestamp">${formattedTimestamp}</div>
+            `;
+            messagesArea.appendChild(messageElement);
+        }
+    });
+</script>
+{% endblock %}
