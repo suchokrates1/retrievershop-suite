@@ -17,6 +17,7 @@ from .env_tokens import clear_allegro_tokens, update_allegro_tokens
 from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
 from .domain import allegro_prices
 from .settings_store import SettingsPersistenceError, settings_store
+from . import allegro_responder
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,13 @@ def sync_offers():
             ) from exc
     if not token:
         raise RuntimeError("Missing Allegro access token")
+
+    try:
+        allegro_responder.process_new_messages(token)
+        allegro_responder.process_new_discussions(token)
+    except Exception:
+        logger.exception("Failed to process auto-responder tasks")
+        ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="auto_responder").inc()
 
     offset = 0
     limit = 100
