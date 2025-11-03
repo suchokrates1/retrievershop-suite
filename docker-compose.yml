@@ -9,11 +9,7 @@ services:
       - ./.env.example:/app/.env.example:ro
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     env_file: .env
-    command: >
-      gunicorn "magazyn.wsgi:app"
-      --bind 0.0.0.0:8000
-      --worker-class gevent
-      --timeout 300
+    command: ["gunicorn", "-c", "/app/gunicorn.conf.py", "magazyn.wsgi:app"]
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
