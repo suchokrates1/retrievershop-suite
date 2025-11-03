@@ -853,7 +853,7 @@ class LabelAgent:
                 f"📦 Nowe zamówienie od: {data.get('customer', '-')}\n"
                 f"🛒 Produkty:\n"
                 + "".join(
-                    f"- {shorten_product_name(p['name'])} (x{p['quantity']})\n"
+                    f"- {p['name']} (x{p['quantity']})\n"
                     for p in data.get("products", [])
                 )
                 + f"🚚 Wysyłka: {data.get('shipping', '-')}\n"
