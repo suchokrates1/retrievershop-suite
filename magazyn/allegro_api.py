@@ -371,6 +371,40 @@ def fetch_thread_messages(***REMOVED***: str, thread_id: str, limit: int = 1) ->
     return response.json()
 
 
+def send_thread_message(***REMOVED***: str, thread_id: str, text: str) -> dict:
+    """Send a message to a specific thread."""
+    headers = {
+        "Authorization": f"Bearer {***REMOVED***}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+        "Content-Type": "application/vnd.allegro.public.v1+json",
+    }
+    payload = {"text": text}
+    url = f"{API_BASE_URL}/messaging/threads/{thread_id}/messages"
+    response = _request_with_retry(
+        requests.post, url, endpoint="send_thread_message", headers=headers, json=payload
+    )
+    return response.json()
+
+
+def send_discussion_message(***REMOVED***: str, issue_id: str, text: str) -> dict:
+    """Send a message to a specific discussion."""
+    headers = {
+        "Authorization": f"Bearer {***REMOVED***}",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+        "Content-Type": "application/vnd.allegro.beta.v1+json",
+    }
+    payload = {"text": text, "type": "REGULAR"}
+    url = f"{API_BASE_URL}/sale/issues/{issue_id}/message"
+    response = _request_with_retry(
+        requests.post,
+        url,
+        endpoint="send_discussion_message",
+        headers=headers,
+        json=payload,
+    )
+    return response.json()
+
+
 def _describe_token(token: ***REMOVED***) -> str:
     if not token:
         return "brak"

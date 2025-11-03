@@ -282,6 +282,11 @@ class SettingsStore:
             API_TOKEN=get("API_TOKEN"),
             PAGE_ACCESS_TOKEN=get("PAGE_ACCESS_TOKEN"),
             RECIPIENT_ID=get("RECIPIENT_ID"),
+            ALLEGRO_AUTORESPONDER_ENABLED=_bool("ALLEGRO_AUTORESPONDER_ENABLED", "0"),
+            ALLEGRO_AUTORESPONDER_MESSAGE=get(
+                "ALLEGRO_AUTORESPONDER_MESSAGE",
+                "Dziękujemy za wiadomość. Zajmujemy się Państwa sprawą.",
+            ),
             STATUS_ID=_int("STATUS_ID", "91618"),
             PRINTER_NAME=get("PRINTER_NAME", "Xprinter"),
             CUPS_SERVER=get("CUPS_SERVER"),
