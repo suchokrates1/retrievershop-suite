@@ -251,67 +251,25 @@ class SettingsStore:
             conn.close()
 
     def _build_namespace(self, values: Mapping[str, str]) -> SimpleNamespace:
-        get = values.get
-        excluded = {
-            seller.strip()
-            for seller in (get("ALLEGRO_EXCLUDED_SELLERS") or "").split(",")
-            if seller.strip()
-        }
-        base_dir = os.path.dirname(__file__)
-        db_path = get("DB_PATH") or os.path.join(base_dir, "database.db")
+        processed_values = {}
+        for key, value in values.items():
+            if key.endswith('_AT') and value:
+                try:
+                    processed_values[key] = float(value)
+                except (ValueError, TypeError):
+                    processed_values[key] = value
+            elif key.startswith('ENABLE_') or key.endswith('_ENABLED'):
+                processed_values[key] = (value or "0") == "1"
+            elif 'INTERVAL' in key or 'EXPIRY' in key or 'THRESHOLD' in key or 'PORT' in key or 'ID' in key:
+                 if key not in ['RECIPIENT_ID', 'ALLEGRO_SELLER_ID']:
+                    try:
+                        processed_values[key] = int(value)
+                    except (ValueError, TypeError):
+                        processed_values[key] = value
+            else:
+                processed_values[key] = value
 
-        def _bool(key: str, default: str = "1") -> bool:
-            return (get(key, default) or "0") == "1"
-
-        def _int(key: str, default: str) -> int:
-            return int(get(key, default) or default)
-
-        def _float(key: str, default: str) -> float:
-            return float(get(key, default) or default)
-
-        namespace = SimpleNamespace(
-            API_TOKEN=get("API_TOKEN"),
-            PAGE_ACCESS_TOKEN=get("PAGE_ACCESS_TOKEN"),
-            RECIPIENT_ID=get("RECIPIENT_ID"),
-            ALLEGRO_AUTORESPONDER_ENABLED=_bool("ALLEGRO_AUTORESPONDER_ENABLED", "0"),
-            ALLEGRO_AUTORESPONDER_MESSAGE=get(
-                "ALLEGRO_AUTORESPONDER_MESSAGE",
-                "Dziękujemy za wiadomość. Zajmujemy się Państwa sprawą.",
-            ),
-            STATUS_ID=_int("STATUS_ID", "91618"),
-            PRINTER_NAME=get("PRINTER_NAME", "Xprinter"),
-            CUPS_SERVER=get("CUPS_SERVER"),
-            CUPS_PORT=get("CUPS_PORT"),
-            POLL_INTERVAL=_int("POLL_INTERVAL", "60"),
-            QUIET_HOURS_START=get("QUIET_HOURS_START", "10:00"),
-            QUIET_HOURS_END=get("QUIET_HOURS_END", "22:00"),
-            TIMEZONE=get("TIMEZONE", "Europe/Warsaw"),
-            PRINTED_EXPIRY_DAYS=_int("PRINTED_EXPIRY_DAYS", "5"),
-            LOG_LEVEL=(get("LOG_LEVEL", "INFO") or "INFO").upper(),
-            LOG_FILE=get("LOG_FILE", os.path.join(base_dir, "agent.log")),
-            DB_PATH=db_path,
-            SECRET_KEY=get("SECRET_KEY", "default_secret_key"),
-            FLASK_DEBUG=_bool("FLASK_DEBUG", "0"),
-            FLASK_ENV=get("FLASK_ENV", "production"),
-            COMMISSION_ALLEGRO=float(get("COMMISSION_ALLEGRO", "0") or 0),
-            ALLEGRO_SELLER_ID=get("ALLEGRO_SELLER_ID"),
-            ALLEGRO_SELLER_NAME=get("ALLEGRO_SELLER_NAME"),
-            ALLEGRO_EXCLUDED_SELLERS=excluded,
-            LOW_STOCK_THRESHOLD=_int("LOW_STOCK_THRESHOLD", "1"),
-            ALERT_EMAIL=get("ALERT_EMAIL"),
-            SMTP_SERVER=get("SMTP_SERVER"),
-            SMTP_PORT=get("SMTP_PORT", "25"),
-            SMTP_USERNAME=get("SMTP_USERNAME"),
-            SMTP_PASSWORD=get("SMTP_PASSWORD"),
-            ENABLE_MONTHLY_REPORTS=_bool("ENABLE_MONTHLY_REPORTS", "1"),
-            ENABLE_WEEKLY_REPORTS=_bool("ENABLE_WEEKLY_REPORTS", "1"),
-            API_RATE_LIMIT_CALLS=_int("API_RATE_LIMIT_CALLS", "60"),
-            API_RATE_LIMIT_PERIOD=_float("API_RATE_LIMIT_PERIOD", "60"),
-            API_RETRY_ATTEMPTS=_int("API_RETRY_ATTEMPTS", "3"),
-            API_RETRY_BACKOFF_INITIAL=_float("API_RETRY_BACKOFF_INITIAL", "1.0"),
-            API_RETRY_BACKOFF_MAX=_float("API_RETRY_BACKOFF_MAX", "30.0"),
-        )
-        return namespace
+        return SimpleNamespace(**processed_values)
 
     def _apply_environment(
         self,
