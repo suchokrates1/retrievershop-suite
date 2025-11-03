@@ -1004,15 +1004,20 @@ class LabelAgent:
         allegro_check_interval = timedelta(minutes=5)
         last_allegro_check = datetime.now() - allegro_check_interval
 
-        # Wait a moment for settings to fully load
-        time.sleep(60)
-
         while not self._stop_event.is_set():
             loop_start = datetime.now()
             self._write_heartbeat()
             self._send_periodic_reports()
 
             if datetime.now() - last_allegro_check >= allegro_check_interval:
+                while True:
+                    token_valid = hasattr(self.settings, 'ALLEGRO_ACCESS_TOKEN') and self.settings.ALLEGRO_ACCESS_TOKEN
+                    expires_at = getattr(self.settings, 'ALLEGRO_TOKEN_EXPIRES_AT', 0)
+                    if token_valid and expires_at > time.time():
+                        break
+                    if self._stop_event.wait(5):
+                        return
+
                 access_token = self.settings.ALLEGRO_ACCESS_TOKEN
                 if access_token:
                     self._check_allegro_discussions(access_token)
