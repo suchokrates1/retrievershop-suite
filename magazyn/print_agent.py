@@ -24,7 +24,6 @@ from .db import sqlite_connect
 from .notifications import send_report, send_messenger
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
-from .allegro_token_refresher import token_refresher
 from .allegro_api import (
     fetch_discussions,
     fetch_discussion_chat,
@@ -1212,6 +1211,7 @@ class LabelAgent:
                 os.remove(self.config.lock_file)
             except OSError:
                 pass
+        from .allegro_token_refresher import token_refresher
         token_refresher.stop()
 
 
