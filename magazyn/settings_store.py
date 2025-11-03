@@ -72,18 +72,9 @@ class SettingsStore:
             else:
                 db_values, db_updated_at = db_result
 
-            if db_values is not None and db_values:
-                values = db_values
-            elif env_values:
-                values = env_values
-                try:
-                    self._persist_many(values, db_path)
-                except SettingsPersistenceError as exc:
-                    LOGGER.warning(
-                        "Could not persist initial settings to database: %s", exc
-                    )
-            else:
-                values = OrderedDict()
+            values = OrderedDict(env_values)
+            if db_values:
+                values.update(db_values)
 
             self._db_path = db_path
             self._values = OrderedDict(
