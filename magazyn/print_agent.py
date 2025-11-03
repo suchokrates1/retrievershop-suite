@@ -960,18 +960,41 @@ class LabelAgent:
         last_checked = self._load_state_value("last_discussion_check") or ""
         try:
             discussions = fetch_discussions(access_token).get("issues", [])
-            for discussion in discussions:
-                if discussion["id"] <= last_checked:
-                    continue
-                chat = fetch_discussion_chat(access_token, discussion["id"])
-                last_message = chat.get("chat", [{}])[0]
-                if last_message.get("author", {}).get("role") == "BUYER":
-                    buyer = discussion.get("buyer", {}).get("login", "Nieznany")
-                    text = last_message.get("text", "")[:50]
-                    link = f"https://allegro.pl/dyskusje/z-kupujacym/{discussion['id']}"
-                    message = f"💬 Nowa wiadomość w dyskusji od kupującego: {buyer}. Treść: \"{text}...\". Link: {link}"
-                    send_messenger(message)
-                last_checked = discussion["id"]
+            with sqlite_connect(self.config.db_file) as conn:
+                cur = conn.cursor()
+                for discussion in discussions:
+                    if discussion["id"] <= last_checked:
+                        continue
+
+                    cur.execute("SELECT id FROM threads WHERE id = ?", (discussion['id'],))
+                    thread_exists = cur.fetchone()
+
+                    if not thread_exists:
+                        cur.execute(
+                            "INSERT INTO threads (id, title, author, type) VALUES (?, ?, ?, ?)",
+                            (discussion['id'], discussion['subject'], discussion['buyer']['login'], 'dyskusja')
+                        )
+
+                    chat = fetch_discussion_chat(access_token, discussion["id"])
+                    for msg in reversed(chat.get("chat", [])):
+                        cur.execute("SELECT id FROM messages WHERE id = ?", (msg['id'],))
+                        message_exists = cur.fetchone()
+                        if not message_exists:
+                            cur.execute(
+                                "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
+                                (msg['id'], discussion['id'], msg['author']['login'], msg['text'], msg['date'])
+                            )
+                            cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['date'], discussion['id']))
+
+
+                    last_message = chat.get("chat", [{}])[0]
+                    if last_message.get("author", {}).get("role") == "BUYER":
+                        buyer = discussion.get("buyer", {}).get("login", "Nieznany")
+                        text = last_message.get("text", "")[:50]
+                        link = f"https://allegro.pl/dyskusje/z-kupujacym/{discussion['id']}"
+                        message = f"💬 Nowa wiadomość w dyskusji od kupującego: {buyer}. Treść: \"{text}...\". Link: {link}"
+                        send_messenger(message)
+                    last_checked = discussion["id"]
         except Exception as e:
             self.logger.error("Błąd podczas sprawdzania dyskusji Allegro: %s", e)
         finally:
@@ -981,19 +1004,41 @@ class LabelAgent:
         last_checked = self._load_state_value("last_message_check") or ""
         try:
             threads = fetch_message_threads(access_token).get("threads", [])
-            for thread in threads:
-                if thread["id"] <= last_checked:
-                    continue
-                if not thread.get("read"):
-                    messages = fetch_thread_messages(access_token, thread["id"])
-                    last_message = messages.get("messages", [{}])[0]
-                    if last_message.get("author", {}).get("isInterlocutor"):
-                        interlocutor = thread.get("interlocutor", {}).get("login", "Nieznany")
-                        text = last_message.get("text", "")[:50]
-                        link = f"https://allegro.pl/wiadomosci/{thread['id']}"
-                        message = f"✉️ Nowa wiadomość w Centrum Wiadomości od: {interlocutor}. Treść: \"{text}...\". Link: {link}"
-                        send_messenger(message)
-                last_checked = thread["id"]
+            with sqlite_connect(self.config.db_file) as conn:
+                cur = conn.cursor()
+                for thread in threads:
+                    if thread["id"] <= last_checked:
+                        continue
+
+                    cur.execute("SELECT id FROM threads WHERE id = ?", (thread['id'],))
+                    thread_exists = cur.fetchone()
+
+                    if not thread_exists:
+                        cur.execute(
+                            "INSERT INTO threads (id, title, author, type) VALUES (?, ?, ?, ?)",
+                            (thread['id'], thread['interlocutor']['login'], thread['interlocutor']['login'], 'wiadomość')
+                        )
+
+                    if not thread.get("read"):
+                        messages = fetch_thread_messages(access_token, thread["id"])
+                        for msg in reversed(messages.get("messages", [])):
+                            cur.execute("SELECT id FROM messages WHERE id = ?", (msg['id'],))
+                            message_exists = cur.fetchone()
+                            if not message_exists:
+                                cur.execute(
+                                    "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
+                                    (msg['id'], thread['id'], msg['author']['login'], msg['text'], msg['createdAt'])
+                                )
+                                cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['createdAt'], thread['id']))
+
+                        last_message = messages.get("messages", [{}])[0]
+                        if last_message.get("author", {}).get("isInterlocutor"):
+                            interlocutor = thread.get("interlocutor", {}).get("login", "Nieznany")
+                            text = last_message.get("text", "")[:50]
+                            link = f"https://allegro.pl/wiadomosci/{thread['id']}"
+                            message = f"✉️ Nowa wiadomość w Centrum Wiadomości od: {interlocutor}. Treść: \"{text}...\". Link: {link}"
+                            send_messenger(message)
+                    last_checked = thread["id"]
         except Exception as e:
             self.logger.error("Błąd podczas sprawdzania wiadomości Allegro: %s", e)
         finally:

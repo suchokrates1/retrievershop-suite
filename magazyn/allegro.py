@@ -33,6 +33,7 @@ from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
+from .print_agent import agent
 from .allegro_scraper import (
     AllegroScrapeError,
     fetch_competitors_for_offer,
@@ -183,6 +184,7 @@ def _process_oauth_response() -> dict[str, object]:
 
     try:
         update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
+        agent.reload_config()
         _record_debug_step(debug_steps, "Wynik zapisu tokenów", "Sukces")
     except SettingsPersistenceError:
         _record_debug_step(debug_steps, "Błąd zapisu tokenów", "SettingsPersistenceError")
