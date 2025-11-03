@@ -431,22 +431,7 @@ class SettingsStore:
         """Return a configuration value from the persistent store."""
 
         self._ensure_loaded()
-        self._refresh_if_stale()
         return self._values.get(key, default)
-
-    def _refresh_if_stale(self) -> None:
-        if not self._loaded or not self._db_path:
-            return
-        latest = self._fetch_last_updated_at()
-        if latest is None:
-            return
-        with self._lock:
-            if not self._loaded:
-                return
-            current = self._db_last_updated_at
-        if current is not None and latest <= current:
-            return
-        self.reload()
 
 
 settings_store = SettingsStore()
