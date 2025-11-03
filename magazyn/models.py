@@ -177,7 +177,7 @@ class AllegroRepliedDiscussion(Base):
 
 class Thread(Base):
     __tablename__ = "threads"
-    id = Column(Integer, primary_key=True)
+    id = Column(String, primary_key=True)
     title = Column(String, nullable=False)
     author = Column(String, nullable=False)
     last_message_at = Column(DateTime, nullable=False, server_default=func.now())
@@ -187,8 +187,8 @@ class Thread(Base):
 
 class Message(Base):
     __tablename__ = "messages"
-    id = Column(Integer, primary_key=True)
-    thread_id = Column(Integer, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String, primary_key=True)
+    thread_id = Column(String, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False)
     author = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
