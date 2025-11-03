@@ -80,9 +80,9 @@ def update_allegro_tokens(
 
     if expires_value is not None:
         metadata_payload["expires_in"] = expires_value
-        metadata_payload["expires_at"] = (
-            now + timedelta(seconds=expires_value)
-        ).isoformat()
+        expires_at_dt = now + timedelta(seconds=expires_value)
+        metadata_payload["expires_at"] = expires_at_dt.isoformat()
+        updates["ALLEGRO_TOKEN_EXPIRES_AT"] = int(expires_at_dt.timestamp())
 
     if metadata:
         metadata_payload.update(metadata)
