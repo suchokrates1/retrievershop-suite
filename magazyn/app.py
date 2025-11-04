@@ -319,7 +319,18 @@ from sqlalchemy.orm import subqueryload
 @login_required
 def discussions():
     with get_session() as db:
-        threads = db.query(Thread).options(subqueryload(Thread.messages)).order_by(Thread.last_message_at.desc()).all()
+        threads_from_db = db.query(Thread).order_by(Thread.last_message_at.desc()).all()
+
+        threads = []
+        for t in threads_from_db:
+            threads.append({
+                'id': t.id,
+                'title': t.title,
+                'author': t.author,
+                'last_message_at': t.last_message_at,
+                'type': t.type,
+            })
+
     return render_template("discussions.html", threads=threads)
 
 
