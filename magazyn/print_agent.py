@@ -109,12 +109,12 @@ class AgentConfig:
             status_id=cfg.STATUS_ID,
             printer_name=cfg.PRINTER_NAME,
             cups_server=cfg.CUPS_SERVER,
-            cups_port=cfg.CUPS_PORT,
-            poll_interval=cfg.POLL_INTERVAL,
+            cups_port=int(cfg.CUPS_PORT) if cfg.CUPS_PORT else None,
+            poll_interval=int(cfg.POLL_INTERVAL),
             quiet_hours_start=parse_time_str(cfg.QUIET_HOURS_START),
             quiet_hours_end=parse_time_str(cfg.QUIET_HOURS_END),
             timezone=cfg.TIMEZONE,
-            printed_expiry_days=cfg.PRINTED_EXPIRY_DAYS,
+            printed_expiry_days=int(cfg.PRINTED_EXPIRY_DAYS),
             enable_weekly_reports=cfg.ENABLE_WEEKLY_REPORTS,
             enable_monthly_reports=cfg.ENABLE_MONTHLY_REPORTS,
             log_level=cfg.LOG_LEVEL,
@@ -126,11 +126,11 @@ class AgentConfig:
             legacy_db_file=os.path.abspath(
                 os.path.join(base_dir, os.pardir, "printer", "data.db")
             ),
-            api_rate_limit_calls=cfg.API_RATE_LIMIT_CALLS,
-            api_rate_limit_period=cfg.API_RATE_LIMIT_PERIOD,
-            api_retry_attempts=cfg.API_RETRY_ATTEMPTS,
-            api_retry_backoff_initial=cfg.API_RETRY_BACKOFF_INITIAL,
-            api_retry_backoff_max=cfg.API_RETRY_BACKOFF_MAX,
+            api_rate_limit_calls=int(cfg.API_RATE_LIMIT_CALLS),
+            api_rate_limit_period=float(cfg.API_RATE_LIMIT_PERIOD),
+            api_retry_attempts=int(cfg.API_RETRY_ATTEMPTS),
+            api_retry_backoff_initial=float(cfg.API_RETRY_BACKOFF_INITIAL),
+            api_retry_backoff_max=float(cfg.API_RETRY_BACKOFF_MAX),
         )
 
     def with_updates(self, **kwargs: Any) -> "AgentConfig":
