@@ -433,17 +433,10 @@ def handle_500(error):
 
 if __name__ == "__main__":
     from .factory import create_app
-    from alembic.config import Config
-    from alembic import command
 
     cli_app = create_app()
-    with cli_app.app_context():
-        ensure_db_initialized(cli_app)
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-
     cli_app.run(
         host="0.0.0.0",
-        port=8080,
+        port=80,
         debug=settings_store.settings.FLASK_DEBUG,
     )
