@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     DateTime,
     func,
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -182,6 +183,7 @@ class Thread(Base):
     author = Column(String, nullable=False)
     last_message_at = Column(DateTime, nullable=False, server_default=func.now())
     type = Column(String, nullable=False)  # "wiadomość" or "dyskusja"
+    read = Column(Boolean, default=False, nullable=False)
     messages = relationship("Message", back_populates="thread", cascade="all, delete-orphan")
 
 
