@@ -31,7 +31,6 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     import magazyn.db as db_mod
 
     importlib.reload(db_mod)
-    monkeypatch.setattr(db_mod, "apply_migrations", lambda: None)
     db_mod.configure_engine(cfg.settings.DB_PATH)
     from sqlalchemy.orm import sessionmaker
 
