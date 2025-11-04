@@ -17,13 +17,12 @@ from zoneinfo import ZoneInfo
 import requests
 import sqlite3
 
-from magazyn import DB_PATH
-
 from .config import load_config, settings
 from .db import sqlite_connect
 from .notifications import send_report, send_messenger
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
+from .allegro_token_refresher import token_refresher
 from .allegro_api import (
     fetch_discussions,
     fetch_discussion_chat,
@@ -114,12 +113,12 @@ class AgentConfig:
             quiet_hours_start=parse_time_str(cfg.QUIET_HOURS_START),
             quiet_hours_end=parse_time_str(cfg.QUIET_HOURS_END),
             timezone=cfg.TIMEZONE,
-            printed_expiry_days=int(cfg.PRINTED_EXPIRY_DAYS),
+            printed_expiry_days=cfg.PRINTED_EXPIRY_DAYS,
             enable_weekly_reports=cfg.ENABLE_WEEKLY_REPORTS,
             enable_monthly_reports=cfg.ENABLE_MONTHLY_REPORTS,
             log_level=cfg.LOG_LEVEL,
             log_file=log_file,
-            db_file=getattr(cfg, "DB_PATH", DB_PATH),
+            db_file=getattr(cfg, "DB_PATH", settings.DB_PATH),
             lock_file=lock_file,
             legacy_printed_file=os.path.join(base_dir, "printed_orders.txt"),
             legacy_queue_file=os.path.join(base_dir, "queued_labels.jsonl"),
@@ -376,55 +375,6 @@ class LabelAgent:
                     )
                     conn.commit()
                 conn.commit()
-
-                # Migration for threads and messages table to convert IDs to TEXT
-                try:
-                    cur.execute("PRAGMA table_info(threads)")
-                    threads_cols = {row[1]: row[2] for row in cur.fetchall()}
-                    if threads_cols.get("id") and "INT" in threads_cols.get("id", "").upper():
-                        self.logger.info("Uruchamianie migracji schematu bazy danych dla wiadomości Allegro...")
-                        cur.execute("PRAGMA foreign_keys=OFF")
-                        cur.execute("BEGIN TRANSACTION")
-                        try:
-                            cur.execute("ALTER TABLE threads RENAME TO threads_old")
-                            cur.execute("ALTER TABLE messages RENAME TO messages_old")
-
-                            cur.execute("""
-                                CREATE TABLE threads (
-                                    id TEXT PRIMARY KEY NOT NULL,
-                                    title TEXT NOT NULL,
-                                    author TEXT NOT NULL,
-                                    last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                                    type TEXT NOT NULL
-                                )
-                            """)
-                            cur.execute("""
-                                CREATE TABLE messages (
-                                    id TEXT PRIMARY KEY NOT NULL,
-                                    thread_id TEXT NOT NULL,
-                                    author TEXT NOT NULL,
-                                    content TEXT NOT NULL,
-                                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                                    FOREIGN KEY(thread_id) REFERENCES threads(id) ON DELETE CASCADE
-                                )
-                            """)
-
-                            cur.execute("INSERT INTO threads (id, title, author, last_message_at, type) SELECT CAST(id AS TEXT), title, author, last_message_at, type FROM threads_old")
-                            cur.execute("INSERT INTO messages (id, thread_id, author, content, created_at) SELECT CAST(id AS TEXT), CAST(thread_id AS TEXT), author, content, created_at FROM messages_old")
-
-                            cur.execute("DROP TABLE threads_old")
-                            cur.execute("DROP TABLE messages_old")
-
-                            cur.execute("COMMIT")
-                            self.logger.info("Migracja bazy danych zakończona pomyślnie.")
-                        except Exception as e:
-                            self.logger.error(f"Błąd podczas migracji, wycofywanie zmian: {e}")
-                            cur.execute("ROLLBACK")
-                        finally:
-                            cur.execute("PRAGMA foreign_keys=ON")
-                except sqlite3.OperationalError as e:
-                    if "no such table" not in str(e):
-                        raise
             except sqlite3.OperationalError as exc:
                 if self._handle_readonly_error("database migrations", exc):
                     return
@@ -1316,7 +1266,6 @@ class LabelAgent:
                 os.remove(self.config.lock_file)
             except OSError:
                 pass
-        from .allegro_token_refresher import token_refresher
         token_refresher.stop()
 
 
