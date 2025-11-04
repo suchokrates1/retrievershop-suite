@@ -1,15 +1,15 @@
 services:
   magazyn_app:
     build:
-      context: .
-      dockerfile: magazyn/Dockerfile
+      context: ./magazyn
+      dockerfile: Dockerfile
     volumes:
       - ./magazyn/database.db:/app/database.db
       - ./.env:/app/.env
       - ./.env.example:/app/.env.example:ro
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     env_file: .env
-    command: ["gunicorn", "-c", "/app/gunicorn.conf.py", "magazyn.wsgi:app"]
+    command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
