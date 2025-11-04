@@ -21,11 +21,14 @@
     }
     .thread-item {
         padding: 1rem;
-        border-bottom: 1px solid #eee;
+        border: 1px solid #444;
+        border-radius: 5px;
+        margin-bottom: 1rem;
         cursor: pointer;
+        transition: background-color 0.3s;
     }
     .thread-item:hover {
-        background-color: #f5f5f5;
+        background-color: #3a3a3a;
     }
     .thread-item.active {
         background-color: #e0e0e0;
@@ -41,9 +44,24 @@
     }
     .message {
         margin-bottom: 1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        max-width: 70%;
+    }
+    .message.sent {
+        background-color: #0b3d91;
+        margin-left: auto;
+        text-align: right;
+    }
+    .message.received {
+        background-color: #333;
+        margin-right: auto;
+        text-align: left;
     }
     .message .author {
         font-weight: bold;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
     }
     .message .timestamp {
         font-size: 0.8rem;
@@ -62,7 +80,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="discussions-container">
+<div class="discussions-container" data-username="{{ username }}">
     <div class="threads-list">
         <input type="text" id="search-threads" placeholder="Wyszukaj wątek...">
         <button id="new-thread-btn" class="btn btn-primary mb-3">Nowy wątek</button>
@@ -231,7 +249,14 @@
 
         function appendMessage(author, content, timestamp) {
             const messageElement = document.createElement('div');
+            const currentUsername = document.querySelector('.discussions-container').dataset.username;
+
             messageElement.classList.add('message');
+            if (author === currentUsername) {
+                messageElement.classList.add('sent');
+            } else {
+                messageElement.classList.add('received');
+            }
 
             const formattedTimestamp = new Date(timestamp).toLocaleString('pl-PL');
 
