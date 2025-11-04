@@ -179,7 +179,6 @@ def ensure_db_initialized(app_obj=None):
             raise SystemExit(1)
 
         # Always run table creation so new tables appear automatically.
-        init_db()
         register_default_user()
     except Exception as e:
         logger = (app_obj or current_app).logger
@@ -431,12 +430,3 @@ def handle_500(error):
     return render_template("500.html"), 500
 
 
-if __name__ == "__main__":
-    from .factory import create_app
-
-    cli_app = create_app()
-    cli_app.run(
-        host="0.0.0.0",
-        port=80,
-        debug=settings_store.settings.FLASK_DEBUG,
-    )
