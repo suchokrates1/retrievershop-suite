@@ -963,42 +963,43 @@ class LabelAgent:
             with sqlite_connect(self.config.db_file) as conn:
                 cur = conn.cursor()
                 for discussion in discussions:
-                    if discussion["id"] <= last_checked:
+                    discussion_id = str(discussion["id"])
+                    if discussion_id <= last_checked:
                         continue
 
-                    cur.execute("SELECT id FROM threads WHERE id = ?", (discussion['id'],))
+                    cur.execute("SELECT id FROM threads WHERE id = ?", (discussion_id,))
                     thread_exists = cur.fetchone()
 
                     if not thread_exists:
                         cur.execute(
                             "INSERT INTO threads (id, title, author, type) VALUES (?, ?, ?, ?)",
-                            (discussion['id'], discussion['subject'], discussion['buyer']['login'], 'dyskusja')
+                            (discussion_id, discussion['subject'], discussion['buyer']['login'], 'dyskusja')
                         )
 
-                    chat = fetch_discussion_chat(access_token, discussion["id"])
+                    chat = fetch_discussion_chat(access_token, discussion_id)
                     for msg in reversed(chat.get("chat", [])):
-                        cur.execute("SELECT id FROM messages WHERE id = ?", (msg['id'],))
+                        msg_id = str(msg['id'])
+                        cur.execute("SELECT id FROM messages WHERE id = ?", (msg_id,))
                         message_exists = cur.fetchone()
                         if not message_exists:
                             cur.execute(
                                 "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                                (msg['id'], discussion['id'], msg['author']['login'], msg['text'], msg['date'])
+                                (msg_id, discussion_id, msg['author']['login'], msg['text'], msg['date'])
                             )
-                            cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['date'], discussion['id']))
-
+                            cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['date'], discussion_id))
 
                     last_message = chat.get("chat", [{}])[0]
                     if last_message.get("author", {}).get("role") == "BUYER":
                         buyer = discussion.get("buyer", {}).get("login", "Nieznany")
                         text = last_message.get("text", "")[:50]
-                        link = f"https://allegro.pl/dyskusje/z-kupujacym/{discussion['id']}"
+                        link = f"https://allegro.pl/dyskusje/z-kupujacym/{discussion_id}"
                         message = f"💬 Nowa wiadomość w dyskusji od kupującego: {buyer}. Treść: \"{text}...\". Link: {link}"
                         send_messenger(message)
-                    last_checked = discussion["id"]
+                    last_checked = discussion_id
         except Exception as e:
             self.logger.error("Błąd podczas sprawdzania dyskusji Allegro: %s", e)
         finally:
-            self._save_state_value("last_discussion_check", last_checked)
+            self._save_state_value("last_discussion_check", str(last_checked))
 
     def _check_allegro_messages(self, access_token: str) -> None:
         last_checked = self._load_state_value("last_message_check") or ""
@@ -1007,42 +1008,44 @@ class LabelAgent:
             with sqlite_connect(self.config.db_file) as conn:
                 cur = conn.cursor()
                 for thread in threads:
-                    if thread["id"] <= last_checked:
+                    thread_id = str(thread["id"])
+                    if thread_id <= last_checked:
                         continue
 
-                    cur.execute("SELECT id FROM threads WHERE id = ?", (thread['id'],))
+                    cur.execute("SELECT id FROM threads WHERE id = ?", (thread_id,))
                     thread_exists = cur.fetchone()
 
                     if not thread_exists:
                         cur.execute(
                             "INSERT INTO threads (id, title, author, type) VALUES (?, ?, ?, ?)",
-                            (thread['id'], thread['interlocutor']['login'], thread['interlocutor']['login'], 'wiadomość')
+                            (thread_id, thread['interlocutor']['login'], thread['interlocutor']['login'], 'wiadomość')
                         )
 
                     if not thread.get("read"):
-                        messages = fetch_thread_messages(access_token, thread["id"])
+                        messages = fetch_thread_messages(access_token, thread_id)
                         for msg in reversed(messages.get("messages", [])):
-                            cur.execute("SELECT id FROM messages WHERE id = ?", (msg['id'],))
+                            msg_id = str(msg['id'])
+                            cur.execute("SELECT id FROM messages WHERE id = ?", (msg_id,))
                             message_exists = cur.fetchone()
                             if not message_exists:
                                 cur.execute(
                                     "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                                    (msg['id'], thread['id'], msg['author']['login'], msg['text'], msg['createdAt'])
+                                    (msg_id, thread_id, msg['author']['login'], msg['text'], msg['createdAt'])
                                 )
-                                cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['createdAt'], thread['id']))
+                                cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['createdAt'], thread_id))
 
                         last_message = messages.get("messages", [{}])[0]
                         if last_message.get("author", {}).get("isInterlocutor"):
                             interlocutor = thread.get("interlocutor", {}).get("login", "Nieznany")
                             text = last_message.get("text", "")[:50]
-                            link = f"https://allegro.pl/wiadomosci/{thread['id']}"
+                            link = f"https://allegro.pl/wiadomosci/{thread_id}"
                             message = f"✉️ Nowa wiadomość w Centrum Wiadomości od: {interlocutor}. Treść: \"{text}...\". Link: {link}"
                             send_messenger(message)
-                    last_checked = thread["id"]
+                    last_checked = thread_id
         except Exception as e:
             self.logger.error("Błąd podczas sprawdzania wiadomości Allegro: %s", e)
         finally:
-            self._save_state_value("last_message_check", last_checked)
+            self._save_state_value("last_message_check", str(last_checked))
 
     def _agent_loop(self) -> None:
         allegro_check_interval = timedelta(minutes=5)
