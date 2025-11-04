@@ -435,12 +435,11 @@ if __name__ == "__main__":
     from .factory import create_app
 
     cli_app = create_app()
-    if len(sys.argv) > 1 and sys.argv[1] == "init_db":
-        with cli_app.app_context():
-            ensure_db_initialized(cli_app)
-    else:
-        cli_app.run(
-            host="0.0.0.0",
-            port=80,
-            debug=settings_store.settings.FLASK_DEBUG,
-        )
+    with cli_app.app_context():
+        ensure_db_initialized(cli_app)
+
+    cli_app.run(
+        host="0.0.0.0",
+        port=8080,
+        debug=settings_store.settings.FLASK_DEBUG,
+    )
