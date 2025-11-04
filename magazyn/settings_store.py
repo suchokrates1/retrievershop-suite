@@ -252,7 +252,11 @@ class SettingsStore:
 
     def _build_namespace(self, values: Mapping[str, str]) -> SimpleNamespace:
         processed_values = {}
-        for key, value in values.items():
+        defaults = settings_io.load_settings(include_hidden=True)
+        all_keys = set(values.keys()) | set(defaults.keys())
+
+        for key in all_keys:
+            value = values.get(key, defaults.get(key))
             if key.endswith('_AT') and value:
                 try:
                     processed_values[key] = float(value)
@@ -400,4 +404,3 @@ class SettingsStore:
 settings_store = SettingsStore()
 
 __all__ = ["settings_store", "SettingsStore", "SettingsPersistenceError"]
-

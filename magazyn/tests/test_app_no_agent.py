@@ -50,3 +50,27 @@ def test_app_response_without_agent(tmp_path, monkeypatch):
     client = app_mod.app.test_client()
     resp = client.get("/login")
     assert resp.status_code == 200
+
+import uuid
+
+def test_discussions_page_loads_without_error(tmp_path, monkeypatch):
+    app_mod = setup_app_missing_agent(tmp_path, monkeypatch)
+    client = app_mod.app.test_client()
+    with app_mod.app.app_context():
+        with app_mod.get_session() as db:
+            from magazyn.models import User, Thread, Message
+            from werkzeug.security import generate_password_hash
+
+            user = User(username='test', password=generate_password_hash('test'))
+            db.add(user)
+            thread = Thread(id=str(uuid.uuid4()), title="Test Thread", author="test", type="dyskusja")
+            db.add(thread)
+            message = Message(id=str(uuid.uuid4()), thread_id=thread.id, author="test", content="Test message")
+            db.add(message)
+            db.commit()
+
+    with client:
+        client.post('/login', data={'username': 'test', 'password': 'test'})
+        resp = client.get("/discussions")
+        assert resp.status_code == 200
+        assert b"Test Thread" in resp.data

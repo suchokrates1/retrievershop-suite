@@ -1,46 +1,13 @@
-import importlib
-import sys
-
 from werkzeug.security import generate_password_hash
 from magazyn.models import User
-import magazyn.config as cfg
+from magazyn.db import get_session
 
-
-def setup_app_default_session(tmp_path, monkeypatch):
-    db_path = tmp_path / "test.db"
-    monkeypatch.setattr(cfg.settings, "DB_PATH", str(db_path))
-    import werkzeug
-
-    monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
-    init = importlib.import_module("magazyn.__init__")
-    importlib.reload(init)
-    monkeypatch.setitem(sys.modules, "__init__", init)
-    pa = importlib.import_module("magazyn.print_agent")
-    monkeypatch.setitem(sys.modules, "print_agent", pa)
-    monkeypatch.setattr(pa, "start_agent_thread", lambda: None)
-    monkeypatch.setattr(pa, "ensure_db_init", lambda: None)
-    monkeypatch.setattr(pa, "validate_env", lambda: None)
-    import magazyn.app as app_mod
-
-    importlib.reload(app_mod)
-    from magazyn.factory import create_app
-    import magazyn.db as db_mod
-    from sqlalchemy.orm import sessionmaker
-
-    importlib.reload(db_mod)
-    monkeypatch.setattr(db_mod, "apply_migrations", lambda: None)
-    db_mod.SessionLocal = sessionmaker(bind=db_mod.engine, autoflush=False)
-
-    app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
-    app_mod.app = app
-    app_mod.reset_db()
-    return app_mod
-
-
-def test_login_route_authenticates_user(app_mod, client):
+def test_login_route_authenticates_user(client, app):
     hashed = generate_password_hash("secret")
-    with app_mod.get_session() as db:
-        db.add(User(username="tester", password=hashed))
+    with app.app_context():
+        with get_session() as db:
+            db.add(User(username="tester", password=hashed))
+            db.commit()
 
     resp = client.post(
         "/login", data={"username": "tester", "password": "secret"}
@@ -49,13 +16,12 @@ def test_login_route_authenticates_user(app_mod, client):
     with client.session_transaction() as sess:
         assert sess["username"] == "tester"
 
-
-def test_login_default_session_expiry(tmp_path, monkeypatch):
-    app_mod = setup_app_default_session(tmp_path, monkeypatch)
-    client = app_mod.app.test_client()
+def test_login_default_session_expiry(client, app):
     hashed = generate_password_hash("secret")
-    with app_mod.get_session() as db:
-        db.add(User(username="tester", password=hashed))
+    with app.app_context():
+        with get_session() as db:
+            db.add(User(username="tester", password=hashed))
+            db.commit()
 
     resp = client.post(
         "/login", data={"username": "tester", "password": "secret"}
