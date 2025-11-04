@@ -18,11 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /tmp/requirements.txt
+COPY ../requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY magazyn/gunicorn.conf.py /app/gunicorn.conf.py
-COPY magazyn /app/magazyn
+COPY gunicorn.conf.py /app/gunicorn.conf.py
+COPY . /app/magazyn
 
 
 FROM python:3.12-slim AS runtime
