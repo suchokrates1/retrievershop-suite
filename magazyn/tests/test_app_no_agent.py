@@ -36,7 +36,7 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     from sqlalchemy.orm import sessionmaker
 
     db_mod.SessionLocal = sessionmaker(
-        bind=db_mod.engine, autoflush=False, expire_on_commit=False
+        bind=db_mod.engine, autoflush=False
     )
 
     app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
@@ -69,8 +69,8 @@ def test_discussions_page_loads_without_error(tmp_path, monkeypatch):
             db.add(message)
             db.commit()
 
-    with client:
-        client.post('/login', data={'username': 'test', 'password': 'test'})
-        resp = client.get("/discussions")
-        assert resp.status_code == 200
-        assert b"Test Thread" in resp.data
+        with client:
+            client.post('/login', data={'username': 'test', 'password': 'test'})
+            resp = client.get("/discussions")
+            assert resp.status_code == 200
+            assert b"Test Thread" in resp.data
