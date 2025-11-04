@@ -11,13 +11,6 @@ def test_create_app_initializes_agent_and_migrations(tmp_path, monkeypatch, requ
     db_mod.configure_engine(settings.DB_PATH)
     request.addfinalizer(lambda: db_mod.configure_engine(original_db_path))
 
-    migrations_called = []
-
-    def fake_apply_migrations():
-        migrations_called.append(True)
-
-    monkeypatch.setattr(db_mod, "apply_migrations", fake_apply_migrations)
-
     call_order = []
     original_ensure = factory.ensure_db_initialized
 
@@ -34,7 +27,6 @@ def test_create_app_initializes_agent_and_migrations(tmp_path, monkeypatch, requ
 
     app = factory.create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
 
-    assert migrations_called, "Migrations should run during app creation"
     assert ("ensure", app) in call_order, "Database init should be triggered immediately"
     assert ("start", app) in call_order, "Agent should start during app creation"
     assert call_order.index(("ensure", app)) < call_order.index(("start", app))

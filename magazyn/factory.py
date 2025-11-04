@@ -68,7 +68,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
         ensure_db_initialized(app)
         alembic_ini_path = os.path.join(app.root_path, '..', 'alembic.ini')
         alembic_cfg = Config(alembic_ini_path)
-        alembic_cfg.set_main_option('sqlalchemy.url', settings.DB_PATH)
+        alembic_cfg.set_main_option('sqlalchemy.url', f"sqlite:///{settings.DB_PATH}")
         command.upgrade(alembic_cfg, "head")
 
     start_print_agent(app)
