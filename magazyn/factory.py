@@ -18,6 +18,7 @@ from .allegro import bp as allegro_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
+import os
 from .db import configure_engine
 from alembic.config import Config
 from alembic import command
@@ -65,7 +66,9 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     with app.app_context():
         ensure_db_initialized(app)
-        alembic_cfg = Config("alembic.ini")
+        alembic_ini_path = os.path.join(app.root_path, '..', 'alembic.ini')
+        alembic_cfg = Config(alembic_ini_path)
+        alembic_cfg.set_main_option('sqlalchemy.url', settings.DB_PATH)
         command.upgrade(alembic_cfg, "head")
 
     start_print_agent(app)
