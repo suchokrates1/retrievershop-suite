@@ -11,7 +11,6 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
-from . import DB_PATH
 from .models import (
     Base,
     User,
@@ -85,8 +84,15 @@ def _configure_sqlite_connection(dbapi_connection):
         cursor.close()
 
 
-def sqlite_connect(db_path=DB_PATH, *, apply_pragmas=True, **kwargs):
+def sqlite_connect(db_path=None, *, apply_pragmas=True, **kwargs):
     """Return a SQLite connection with standard settings applied."""
+
+    if db_path is None:
+        if engine is None:
+            raise RuntimeError(
+                "Database not configured. Call configure_engine() first."
+            )
+        db_path = engine.url.database
 
     params = {**SQLITE_CONNECT_ARGS, **kwargs}
     conn = sqlite3.connect(str(db_path), **params)
@@ -109,9 +115,6 @@ def configure_engine(db_path):
         _configure_sqlite_connection(dbapi_connection)
 
     SessionLocal = sessionmaker(bind=engine, autoflush=False)
-
-
-configure_engine(DB_PATH)
 
 
 @contextmanager
@@ -144,14 +147,14 @@ def _ensure_schema_migrations_table(conn):
 
 
 def _get_applied_migrations():
-    with sqlite_connect(DB_PATH) as conn:
+    with sqlite_connect() as conn:
         _ensure_schema_migrations_table(conn)
         cur = conn.execute("SELECT filename FROM schema_migrations")
         return {row[0] for row in cur.fetchall()}
 
 
 def _record_migration(filename):
-    with sqlite_connect(DB_PATH) as conn:
+    with sqlite_connect() as conn:
         _ensure_schema_migrations_table(conn)
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
@@ -189,7 +192,7 @@ def reset_db():
     clean database state without losing the ability of :func:`init_db`
     to preserve existing data."""
     Base.metadata.drop_all(engine)
-    with sqlite_connect(DB_PATH) as conn:
+    with sqlite_connect() as conn:
         conn.execute("DROP TABLE IF EXISTS schema_migrations")
         conn.commit()
     Base.metadata.create_all(engine)
