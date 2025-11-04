@@ -117,7 +117,9 @@ def write_env(values):
 
 @bp.app_context_processor
 def inject_current_year():
-    return {"current_year": datetime.now().year}
+    with get_session() as db:
+        unread_count = db.query(Thread).filter_by(read=False).count()
+    return {"current_year": datetime.now().year, "unread_count": unread_count}
 
 
 def start_print_agent(app_obj=None):
@@ -330,9 +332,22 @@ def discussions():
                 'author': t.author,
                 'last_message_at': t.last_message_at,
                 'type': t.type,
+                'read': t.read,
             })
 
     return render_template("discussions.html", threads=threads, username=session.get('username'))
+
+
+@bp.route("/discussions/<string:thread_id>/read", methods=["POST"])
+@login_required
+def mark_as_read(thread_id):
+    with get_session() as db:
+        thread = db.query(Thread).filter_by(id=thread_id).first()
+        if thread:
+            thread.read = True
+            db.commit()
+            return {"success": True}
+        return {"success": False}, 404
 
 
 @bp.route("/discussions/<thread_id>")
