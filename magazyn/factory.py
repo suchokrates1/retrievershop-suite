@@ -18,6 +18,7 @@ from .allegro import bp as allegro_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
+from .db import configure_engine
 
 _shutdown_registered = False
 
@@ -38,6 +39,8 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     if config:
         app.config.update(config)
+
+    configure_engine(settings.DB_PATH)
 
     CSRFProtect(app)
     app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES

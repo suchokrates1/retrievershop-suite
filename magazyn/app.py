@@ -18,6 +18,7 @@ from collections import OrderedDict
 
 from .models import User, Thread, Message
 from .forms import LoginForm
+from sqlalchemy.orm import joinedload
 
 from .db import (
     get_session,
@@ -33,7 +34,7 @@ from . import print_agent
 from .allegro import ALLEGRO_AUTHORIZATION_URL
 from .allegro_token_refresher import token_refresher
 from .env_info import ENV_INFO
-from magazyn import DB_PATH
+from .config import settings
 from .settings_store import SettingsPersistenceError, settings_store
 from .settings_io import (
     ENV_PATH,
@@ -155,20 +156,21 @@ def start_print_agent(app_obj=None):
 
 def ensure_db_initialized(app_obj=None):
     try:
-        if os.path.isdir(DB_PATH):
+        db_path = settings.DB_PATH
+        if os.path.isdir(db_path):
             logger = (app_obj or current_app).logger
             logger.error(
                 (
-                    f"Database path {DB_PATH} is a directory. "
+                    f"Database path {db_path} is a directory. "
                     "Please fix the mount."
                 )
             )
             if has_request_context():
                 flash("Błąd konfiguracji bazy danych.")
             raise SystemExit(1)
-        if os.path.exists(DB_PATH) and not os.path.isfile(DB_PATH):
+        if os.path.exists(db_path) and not os.path.isfile(db_path):
             logger = (app_obj or current_app).logger
-            logger.error(f"Database path {DB_PATH} is not a file.")
+            logger.error(f"Database path {db_path} is not a file.")
             if has_request_context():
                 flash("Błąd konfiguracji bazy danych.")
             raise SystemExit(1)
@@ -205,7 +207,7 @@ def login():
 
         if valid:
             session["username"] = username
-            return redirect(url_for("main.home"))
+            return redirect(url_for("home"))
         else:
             flash("Niepoprawna nazwa użytkownika lub hasło")
         return redirect(url_for("login"))
@@ -311,16 +313,13 @@ def test_message():
     return render_template("test.html", message=msg)
 
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import subqueryload
 
 @bp.route("/discussions")
 @login_required
 def discussions():
     with get_session() as db:
-        threads = db.query(Thread).options(joinedload(Thread.messages)).order_by(Thread.last_message_at.desc()).all()
-        # Eagerly load messages to prevent DetachedInstanceError
-        for thread in threads:
-            thread.messages
+        threads = db.query(Thread).options(subqueryload(Thread.messages)).order_by(Thread.last_message_at.desc()).all()
     return render_template("discussions.html", threads=threads)
 
 
