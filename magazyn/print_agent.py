@@ -28,6 +28,8 @@ from .allegro_api import (
     fetch_discussion_chat,
     fetch_message_threads,
     fetch_thread_messages,
+    send_discussion_message,
+    send_thread_message,
 )
 from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
@@ -363,6 +365,10 @@ class LabelAgent:
                 cur.execute(
                     "CREATE TABLE IF NOT EXISTS agent_state("  # noqa: S608 - static SQL
                     "key TEXT PRIMARY KEY, value TEXT)"
+                )
+                cur.execute(
+                    "CREATE TABLE IF NOT EXISTS allegro_replied_threads("  # noqa: S608 - static SQL
+                    "thread_id TEXT PRIMARY KEY, replied_at TEXT)"
                 )
                 cur.execute("PRAGMA table_info(label_queue)")
                 queue_cols = [row[1] for row in cur.fetchall()]
@@ -990,10 +996,16 @@ class LabelAgent:
                     last_message = chat.get("chat", [{}])[0]
                     if last_message.get("author", {}).get("role") == "BUYER":
                         buyer = discussion.get("buyer", {}).get("login", "Nieznany")
-                        text = last_message.get("text", "")[:50]
-                        link = f"https://allegro.pl/dyskusje/z-kupujacym/{discussion_id}"
-                        message = f"💬 Nowa wiadomość w dyskusji od kupującego: {buyer}. Treść: \"{text}...\". Link: {link}"
+                        text = last_message.get("text", "")
+                        message = f"Użytkownik {buyer} utworzył nową dyskusję o treści: \"{text}\""
                         send_messenger(message)
+
+                        cur.execute("SELECT thread_id FROM allegro_replied_threads WHERE thread_id = ?", (discussion_id,))
+                        already_replied = cur.fetchone()
+                        if not already_replied:
+                            auto_reply_text = "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
+                            send_discussion_message(access_token, discussion_id, auto_reply_text)
+                            cur.execute("INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (?, ?)", (discussion_id, datetime.now().isoformat()))
                     last_checked = discussion_id
         except Exception as e:
             self.logger.error("Błąd podczas sprawdzania dyskusji Allegro: %s", e)
@@ -1036,10 +1048,17 @@ class LabelAgent:
                         last_message = messages.get("messages", [{}])[0]
                         if last_message.get("author", {}).get("isInterlocutor"):
                             interlocutor = thread.get("interlocutor", {}).get("login", "Nieznany")
-                            text = last_message.get("text", "")[:50]
-                            link = f"https://allegro.pl/wiadomosci/{thread_id}"
-                            message = f"✉️ Nowa wiadomość w Centrum Wiadomości od: {interlocutor}. Treść: \"{text}...\". Link: {link}"
+                            text = last_message.get("text", "")
+                            message = f"Użytkownik {interlocutor} napisał Ci wiadomość: \"{text}\""
                             send_messenger(message)
+
+                            cur.execute("SELECT thread_id FROM allegro_replied_threads WHERE thread_id = ?", (thread_id,))
+                            already_replied = cur.fetchone()
+                            if not already_replied:
+                                auto_reply_text = "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
+                                send_thread_message(access_token, thread_id, auto_reply_text)
+                                cur.execute("INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (?, ?)", (thread_id, datetime.now().isoformat()))
+
                     last_checked = thread_id
         except Exception as e:
             self.logger.error("Błąd podczas sprawdzania wiadomości Allegro: %s", e)
