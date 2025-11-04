@@ -5,9 +5,9 @@ FROM python:3.12-slim AS builder
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-WORKDIR /app/magazyn
+WORKDIR /app
 
-ENV PYTHONPATH="/app:/app/magazyn"
+ENV PYTHONPATH="/app"
 
 RUN python -m venv "$VIRTUAL_ENV"
 
@@ -21,8 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY ../requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY gunicorn.conf.py /app/gunicorn.conf.py
-COPY . /app/magazyn
+COPY . /app
 
 
 FROM python:3.12-slim AS runtime
@@ -30,9 +29,9 @@ FROM python:3.12-slim AS runtime
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-WORKDIR /app/magazyn
+WORKDIR /app
 
-ENV PYTHONPATH="/app:/app/magazyn"
+ENV PYTHONPATH="/app"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cups-client \
@@ -43,8 +42,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
 COPY --from=builder /app /app
-
-COPY magazyn/gunicorn.conf.py /app/gunicorn.conf.py
 
 RUN groupadd --system magazyn && \
     useradd --system --gid magazyn --home /app magazyn && \
