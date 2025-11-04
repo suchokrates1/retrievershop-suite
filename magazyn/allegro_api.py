@@ -341,6 +341,25 @@ def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 1) -> 
     return response.json()
 
 
+def send_discussion_message(access_token: str, issue_id: str, text: str) -> dict:
+    """Send a message to a specific discussion."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+        "Content-Type": "application/vnd.allegro.beta.v1+json",
+    }
+    payload = {"text": text, "type": "REGULAR"}
+    url = f"{API_BASE_URL}/sale/issues/{issue_id}/message"
+    response = _request_with_retry(
+        requests.post,
+        url,
+        endpoint="send_discussion_message",
+        headers=headers,
+        json=payload,
+    )
+    return response.json()
+
+
 def send_thread_message(access_token: str, thread_id: str, text: str) -> dict:
     """Send a message to a specific thread."""
     headers = {
