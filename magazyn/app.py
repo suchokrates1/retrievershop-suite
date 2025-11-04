@@ -13,6 +13,7 @@ from flask import (
 from datetime import datetime
 import os
 import sys
+import uuid
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 
@@ -331,7 +332,7 @@ def discussions():
                 'type': t.type,
             })
 
-    return render_template("discussions.html", threads=threads)
+    return render_template("discussions.html", threads=threads, username=session.get('username'))
 
 
 @bp.route("/discussions/<thread_id>")
@@ -355,15 +356,18 @@ def get_messages(thread_id):
 @login_required
 def create_thread():
     with get_session() as db:
+        new_thread_id = str(uuid.uuid4())
         new_thread = Thread(
+            id=new_thread_id,
             title=request.json["title"],
             author=session["username"],
             type=request.json["type"],
         )
         db.add(new_thread)
-        db.commit()
+        db.flush()  # flush to get the new_thread object with its relationship
 
         new_message = Message(
+            id=str(uuid.uuid4()),
             thread_id=new_thread.id,
             author=session["username"],
             content=request.json["message"],
@@ -375,7 +379,7 @@ def create_thread():
         return {"id": new_thread.id}
 
 
-@bp.route("/discussions/<int:thread_id>/send", methods=["POST"])
+@bp.route("/discussions/<string:thread_id>/send", methods=["POST"])
 @login_required
 def send_message(thread_id):
     with get_session() as db:
@@ -384,6 +388,7 @@ def send_message(thread_id):
             return {"error": "Thread not found"}, 404
 
         new_message = Message(
+            id=str(uuid.uuid4()),
             thread_id=thread_id,
             author=session["username"],
             content=request.json["content"],
