@@ -21,8 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY gunicorn.conf.py /app/gunicorn.conf.py
-COPY . /app/magazyn
+COPY magazyn/gunicorn.conf.py /app/gunicorn.conf.py
+COPY magazyn /app/magazyn
 
 
 FROM python:3.12-slim AS runtime
@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
 COPY --from=builder /app /app
 
-COPY gunicorn.conf.py /app/gunicorn.conf.py
+COPY magazyn/gunicorn.conf.py /app/gunicorn.conf.py
 
 RUN groupadd --system magazyn && \
     useradd --system --gid magazyn --home /app magazyn && \
