@@ -50,7 +50,14 @@
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers') }}">Oferty Allegro</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.price_check') }}">Monitor cen Allegro</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('main.discussions') }}">Wiadomości / Dyskusje</a></li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('main.discussions') }}">
+                            Wiadomości / Dyskusje
+                            {% if unread_count > 0 %}
+                                <span class="badge bg-danger">{{ unread_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
                     {#
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle text-white" href="#" id="navbarAllegro" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -94,7 +101,14 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('history.print_history') }}">Historia drukowania</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers') }}">Oferty Allegro</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.price_check') }}">Monitor cen Allegro</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('main.discussions') }}">Wiadomości / Dyskusje</a></li>
+            <li class="nav-item">
+                <a class="nav-link text-white" href="{{ url_for('main.discussions') }}">
+                    Wiadomości / Dyskusje
+                    {% if unread_count > 0 %}
+                        <span class="badge bg-danger">{{ unread_count }}</span>
+                    {% endif %}
+                </a>
+            </li>
             {#
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle text-white" href="#" id="mobileAllegro" role="button" data-bs-toggle="dropdown" aria-expanded="false">
