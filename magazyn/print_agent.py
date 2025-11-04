@@ -376,6 +376,55 @@ class LabelAgent:
                     )
                     conn.commit()
                 conn.commit()
+
+                # Migration for threads and messages table to convert IDs to TEXT
+                try:
+                    cur.execute("PRAGMA table_info(threads)")
+                    threads_cols = {row[1]: row[2] for row in cur.fetchall()}
+                    if threads_cols.get("id") and "INT" in threads_cols.get("id", "").upper():
+                        self.logger.info("Uruchamianie migracji schematu bazy danych dla wiadomości Allegro...")
+                        cur.execute("PRAGMA foreign_keys=OFF")
+                        cur.execute("BEGIN TRANSACTION")
+                        try:
+                            cur.execute("ALTER TABLE threads RENAME TO threads_old")
+                            cur.execute("ALTER TABLE messages RENAME TO messages_old")
+
+                            cur.execute("""
+                                CREATE TABLE threads (
+                                    id TEXT PRIMARY KEY NOT NULL,
+                                    title TEXT NOT NULL,
+                                    author TEXT NOT NULL,
+                                    last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                    type TEXT NOT NULL
+                                )
+                            """)
+                            cur.execute("""
+                                CREATE TABLE messages (
+                                    id TEXT PRIMARY KEY NOT NULL,
+                                    thread_id TEXT NOT NULL,
+                                    author TEXT NOT NULL,
+                                    content TEXT NOT NULL,
+                                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                    FOREIGN KEY(thread_id) REFERENCES threads(id) ON DELETE CASCADE
+                                )
+                            """)
+
+                            cur.execute("INSERT INTO threads (id, title, author, last_message_at, type) SELECT CAST(id AS TEXT), title, author, last_message_at, type FROM threads_old")
+                            cur.execute("INSERT INTO messages (id, thread_id, author, content, created_at) SELECT CAST(id AS TEXT), CAST(thread_id AS TEXT), author, content, created_at FROM messages_old")
+
+                            cur.execute("DROP TABLE threads_old")
+                            cur.execute("DROP TABLE messages_old")
+
+                            cur.execute("COMMIT")
+                            self.logger.info("Migracja bazy danych zakończona pomyślnie.")
+                        except Exception as e:
+                            self.logger.error(f"Błąd podczas migracji, wycofywanie zmian: {e}")
+                            cur.execute("ROLLBACK")
+                        finally:
+                            cur.execute("PRAGMA foreign_keys=ON")
+                except sqlite3.OperationalError as e:
+                    if "no such table" not in str(e):
+                        raise
             except sqlite3.OperationalError as exc:
                 if self._handle_readonly_error("database migrations", exc):
                     return
@@ -964,7 +1013,7 @@ class LabelAgent:
                 cur = conn.cursor()
                 for discussion in discussions:
                     discussion_id = str(discussion["id"])
-                    if discussion_id <= last_checked:
+                    if not self._is_new_id(discussion_id, last_checked):
                         continue
 
                     cur.execute("SELECT id FROM threads WHERE id = ?", (discussion_id,))
@@ -1009,7 +1058,7 @@ class LabelAgent:
                 cur = conn.cursor()
                 for thread in threads:
                     thread_id = str(thread["id"])
-                    if thread_id <= last_checked:
+                    if not self._is_new_id(thread_id, last_checked):
                         continue
 
                     cur.execute("SELECT id FROM threads WHERE id = ?", (thread_id,))
@@ -1046,6 +1095,14 @@ class LabelAgent:
             self.logger.error("Błąd podczas sprawdzania wiadomości Allegro: %s", e)
         finally:
             self._save_state_value("last_message_check", str(last_checked))
+
+    def _is_new_id(self, new_id: str, last_id: str) -> bool:
+        """Safely compare two IDs which may be numeric or string-based."""
+        if not last_id:
+            return True
+        if new_id.isdigit() and last_id.isdigit():
+            return int(new_id) > int(last_id)
+        return new_id > last_id
 
     def _agent_loop(self) -> None:
         allegro_check_interval = timedelta(minutes=5)
