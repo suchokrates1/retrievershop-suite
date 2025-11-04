@@ -22,16 +22,24 @@
     .thread-item {
         padding: 1rem;
         border: 1px solid #444;
+        border-left: 5px solid transparent; /* Add space for active indicator */
         border-radius: 5px;
         margin-bottom: 1rem;
         cursor: pointer;
-        transition: background-color 0.3s;
+        transition: background-color 0.3s, border-color 0.3s;
     }
     .thread-item:hover {
-        background-color: #3a3a3a;
+        background-color: #4f4f4f;
+        border-color: #666;
     }
     .thread-item.active {
-        background-color: #e0e0e0;
+        background-color: #555;
+        border-left: 5px solid #0b3d91;
+        font-weight: bold;
+    }
+    .thread-item.unread {
+        font-weight: bold;
+        background-color: #444;
     }
     .chat-header {
         padding: 1rem;
@@ -76,6 +84,14 @@
         padding: 0.5rem;
         margin-bottom: 1rem;
     }
+    .thread-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .thread-icon {
+        font-size: 1.2rem;
+    }
 </style>
 {% endblock %}
 
@@ -86,11 +102,19 @@
         <button id="new-thread-btn" class="btn btn-primary mb-3">Nowy wątek</button>
         <div id="threads-container">
             {% for thread in threads %}
-            <div class="thread-item" data-thread-id="{{ thread.id }}">
-                <div class="thread-title">{{ thread.title }}</div>
+            <div class="thread-item {% if not thread.read %}unread{% endif %}" data-thread-id="{{ thread.id }}">
+                <div class="thread-title">
+                    <span class="thread-icon">
+                        {% if thread.type == 'dyskusja' %}
+                            <i class="bi bi-chat-dots-fill"></i>
+                        {% else %}
+                            <i class="bi bi-envelope-fill"></i>
+                        {% endif %}
+                    </span>
+                    <span>{{ thread.title }}</span>
+                </div>
                 <div class="thread-author">Autor: {{ thread.author }}</div>
                 <div class="thread-date">Ostatnia wiadomość: {{ thread.last_message_at|format_dt }}</div>
-                <div class="thread-type">{{ thread.type }}</div>
             </div>
             {% endfor %}
         </div>
@@ -156,19 +180,27 @@
         const messageInput = document.getElementById('message-input');
         const searchInput = document.getElementById('search-threads');
         const newThreadBtn = document.getElementById('new-thread-btn');
-        const newThreadModal = new bootstrap.Modal(document.getElementById('newThreadModal'));
+        const newThreadModalEl = document.getElementById('newThreadModal');
         const createThreadBtn = document.getElementById('create-thread-btn');
         let currentThreadId = null;
+        let newThreadModal = null;
 
-        threadsContainer.addEventListener('click', async (event) => {
+        if (newThreadModalEl) {
+            newThreadModal = new bootstrap.Modal(newThreadModalEl);
+        }
+
+        if (threadsContainer) {
+            threadsContainer.addEventListener('click', async (event) => {
             const threadItem = event.target.closest('.thread-item');
             if (threadItem) {
-                // Remove active class from all items
                 document.querySelectorAll('.thread-item').forEach(item => item.classList.remove('active'));
-                // Add active class to the clicked one
                 threadItem.classList.add('active');
+                threadItem.classList.remove('unread');
 
                 currentThreadId = threadItem.dataset.threadId;
+
+                fetch(`/discussions/${currentThreadId}/read`, { method: 'POST' });
+
                 const threadTitle = threadItem.querySelector('.thread-title').innerText;
 
                 chatHeader.innerText = threadTitle;
@@ -185,84 +217,76 @@
                 messagesArea.scrollTop = messagesArea.scrollHeight;
             }
         });
+        }
 
-        messageForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const content = messageInput.value.trim();
-            if (content && currentThreadId) {
-                const response = await fetch(`/discussions/${currentThreadId}/send`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ content: content })
-                });
-                const newMessage = await response.json();
-                appendMessage(newMessage.author, newMessage.content, newMessage.created_at);
-                messageInput.value = '';
-                messagesArea.scrollTop = messagesArea.scrollHeight;
-            }
-        });
-
-        searchInput.addEventListener('keyup', () => {
-            const filter = searchInput.value.toLowerCase();
-            const threads = threadsContainer.querySelectorAll('.thread-item');
-            threads.forEach(thread => {
-                const text = thread.innerText.toLowerCase();
-                if (text.includes(filter)) {
-                    thread.style.display = '';
-                } else {
-                    thread.style.display = 'none';
+        if (messageForm) {
+            messageForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const content = messageInput.value.trim();
+                if (content && currentThreadId) {
+                    const response = await fetch(`/discussions/${currentThreadId}/send`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: content })
+                    });
+                    const newMessage = await response.json();
+                    appendMessage(newMessage.author, newMessage.content, newMessage.created_at);
+                    messageInput.value = '';
+                    messagesArea.scrollTop = messagesArea.scrollHeight;
                 }
             });
-        });
+        }
 
-        newThreadBtn.addEventListener('click', () => {
-            newThreadModal.show();
-        });
-
-        createThreadBtn.addEventListener('click', async () => {
-            const title = document.getElementById('thread-title').value.trim();
-            const type = document.getElementById('thread-type').value;
-            const message = document.getElementById('thread-message').value.trim();
-
-            if (title && type && message) {
-                const response = await fetch('/discussions/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        title: title,
-                        type: type,
-                        message: message
-                    })
+        if (searchInput) {
+            searchInput.addEventListener('keyup', () => {
+                const filter = searchInput.value.toLowerCase();
+                const threads = document.querySelectorAll('.thread-item');
+                threads.forEach(thread => {
+                    const text = thread.innerText.toLowerCase();
+                    thread.style.display = text.includes(filter) ? '' : 'none';
                 });
-                const newThread = await response.json();
-                if (newThread.id) {
-                    location.reload();
-                } else {
-                    alert('Wystąpił błąd podczas tworzenia wątku.');
+            });
+        }
+
+        if (newThreadBtn && newThreadModal) {
+            newThreadBtn.addEventListener('click', () => {
+                newThreadModal.show();
+            });
+        }
+
+        if (createThreadBtn) {
+            createThreadBtn.addEventListener('click', async () => {
+                const title = document.getElementById('thread-title').value.trim();
+                const type = document.getElementById('thread-type').value;
+                const message = document.getElementById('thread-message').value.trim();
+
+                if (title && type && message) {
+                    const response = await fetch('/discussions/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, type, message })
+                    });
+                    if(response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Wystąpił błąd podczas tworzenia wątku.');
+                    }
                 }
-            }
-        });
+            });
+        }
 
         function appendMessage(author, content, timestamp) {
             const messageElement = document.createElement('div');
             const currentUsername = document.querySelector('.discussions-container').dataset.username;
 
             messageElement.classList.add('message');
-            if (author === currentUsername) {
-                messageElement.classList.add('sent');
-            } else {
-                messageElement.classList.add('received');
-            }
+            messageElement.classList.add(author === currentUsername ? 'sent' : 'received');
 
-            const formattedTimestamp = new Date(timestamp).toLocaleString('pl-PL');
+            const formattedTimestamp = new Date(timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
 
             messageElement.innerHTML = `
                 <div class="author">${author}</div>
-                <div class="content">${content}</div>
+                <div class="content">${content.replace(/\n/g, '<br>')}</div>
                 <div class="timestamp">${formattedTimestamp}</div>
             `;
             messagesArea.appendChild(messageElement);
