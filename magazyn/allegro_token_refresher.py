@@ -198,7 +198,7 @@ class AllegroTokenRefresher:
             expires_in if expires_in is not None else "unknown",
         )
         from .print_agent import agent
-        agent.reload_env()
+        agent.reload_config()
         return True
 
     def _run(self) -> None:
