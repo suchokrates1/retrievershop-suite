@@ -135,68 +135,21 @@ def get_session():
 get_db_connection = get_session
 
 
-def _ensure_schema_migrations_table(conn):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            filename TEXT PRIMARY KEY,
-            applied_at TEXT NOT NULL
-        )
-        """
-    )
-
-
-def _get_applied_migrations():
-    with sqlite_connect() as conn:
-        _ensure_schema_migrations_table(conn)
-        cur = conn.execute("SELECT filename FROM schema_migrations")
-        return {row[0] for row in cur.fetchall()}
-
-
-def _record_migration(filename):
-    with sqlite_connect() as conn:
-        _ensure_schema_migrations_table(conn)
-        conn.execute(
-            "INSERT OR IGNORE INTO schema_migrations (filename, applied_at) VALUES (?, ?)",
-            (filename, datetime.datetime.now(timezone.utc).isoformat()),
-        )
-        conn.commit()
-
-
-def apply_migrations():
-    """Execute migration scripts that have not been run yet."""
-
-    applied = _get_applied_migrations()
-    for path in sorted(MIGRATIONS_DIR.glob("*.py")):
-        if path.name in applied:
-            continue
-        spec = importlib.util.spec_from_file_location(path.stem, path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        migrate = getattr(module, "migrate", None)
-        if callable(migrate):
-            migrate()
-            _record_migration(path.name)
-
-
 def init_db():
     """Initialize the SQLite database and create required tables."""
     Base.metadata.create_all(engine)
-    apply_migrations()
 
 
 def reset_db():
     """Drop all tables and recreate them.
-
     This is useful for testing scenarios that require a completely
     clean database state without losing the ability of :func:`init_db`
     to preserve existing data."""
     Base.metadata.drop_all(engine)
     with sqlite_connect() as conn:
-        conn.execute("DROP TABLE IF EXISTS schema_migrations")
+        conn.execute("DROP TABLE IF EXISTS alembic_version")
         conn.commit()
     Base.metadata.create_all(engine)
-    apply_migrations()
 
 
 def register_default_user():
