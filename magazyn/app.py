@@ -311,15 +311,20 @@ def test_message():
     return render_template("test.html", message=msg)
 
 
+from sqlalchemy.orm import joinedload
+
 @bp.route("/discussions")
 @login_required
 def discussions():
     with get_session() as db:
-        threads = db.query(Thread).order_by(Thread.last_message_at.desc()).all()
+        threads = db.query(Thread).options(joinedload(Thread.messages)).order_by(Thread.last_message_at.desc()).all()
+        # Eagerly load messages to prevent DetachedInstanceError
+        for thread in threads:
+            thread.messages
     return render_template("discussions.html", threads=threads)
 
 
-@bp.route("/discussions/<int:thread_id>")
+@bp.route("/discussions/<thread_id>")
 @login_required
 def get_messages(thread_id):
     with get_session() as db:
