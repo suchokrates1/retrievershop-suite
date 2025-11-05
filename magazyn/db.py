@@ -152,14 +152,15 @@ def reset_db():
     Base.metadata.create_all(engine)
 
 
-def register_default_user():
+def create_default_user_if_needed(app):
     """Ensure the default admin account exists."""
-    with get_session() as session:
-        if not session.query(User).filter_by(username="admin").first():
-            hashed_password = generate_password_hash(
-                "admin123", method="pbkdf2:sha256", salt_length=16
-            )
-            session.add(User(username="admin", password=hashed_password))
+    with app.app_context():
+        with get_session() as session:
+            if not session.query(User).filter_by(username="admin").first():
+                hashed_password = generate_password_hash(
+                    "admin123", method="pbkdf2:sha256", salt_length=16
+                )
+                session.add(User(username="admin", password=hashed_password))
 
 
 def record_purchase(
