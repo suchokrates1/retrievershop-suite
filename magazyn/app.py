@@ -25,7 +25,6 @@ from .db import (
     get_session,
     init_db,
     reset_db,
-    register_default_user,
     record_purchase,
     consume_stock,
 )
@@ -179,7 +178,6 @@ def ensure_db_initialized(app_obj=None):
             raise SystemExit(1)
 
         # Always run table creation so new tables appear automatically.
-        register_default_user()
     except Exception as e:
         logger = (app_obj or current_app).logger
         logger.exception("Database initialization failed: %s", e)
