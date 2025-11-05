@@ -19,7 +19,7 @@ from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
 import os
-from .db import configure_engine
+from .db import configure_engine, create_default_user_if_needed, Base, engine
 from alembic.config import Config
 from alembic import command
 
@@ -70,6 +70,8 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
         alembic_cfg = Config(alembic_ini_path)
         alembic_cfg.set_main_option('sqlalchemy.url', f"sqlite:///{settings.DB_PATH}")
         command.upgrade(alembic_cfg, "head")
+        Base.metadata.create_all(engine)
+        create_default_user_if_needed(app)
 
     start_print_agent(app)
 

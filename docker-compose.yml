@@ -1,10 +1,9 @@
 services:
   magazyn_app:
     build:
-      context: ./magazyn
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: magazyn/Dockerfile
     volumes:
-      - ./magazyn/database.db:/app/database.db
       - ./.env:/app/.env
       - ./.env.example:/app/.env.example:ro
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
