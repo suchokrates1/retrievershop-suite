@@ -7,8 +7,6 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 WORKDIR /app
 
-ENV PYTHONPATH="/app"
-
 RUN python -m venv "$VIRTUAL_ENV"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,10 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ../requirements.txt /tmp/requirements.txt
+COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY . /app
+COPY magazyn/ /app/magazyn/
+COPY alembic.ini /app/alembic.ini
+COPY migrations/ /app/migrations/
 
 
 FROM python:3.12-slim AS runtime
@@ -30,8 +30,6 @@ ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 WORKDIR /app
-
-ENV PYTHONPATH="/app"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cups-client \
