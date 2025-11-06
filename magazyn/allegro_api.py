@@ -348,8 +348,9 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) ->
     params = {"limit": limit}
     url = f"{API_BASE_URL}/sale/issues/{issue_id}/chat"
     response = _request_with_retry(
-        requests.get, url, endpoint="discussion_chat", headers=headers, params=params
+        "GET", url, endpoint="discussion_chat", headers=headers, params=params, timeout=10
     )
+    response.raise_for_status()
     return response.json()
 
 def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 100) -> dict:
@@ -361,8 +362,9 @@ def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 100) -
     params = {"limit": limit}
     url = f"{API_BASE_URL}/messaging/threads/{thread_id}/messages"
     response = _request_with_retry(
-        requests.get, url, endpoint="thread_messages", headers=headers, params=params
+        "GET", url, endpoint="thread_messages", headers=headers, params=params, timeout=10
     )
+    response.raise_for_status()
     return response.json()
 
 
