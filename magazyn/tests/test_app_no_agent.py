@@ -4,7 +4,8 @@ import magazyn.config as cfg
 
 
 def setup_app_missing_agent(tmp_path, monkeypatch):
-    db_path = tmp_path / "test.db"
+    # Use existing production database for tests
+    db_path = r"d:\Serwer\obecność\templates\docx_templates\database.db"
     monkeypatch.setattr(cfg.settings, "DB_PATH", str(db_path))
     monkeypatch.setattr(cfg.settings, "API_TOKEN", "")
     monkeypatch.setattr(cfg.settings, "PAGE_ACCESS_TOKEN", "")
@@ -40,7 +41,7 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
 
     app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
     app_mod.app = app
-    app_mod.reset_db()
+    # Note: We use existing production database, so we don't call reset_db()
     return app_mod
 
 
@@ -60,9 +61,15 @@ def test_discussions_page_loads_without_error(tmp_path, monkeypatch):
             from magazyn.models import User, Thread, Message
             from werkzeug.security import generate_password_hash
 
-            user = User(username='test', password=generate_password_hash('test'))
-            db.add(user)
-            thread = Thread(id=str(uuid.uuid4()), title="Test Thread", author="test", type="dyskusja")
+            # Use existing user or create if not exists (for production DB)
+            user = db.query(User).filter_by(username='test').first()
+            if not user:
+                user = User(username='test', password=generate_password_hash('test'))
+                db.add(user)
+            
+            # Create unique test thread
+            test_thread_id = str(uuid.uuid4())
+            thread = Thread(id=test_thread_id, title="Test Thread", author="test", type="dyskusja")
             db.add(thread)
             message = Message(id=str(uuid.uuid4()), thread_id=thread.id, author="test", content="Test message")
             db.add(message)

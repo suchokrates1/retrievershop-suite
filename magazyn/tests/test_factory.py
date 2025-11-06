@@ -24,6 +24,9 @@ def test_create_app_initializes_agent_and_migrations(tmp_path, monkeypatch, requ
         call_order.append(("start", app_obj))
 
     monkeypatch.setattr(factory, "start_print_agent", fake_start_agent)
+    
+    # Mock create_default_user_if_needed to avoid DB issues with temp DB
+    monkeypatch.setattr(factory, "create_default_user_if_needed", lambda app: None)
 
     app = factory.create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
 

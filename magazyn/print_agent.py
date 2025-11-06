@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import base64
-import fcntl
 import json
 import logging
 import os
 import subprocess
 import threading
 import time
+
+# fcntl is Unix-only, provide fallback for Windows
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, time as dt_time, timezone
@@ -279,7 +284,9 @@ class LabelAgent:
         try:
             with open(self.config.lock_file, "a+", encoding="utf-8") as handle:
                 try:
-                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    if fcntl:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    # On Windows without fcntl, skip lock check
                 except OSError:
                     return
         except OSError:
@@ -1381,7 +1388,9 @@ class LabelAgent:
         if self._lock_handle is None:
             try:
                 self._lock_handle = open(self.config.lock_file, "w")
-                fcntl.flock(self._lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                if fcntl:
+                    fcntl.flock(self._lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # On Windows, skip file locking
             except OSError:
                 if self._lock_handle:
                     self._lock_handle.close()
@@ -1402,7 +1411,8 @@ class LabelAgent:
         self._clear_heartbeat()
         if self._lock_handle:
             try:
-                fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
+                if fcntl:
+                    fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
             except OSError:  # pragma: no cover - defensive
                 pass
             self._lock_handle.close()

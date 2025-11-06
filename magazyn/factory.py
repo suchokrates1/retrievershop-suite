@@ -18,6 +18,7 @@ from .allegro import bp as allegro_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
+from .socketio_extension import socketio
 import os
 from .db import configure_engine, create_default_user_if_needed, Base, engine
 from alembic.config import Config
@@ -77,17 +78,20 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     _register_shutdown_hook()
 
+    # Initialize SocketIO
+    socketio.init_app(app, cors_allowed_origins="*", async_mode='threading')
+
     @app.after_request
     def apply_security_headers(response):
         """Attach security headers to every response."""
 
         csp = (
             "default-src 'self'; "
-            "img-src 'self' https://retrievershop.pl data:; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' https://retrievershop.pl data: blob:; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.socket.io https://static.cloudflareinsights.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.jsdelivr.net data:; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://cloudflareinsights.com wss: ws:; "
             "object-src 'none'; "
             "base-uri 'self'; "
             "frame-ancestors 'self'"

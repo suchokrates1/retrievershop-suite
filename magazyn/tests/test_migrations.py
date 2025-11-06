@@ -1,4 +1,5 @@
 import importlib
+import pytest
 
 import magazyn.config as cfg
 from magazyn.db import sqlite_connect
@@ -17,6 +18,7 @@ def _prepare_db(tmp_path, monkeypatch):
     return db, db_path
 
 
+@pytest.mark.skip(reason="Legacy migration system replaced by Alembic")
 def test_apply_migrations_records_executions(tmp_path, monkeypatch):
     db, db_path = _prepare_db(tmp_path, monkeypatch)
 
@@ -71,6 +73,7 @@ def migrate():
     assert [row[0] for row in demo_entries] == ["first", "second"]
 
 
+@pytest.mark.skip(reason="Legacy migration system replaced by Alembic")
 def test_apply_migrations_skip_already_applied(tmp_path, monkeypatch):
     db, db_path = _prepare_db(tmp_path, monkeypatch)
 
@@ -115,6 +118,7 @@ def migrate():
     assert final == initial
 
 
+@pytest.mark.skip(reason="Legacy migration system replaced by Alembic")
 def test_create_app_settings_migration(tmp_path, monkeypatch):
     db, db_path = _prepare_db(tmp_path, monkeypatch)
 
@@ -143,6 +147,7 @@ def test_create_app_settings_migration(tmp_path, monkeypatch):
     assert {"key", "value", "updated_at"}.issubset(columns)
 
 
+@pytest.mark.skip(reason="Legacy migration system replaced by Alembic")
 def test_fix_allegro_price_history_migration(tmp_path, monkeypatch):
     db, db_path = _prepare_db(tmp_path, monkeypatch)
 

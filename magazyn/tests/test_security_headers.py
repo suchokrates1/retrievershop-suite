@@ -8,11 +8,11 @@ def test_security_headers_are_applied(client):
     assert response.status_code == 200
     assert response.headers["Content-Security-Policy"] == (
         "default-src 'self'; "
-        "img-src 'self' https://retrievershop.pl data:; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "img-src 'self' https://retrievershop.pl data: blob:; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.socket.io https://static.cloudflareinsights.com; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "font-src 'self' https://cdn.jsdelivr.net data:; "
-        "connect-src 'self'; "
+        "connect-src 'self' https://cloudflareinsights.com wss: ws:; "
         "object-src 'none'; "
         "base-uri 'self'; "
         "frame-ancestors 'self'"

@@ -1,4 +1,5 @@
 import importlib
+import pytest
 
 import magazyn.config as cfg
 
@@ -16,6 +17,7 @@ def _prepare_db(tmp_path, monkeypatch):
     return db, db_path
 
 
+@pytest.mark.skip(reason="Legacy migration system replaced by Alembic")
 def test_migration_repoints_price_history_fk(tmp_path, monkeypatch):
     db, db_path = _prepare_db(tmp_path, monkeypatch)
 
