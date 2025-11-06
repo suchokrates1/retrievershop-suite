@@ -395,16 +395,6 @@ def discussions():
             messaging_data = allegro_api.fetch_message_threads(token)
             messaging_threads = messaging_data.get("threads", [])
             
-            # DEBUG: Sprawdź strukturę pierwszego wątku
-            if messaging_threads:
-                sample = messaging_threads[0]
-                current_app.logger.info(
-                    f"[DEBUG] Sample messaging thread keys: {list(sample.keys())}"
-                )
-                current_app.logger.info(
-                    f"[DEBUG] Sample thread: {sample}"
-                )
-            
             # Pobierz dyskusje i reklamacje
             try:
                 issues_data = allegro_api.fetch_discussion_issues(token)
@@ -414,8 +404,9 @@ def discussions():
                 issues = []
             
             # Konwertuj wątki z Centrum Wiadomości
+            # API zwraca: {id, read, lastMessageDateTime, interlocutor}
             for thread in messaging_threads:
-                last_msg = thread.get("lastMessage", {})
+                last_msg_time = thread.get("lastMessageDateTime")
                 
                 threads.append({
                     "id": thread.get("id"),
@@ -423,10 +414,10 @@ def discussions():
                     "author": _get_thread_author(thread),
                     "type": "wiadomość",
                     "read": thread.get("read", False),
-                    "last_message_at": last_msg.get("createdAt") if last_msg else None,
-                    "last_message_iso": last_msg.get("createdAt") if last_msg else None,
-                    "last_message_preview": _message_preview(last_msg.get("text")) if last_msg else "Brak wiadomości",
-                    "last_message_author": _get_message_author(last_msg) if last_msg else "",
+                    "last_message_at": last_msg_time,
+                    "last_message_iso": last_msg_time,
+                    "last_message_preview": "Kliknij aby zobaczyć wiadomości",
+                    "last_message_author": "",
                     "source": "messaging",
                 })
             
