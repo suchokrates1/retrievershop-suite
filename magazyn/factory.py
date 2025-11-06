@@ -19,10 +19,7 @@ from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
 from .socketio_extension import socketio
-import os
 from .db import configure_engine, create_default_user_if_needed, Base, engine
-from alembic.config import Config
-from alembic import command
 
 _shutdown_registered = False
 
@@ -67,10 +64,8 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     with app.app_context():
         ensure_db_initialized(app)
-        alembic_ini_path = os.path.join(app.root_path, '..', 'alembic.ini')
-        alembic_cfg = Config(alembic_ini_path)
-        alembic_cfg.set_main_option('sqlalchemy.url', f"sqlite:///{settings.DB_PATH}")
-        command.upgrade(alembic_cfg, "head")
+        # Note: Alembic migrations are now run via entrypoint.sh before gunicorn starts
+        # This prevents multiple workers from trying to run migrations simultaneously
         Base.metadata.create_all(engine)
         create_default_user_if_needed(app)
 
