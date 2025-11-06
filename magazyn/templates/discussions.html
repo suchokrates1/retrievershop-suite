@@ -4,51 +4,71 @@
 
 {% block styles %}
 <style>
+    /* === GŁÓWNY KONTENER === */
     .discussions-layout {
         display: grid;
         grid-template-columns: minmax(310px, 360px) 1fr;
         height: clamp(520px, 78vh, calc(100vh - 120px));
-        background: linear-gradient(135deg, rgba(11, 13, 23, 0.92), rgba(19, 23, 37, 0.94));
+        background: #0d1117;
         border-radius: 24px;
         overflow: hidden;
-        box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        backdrop-filter: blur(18px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+        border: 1px solid #21262d;
         margin: 0 auto;
-        max-width: 1380px;
+        max-width: 1400px;
     }
 
+    /* === PANEL WĄTKÓW (LEWY) === */
     .threads-panel {
         display: flex;
         flex-direction: column;
-        background: rgba(9, 11, 20, 0.82);
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        background: #161b22;
+        border-right: 1px solid #21262d;
         min-height: 0;
     }
 
     .threads-toolbar {
-        padding: 1.5rem 1.25rem 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 1.25rem 1rem;
+        border-bottom: 1px solid #21262d;
+        background: #0d1117;
+    }
+
+    .threads-toolbar h5 {
+        color: #c9d1d9;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 
     .search-group .input-group-text {
-        background: transparent;
-        color: rgba(255, 255, 255, 0.65);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #0d1117;
+        color: #8b949e;
+        border: 1px solid #30363d;
         border-right: none;
+        border-radius: 12px 0 0 12px;
     }
 
     .search-group .form-control {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #0d1117;
+        border: 1px solid #30363d;
         border-left: none;
-        color: #f8f9fc;
+        color: #c9d1d9;
+        border-radius: 0 12px 12px 0;
+        padding: 0.5rem 0.75rem;
     }
 
     .search-group .form-control:focus {
-        background: rgba(255, 255, 255, 0.07);
-        border-color: rgba(13, 110, 253, 0.6);
-        box-shadow: none;
+        background: #161b22;
+        border-color: #58a6ff;
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        outline: none;
+    }
+
+    .search-group .form-control::placeholder {
+        color: #6e7681;
     }
 
     .threads-list {
@@ -75,119 +95,131 @@
         background: transparent;
     }
 
+    /* === POJEDYNCZY WĄTEK === */
     .thread-item {
         position: relative;
-        padding: 1rem 1.1rem 1rem 1.1rem;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 0.875rem 1rem;
+        border-radius: 12px;
+        background: transparent;
+        border: 1px solid transparent;
         cursor: pointer;
-        transition: transform 0.16s ease, box-shadow 0.22s ease, border 0.16s ease, background 0.16s ease;
+        transition: all 0.15s ease;
         display: flex;
         flex-direction: column;
-        gap: 0.45rem;
+        gap: 0.5rem;
         outline: none;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
     }
 
     .thread-item:hover,
     .thread-item:focus-visible {
-        transform: translateY(-4px);
-        box-shadow: 0 22px 44px rgba(0, 0, 0, 0.4);
-        border-color: rgba(13, 110, 253, 0.55);
-        background: linear-gradient(135deg, rgba(13, 110, 253, 0.22), rgba(90, 47, 255, 0.24));
+        background: #21262d;
+        border-color: #30363d;
     }
 
     .thread-item.active {
-        border-color: rgba(13, 110, 253, 0.85);
-        background: linear-gradient(135deg, rgba(13, 110, 253, 0.32), rgba(90, 47, 255, 0.28));
-        box-shadow: 0 20px 40px rgba(13, 110, 253, 0.32);
+        background: #1c2128;
+        border-color: #58a6ff;
     }
 
     .thread-item.unread {
-        border-color: rgba(255, 99, 132, 0.55);
-        background: linear-gradient(135deg, rgba(255, 99, 132, 0.24), rgba(255, 159, 64, 0.2));
-        box-shadow: 0 18px 34px rgba(255, 99, 132, 0.25);
-        animation: pulseHighlight 2.4s ease-in-out infinite;
+        background: #1c2128;
     }
 
-    .thread-item:active {
-        transform: translateY(1px);
+    .thread-item.unread .thread-title {
+        font-weight: 700;
+        color: #58a6ff;
     }
 
     .unread-dot {
         position: absolute;
-        top: 12px;
-        right: 12px;
-        width: 10px;
-        height: 10px;
+        top: 50%;
+        right: 0.75rem;
+        transform: translateY(-50%);
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #ff6b6b, #f94c10);
-        box-shadow: 0 0 8px rgba(249, 76, 16, 0.7);
+        background: #58a6ff;
+        box-shadow: 0 0 6px rgba(88, 166, 255, 0.6);
+        animation: pulseUnread 2s ease-in-out infinite;
     }
 
     .thread-item-header {
         display: flex;
         flex-direction: column;
-        gap: 0.45rem;
+        gap: 0.375rem;
     }
 
     .thread-title-row {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
-        gap: 0.75rem;
+        gap: 0.5rem;
     }
 
     .thread-title {
-        font-size: 1rem;
+        font-size: 0.9375rem;
         font-weight: 600;
-        color: #f4f6ff;
+        color: #c9d1d9;
         margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
     }
 
     .thread-timestamp {
-        font-size: 0.78rem;
-        color: rgba(255, 255, 255, 0.58);
+        font-size: 0.75rem;
+        color: #8b949e;
         white-space: nowrap;
+        flex-shrink: 0;
     }
 
     .thread-item-meta {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 0.55rem;
-        font-size: 0.78rem;
-        color: rgba(255, 255, 255, 0.72);
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: #8b949e;
+    }
+
+    .thread-author {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .thread-type-pill {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
-        padding: 0.2rem 0.6rem;
+        gap: 0.25rem;
+        padding: 0.125rem 0.5rem;
         border-radius: 999px;
-        font-size: 0.72rem;
+        font-size: 0.6875rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.03em;
+        flex-shrink: 0;
     }
 
     .pill-discussion {
-        background: rgba(13, 110, 253, 0.22);
-        color: #82b0ff;
+        background: rgba(88, 166, 255, 0.15);
+        color: #58a6ff;
     }
 
     .pill-message {
-        background: rgba(32, 201, 151, 0.22);
-        color: #86f2ce;
+        background: rgba(63, 185, 80, 0.15);
+        color: #3fb950;
     }
 
     .thread-preview {
         margin: 0;
-        font-size: 0.85rem;
-        line-height: 1.4;
-        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.8125rem;
+        line-height: 1.35;
+        color: #8b949e;
         display: -webkit-box;
         line-clamp: 2;
         -webkit-line-clamp: 2;
@@ -196,47 +228,70 @@
     }
 
     .autoresponder-badge {
-        margin-top: 0.85rem;
-        font-size: 0.72rem;
-        color: #8fa9ff;
+        margin-top: 0.75rem;
+        font-size: 0.75rem;
+        color: #f778ba;
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        gap: 0.375rem;
+        padding: 0.375rem 0.625rem;
+        background: rgba(247, 120, 186, 0.1);
+        border-radius: 8px;
+        border: 1px solid rgba(247, 120, 186, 0.2);
     }
 
     .threads-empty {
-        border: 1px dashed rgba(255, 255, 255, 0.12);
-        border-radius: 14px;
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #8b949e;
     }
 
+    .threads-empty i {
+        font-size: 2.5rem;
+        color: #6e7681;
+        margin-bottom: 0.75rem;
+    }
+
+    /* === PANEL KONWERSACJI (PRAWY) === */
     .conversation-panel {
         display: flex;
         flex-direction: column;
-        background: rgba(15, 17, 27, 0.88);
+        background: #0d1117;
         min-height: 0;
     }
 
     .conversation-header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 1rem;
-        padding: 1.35rem 1.65rem 1.1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #21262d;
+        background: #161b22;
+    }
+
+    .conversation-header-left {
+        flex: 1;
+        min-width: 0;
     }
 
     .conversation-title {
         margin: 0;
-        font-size: 1.4rem;
+        font-size: 1.125rem;
         font-weight: 600;
-        color: #f8f9ff;
+        color: #c9d1d9;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .conversation-meta {
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.8125rem;
+        color: #8b949e;
+        margin-top: 0.25rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .conversation-actions {
@@ -463,9 +518,13 @@
 <div class="discussions-layout" data-username="{{ username }}" data-can-reply="{{ 'true' if can_reply else 'false' }}">
     <aside class="threads-panel">
         <div class="threads-toolbar">
+            <h5>
+                <i class="bi bi-chat-left-text-fill"></i>
+                Wiadomości
+            </h5>
             <div class="input-group input-group-sm search-group">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" id="search-threads" placeholder="Wyszukaj wątki...">
+                <input type="text" class="form-control" id="search-threads" placeholder="Szukaj rozmów...">
             </div>
             {% if autoresponder_enabled %}
             <div class="autoresponder-badge">
@@ -516,14 +575,14 @@
     </aside>
     <section class="conversation-panel">
         <header class="conversation-header">
-            <div>
+            <div class="conversation-header-left">
                 <h2 class="conversation-title" data-thread-title>Wybierz wątek</h2>
-                <div class="conversation-meta" data-thread-meta>Brak aktywnej rozmowy</div>
+                <div class="conversation-meta" data-thread-meta>Kliknij rozmowę po lewej stronie</div>
             </div>
             <div class="conversation-actions">
                 <span class="thread-type-pill" data-thread-type hidden></span>
-                <button type="button" class="btn btn-outline-light btn-sm" id="refresh-thread" title="Odśwież wiadomości">
-                    <i class="bi bi-arrow-repeat"></i>
+                <button type="button" class="btn btn-outline-light btn-sm" id="refresh-thread" title="Odśwież wiadomości" aria-label="Odśwież wiadomości">
+                    <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
         </header>
