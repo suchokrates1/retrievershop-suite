@@ -9,6 +9,7 @@ from flask import (
     flash,
     has_request_context,
     has_app_context,
+    make_response,
 )
 from datetime import datetime, timezone
 import os
@@ -560,53 +561,76 @@ def mark_as_read(thread_id):
 @bp.route("/discussions/<thread_id>")
 @login_required
 def get_messages(thread_id):
+    """
+    Pobierz wiadomości dla danego wątku.
+    
+    DWA TYPY API:
+    1. Messaging API (/messaging/threads) - zwykłe wiadomości
+    2. Issues API (/sale/issues) - dyskusje (DISPUTE) i reklamacje (CLAIM)
+    
+    Próbujemy oba API, jeśli jedno zwraca 422, sprawdzamy drugie.
+    """
     token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
     if not token:
         return {"error": "Brak tokenu Allegro"}, 401
     
-    # Sprawdź typ wątku (messaging vs issue)
+    # Sprawdź typ wątku z parametru source
     thread_source = request.args.get("source", "messaging")
     
     def try_fetch_messages(source_type):
-        """Helper to fetch messages from the appropriate API."""
+        """Pobierz wiadomości z odpowiedniego API."""
         current_app.logger.debug(
             f"Fetching {source_type} messages for thread {thread_id}"
         )
         
         if source_type == "issue":
+            # Issues API: GET /sale/issues/{issueId}/chat
             data = allegro_api.fetch_discussion_chat(token, thread_id)
-            # API zwraca { "messages": [...] }
-            raw_messages = data.get("messages", [])
+            # Odpowiedź: {"chat": [...]}
+            raw_messages = data.get("chat", [])
         else:
+            # Messaging API: GET /messaging/threads/{threadId}/messages
             data = allegro_api.fetch_thread_messages(token, thread_id)
-            # API zwraca { "messages": [...] }
+            # Odpowiedź: {"messages": [...]}
             raw_messages = data.get("messages", [])
         
         current_app.logger.info(
-            f"[DEBUG] Got {len(raw_messages)} messages from {source_type} API for thread {thread_id}"
+            f"Got {len(raw_messages)} messages from {source_type} API for thread {thread_id}"
         )
         
-        # Konwertuj format
+        # Konwertuj format wiadomości
         messages = []
         for msg in raw_messages:
             author_data = msg.get("author", {})
+            
+            # Pobierz załączniki jeśli istnieją
+            attachments = []
+            for att in msg.get("attachments", []):
+                attachments.append({
+                    "id": att.get("id"),
+                    "filename": att.get("fileName"),
+                    "url": att.get("url"),
+                    "mimeType": att.get("mimeType"),
+                })
+            
             messages.append({
                 "id": msg.get("id"),
                 "author": author_data.get("login", "System"),
                 "author_role": author_data.get("role", ""),
                 "content": msg.get("text", ""),
                 "created_at": msg.get("createdAt"),
+                "attachments": attachments,
             })
         return messages, source_type
     
     try:
-        # Try the specified source first
+        # Próbuj ze wskazanym źródłem
         messages, actual_source = try_fetch_messages(thread_source)
         
     except HTTPError as exc:
         status_code = getattr(getattr(exc, "response", None), "status_code", 0)
         
-        # If 422 and we tried messaging, try issue instead (auto-detect)
+        # Jeśli 422 i próbowaliśmy messaging, spróbuj issue
         if status_code == 422 and thread_source == "messaging":
             try:
                 current_app.logger.info(f"Thread {thread_id} returned 422 as messaging, trying as issue...")
@@ -614,12 +638,11 @@ def get_messages(thread_id):
             except HTTPError as retry_exc:
                 retry_status = getattr(getattr(retry_exc, "response", None), "status_code", 0)
                 if retry_status == 404:
-                    # Nie istnieje ani jako messaging ani jako issue - ID jest nieprawidłowe
                     return {"error": "Wątek nie znaleziony w żadnym API"}, 404
                 current_app.logger.exception("Retry as issue also failed")
                 return {"error": "Nie udało się pobrać wiadomości z żadnego API"}, 502
         
-        # If 422 and we tried issue, try messaging instead
+        # Jeśli 422 i próbowaliśmy issue, spróbuj messaging
         elif status_code == 422 and thread_source == "issue":
             try:
                 current_app.logger.info(f"Thread {thread_id} returned 422 as issue, trying as messaging...")
@@ -627,12 +650,11 @@ def get_messages(thread_id):
             except HTTPError as retry_exc:
                 retry_status = getattr(getattr(retry_exc, "response", None), "status_code", 0)
                 if retry_status == 404:
-                    # Nie istnieje ani jako issue ani jako messaging
                     return {"error": "Wątek nie znaleziony w żadnym API"}, 404
                 current_app.logger.exception("Retry as messaging also failed")
                 return {"error": "Nie udało się pobrać wiadomości z żadnego API"}, 502
         
-        # Other HTTP errors
+        # Inne błędy HTTP
         elif status_code == 401:
             return {"error": "Token wygasł"}, 401
         elif status_code == 404:
@@ -708,14 +730,22 @@ def create_thread():
 @bp.route("/discussions/<string:thread_id>/send", methods=["POST"])
 @login_required
 def send_message(thread_id):
+    """
+    Wysyła wiadomość do wątku.
+    
+    DWA TYPY API:
+    1. Messaging API: POST /messaging/threads/{threadId}/messages
+    2. Issues API: POST /sale/issues/{issueId}/message
+    """
     from .socketio_extension import broadcast_new_message
     
     payload = request.get_json(silent=True) or {}
     content = (payload.get("content") or "").strip()
     thread_source = (payload.get("source") or "messaging").strip()
+    attachment_ids = payload.get("attachments", [])
     
-    if not content:
-        return {"error": "Treść wiadomości nie może być pusta."}, 400
+    if not content and not attachment_ids:
+        return {"error": "Treść wiadomości lub załącznik są wymagane."}, 400
 
     token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
     if not token:
@@ -726,9 +756,15 @@ def send_message(thread_id):
     try:
         # Wybierz odpowiednie API w zależności od źródła
         if thread_source == "issue":
-            response = allegro_api.send_discussion_message(token, thread_id, content)
+            # Issues API: POST /sale/issues/{issueId}/message
+            response = allegro_api.send_discussion_message(
+                token, thread_id, content, attachment_ids=attachment_ids
+            )
         else:
-            response = allegro_api.send_thread_message(token, thread_id, content)
+            # Messaging API: POST /messaging/threads/{threadId}/messages
+            response = allegro_api.send_thread_message(
+                token, thread_id, content, attachment_ids=attachment_ids
+            )
             
     except HTTPError as exc:  # pragma: no cover - relies on Allegro API
         current_app.logger.exception(
@@ -786,6 +822,130 @@ def send_message(thread_id):
         broadcast_new_message(thread_id, payload)
         
         return payload
+
+
+@bp.route("/discussions/attachments/upload", methods=["POST"])
+@login_required
+def upload_attachment():
+    """
+    Przesyła załącznik do Allegro.
+    Oczekuje pliku w FormData pod kluczem 'file'.
+    Parametr 'source' określa typ API: 'messaging' (default) lub 'issue'.
+    Zwraca ID załącznika gotowego do użycia w wiadomości.
+    """
+    token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
+    if not token:
+        return {"error": "Brak tokenu Allegro"}, 401
+    
+    # Sprawdź czy plik został przesłany
+    if 'file' not in request.files:
+        return {"error": "Brak pliku"}, 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return {"error": "Nie wybrano pliku"}, 400
+    
+    # Sprawdź typ API (messaging vs issue)
+    source = request.form.get('source', 'messaging')
+    
+    # Sprawdź typ pliku
+    allowed_types = {
+        'image/png': '.png',
+        'image/gif': '.gif',
+        'image/bmp': '.bmp',
+        'image/tiff': '.tiff',
+        'image/jpeg': '.jpg',
+        'application/pdf': '.pdf',
+    }
+    
+    content_type = file.content_type
+    if content_type not in allowed_types:
+        return {
+            "error": f"Nieobsługiwany typ pliku: {content_type}. "
+                     f"Dozwolone: {', '.join(allowed_types.keys())}"
+        }, 400
+    
+    try:
+        # Odczytaj zawartość pliku
+        file_content = file.read()
+        filename = file.filename
+        
+        # Prześlij do Allegro (wybierz odpowiednie API)
+        if source == "issue":
+            # Issues API: max 2MB
+            if len(file_content) > 2097152:
+                return {"error": "Plik za duży (max 2MB dla dyskusji/reklamacji)"}, 400
+            attachment_id = allegro_api.upload_issue_attachment_complete(
+                token, filename, file_content, content_type
+            )
+        else:
+            # Messaging API
+            attachment_id = allegro_api.upload_attachment_complete(
+                token, filename, file_content, content_type
+            )
+        
+        return {
+            "id": attachment_id,
+            "filename": filename,
+            "size": len(file_content),
+            "mimeType": content_type,
+        }
+        
+    except HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+        current_app.logger.exception("Błąd API Allegro przy przesyłaniu załącznika")
+        
+        if status_code == 401:
+            return {"error": "Token wygasł"}, 401
+        else:
+            return {"error": f"Błąd API: {status_code}"}, 502
+    
+    except Exception as exc:
+        current_app.logger.exception("Błąd przy przesyłaniu załącznika")
+        return {"error": "Nie udało się przesłać załącznika"}, 500
+
+
+@bp.route("/discussions/attachments/<attachment_id>")
+@login_required
+def download_attachment(attachment_id):
+    """
+    Pobiera załącznik z Allegro.
+    Parametr query 'source' określa typ API: 'messaging' (default) lub 'issue'.
+    """
+    token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
+    if not token:
+        return {"error": "Brak tokenu Allegro"}, 401
+    
+    # Sprawdź typ API
+    source = request.args.get('source', 'messaging')
+    
+    try:
+        # Pobierz z odpowiedniego API
+        if source == "issue":
+            file_content = allegro_api.download_issue_attachment(token, attachment_id)
+        else:
+            file_content = allegro_api.download_attachment(token, attachment_id)
+        
+        # Zwróć plik jako response
+        response = make_response(file_content)
+        response.headers['Content-Type'] = 'application/octet-stream'
+        response.headers['Content-Disposition'] = f'attachment; filename="{attachment_id}"'
+        return response
+        
+    except HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+        current_app.logger.exception("Błąd API Allegro przy pobieraniu załącznika")
+        
+        if status_code == 401:
+            return {"error": "Token wygasł"}, 401
+        elif status_code == 404:
+            return {"error": "Załącznik nie znaleziony"}, 404
+        else:
+            return {"error": f"Błąd API: {status_code}"}, 502
+    
+    except Exception as exc:
+        current_app.logger.exception("Błąd przy pobieraniu załącznika")
+        return {"error": "Nie udało się pobrać załącznika"}, 500
 
 
 @bp.app_errorhandler(404)
