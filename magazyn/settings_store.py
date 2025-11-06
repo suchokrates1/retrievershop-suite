@@ -400,6 +400,12 @@ class SettingsStore:
                     self._namespace = self._build_namespace(self._values)
                     self._db_last_updated_at = db_updated_at
 
+    def reload(self) -> None:
+        """Force reload settings from environment and database."""
+        with self._lock:
+            self._loaded = False
+        self._ensure_loaded()
+
 
 settings_store = SettingsStore()
 

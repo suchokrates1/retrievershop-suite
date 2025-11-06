@@ -9,7 +9,7 @@ from magazyn.db import sqlite_connect
 
 def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
     first = tmp_path / "first.db"
-    monkeypatch.setattr(db, "apply_migrations", lambda: None)
+    # Note: apply_migrations() was removed in favor of Alembic
     db.configure_engine(str(first))
     db.init_db()
     with db.get_session() as session:

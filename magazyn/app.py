@@ -504,6 +504,8 @@ def create_thread():
 @bp.route("/discussions/<string:thread_id>/send", methods=["POST"])
 @login_required
 def send_message(thread_id):
+    from .socketio_extension import broadcast_new_message
+    
     payload = request.get_json(silent=True) or {}
     content = (payload.get("content") or "").strip()
     if not content:
@@ -565,6 +567,10 @@ def send_message(thread_id):
             "created_at": _serialize_dt(new_message.created_at),
             "thread": _thread_payload(thread, last_message=new_message),
         }
+        
+        # Broadcast to other users via WebSocket
+        broadcast_new_message(thread_id, payload)
+        
         return payload
 
 

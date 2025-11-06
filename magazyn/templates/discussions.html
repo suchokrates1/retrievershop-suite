@@ -1130,6 +1130,181 @@ document.addEventListener('DOMContentLoaded', () => {
     if (initialItem) {
         loadThread(initialItem);
     }
+
+    // ========================================
+    // WEBSOCKET REAL-TIME FEATURES
+    // ========================================
+    
+    let socket = null;
+    let currentRoom = null;
+    let typingTimeout = null;
+
+    if (typeof io !== 'undefined') {
+        socket = io();
+
+        socket.on('connect', () => {
+            console.log('[WebSocket] Connected');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('[WebSocket] Disconnected');
+        });
+
+        socket.on('message_received', (data) => {
+            console.log('[WebSocket] New message:', data);
+            
+            if (data.thread_id === currentThreadId) {
+                // Dodaj wiadomość do aktualnie otwartego wątku
+                appendMessage(data.message);
+                
+                // Aktualizuj thread card
+                if (data.message.thread) {
+                    updateThreadCard(data.message.thread);
+                }
+            } else {
+                // Aktualizuj badge nieprzeczytanych dla innego wątku
+                const threadItem = document.querySelector(`[data-thread-id="${data.thread_id}"]`);
+                if (threadItem && data.message.thread) {
+                    updateThreadCard(data.message.thread);
+                }
+                
+                // Pokaż powiadomienie jeśli nie jesteśmy na tym wątku
+                showDesktopNotification(
+                    `Nowa wiadomość od ${data.message.author || 'Nieznany'}`,
+                    data.message.content
+                );
+            }
+        });
+
+        socket.on('thread_updated', (data) => {
+            console.log('[WebSocket] Thread updated:', data);
+            updateThreadCard(data.thread);
+        });
+
+        socket.on('user_typing', (data) => {
+            console.log('[WebSocket] User typing:', data);
+            showTypingIndicator(data.username, data.is_typing);
+        });
+
+        // Funkcja do dołączania do pokoju wątku
+        function joinThreadRoom(threadId) {
+            if (currentRoom && currentRoom !== threadId) {
+                socket.emit('leave_thread', { thread_id: currentRoom });
+            }
+            socket.emit('join_thread', { thread_id: threadId });
+            currentRoom = threadId;
+        }
+
+        // Modyfikuj loadThread aby dołączać do pokoju
+        const originalLoadThread = loadThread;
+        loadThread = async function(threadEl, options) {
+            const result = await originalLoadThread(threadEl, options);
+            const threadId = threadEl?.dataset.threadId;
+            if (threadId && socket && socket.connected) {
+                joinThreadRoom(threadId);
+            }
+            return result;
+        };
+
+        // Typing indicator
+        if (messageInput) {
+            messageInput.addEventListener('input', () => {
+                if (!currentThreadId || !socket || !socket.connected) return;
+                
+                socket.emit('typing', { thread_id: currentThreadId, is_typing: true });
+                
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    socket.emit('typing', { thread_id: currentThreadId, is_typing: false });
+                }, 2000);
+            });
+        }
+
+        function showTypingIndicator(username, isTyping) {
+            let typingDiv = document.getElementById('typing-indicator');
+            if (!typingDiv) {
+                // Create typing indicator if it doesn't exist
+                typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'typing-indicator d-none';
+                messagesArea.parentNode.insertBefore(typingDiv, messagesArea.nextSibling);
+            }
+            
+            if (isTyping) {
+                typingDiv.textContent = `${username} pisze...`;
+                typingDiv.classList.remove('d-none');
+            } else {
+                typingDiv.classList.add('d-none');
+            }
+        }
+    } else {
+        console.warn('[WebSocket] Socket.IO not loaded, real-time features disabled');
+    }
+
+    // ========================================
+    // DESKTOP NOTIFICATIONS
+    // ========================================
+    
+    let notificationsEnabled = false;
+
+    async function requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            console.warn('Przeglądarka nie wspiera powiadomień');
+            return false;
+        }
+
+        if (Notification.permission === 'granted') {
+            notificationsEnabled = true;
+            return true;
+        }
+
+        if (Notification.permission !== 'denied') {
+            const permission = await Notification.requestPermission();
+            notificationsEnabled = permission === 'granted';
+            return notificationsEnabled;
+        }
+
+        return false;
+    }
+
+    function showDesktopNotification(title, body) {
+        if (!notificationsEnabled || !document.hidden) return;
+
+        const notification = new Notification(title, {
+            body: body.substring(0, 100),
+            icon: '/static/favicon.ico',
+            tag: 'discussion-message',
+        });
+
+        notification.onclick = function() {
+            window.focus();
+            notification.close();
+        };
+
+        setTimeout(() => notification.close(), 5000);
+    }
+
+    // Request notification permission on page load
+    requestNotificationPermission().then(enabled => {
+        if (enabled) {
+            console.log('[Notifications] Desktop notifications enabled');
+        }
+    });
 });
 </script>
+
+<style>
+.typing-indicator {
+    padding: 0.5rem 1rem;
+    color: #8b949e;
+    font-size: 0.875rem;
+    font-style: italic;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+</style>
 {% endblock %}
