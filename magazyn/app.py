@@ -597,28 +597,6 @@ def get_messages(thread_id):
             raw_messages = data.get("chat", [])
         else:
             # Messaging API: GET /messaging/threads/{threadId}/messages
-            # NAJPIERW sprawdź szczegóły wątku
-            try:
-                thread_details = allegro_api.fetch_thread_details(token, thread_id)
-                current_app.logger.debug(
-                    f"Thread {thread_id} details: read={thread_details.get('read')}, "
-                    f"lastMessage={thread_details.get('lastMessageDateTime')}"
-                )
-                # Jeśli brak lastMessageDateTime, wątek jest prawdopodobnie pusty
-                if not thread_details.get('lastMessageDateTime'):
-                    current_app.logger.warning(
-                        f"Thread {thread_id} appears empty (no lastMessageDateTime)"
-                    )
-                    return [], source_type
-            except HTTPError as detail_err:
-                detail_status = getattr(getattr(detail_err, "response", None), "status_code", 0)
-                current_app.logger.warning(
-                    f"Could not fetch thread details for {thread_id}: HTTP {detail_status}"
-                )
-                # Jeśli 404, wątek nie istnieje - zwróć pustą listę
-                if detail_status == 404:
-                    return [], source_type
-            
             data = allegro_api.fetch_thread_messages(token, thread_id)
             # Odpowiedź: {"messages": [...]}
             raw_messages = data.get("messages", [])

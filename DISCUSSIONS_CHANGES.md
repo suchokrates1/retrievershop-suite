@@ -3,6 +3,42 @@
 **Date:** November 5-6, 2025  
 **Status:** ✅ **COMPLETED + WebSocket Real-Time** 🚀
 
+## 🔥 CRITICAL FIX: November 6, 2025 17:50 - API Limit Parameter
+
+### Problem
+- **HTTP 422 errors** dla WSZYSTKICH wątków z Messaging API
+- Błąd: `"VALIDATION_ERROR: musi być równe lub mniejsze od 20"`
+- Przyczyna: wysyłaliśmy `limit=100`, a API akceptuje max **`limit=20`**
+
+### Rozwiązanie
+```python
+# PRZED (błędne):
+def fetch_thread_messages(..., limit: int = 100):
+    params = {"limit": limit}  # ❌ 100 przekracza limit API
+
+# PO (poprawione):
+def fetch_thread_messages(..., limit: int = 20):
+    params = {"limit": min(limit, 20)}  # ✅ Maksymalnie 20
+```
+
+### Zmiany w kodzie:
+1. **magazyn/allegro_api.py**:
+   - `fetch_thread_messages()`: limit 100→20, dodano `min(limit, 20)`
+   - `fetch_discussion_chat()`: dodano `min(limit, 100)` dla Issues API
+   - Usunięto niepotrzebną funkcję `fetch_thread_details()`
+
+2. **magazyn/app.py**:
+   - Uproszczono logikę `try_fetch_messages()`
+   - Usunięto nadmiarowe sprawdzanie szczegółów wątku
+   - Zachowano filtrowanie pustych wątków podczas synchronizacji
+
+### Efekt
+✅ Wszystkie wątki teraz otwierają się poprawnie  
+✅ Brak błędów 422  
+✅ Wiadomości pobierają się natychmiastowo
+
+---
+
 ## 🆕 UPDATE: November 6, 2025 - WebSocket ZAIMPLEMENTOWANY! ✅
 
 ### Nowe Funkcje Real-Time:

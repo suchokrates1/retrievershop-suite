@@ -309,29 +309,6 @@ def fetch_message_threads(access_token: str) -> dict:
     return {"threads": all_threads}
 
 
-def fetch_thread_details(access_token: str, thread_id: str) -> dict:
-    """
-    Pobierz szczegóły wątku (bez wiadomości).
-    
-    Endpoint: GET /messaging/threads/{threadId}
-    
-    Używaj tego aby sprawdzić czy wątek istnieje i czy ma wiadomości
-    przed próbą pobrania ich przez /messaging/threads/{threadId}/messages
-    
-    Returns:
-        dict: Szczegóły wątku z polami: id, read, lastMessageDateTime, interlocutor, etc.
-    """
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/vnd.allegro.public.v1+json",
-    }
-    url = f"{API_BASE_URL}/messaging/threads/{thread_id}"
-    response = _request_with_retry(
-        requests.get, url, endpoint="thread_details", headers=headers
-    )
-    return response.json()
-
-
 def fetch_discussion_issues(access_token: str, limit: int = 100) -> dict:
     """Fetch all discussion issues (disputes and claims) from Allegro."""
     headers = {
@@ -369,7 +346,7 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) ->
     Args:
         access_token: Token dostępu Allegro
         issue_id: ID dyskusji/reklamacji
-        limit: Maksymalna liczba wiadomości (1-100)
+        limit: Maksymalna liczba wiadomości (1-100, Issues API akceptuje do 100)
     
     Returns:
         dict: {"chat": [...]} - wiadomości w kolejności od najnowszej do najstarszej
@@ -378,7 +355,8 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) ->
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
     }
-    params = {"limit": limit}
+    # Issues API akceptuje do 100 wiadomości na stronę
+    params = {"limit": min(limit, 100)}
     url = f"{API_BASE_URL}/sale/issues/{issue_id}/chat"
     response = _request_with_retry(
         requests.get, url, endpoint="discussion_chat", headers=headers, params=params
@@ -389,13 +367,18 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) ->
     logging.info(f"[DEBUG] fetch_discussion_chat({issue_id}): keys={list(data.keys())}, message_count={len(data.get('chat', []))}")
     return data
 
-def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 100) -> dict:
-    """Fetch messages for a specific thread."""
+def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 20) -> dict:
+    """
+    Fetch messages for a specific thread.
+    
+    UWAGA: Messaging API akceptuje maksymalnie limit=20!
+    """
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
-    params = {"limit": limit}
+    # API akceptuje max 20 wiadomości na stronę
+    params = {"limit": min(limit, 20)}
     url = f"{API_BASE_URL}/messaging/threads/{thread_id}/messages"
     response = _request_with_retry(
         requests.get, url, endpoint="thread_messages", headers=headers, params=params
