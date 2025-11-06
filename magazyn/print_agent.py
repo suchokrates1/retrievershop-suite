@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 import sqlite3
+from requests.exceptions import HTTPError
 
 from .config import load_config, settings
 from .db import sqlite_connect
@@ -1132,6 +1133,19 @@ class LabelAgent:
 
                 try:
                     messages_payload = fetch_thread_messages(access_token, thread_id, limit=100)
+                except HTTPError as exc:  # pragma: no cover - network/service issues
+                    status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+                    if status_code == 422:
+                        # Wątek nie ma dostępnych wiadomości (archiwalny/usunięty)
+                        self.logger.debug(
+                            "Wątek %s nie ma dostępnych wiadomości (422), pomijam", thread_id
+                        )
+                        continue
+                    else:
+                        self.logger.error(
+                            "Błąd pobierania treści wątku %s: %s", thread_id, exc
+                        )
+                        continue
                 except Exception as exc:  # pragma: no cover - network/service issues
                     self.logger.error(
                         "Błąd pobierania treści wątku %s: %s", thread_id, exc
