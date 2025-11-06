@@ -309,6 +309,27 @@ def fetch_message_threads(***REMOVED***: str) -> dict:
     return {"threads": all_threads}
 
 
+def fetch_thread_details(***REMOVED***: str, thread_id: str) -> dict:
+    """
+    Pobierz szczegóły wątku (bez wiadomości).
+    
+    Endpoint: GET /messaging/threads/{threadId}
+    
+    Używaj tego aby sprawdzić czy wątek istnieje i czy ma wiadomości
+    przed próbą pobrania ich przez /messaging/threads/{threadId}/messages
+    
+    Returns:
+        dict: Szczegóły wątku z polami: id, read, lastMessageDateTime, interlocutor, etc.
+    """
+    headers = {
+        "Authorization": f"Bearer {***REMOVED***}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    url = f"{API_BASE_URL}/messaging/threads/{thread_id}"
+    response = _request_with_retry(
+        requests.get, url, endpoint="thread_details", headers=headers
+    )
+    return response.json()
 
 
 def fetch_discussion_issues(***REMOVED***: str, limit: int = 100) -> dict:
