@@ -11,7 +11,7 @@ def test_configure_engine_enables_wal_mode(tmp_path, monkeypatch):
     test_db = tmp_path / "wal.db"
 
     try:
-        monkeypatch.setattr(db, "apply_migrations", lambda: None)
+        # Note: apply_migrations() was removed in favor of Alembic
         db.configure_engine(str(test_db))
         db.init_db()
 

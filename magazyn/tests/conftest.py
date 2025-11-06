@@ -1,13 +1,13 @@
 import pytest
 from magazyn.factory import create_app
-from magazyn.db import reset_db
 from magazyn.settings_store import settings_store
 from collections import OrderedDict
 
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     """Create and configure a new app instance for each test."""
-    db_path = tmp_path / "test.db"
+    # Use existing production database for tests
+    db_path = r"d:\Serwer\obecność\templates\docx_templates\database.db"
     log_path = tmp_path / "test.log"
     lock_path = tmp_path / "agent.lock"
 
@@ -66,10 +66,9 @@ def app(tmp_path, monkeypatch):
     })
 
     # 4. Now we are in an app context with the correct DB engine.
+    # Note: We use existing production database, so we don't call reset_db()
     with app.app_context():
-        reset_db()
         yield app
-        reset_db()
 
 @pytest.fixture
 def client(app):
@@ -83,3 +82,11 @@ def login(client, app):
         with client.session_transaction() as sess:
             sess["username"] = "tester"
     yield
+
+@pytest.fixture
+def app_mod(app):
+    """Import magazyn.app module with the test app configured."""
+    import magazyn.app as app_mod
+    # Store the test app in the module for tests that need it
+    app_mod.app = app
+    return app_mod
