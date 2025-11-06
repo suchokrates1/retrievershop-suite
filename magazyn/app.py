@@ -10,12 +10,14 @@ from flask import (
     has_request_context,
     has_app_context,
 )
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import sys
 import uuid
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
+
+from requests.exceptions import HTTPError, RequestException
 
 from .models import User, Thread, Message
 from .forms import LoginForm
@@ -30,7 +32,7 @@ from .db import (
 )
 from .sales import _sales_keys
 from .auth import login_required
-from . import print_agent
+from . import print_agent, allegro_api
 from .allegro import ALLEGRO_AUTHORIZATION_URL
 from .allegro_token_refresher import token_refresher
 from .env_info import ENV_INFO
@@ -112,6 +114,46 @@ def write_env(values):
         logger=_make_logger(),
         on_error=_make_error_notifier(),
     )
+
+
+def _serialize_dt(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    try:
+        return str(value)
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _parse_iso_timestamp(raw_value):
+    if isinstance(raw_value, datetime):
+        return raw_value
+    if not raw_value:
+        return datetime.utcnow()
+    value = str(raw_value).strip()
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return datetime.utcnow()
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _thread_payload(thread: Thread) -> dict:
+    return {
+        "id": thread.id,
+        "title": thread.title,
+        "author": thread.author,
+        "type": thread.type,
+        "read": bool(thread.read),
+        "last_message_at": _serialize_dt(thread.last_message_at),
+        "last_message_iso": _serialize_dt(thread.last_message_at),
+    }
 
 
 @bp.app_context_processor
@@ -313,26 +355,40 @@ def test_message():
     return render_template("test.html", message=msg)
 
 
-from sqlalchemy.orm import subqueryload
-
 @bp.route("/discussions")
 @login_required
 def discussions():
     with get_session() as db:
-        threads_from_db = db.query(Thread).order_by(Thread.last_message_at.desc()).all()
+        threads_from_db = (
+            db.query(Thread)
+            .order_by(Thread.last_message_at.desc(), Thread.title.asc())
+            .all()
+        )
+        threads = [
+            {
+                "id": thread.id,
+                "title": thread.title,
+                "author": thread.author,
+                "type": thread.type,
+                "read": bool(thread.read),
+                "last_message_at": thread.last_message_at,
+                "last_message_iso": _serialize_dt(thread.last_message_at),
+            }
+            for thread in threads_from_db
+        ]
 
-        threads = []
-        for t in threads_from_db:
-            threads.append({
-                'id': t.id,
-                'title': t.title,
-                'author': t.author,
-                'last_message_at': t.last_message_at,
-                'type': t.type,
-                'read': t.read,
-            })
+    can_reply = bool(getattr(settings, "ALLEGRO_ACCESS_TOKEN", None))
+    autoresponder_enabled = bool(
+        getattr(settings, "ALLEGRO_AUTORESPONDER_ENABLED", False)
+    )
 
-    return render_template("discussions.html", threads=threads, username=session.get('username'))
+    return render_template(
+        "discussions.html",
+        threads=threads,
+        username=session.get("username"),
+        can_reply=can_reply,
+        autoresponder_enabled=autoresponder_enabled,
+    )
 
 
 @bp.route("/discussions/<string:thread_id>/read", methods=["POST"])
@@ -342,8 +398,8 @@ def mark_as_read(thread_id):
         thread = db.query(Thread).filter_by(id=thread_id).first()
         if thread:
             thread.read = True
-            db.commit()
-            return {"success": True}
+            db.flush()
+            return {"success": True, "thread": _thread_payload(thread)}
         return {"success": False}, 404
 
 
@@ -351,69 +407,144 @@ def mark_as_read(thread_id):
 @login_required
 def get_messages(thread_id):
     with get_session() as db:
-        messages = db.query(Message).filter_by(thread_id=thread_id).order_by(Message.created_at.asc()).all()
+        thread = (
+            db.query(Thread)
+            .options(joinedload(Thread.messages))
+            .filter_by(id=thread_id)
+            .first()
+        )
+        if not thread:
+            return {"error": "Thread not found"}, 404
+
+        ordered_messages = sorted(
+            thread.messages,
+            key=lambda message: _serialize_dt(message.created_at) or "",
+        )
         return {
+            "thread": _thread_payload(thread),
             "messages": [
                 {
+                    "id": message.id,
                     "author": message.author,
                     "content": message.content,
-                    "created_at": message.created_at.isoformat(),
+                    "created_at": _serialize_dt(message.created_at),
                 }
-                for message in messages
-            ]
+                for message in ordered_messages
+            ],
         }
 
 
 @bp.route("/discussions/create", methods=["POST"])
 @login_required
 def create_thread():
+    payload = request.get_json(silent=True) or {}
+    title = (payload.get("title") or "").strip()
+    thread_type = (payload.get("type") or "").strip()
+    initial_message = (payload.get("message") or "").strip()
+
+    if not title or not thread_type or not initial_message:
+        return {"error": "Wszystkie pola są wymagane."}, 400
+
+    now = datetime.utcnow()
+
     with get_session() as db:
-        new_thread_id = str(uuid.uuid4())
         new_thread = Thread(
-            id=new_thread_id,
-            title=request.json["title"],
+            id=str(uuid.uuid4()),
+            title=title,
             author=session["username"],
-            type=request.json["type"],
+            type=thread_type,
+            read=True,
+            last_message_at=now,
         )
         db.add(new_thread)
-        db.flush()  # flush to get the new_thread object with its relationship
 
         new_message = Message(
             id=str(uuid.uuid4()),
             thread_id=new_thread.id,
             author=session["username"],
-            content=request.json["message"],
+            content=initial_message,
+            created_at=now,
         )
         db.add(new_message)
-        new_thread.last_message_at = new_message.created_at
-        db.commit()
+        db.flush()
 
-        return {"id": new_thread.id}
+        return {
+            "id": new_thread.id,
+            "thread": _thread_payload(new_thread),
+            "message": {
+                "id": new_message.id,
+                "author": new_message.author,
+                "content": new_message.content,
+                "created_at": _serialize_dt(new_message.created_at),
+            },
+        }, 201
 
 
 @bp.route("/discussions/<string:thread_id>/send", methods=["POST"])
 @login_required
 def send_message(thread_id):
+    payload = request.get_json(silent=True) or {}
+    content = (payload.get("content") or "").strip()
+    if not content:
+        return {"error": "Treść wiadomości nie może być pusta."}, 400
+
+    token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
+    if not token:
+        return {
+            "error": "Brak skonfigurowanego tokenu Allegro. Zaktualizuj ustawienia integracji.",
+        }, 400
+
     with get_session() as db:
         thread = db.query(Thread).filter_by(id=thread_id).first()
         if not thread:
             return {"error": "Thread not found"}, 404
 
+        try:
+            response = allegro_api.send_thread_message(token, thread_id, content)
+        except HTTPError as exc:  # pragma: no cover - relies on Allegro API
+            current_app.logger.exception(
+                "Nie udało się wysłać wiadomości do Allegro dla wątku %s", thread_id
+            )
+            status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+            if status_code == 401:
+                message = "Token Allegro wygasł. Odśwież integrację i spróbuj ponownie."
+            else:
+                message = "Allegro odrzuciło wiadomość. Sprawdź logi i spróbuj ponownie."
+            return {"error": message}, 502
+        except RequestException:
+            current_app.logger.exception(
+                "Błąd sieci podczas wysyłania wiadomości Allegro dla wątku %s",
+                thread_id,
+            )
+            return {
+                "error": "Nie udało się połączyć z Allegro. Spróbuj ponownie.",
+            }, 502
+
+        created_at_dt = _parse_iso_timestamp(
+            response.get("createdAt") or response.get("created_at")
+        )
+        message_id = str(response.get("id") or uuid.uuid4())
+
         new_message = Message(
-            id=str(uuid.uuid4()),
+            id=message_id,
             thread_id=thread_id,
             author=session["username"],
-            content=request.json["content"],
+            content=content,
+            created_at=created_at_dt,
         )
         db.add(new_message)
-        thread.last_message_at = new_message.created_at
-        db.commit()
+        thread.last_message_at = created_at_dt
+        thread.read = True
+        db.flush()
 
-        return {
+        payload = {
+            "id": new_message.id,
             "author": new_message.author,
             "content": new_message.content,
-            "created_at": new_message.created_at.isoformat(),
+            "created_at": _serialize_dt(new_message.created_at),
+            "thread": _thread_payload(thread),
         }
+        return payload
 
 
 @bp.app_errorhandler(404)
