@@ -311,6 +311,34 @@ def fetch_message_threads(access_token: str) -> dict:
 
 
 
+def fetch_discussion_issues(access_token: str, limit: int = 100) -> dict:
+    """Fetch all discussion issues (disputes and claims) from Allegro."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+    }
+    
+    all_issues = []
+    offset = 0
+    page_limit = min(limit, 100)  # API max is 100
+    
+    while True:
+        params = {"offset": offset, "limit": page_limit}
+        url = f"{API_BASE_URL}/sale/issues"
+        response = _request_with_retry(
+            requests.get, url, endpoint="discussion_issues", headers=headers, params=params
+        )
+        data = response.json()
+        issues = data.get("issues", [])
+        all_issues.extend(issues)
+        
+        if not issues or len(issues) < page_limit or len(all_issues) >= limit:
+            break
+        offset += page_limit
+    
+    return {"issues": all_issues[:limit]}
+
+
 def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) -> dict:
     """Fetch chat messages for a specific discussion."""
     headers = {

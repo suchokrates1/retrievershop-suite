@@ -535,7 +535,7 @@
         </div>
         <div class="threads-list" id="threads-container" data-threads>
             {% for thread in threads %}
-            <div class="thread-item{% if not thread.read %} unread{% endif %}" role="button" tabindex="0" aria-selected="false" data-thread-id="{{ thread.id }}" data-thread-title="{{ thread.title|e }}" data-thread-author="{{ thread.author|default('', true)|e }}" data-thread-type="{{ thread.type|default('', true)|e }}" data-thread-read="{{ 'true' if thread.read else 'false' }}" data-thread-last="{{ thread.last_message_iso or '' }}" data-thread-preview="{{ thread.last_message_preview|default('', true)|e }}" data-thread-last-author="{{ thread.last_message_author|default('', true)|e }}">
+            <div class="thread-item{% if not thread.read %} unread{% endif %}" role="button" tabindex="0" aria-selected="false" data-thread-id="{{ thread.id }}" data-thread-title="{{ thread.title|e }}" data-thread-author="{{ thread.author|default('', true)|e }}" data-thread-type="{{ thread.type|default('', true)|e }}" data-thread-read="{{ 'true' if thread.read else 'false' }}" data-thread-last="{{ thread.last_message_iso or '' }}" data-thread-preview="{{ thread.last_message_preview|default('', true)|e }}" data-thread-last-author="{{ thread.last_message_author|default('', true)|e }}" data-source="{{ thread.source|default('messaging', true) }}">
                 <div class="thread-item-header">
                     <div class="thread-title-row">
                         <h6 class="thread-title">{{ thread.title }}</h6>
@@ -647,6 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-threads');
 
     let currentThreadId = null;
+    let currentThreadSource = null;
     let activeThreadEl = null;
     let isSending = false;
 
@@ -989,16 +990,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const threadId = threadEl.dataset.threadId;
+        const source = threadEl.dataset.source || 'messaging';
         if (!threadId || (!forceReload && currentThreadId === threadId)) {
             return;
         }
         currentThreadId = threadId;
+        currentThreadSource = source;
         setActiveThread(threadEl);
         updateHeaderFromElement(threadEl);
         clearStatus();
         showLoading();
         try {
-            const response = await fetch(`/discussions/${threadId}`, { credentials: 'same-origin' });
+            const response = await fetch(`/discussions/${threadId}?source=${encodeURIComponent(source)}`, { credentials: 'same-origin' });
             if (!response.ok) {
                 const errorText = await response.text().catch(() => '');
                 throw new Error(errorText || 'Nie udało się pobrać wiadomości.');
@@ -1068,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         'X-CSRFToken': csrfToken,
                     },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ content }),
+                    body: JSON.stringify({ content, source: currentThreadSource || 'messaging' }),
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok) {
