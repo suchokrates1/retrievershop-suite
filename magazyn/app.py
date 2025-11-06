@@ -380,30 +380,145 @@ def test_message():
 @bp.route("/discussions")
 @login_required
 def discussions():
-    with get_session() as db:
-        threads_from_db = (
-            db.query(Thread)
-            .options(joinedload(Thread.messages))
-            .order_by(Thread.last_message_at.desc(), Thread.title.asc())
-            .all()
-        )
-        threads = [
-            _thread_payload(thread, last_message=_latest_message(thread))
-            for thread in threads_from_db
-        ]
-
-    can_reply = bool(getattr(settings, "ALLEGRO_ACCESS_TOKEN", None))
+    token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
+    can_reply = bool(token)
     autoresponder_enabled = bool(
         getattr(settings, "ALLEGRO_AUTORESPONDER_ENABLED", False)
     )
-
+    
+    threads = []
+    error_message = None
+    
+    if token:
+        try:
+            # Pobierz wątki z Centrum Wiadomości Allegro
+            messaging_data = allegro_api.fetch_message_threads(token)
+            messaging_threads = messaging_data.get("threads", [])
+            
+            # Pobierz dyskusje i reklamacje
+            try:
+                issues_data = allegro_api.fetch_discussion_issues(token)
+                issues = issues_data.get("issues", [])
+            except Exception as e:
+                current_app.logger.warning("Nie udało się pobrać dyskusji: %s", e)
+                issues = []
+            
+            # Konwertuj wątki z Centrum Wiadomości
+            for thread in messaging_threads:
+                last_msg = thread.get("lastMessage", {})
+                threads.append({
+                    "id": thread.get("id"),
+                    "title": _get_thread_title(thread),
+                    "author": _get_thread_author(thread),
+                    "type": "wiadomość",
+                    "read": thread.get("read", False),
+                    "last_message_at": last_msg.get("createdAt"),
+                    "last_message_iso": last_msg.get("createdAt"),
+                    "last_message_preview": _message_preview(last_msg.get("text")),
+                    "last_message_author": _get_message_author(last_msg),
+                    "source": "messaging",
+                })
+            
+            # Konwertuj dyskusje i reklamacje
+            for issue in issues:
+                chat = issue.get("chat", {})
+                last_msg = chat.get("lastMessage", {})
+                initial_msg = chat.get("initialMessage", {})
+                threads.append({
+                    "id": issue.get("id"),
+                    "title": _get_issue_title(issue),
+                    "author": issue.get("buyer", {}).get("login", "Nieznany"),
+                    "type": _get_issue_type_pl(issue.get("type")),
+                    "read": last_msg.get("status") != "NEW",
+                    "last_message_at": last_msg.get("createdAt"),
+                    "last_message_iso": last_msg.get("createdAt"),
+                    "last_message_preview": _message_preview(initial_msg.get("text")),
+                    "last_message_author": initial_msg.get("author", {}).get("login", ""),
+                    "source": "issue",
+                })
+            
+            # Sortuj po dacie ostatniej wiadomości
+            threads.sort(key=lambda t: t.get("last_message_at") or "", reverse=True)
+            
+        except HTTPError as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+            if status_code == 401:
+                error_message = "Token Allegro wygasł. Odśwież autoryzację w ustawieniach."
+            else:
+                error_message = f"Błąd API Allegro: {status_code}"
+            current_app.logger.exception("Błąd pobierania wątków z Allegro")
+        except RequestException as exc:
+            error_message = "Nie udało się połączyć z Allegro."
+            current_app.logger.exception("Błąd sieci podczas pobierania wątków")
+    
     return render_template(
         "discussions.html",
         threads=threads,
         username=session.get("username"),
         can_reply=can_reply,
         autoresponder_enabled=autoresponder_enabled,
+        error_message=error_message,
     )
+
+
+def _get_thread_title(thread: dict) -> str:
+    """Generuj tytuł wątku z Centrum Wiadomości."""
+    interlocutor = thread.get("interlocutor", {})
+    login = interlocutor.get("login", "Nieznany")
+    return f"Rozmowa z {login}"
+
+
+def _get_thread_author(thread: dict) -> str:
+    """Pobierz autora wątku."""
+    interlocutor = thread.get("interlocutor", {})
+    return interlocutor.get("login", "Nieznany")
+
+
+def _get_message_author(message: dict) -> str:
+    """Pobierz autora wiadomości."""
+    author = message.get("author", {})
+    role = author.get("role", "")
+    login = author.get("login", "")
+    if role == "BUYER":
+        return login or "Kupujący"
+    elif role == "SELLER":
+        return login or "Ty"
+    return login or "System"
+
+
+def _get_issue_title(issue: dict) -> str:
+    """Generuj tytuł dla dyskusji/reklamacji."""
+    issue_type = issue.get("type")
+    subject = issue.get("subject") or ""
+    buyer_login = issue.get("buyer", {}).get("login", "Nieznany")
+    
+    if issue_type == "DISPUTE":
+        prefix = "Dyskusja"
+    elif issue_type == "CLAIM":
+        prefix = "Reklamacja"
+    else:
+        prefix = "Problem"
+    
+    # Podmień subject na bardziej czytelny
+    subject_map = {
+        "NO_REFUND_AFTER_RETURNING_PRODUCT": "brak zwrotu po odesłaniu",
+        "DEFECTIVE_PRODUCT": "wadliwy produkt",
+        "DIFFERENT_PRODUCT": "inny produkt",
+        "DAMAGED_PRODUCT": "uszkodzony produkt",
+        "NOT_DELIVERED": "nie dostarczono",
+    }
+    subject_pl = subject_map.get(subject, subject.lower().replace("_", " "))
+    
+    return f"{prefix}: {buyer_login} - {subject_pl}" if subject_pl else f"{prefix}: {buyer_login}"
+
+
+def _get_issue_type_pl(issue_type: str) -> str:
+    """Konwertuj typ problemu na polski."""
+    type_map = {
+        "DISPUTE": "dyskusja",
+        "CLAIM": "reklamacja",
+    }
+    return type_map.get(issue_type, issue_type.lower())
 
 
 @bp.route("/discussions/<string:thread_id>/read", methods=["POST"])
@@ -421,36 +536,70 @@ def mark_as_read(thread_id):
 @bp.route("/discussions/<thread_id>")
 @login_required
 def get_messages(thread_id):
-    with get_session() as db:
-        thread = (
-            db.query(Thread)
-            .options(joinedload(Thread.messages))
-            .filter_by(id=thread_id)
-            .first()
-        )
-        if not thread:
-            return {"error": "Thread not found"}, 404
-
-        ordered_messages = sorted(
-            thread.messages,
-            key=lambda message: message.created_at or datetime.min,
-        )
-        thread_payload = _thread_payload(
-            thread,
-            last_message=ordered_messages[-1] if ordered_messages else None,
-        )
+    token = getattr(settings, "ALLEGRO_ACCESS_TOKEN", None)
+    if not token:
+        return {"error": "Brak tokenu Allegro"}, 401
+    
+    # Sprawdź typ wątku (messaging vs issue)
+    thread_source = request.args.get("source", "messaging")
+    
+    try:
+        if thread_source == "issue":
+            # Dyskusja/reklamacja
+            data = allegro_api.fetch_discussion_chat(token, thread_id)
+            raw_messages = data.get("chat", [])
+            
+            # Konwertuj format dyskusji
+            messages = []
+            for msg in raw_messages:
+                author_data = msg.get("author", {})
+                messages.append({
+                    "id": msg.get("id"),
+                    "author": author_data.get("login", "System"),
+                    "author_role": author_data.get("role", ""),
+                    "content": msg.get("text", ""),
+                    "created_at": msg.get("createdAt"),
+                })
+        else:
+            # Centrum wiadomości
+            data = allegro_api.fetch_thread_messages(token, thread_id)
+            raw_messages = data.get("messages", [])
+            
+            # Konwertuj format wiadomości
+            messages = []
+            for msg in raw_messages:
+                author_data = msg.get("author", {})
+                messages.append({
+                    "id": msg.get("id"),
+                    "author": author_data.get("login", "System"),
+                    "author_role": author_data.get("role", ""),
+                    "content": msg.get("text", ""),
+                    "created_at": msg.get("createdAt"),
+                })
+        
+        # Sortuj od najstarszej do najnowszej
+        messages.sort(key=lambda m: m.get("created_at") or "")
+        
         return {
-            "thread": thread_payload,
-            "messages": [
-                {
-                    "id": message.id,
-                    "author": message.author,
-                    "content": message.content,
-                    "created_at": _serialize_dt(message.created_at),
-                }
-                for message in ordered_messages
-            ],
+            "thread": {
+                "id": thread_id,
+                "source": thread_source,
+            },
+            "messages": messages,
         }
+        
+    except HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+        if status_code == 401:
+            return {"error": "Token wygasł"}, 401
+        elif status_code == 404:
+            return {"error": "Wątek nie znaleziony"}, 404
+        else:
+            current_app.logger.exception("Błąd API Allegro przy pobieraniu wiadomości")
+            return {"error": f"Błąd API: {status_code}"}, 502
+    except RequestException:
+        current_app.logger.exception("Błąd sieci przy pobieraniu wiadomości")
+        return {"error": "Błąd połączenia z Allegro"}, 502
 
 
 @bp.route("/discussions/create", methods=["POST"])
@@ -508,6 +657,8 @@ def send_message(thread_id):
     
     payload = request.get_json(silent=True) or {}
     content = (payload.get("content") or "").strip()
+    thread_source = (payload.get("source") or "messaging").strip()
+    
     if not content:
         return {"error": "Treść wiadomości nie może być pusta."}, 400
 
@@ -517,47 +668,55 @@ def send_message(thread_id):
             "error": "Brak skonfigurowanego tokenu Allegro. Zaktualizuj ustawienia integracji.",
         }, 400
 
-    with get_session() as db:
-        thread = db.query(Thread).filter_by(id=thread_id).first()
-        if not thread:
-            return {"error": "Thread not found"}, 404
-
-        try:
+    try:
+        # Wybierz odpowiednie API w zależności od źródła
+        if thread_source == "issue":
+            response = allegro_api.send_discussion_message(token, thread_id, content)
+        else:
             response = allegro_api.send_thread_message(token, thread_id, content)
-        except HTTPError as exc:  # pragma: no cover - relies on Allegro API
-            current_app.logger.exception(
-                "Nie udało się wysłać wiadomości do Allegro dla wątku %s", thread_id
-            )
-            status_code = getattr(getattr(exc, "response", None), "status_code", 0)
-            if status_code == 401:
-                message = "Token Allegro wygasł. Odśwież integrację i spróbuj ponownie."
-            else:
-                message = "Allegro odrzuciło wiadomość. Sprawdź logi i spróbuj ponownie."
-            return {"error": message}, 502
-        except RequestException:
-            current_app.logger.exception(
-                "Błąd sieci podczas wysyłania wiadomości Allegro dla wątku %s",
-                thread_id,
-            )
-            return {
-                "error": "Nie udało się połączyć z Allegro. Spróbuj ponownie.",
-            }, 502
-
-        created_at_dt = _parse_iso_timestamp(
-            response.get("createdAt") or response.get("created_at")
+            
+    except HTTPError as exc:  # pragma: no cover - relies on Allegro API
+        current_app.logger.exception(
+            "Nie udało się wysłać wiadomości do Allegro dla wątku %s", thread_id
         )
-        message_id = str(response.get("id") or uuid.uuid4())
-
-        new_message = Message(
-            id=message_id,
-            thread_id=thread_id,
-            author=session["username"],
-            content=content,
-            created_at=created_at_dt,
+        status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+        if status_code == 401:
+            message = "Token Allegro wygasł. Odśwież integrację i spróbuj ponownie."
+        else:
+            message = "Allegro odrzuciło wiadomość. Sprawdź logi i spróbuj ponownie."
+        return {"error": message}, 502
+    except RequestException:
+        current_app.logger.exception(
+            "Błąd sieci podczas wysyłania wiadomości Allegro dla wątku %s",
+            thread_id,
         )
-        db.add(new_message)
-        thread.last_message_at = created_at_dt
-        thread.read = True
+        return {
+            "error": "Nie udało się połączyć z Allegro. Spróbuj ponownie.",
+        }, 502
+
+    created_at_dt = _parse_iso_timestamp(
+        response.get("createdAt") or response.get("created_at")
+    )
+    message_id = str(response.get("id") or uuid.uuid4())
+
+    # Opcjonalnie zapisz w lokalnej bazie jako cache
+    try:
+        with get_session() as db:
+            thread = db.query(Thread).filter_by(id=thread_id).first()
+            if thread:
+                new_message = Message(
+                    id=message_id,
+                    thread_id=thread_id,
+                    author=session["username"],
+                    content=content,
+                    created_at=created_at_dt,
+                )
+                db.add(new_message)
+                thread.last_message_at = created_at_dt
+                thread.read = True
+    except Exception as e:
+        # Cache niepowodzenie nie powinno blokować odpowiedzi
+        current_app.logger.warning("Nie udało się zapisać wiadomości w cache: %s", e)
         db.flush()
 
         payload = {
