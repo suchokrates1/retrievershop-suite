@@ -594,7 +594,11 @@ def get_messages(thread_id):
             try:
                 current_app.logger.info(f"Thread {thread_id} returned 422 as messaging, trying as issue...")
                 messages, actual_source = try_fetch_messages("issue")
-            except Exception as retry_exc:
+            except HTTPError as retry_exc:
+                retry_status = getattr(getattr(retry_exc, "response", None), "status_code", 0)
+                if retry_status == 404:
+                    # Nie istnieje ani jako messaging ani jako issue - ID jest nieprawidłowe
+                    return {"error": "Wątek nie znaleziony w żadnym API"}, 404
                 current_app.logger.exception("Retry as issue also failed")
                 return {"error": "Nie udało się pobrać wiadomości z żadnego API"}, 502
         
@@ -603,7 +607,11 @@ def get_messages(thread_id):
             try:
                 current_app.logger.info(f"Thread {thread_id} returned 422 as issue, trying as messaging...")
                 messages, actual_source = try_fetch_messages("messaging")
-            except Exception as retry_exc:
+            except HTTPError as retry_exc:
+                retry_status = getattr(getattr(retry_exc, "response", None), "status_code", 0)
+                if retry_status == 404:
+                    # Nie istnieje ani jako issue ani jako messaging
+                    return {"error": "Wątek nie znaleziony w żadnym API"}, 404
                 current_app.logger.exception("Retry as messaging also failed")
                 return {"error": "Nie udało się pobrać wiadomości z żadnego API"}, 502
         
