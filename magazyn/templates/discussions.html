@@ -1120,14 +1120,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ========================================
-    // WEBSOCKET REAL-TIME FEATURES
+    // WEBSOCKET REAL-TIME FEATURES (DISABLED)
     // ========================================
+    // SocketIO disabled due to 400 errors with Cloudflare proxy
+    // TODO: Fix SocketIO session handling or implement alternative real-time solution
     
     let socket = null;
     let currentRoom = null;
     let typingTimeout = null;
 
-    if (typeof io !== 'undefined') {
+    if (false && typeof io !== 'undefined') {  // DISABLED
         // Use polling transport only (Cloudflare has issues with WebSocket)
         socket = io({
             transports: ['polling'],
