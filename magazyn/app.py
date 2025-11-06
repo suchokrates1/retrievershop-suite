@@ -395,6 +395,16 @@ def discussions():
             messaging_data = allegro_api.fetch_message_threads(token)
             messaging_threads = messaging_data.get("threads", [])
             
+            # DEBUG: Sprawdź strukturę pierwszego wątku
+            if messaging_threads:
+                sample = messaging_threads[0]
+                current_app.logger.info(
+                    f"[DEBUG] Sample messaging thread keys: {list(sample.keys())}"
+                )
+                current_app.logger.info(
+                    f"[DEBUG] Sample thread: {sample}"
+                )
+            
             # Pobierz dyskusje i reklamacje
             try:
                 issues_data = allegro_api.fetch_discussion_issues(token)
@@ -416,7 +426,7 @@ def discussions():
                     "last_message_at": last_msg.get("createdAt") if last_msg else None,
                     "last_message_iso": last_msg.get("createdAt") if last_msg else None,
                     "last_message_preview": _message_preview(last_msg.get("text")) if last_msg else "Brak wiadomości",
-                    "last_message_author": _get_message_author(last_msg) if last_msg else "System",
+                    "last_message_author": _get_message_author(last_msg) if last_msg else "",
                     "source": "messaging",
                 })
             
@@ -448,13 +458,18 @@ def discussions():
                 refresh_token = getattr(settings, "ALLEGRO_REFRESH_TOKEN", None)
                 if refresh_token:
                     try:
+                        from .env_tokens import update_allegro_tokens
                         current_app.logger.info("Próba odświeżenia tokena Allegro...")
                         new_tokens = allegro_api.refresh_token(refresh_token)
-                        # Zaktualizuj tokeny w settings
-                        settings.ALLEGRO_ACCESS_TOKEN = new_tokens.get("access_token")
-                        if new_tokens.get("refresh_token"):
-                            settings.ALLEGRO_REFRESH_TOKEN = new_tokens["refresh_token"]
-                        current_app.logger.info("Token Allegro odświeżony pomyślnie")
+                        
+                        # Zapisz tokeny do bazy/env i zaktualizuj settings
+                        update_allegro_tokens(
+                            access_token=new_tokens.get("access_token"),
+                            refresh_token=new_tokens.get("refresh_token"),
+                            expires_in=new_tokens.get("expires_in"),
+                        )
+                        
+                        current_app.logger.info("Token Allegro odświeżony i zapisany pomyślnie")
                         # Retry request
                         return discussions()  # Rekurencyjne wywołanie po odświeżeniu
                     except Exception as refresh_exc:
@@ -563,6 +578,10 @@ def get_messages(thread_id):
     
     def try_fetch_messages(source_type):
         """Helper to fetch messages from the appropriate API."""
+        current_app.logger.debug(
+            f"Fetching {source_type} messages for thread {thread_id}"
+        )
+        
         if source_type == "issue":
             data = allegro_api.fetch_discussion_chat(token, thread_id)
             # API zwraca { "messages": [...] }
@@ -571,6 +590,10 @@ def get_messages(thread_id):
             data = allegro_api.fetch_thread_messages(token, thread_id)
             # API zwraca { "messages": [...] }
             raw_messages = data.get("messages", [])
+        
+        current_app.logger.info(
+            f"[DEBUG] Got {len(raw_messages)} messages from {source_type} API for thread {thread_id}"
+        )
         
         # Konwertuj format
         messages = []
