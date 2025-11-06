@@ -17,12 +17,12 @@ def authenticated_only(f):
 
 
 @socketio.on('connect')
-@authenticated_only
 def handle_connect():
     """Handle client connection."""
-    username = session.get('username')
+    username = session.get('username', 'anonymous')
     print(f'[SocketIO] User {username} connected')
-    emit('connected', {'username': username})
+    if username != 'anonymous':
+        emit('connected', {'username': username})
 
 
 @socketio.on('disconnect')
