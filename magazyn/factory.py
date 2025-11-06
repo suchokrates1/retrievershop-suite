@@ -73,8 +73,15 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     _register_shutdown_hook()
 
-    # Initialize SocketIO
-    socketio.init_app(app, cors_allowed_origins="*", async_mode='threading')
+    # Initialize SocketIO with gevent (matches gunicorn worker class)
+    socketio.init_app(
+        app, 
+        cors_allowed_origins="*", 
+        async_mode='gevent',
+        manage_session=False,  # Don't manage sessions (Flask handles this)
+        engineio_logger=False,  # Reduce log spam
+        logger=False
+    )
 
     @app.after_request
     def apply_security_headers(response):
