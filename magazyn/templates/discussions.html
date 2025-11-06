@@ -71,31 +71,40 @@
 
     .thread-item {
         position: relative;
-        padding: 0.85rem 1rem;
-        border-radius: 14px;
+        padding: 1rem 1.1rem 1rem 1.1rem;
+        border-radius: 16px;
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid transparent;
         cursor: pointer;
-        transition: transform 0.18s ease, box-shadow 0.18s ease, border 0.18s ease, background 0.18s ease;
+        transition: transform 0.16s ease, box-shadow 0.2s ease, border 0.16s ease, background 0.16s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        outline: none;
     }
 
-    .thread-item:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
-        border-color: rgba(13, 110, 253, 0.4);
-        background: rgba(13, 110, 253, 0.12);
+    .thread-item:hover,
+    .thread-item:focus-visible {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+        border-color: rgba(13, 110, 253, 0.55);
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.22), rgba(90, 47, 255, 0.24));
     }
 
     .thread-item.active {
-        border-color: rgba(13, 110, 253, 0.75);
-        background: rgba(13, 110, 253, 0.18);
-        box-shadow: 0 16px 36px rgba(13, 110, 253, 0.25);
+        border-color: rgba(13, 110, 253, 0.85);
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.32), rgba(90, 47, 255, 0.28));
+        box-shadow: 0 20px 40px rgba(13, 110, 253, 0.32);
     }
 
     .thread-item.unread {
-        border-color: rgba(220, 53, 69, 0.55);
-        background: rgba(220, 53, 69, 0.14);
-        box-shadow: 0 16px 32px rgba(220, 53, 69, 0.2);
+        border-color: rgba(255, 99, 132, 0.55);
+        background: linear-gradient(135deg, rgba(255, 99, 132, 0.24), rgba(255, 159, 64, 0.2));
+        box-shadow: 0 18px 34px rgba(255, 99, 132, 0.25);
+    }
+
+    .thread-item:active {
+        transform: translateY(1px);
     }
 
     .unread-dot {
@@ -111,22 +120,27 @@
 
     .thread-item-header {
         display: flex;
-        align-items: baseline;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .thread-title-row {
+        display: flex;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
-        margin-bottom: 0.5rem;
     }
 
     .thread-title {
-        font-size: 0.95rem;
+        font-size: 1rem;
         font-weight: 600;
         color: #f4f6ff;
         margin: 0;
     }
 
     .thread-timestamp {
-        font-size: 0.76rem;
-        color: rgba(255, 255, 255, 0.55);
+        font-size: 0.78rem;
+        color: rgba(255, 255, 255, 0.58);
         white-space: nowrap;
     }
 
@@ -134,9 +148,9 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.5rem;
+        gap: 0.55rem;
         font-size: 0.78rem;
-        color: rgba(255, 255, 255, 0.68);
+        color: rgba(255, 255, 255, 0.72);
     }
 
     .thread-type-pill {
@@ -159,6 +173,18 @@
     .pill-message {
         background: rgba(32, 201, 151, 0.22);
         color: #86f2ce;
+    }
+
+    .thread-preview {
+        margin: 0;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.7);
+        display: -webkit-box;
+        line-clamp: 2;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
     .autoresponder-badge {
@@ -405,23 +431,32 @@
         </div>
         <div class="threads-list" id="threads-container" data-threads>
             {% for thread in threads %}
-            <div class="thread-item{% if not thread.read %} unread{% endif %}" data-thread-id="{{ thread.id }}" data-thread-title="{{ thread.title|e }}" data-thread-author="{{ thread.author|default('', true)|e }}" data-thread-type="{{ thread.type|default('', true)|e }}" data-thread-read="{{ 'true' if thread.read else 'false' }}" data-thread-last="{{ thread.last_message_iso or '' }}">
+            <div class="thread-item{% if not thread.read %} unread{% endif %}" role="button" tabindex="0" aria-selected="false" data-thread-id="{{ thread.id }}" data-thread-title="{{ thread.title|e }}" data-thread-author="{{ thread.author|default('', true)|e }}" data-thread-type="{{ thread.type|default('', true)|e }}" data-thread-read="{{ 'true' if thread.read else 'false' }}" data-thread-last="{{ thread.last_message_iso or '' }}" data-thread-preview="{{ thread.last_message_preview|default('', true)|e }}" data-thread-last-author="{{ thread.last_message_author|default('', true)|e }}">
                 <div class="thread-item-header">
-                    <h6 class="thread-title">{{ thread.title }}</h6>
-                    <time class="thread-timestamp" data-thread-timestamp>{{ thread.last_message_at|format_dt }}</time>
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">{{ thread.title }}</h6>
+                        <time class="thread-timestamp" data-thread-timestamp>{{ thread.last_message_at|format_dt }}</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author>
+                            {% if thread.last_message_author %}@{{ thread.last_message_author }}{% else %}Nieznany nadawca{% endif %}
+                        </span>
+                        <span class="thread-type-pill {% if thread.type == 'dyskusja' %}pill-discussion{% else %}pill-message{% endif %}" data-thread-type-pill>
+                            {% if thread.type == 'dyskusja' %}
+                                <i class="bi bi-chat-dots-fill"></i>Dyskusja
+                            {% else %}
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            {% endif %}
+                        </span>
+                    </div>
                 </div>
-                <div class="thread-item-meta">
-                    <span class="thread-author">
-                        {% if thread.author %}@{{ thread.author }}{% else %}Nieznany nadawca{% endif %}
-                    </span>
-                    <span class="thread-type-pill {% if thread.type == 'dyskusja' %}pill-discussion{% else %}pill-message{% endif %}">
-                        {% if thread.type == 'dyskusja' %}
-                            <i class="bi bi-chat-dots-fill"></i>Dyskusja
-                        {% else %}
-                            <i class="bi bi-envelope-fill"></i>Wiadomość
-                        {% endif %}
-                    </span>
-                </div>
+                <p class="thread-preview" data-thread-preview-text>
+                    {% if thread.last_message_preview %}
+                        {{ thread.last_message_preview }}
+                    {% else %}
+                        Brak wiadomości w tym wątku.
+                    {% endif %}
+                </p>
                 {% if not thread.read %}
                 <span class="unread-dot" aria-hidden="true"></span>
                 {% endif %}
@@ -511,6 +546,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeThreadEl = null;
     let isSending = false;
 
+    const threadSelector = '.thread-item';
+    const fallbackPreview = 'Brak wiadomości w tym wątku.';
+
+    if (threadsContainer) {
+        threadsContainer.setAttribute('role', 'listbox');
+        threadsContainer.setAttribute('aria-label', 'Lista wątków');
+        threadsContainer.querySelectorAll(threadSelector).forEach((item) => {
+            item.setAttribute('aria-selected', 'false');
+        });
+    }
+
     function escapeHTML(value) {
         return (value || '').replace(/[&<>"']/g, (char) => {
             const map = {
@@ -582,17 +628,127 @@ document.addEventListener('DOMContentLoaded', () => {
         statusBox.className = `chat-status alert alert-${variant}`;
     }
 
+    function findThreadElement(threadId) {
+        if (!threadId || !threadsContainer) {
+            return null;
+        }
+        const items = Array.from(threadsContainer.querySelectorAll(threadSelector));
+        return items.find((item) => item.dataset.threadId === String(threadId)) || null;
+    }
+
+    function moveThreadToTop(threadId) {
+        const card = findThreadElement(threadId);
+        if (card && threadsContainer && threadsContainer.firstElementChild !== card) {
+            threadsContainer.prepend(card);
+        }
+    }
+
+    // Keep list item metadata in sync with the backend payload.
+    function updateThreadCard(threadData) {
+        if (!threadData || !threadData.id) {
+            return { updated: false, shouldReorder: false };
+        }
+        const card = findThreadElement(threadData.id);
+        if (!card) {
+            return { updated: false, shouldReorder: false };
+        }
+
+        const previousLast = card.dataset.threadLast || '';
+        const newLast = threadData.last_message_at || threadData.last_message_iso || previousLast;
+
+        if (threadData.title !== undefined) {
+            card.dataset.threadTitle = threadData.title || '';
+            const titleEl = card.querySelector('.thread-title');
+            if (titleEl) {
+                titleEl.textContent = threadData.title || 'Wiadomość';
+            }
+        }
+
+        if (threadData.author !== undefined) {
+            card.dataset.threadAuthor = threadData.author || '';
+        }
+
+        if (threadData.type !== undefined) {
+            card.dataset.threadType = threadData.type || '';
+            const pillEl = card.querySelector('[data-thread-type-pill]');
+            if (pillEl) {
+                const isDiscussion = threadData.type === 'dyskusja';
+                pillEl.classList.toggle('pill-discussion', isDiscussion);
+                pillEl.classList.toggle('pill-message', !isDiscussion);
+                pillEl.innerHTML = isDiscussion
+                    ? '<i class="bi bi-chat-dots-fill"></i>Dyskusja'
+                    : '<i class="bi bi-envelope-fill"></i>Wiadomość';
+            }
+        }
+
+        const lastAuthor = threadData.last_message_author || threadData.author || '';
+        card.dataset.threadLastAuthor = lastAuthor || '';
+        const authorEl = card.querySelector('[data-thread-author]');
+        if (authorEl) {
+            authorEl.textContent = lastAuthor ? `@${lastAuthor}` : 'Nieznany nadawca';
+        }
+
+        card.dataset.threadPreview = threadData.last_message_preview || '';
+        const previewEl = card.querySelector('[data-thread-preview-text]');
+        if (previewEl) {
+            previewEl.textContent = threadData.last_message_preview || fallbackPreview;
+        }
+
+        card.dataset.threadLast = newLast || '';
+        const timestampEl = card.querySelector('[data-thread-timestamp]');
+        if (timestampEl && newLast) {
+            timestampEl.textContent = formatTimestamp(newLast);
+        }
+
+        if (typeof threadData.read === 'boolean') {
+            card.dataset.threadRead = threadData.read ? 'true' : 'false';
+            if (threadData.read) {
+                card.classList.remove('unread');
+                const dot = card.querySelector('.unread-dot');
+                if (dot) {
+                    dot.remove();
+                }
+            } else if (!card.classList.contains('unread')) {
+                card.classList.add('unread');
+            }
+            if (!threadData.read && !card.querySelector('.unread-dot')) {
+                const dot = document.createElement('span');
+                dot.className = 'unread-dot';
+                dot.setAttribute('aria-hidden', 'true');
+                card.appendChild(dot);
+            }
+        }
+
+        card.setAttribute('aria-selected', card === activeThreadEl ? 'true' : 'false');
+
+        const previousDate = parseDate(previousLast);
+        const newDate = parseDate(newLast);
+        const shouldReorder = Boolean(newDate && (!previousDate || newDate > previousDate));
+
+        return { updated: true, shouldReorder };
+    }
+
     function setActiveThread(threadEl) {
         if (activeThreadEl) {
             activeThreadEl.classList.remove('active');
+            activeThreadEl.setAttribute('aria-selected', 'false');
         }
         activeThreadEl = threadEl;
         if (activeThreadEl) {
             activeThreadEl.classList.add('active');
             activeThreadEl.classList.remove('unread');
+            activeThreadEl.dataset.threadRead = 'true';
+            activeThreadEl.setAttribute('aria-selected', 'true');
             const dot = activeThreadEl.querySelector('.unread-dot');
             if (dot) {
                 dot.remove();
+            }
+            if (document.activeElement !== activeThreadEl) {
+                try {
+                    activeThreadEl.focus({ preventScroll: true });
+                } catch (focusError) {
+                    activeThreadEl.focus();
+                }
             }
         }
     }
@@ -602,24 +758,35 @@ document.addEventListener('DOMContentLoaded', () => {
             headerTitle.textContent = 'Wybierz wątek';
             headerMeta.textContent = 'Brak aktywnej rozmowy';
             headerTypePill.hidden = true;
+            headerMeta.removeAttribute('title');
             return;
         }
 
         const title = threadEl.dataset.threadTitle || 'Wiadomość';
-        const author = threadEl.dataset.threadAuthor || '';
+        const author = threadEl.dataset.threadLastAuthor || threadEl.dataset.threadAuthor || '';
         const lastAt = threadEl.dataset.threadLast || '';
         const type = threadEl.dataset.threadType || '';
+        const preview = threadEl.dataset.threadPreview || '';
 
         headerTitle.textContent = title;
         headerMeta.textContent = formatMeta(author, lastAt);
+        if (preview) {
+            headerMeta.title = preview;
+        } else {
+            headerMeta.removeAttribute('title');
+        }
 
         if (type) {
-            headerTypePill.textContent = type === 'dyskusja' ? 'Dyskusja' : 'Wiadomość';
-            headerTypePill.classList.toggle('pill-discussion', type === 'dyskusja');
-            headerTypePill.classList.toggle('pill-message', type !== 'dyskusja');
+            const isDiscussion = type === 'dyskusja';
+            headerTypePill.innerHTML = isDiscussion
+                ? '<i class="bi bi-chat-dots-fill"></i>Dyskusja'
+                : '<i class="bi bi-envelope-fill"></i>Wiadomość';
+            headerTypePill.classList.toggle('pill-discussion', isDiscussion);
+            headerTypePill.classList.toggle('pill-message', !isDiscussion);
             headerTypePill.hidden = false;
         } else {
             headerTypePill.hidden = true;
+            headerTypePill.innerHTML = '';
         }
     }
 
@@ -627,33 +794,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!thread) {
             return;
         }
+        const { shouldReorder } = updateThreadCard(thread);
         headerTitle.textContent = thread.title || 'Wiadomość';
-        headerMeta.textContent = formatMeta(thread.author, thread.last_message_at);
+        const metaAuthor = thread.last_message_author || thread.author;
+        headerMeta.textContent = formatMeta(metaAuthor, thread.last_message_at);
+        if (thread.last_message_preview) {
+            headerMeta.title = thread.last_message_preview;
+        } else {
+            headerMeta.removeAttribute('title');
+        }
         if (thread.type) {
-            headerTypePill.textContent = thread.type === 'dyskusja' ? 'Dyskusja' : 'Wiadomość';
-            headerTypePill.classList.toggle('pill-discussion', thread.type === 'dyskusja');
-            headerTypePill.classList.toggle('pill-message', thread.type !== 'dyskusja');
+            const isDiscussion = thread.type === 'dyskusja';
+            headerTypePill.innerHTML = isDiscussion
+                ? '<i class="bi bi-chat-dots-fill"></i>Dyskusja'
+                : '<i class="bi bi-envelope-fill"></i>Wiadomość';
+            headerTypePill.classList.toggle('pill-discussion', isDiscussion);
+            headerTypePill.classList.toggle('pill-message', !isDiscussion);
             headerTypePill.hidden = false;
         } else {
             headerTypePill.hidden = true;
+            headerTypePill.innerHTML = '';
         }
-
-        if (activeThreadEl) {
-            activeThreadEl.dataset.threadTitle = thread.title || activeThreadEl.dataset.threadTitle || '';
-            activeThreadEl.dataset.threadAuthor = thread.author || activeThreadEl.dataset.threadAuthor || '';
-            activeThreadEl.dataset.threadType = thread.type || activeThreadEl.dataset.threadType || '';
-            activeThreadEl.dataset.threadLast = thread.last_message_at || '';
-            const timestampEl = activeThreadEl.querySelector('[data-thread-timestamp]');
-            if (timestampEl) {
-                timestampEl.textContent = formatTimestamp(thread.last_message_at);
-            }
-            if (thread.read) {
-                activeThreadEl.classList.remove('unread');
-                const dot = activeThreadEl.querySelector('.unread-dot');
-                if (dot) {
-                    dot.remove();
-                }
-            }
+        if (shouldReorder) {
+            moveThreadToTop(thread.id);
         }
     }
 
@@ -761,10 +924,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (threadsContainer) {
         threadsContainer.addEventListener('click', (event) => {
-            const item = event.target.closest('.thread-item');
+            const item = event.target.closest(threadSelector);
             if (!item || !threadsContainer.contains(item)) {
                 return;
             }
+            loadThread(item, { forceReload: true });
+        });
+
+        threadsContainer.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+                return;
+            }
+            const item = event.target.closest(threadSelector);
+            if (!item || !threadsContainer.contains(item)) {
+                return;
+            }
+            event.preventDefault();
             loadThread(item, { forceReload: true });
         });
     }
@@ -833,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (searchInput && threadsContainer) {
         searchInput.addEventListener('input', () => {
             const query = searchInput.value.trim().toLowerCase();
-            const items = threadsContainer.querySelectorAll('.thread-item');
+            const items = threadsContainer.querySelectorAll(threadSelector);
             items.forEach((item) => {
                 const text = item.innerText || '';
                 item.style.display = text.toLowerCase().includes(query) ? '' : 'none';
@@ -842,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const initialItem = threadsContainer
-        ? threadsContainer.querySelector('.thread-item.unread') || threadsContainer.querySelector('.thread-item')
+    ? threadsContainer.querySelector('.thread-item.unread') || threadsContainer.querySelector(threadSelector)
         : null;
     if (initialItem) {
         loadThread(initialItem);
