@@ -1284,6 +1284,81 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[Notifications] Desktop notifications enabled');
         }
     });
+
+    // ========================================
+    // AUTO-REFRESH MESSAGES (instead of SocketIO)
+    // ========================================
+    let autoRefreshInterval = null;
+    let lastMessageCount = 0;
+    
+    function startAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+        
+        // Refresh messages every 30 seconds
+        autoRefreshInterval = setInterval(async () => {
+            if (!currentThreadId || !activeThreadEl) {
+                return;
+            }
+            
+            try {
+                const source = activeThreadEl.dataset.source || 'messaging';
+                const response = await fetch(`/discussions/${currentThreadId}?source=${encodeURIComponent(source)}`, { 
+                    credentials: 'same-origin' 
+                });
+                
+                if (!response.ok) {
+                    return; // Cicho ignoruj błędy
+                }
+                
+                const payload = await response.json();
+                const messages = payload.messages || [];
+                
+                // Sprawdź czy są nowe wiadomości
+                if (messages.length > lastMessageCount) {
+                    // Dodaj tylko nowe wiadomości (różnica)
+                    const newMessages = messages.slice(lastMessageCount);
+                    newMessages.forEach(msg => {
+                        appendMessage(msg);
+                    });
+                    lastMessageCount = messages.length;
+                    
+                    // Pokaż powiadomienie jeśli są nowe wiadomości od innych
+                    const lastMsg = messages[messages.length - 1];
+                    if (lastMsg && lastMsg.author.toLowerCase() !== username) {
+                        showDesktopNotification(
+                            `Nowa wiadomość od ${lastMsg.author}`,
+                            lastMsg.content
+                        );
+                    }
+                }
+            } catch (error) {
+                console.error('Auto-refresh error:', error);
+            }
+        }, 30000); // 30 sekund
+        
+        console.log('[Auto-refresh] Started (30s interval)');
+    }
+    
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+            console.log('[Auto-refresh] Stopped');
+        }
+    }
+    
+    // Start auto-refresh when thread is loaded
+    const originalLoadThreadFunc = loadThread;
+    loadThread = async function(threadEl, options) {
+        await originalLoadThreadFunc(threadEl, options);
+        lastMessageCount = messagesArea.querySelectorAll('.message-row').length;
+        startAutoRefresh();
+    };
+    
+    // Stop auto-refresh when leaving page
+    window.addEventListener('beforeunload', stopAutoRefresh);
 });
 </script>
 
