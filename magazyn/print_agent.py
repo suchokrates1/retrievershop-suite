@@ -10,7 +10,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, timedelta, time as dt_time, timezone
 from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
@@ -63,6 +63,13 @@ def parse_time_str(value: str) -> dt_time:
         return dt_time.fromisoformat(value)
     except ValueError as exc:  # pragma: no cover - defensive
         raise ValueError(f"Invalid time value: {value}") from exc
+
+
+def _short_preview(text: str, limit: int = 140) -> str:
+    clean = (text or "").strip()
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(limit - 3, 0)] + "..."
 
 
 @dataclass
@@ -962,116 +969,235 @@ class LabelAgent:
         return new_queue
 
     def _check_allegro_discussions(self, access_token: str) -> None:
-        last_checked = self._load_state_value("last_discussion_check") or ""
+        auto_enabled = bool(getattr(self.settings, "ALLEGRO_AUTORESPONDER_ENABLED", False))
+        auto_reply_text = getattr(
+            self.settings,
+            "ALLEGRO_AUTORESPONDER_MESSAGE",
+            None,
+        ) or "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
+
         try:
             discussions = fetch_discussions(access_token).get("issues", [])
-            with sqlite_connect(self.config.db_file) as conn:
-                cur = conn.cursor()
-                for discussion in discussions:
-                    discussion_id = str(discussion["id"])
-                    if not self._is_new_id(discussion_id, last_checked):
+        except Exception as exc:  # pragma: no cover - network/service issues
+            self.logger.error("Błąd pobierania dyskusji Allegro: %s", exc)
+            return
+
+        if not discussions:
+            return
+
+        with sqlite_connect(self.config.db_file) as conn:
+            cur = conn.cursor()
+            for discussion in discussions:
+                discussion_id = str(discussion.get("id")) if discussion.get("id") is not None else None
+                if not discussion_id:
+                    continue
+                buyer = (discussion.get("buyer") or {}).get("login") or "Kupujący"
+                subject = discussion.get("subject") or buyer
+
+                cur.execute("SELECT id FROM threads WHERE id = ?", (discussion_id,))
+                exists = cur.fetchone()
+                if not exists:
+                    cur.execute(
+                        "INSERT INTO threads (id, title, author, type, read) VALUES (?, ?, ?, ?, ?)",
+                        (discussion_id, subject, buyer, "dyskusja", 1),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE threads SET title = ?, author = ? WHERE id = ?",
+                        (subject, buyer, discussion_id),
+                    )
+
+                try:
+                    chat_payload = fetch_discussion_chat(access_token, discussion_id, limit=100)
+                except Exception as exc:  # pragma: no cover - network/service issues
+                    self.logger.error(
+                        "Błąd pobierania wiadomości dyskusji %s: %s", discussion_id, exc
+                    )
+                    continue
+
+                chat_messages = chat_payload.get("chat", []) or []
+                chat_messages.sort(key=lambda entry: entry.get("date") or "")
+
+                latest_timestamp = None
+                last_buyer_message = None
+                for msg in chat_messages:
+                    msg_id_raw = msg.get("id")
+                    if msg_id_raw is None:
+                        continue
+                    msg_id = str(msg_id_raw)
+                    cur.execute("SELECT 1 FROM messages WHERE id = ?", (msg_id,))
+                    if cur.fetchone():
+                        latest_timestamp = msg.get("date") or latest_timestamp
                         continue
 
-                    cur.execute("SELECT id FROM threads WHERE id = ?", (discussion_id,))
-                    thread_exists = cur.fetchone()
+                    author_info = msg.get("author") or {}
+                    author_login = author_info.get("login") or buyer
+                    content = msg.get("text", "")
+                    created_at = msg.get("date") or datetime.now(timezone.utc).isoformat()
 
-                    if not thread_exists:
+                    cur.execute(
+                        "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (msg_id, discussion_id, author_login, content, created_at),
+                    )
+                    latest_timestamp = created_at
+
+                    if (author_info.get("role") or "").upper() == "BUYER":
+                        last_buyer_message = {
+                            "login": author_login,
+                            "text": content,
+                            "created_at": created_at,
+                        }
                         cur.execute(
-                            "INSERT INTO threads (id, title, author, type) VALUES (?, ?, ?, ?)",
-                            (discussion_id, discussion['subject'], discussion['buyer']['login'], 'dyskusja')
+                            "UPDATE threads SET read = 0 WHERE id = ?", (discussion_id,)
                         )
 
-                    chat = fetch_discussion_chat(access_token, discussion_id)
-                    for msg in reversed(chat.get("chat", [])):
-                        msg_id = str(msg['id'])
-                        cur.execute("SELECT id FROM messages WHERE id = ?", (msg_id,))
-                        message_exists = cur.fetchone()
-                        if not message_exists:
-                            cur.execute(
-                                "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                                (msg_id, discussion_id, msg['author']['login'], msg['text'], msg['date'])
-                            )
-                            cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['date'], discussion_id))
+                if latest_timestamp:
+                    cur.execute(
+                        "UPDATE threads SET last_message_at = ? WHERE id = ?",
+                        (latest_timestamp, discussion_id),
+                    )
 
-                    last_message = chat.get("chat", [{}])[0]
-                    if last_message.get("author", {}).get("role") == "BUYER":
-                        buyer = discussion.get("buyer", {}).get("login", "Nieznany")
-                        text = last_message.get("text", "")
-                        message = f"Użytkownik {buyer} utworzył nową dyskusję o treści: \"{text}\""
-                        send_messenger(message)
+                if last_buyer_message:
+                    preview = _short_preview(last_buyer_message["text"])
+                    send_messenger(
+                        f"Użytkownik {last_buyer_message['login']} napisał w dyskusji: \"{preview}\""
+                    )
+                    if auto_enabled:
+                        cur.execute(
+                            "SELECT discussion_id FROM allegro_replied_discussions WHERE discussion_id = ?",
+                            (discussion_id,),
+                        )
+                        if not cur.fetchone():
+                            try:
+                                send_discussion_message(access_token, discussion_id, auto_reply_text)
+                                cur.execute(
+                                    "INSERT INTO allegro_replied_discussions (discussion_id, replied_at) VALUES (?, ?)",
+                                    (discussion_id, datetime.now(timezone.utc).isoformat()),
+                                )
+                            except Exception as exc:  # pragma: no cover - API failure
+                                self.logger.error(
+                                    "Błąd wysyłania autorespondera do dyskusji %s: %s",
+                                    discussion_id,
+                                    exc,
+                                )
 
-                        cur.execute("SELECT thread_id FROM allegro_replied_threads WHERE thread_id = ?", (discussion_id,))
-                        already_replied = cur.fetchone()
-                        if not already_replied:
-                            auto_reply_text = "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
-                            send_discussion_message(access_token, discussion_id, auto_reply_text)
-                            cur.execute("INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (?, ?)", (discussion_id, datetime.now().isoformat()))
-                    last_checked = discussion_id
-        except Exception as e:
-            self.logger.error("Błąd podczas sprawdzania dyskusji Allegro: %s", e)
-        finally:
-            self._save_state_value("last_discussion_check", str(last_checked))
+        self._save_state_value("last_discussion_check", datetime.now(timezone.utc).isoformat())
 
     def _check_allegro_messages(self, access_token: str) -> None:
-        last_checked = self._load_state_value("last_message_check") or ""
+        auto_enabled = bool(getattr(self.settings, "ALLEGRO_AUTORESPONDER_ENABLED", False))
+        auto_reply_text = getattr(
+            self.settings,
+            "ALLEGRO_AUTORESPONDER_MESSAGE",
+            None,
+        ) or "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
+
         try:
             threads = fetch_message_threads(access_token).get("threads", [])
-            with sqlite_connect(self.config.db_file) as conn:
-                cur = conn.cursor()
-                for thread in threads:
-                    thread_id = str(thread["id"])
-                    if not self._is_new_id(thread_id, last_checked):
+        except Exception as exc:  # pragma: no cover - network/service issues
+            self.logger.error("Błąd pobierania wiadomości Allegro: %s", exc)
+            return
+
+        if not threads:
+            return
+
+        with sqlite_connect(self.config.db_file) as conn:
+            cur = conn.cursor()
+            for thread in threads:
+                thread_id_raw = thread.get("id")
+                if thread_id_raw is None:
+                    continue
+                thread_id = str(thread_id_raw)
+                interlocutor = (thread.get("interlocutor") or {}).get("login") or "Kupujący"
+                is_read_remote = bool(thread.get("read", True))
+
+                cur.execute("SELECT id FROM threads WHERE id = ?", (thread_id,))
+                exists = cur.fetchone()
+                if not exists:
+                    cur.execute(
+                        "INSERT INTO threads (id, title, author, type, read) VALUES (?, ?, ?, ?, ?)",
+                        (thread_id, interlocutor, interlocutor, "wiadomość", 1 if is_read_remote else 0),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE threads SET title = ?, author = ? WHERE id = ?",
+                        (thread.get("topic") or interlocutor, interlocutor, thread_id),
+                    )
+
+                try:
+                    messages_payload = fetch_thread_messages(access_token, thread_id, limit=100)
+                except Exception as exc:  # pragma: no cover - network/service issues
+                    self.logger.error(
+                        "Błąd pobierania treści wątku %s: %s", thread_id, exc
+                    )
+                    continue
+
+                messages = messages_payload.get("messages", []) or []
+                messages.sort(key=lambda entry: entry.get("createdAt") or "")
+
+                latest_timestamp = None
+                last_interlocutor_message = None
+                for msg in messages:
+                    msg_id_raw = msg.get("id")
+                    if msg_id_raw is None:
+                        continue
+                    msg_id = str(msg_id_raw)
+                    cur.execute("SELECT 1 FROM messages WHERE id = ?", (msg_id,))
+                    if cur.fetchone():
+                        latest_timestamp = msg.get("createdAt") or latest_timestamp
                         continue
 
-                    cur.execute("SELECT id FROM threads WHERE id = ?", (thread_id,))
-                    thread_exists = cur.fetchone()
+                    author_info = msg.get("author") or {}
+                    author_login = author_info.get("login") or interlocutor
+                    content = msg.get("text", "")
+                    created_at = msg.get("createdAt") or datetime.now(timezone.utc).isoformat()
 
-                    if not thread_exists:
+                    cur.execute(
+                        "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (msg_id, thread_id, author_login, content, created_at),
+                    )
+                    latest_timestamp = created_at
+
+                    if author_info.get("isInterlocutor"):
+                        last_interlocutor_message = {
+                            "login": author_login,
+                            "text": content,
+                            "created_at": created_at,
+                        }
                         cur.execute(
-                            "INSERT INTO threads (id, title, author, type) VALUES (?, ?, ?, ?)",
-                            (thread_id, thread['interlocutor']['login'], thread['interlocutor']['login'], 'wiadomość')
+                            "UPDATE threads SET read = 0 WHERE id = ?", (thread_id,)
                         )
 
-                    if not thread.get("read"):
-                        messages = fetch_thread_messages(access_token, thread_id)
-                        for msg in reversed(messages.get("messages", [])):
-                            msg_id = str(msg['id'])
-                            cur.execute("SELECT id FROM messages WHERE id = ?", (msg_id,))
-                            message_exists = cur.fetchone()
-                            if not message_exists:
-                                cur.execute(
-                                    "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                                    (msg_id, thread_id, msg['author']['login'], msg['text'], msg['createdAt'])
-                                )
-                                cur.execute("UPDATE threads SET last_message_at = ? WHERE id = ?", (msg['createdAt'], thread_id))
+                if latest_timestamp:
+                    cur.execute(
+                        "UPDATE threads SET last_message_at = ? WHERE id = ?",
+                        (latest_timestamp, thread_id),
+                    )
 
-                        last_message = messages.get("messages", [{}])[0]
-                        if last_message.get("author", {}).get("isInterlocutor"):
-                            interlocutor = thread.get("interlocutor", {}).get("login", "Nieznany")
-                            text = last_message.get("text", "")
-                            message = f"Użytkownik {interlocutor} napisał Ci wiadomość: \"{text}\""
-                            send_messenger(message)
-
-                            cur.execute("SELECT thread_id FROM allegro_replied_threads WHERE thread_id = ?", (thread_id,))
-                            already_replied = cur.fetchone()
-                            if not already_replied:
-                                auto_reply_text = "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
+                if last_interlocutor_message:
+                    preview = _short_preview(last_interlocutor_message["text"])
+                    send_messenger(
+                        f"Użytkownik {last_interlocutor_message['login']} napisał wiadomość: \"{preview}\""
+                    )
+                    if auto_enabled:
+                        cur.execute(
+                            "SELECT thread_id FROM allegro_replied_threads WHERE thread_id = ?",
+                            (thread_id,),
+                        )
+                        if not cur.fetchone():
+                            try:
                                 send_thread_message(access_token, thread_id, auto_reply_text)
-                                cur.execute("INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (?, ?)", (thread_id, datetime.now().isoformat()))
+                                cur.execute(
+                                    "INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (?, ?)",
+                                    (thread_id, datetime.now(timezone.utc).isoformat()),
+                                )
+                            except Exception as exc:  # pragma: no cover - API failure
+                                self.logger.error(
+                                    "Błąd wysyłania autorespondera do wątku %s: %s",
+                                    thread_id,
+                                    exc,
+                                )
 
-                    last_checked = thread_id
-        except Exception as e:
-            self.logger.error("Błąd podczas sprawdzania wiadomości Allegro: %s", e)
-        finally:
-            self._save_state_value("last_message_check", str(last_checked))
-
-    def _is_new_id(self, new_id: str, last_id: str) -> bool:
-        """Safely compare two IDs which may be numeric or string-based."""
-        if not last_id:
-            return True
-        if new_id.isdigit() and last_id.isdigit():
-            return int(new_id) > int(last_id)
-        return new_id > last_id
+        self._save_state_value("last_message_check", datetime.now(timezone.utc).isoformat())
 
     def _agent_loop(self) -> None:
         allegro_check_interval = timedelta(minutes=5)

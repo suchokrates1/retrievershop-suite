@@ -311,7 +311,7 @@ def fetch_message_threads(access_token: str) -> dict:
 
 
 
-def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 1) -> dict:
+def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) -> dict:
     """Fetch chat messages for a specific discussion."""
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -324,10 +324,7 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 1) -> d
     )
     return response.json()
 
-
-
-
-def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 1) -> dict:
+def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 100) -> dict:
     """Fetch messages for a specific thread."""
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -337,25 +334,6 @@ def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 1) -> 
     url = f"{API_BASE_URL}/messaging/threads/{thread_id}/messages"
     response = _request_with_retry(
         requests.get, url, endpoint="thread_messages", headers=headers, params=params
-    )
-    return response.json()
-
-
-def send_discussion_message(access_token: str, issue_id: str, text: str) -> dict:
-    """Send a message to a specific discussion."""
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/vnd.allegro.beta.v1+json",
-        "Content-Type": "application/vnd.allegro.beta.v1+json",
-    }
-    payload = {"text": text, "type": "REGULAR"}
-    url = f"{API_BASE_URL}/sale/issues/{issue_id}/message"
-    response = _request_with_retry(
-        requests.post,
-        url,
-        endpoint="send_discussion_message",
-        headers=headers,
-        json=payload,
     )
     return response.json()
 
