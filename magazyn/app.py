@@ -409,6 +409,13 @@ def discussions():
             for thread in messaging_threads:
                 last_msg_time = thread.get("lastMessageDateTime")
                 
+                # POMIŃ puste wątki (brak lastMessageDateTime = brak wiadomości)
+                if not last_msg_time:
+                    current_app.logger.debug(
+                        f"Skipping empty thread {thread.get('id')} (no lastMessageDateTime)"
+                    )
+                    continue
+                
                 threads.append({
                     "id": thread.get("id"),
                     "title": _get_thread_title(thread),
@@ -590,6 +597,28 @@ def get_messages(thread_id):
             raw_messages = data.get("chat", [])
         else:
             # Messaging API: GET /messaging/threads/{threadId}/messages
+            # NAJPIERW sprawdź szczegóły wątku
+            try:
+                thread_details = allegro_api.fetch_thread_details(token, thread_id)
+                current_app.logger.debug(
+                    f"Thread {thread_id} details: read={thread_details.get('read')}, "
+                    f"lastMessage={thread_details.get('lastMessageDateTime')}"
+                )
+                # Jeśli brak lastMessageDateTime, wątek jest prawdopodobnie pusty
+                if not thread_details.get('lastMessageDateTime'):
+                    current_app.logger.warning(
+                        f"Thread {thread_id} appears empty (no lastMessageDateTime)"
+                    )
+                    return [], source_type
+            except HTTPError as detail_err:
+                detail_status = getattr(getattr(detail_err, "response", None), "status_code", 0)
+                current_app.logger.warning(
+                    f"Could not fetch thread details for {thread_id}: HTTP {detail_status}"
+                )
+                # Jeśli 404, wątek nie istnieje - zwróć pustą listę
+                if detail_status == 404:
+                    return [], source_type
+            
             data = allegro_api.fetch_thread_messages(token, thread_id)
             # Odpowiedź: {"messages": [...]}
             raw_messages = data.get("messages", [])
@@ -597,6 +626,12 @@ def get_messages(thread_id):
         current_app.logger.info(
             f"Got {len(raw_messages)} messages from {source_type} API for thread {thread_id}"
         )
+        
+        # Diagnostyka - jeśli brak wiadomości, zaloguj całą odpowiedź
+        if len(raw_messages) == 0:
+            current_app.logger.warning(
+                f"Thread {thread_id} has 0 messages. Full response keys: {list(data.keys())}"
+            )
         
         # Konwertuj format wiadomości
         messages = []
@@ -629,6 +664,20 @@ def get_messages(thread_id):
         
     except HTTPError as exc:
         status_code = getattr(getattr(exc, "response", None), "status_code", 0)
+        response_obj = getattr(exc, "response", None)
+        
+        # Loguj szczegóły błędu
+        error_details = ""
+        if response_obj is not None:
+            try:
+                error_body = response_obj.json()
+                error_details = f" Details: {error_body}"
+            except:
+                error_details = f" Response text: {response_obj.text[:200]}"
+        
+        current_app.logger.warning(
+            f"HTTP {status_code} for thread {thread_id} as {thread_source}.{error_details}"
+        )
         
         # Jeśli 422 i próbowaliśmy messaging, spróbuj issue
         if status_code == 422 and thread_source == "messaging":
@@ -637,6 +686,21 @@ def get_messages(thread_id):
                 messages, actual_source = try_fetch_messages("issue")
             except HTTPError as retry_exc:
                 retry_status = getattr(getattr(retry_exc, "response", None), "status_code", 0)
+                retry_response = getattr(retry_exc, "response", None)
+                
+                # Loguj szczegóły retry
+                retry_details = ""
+                if retry_response is not None:
+                    try:
+                        retry_body = retry_response.json()
+                        retry_details = f" Details: {retry_body}"
+                    except:
+                        retry_details = f" Response: {retry_response.text[:200]}"
+                
+                current_app.logger.warning(
+                    f"Retry as issue also failed: HTTP {retry_status}.{retry_details}"
+                )
+                
                 if retry_status == 404:
                     return {"error": "Wątek nie znaleziony w żadnym API"}, 404
                 current_app.logger.exception("Retry as issue also failed")
