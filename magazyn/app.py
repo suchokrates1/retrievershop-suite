@@ -16,6 +16,7 @@ import sys
 import uuid
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
+from typing import Optional
 
 from requests.exceptions import HTTPError, RequestException
 
@@ -144,7 +145,24 @@ def _parse_iso_timestamp(raw_value):
     return parsed
 
 
-def _thread_payload(thread: Thread) -> dict:
+def _message_preview(text: Optional[str], limit: int = 160) -> str:
+    if not text:
+        return ""
+    condensed = " ".join(str(text).strip().split())
+    if len(condensed) <= limit:
+        return condensed
+    return condensed[: max(limit - 3, 0)].rstrip() + "..."
+
+
+def _latest_message(thread: Thread) -> Optional[Message]:
+    messages = getattr(thread, "messages", None) or []
+    if not messages:
+        return None
+    return max(messages, key=lambda msg: msg.created_at or datetime.min)
+
+
+def _thread_payload(thread: Thread, last_message: Optional[Message] = None) -> dict:
+    last_message = last_message or _latest_message(thread)
     return {
         "id": thread.id,
         "title": thread.title,
@@ -153,6 +171,10 @@ def _thread_payload(thread: Thread) -> dict:
         "read": bool(thread.read),
         "last_message_at": _serialize_dt(thread.last_message_at),
         "last_message_iso": _serialize_dt(thread.last_message_at),
+        "last_message_preview": _message_preview(
+            getattr(last_message, "content", None)
+        ),
+        "last_message_author": getattr(last_message, "author", thread.author),
     }
 
 
@@ -361,19 +383,12 @@ def discussions():
     with get_session() as db:
         threads_from_db = (
             db.query(Thread)
+            .options(joinedload(Thread.messages))
             .order_by(Thread.last_message_at.desc(), Thread.title.asc())
             .all()
         )
         threads = [
-            {
-                "id": thread.id,
-                "title": thread.title,
-                "author": thread.author,
-                "type": thread.type,
-                "read": bool(thread.read),
-                "last_message_at": thread.last_message_at,
-                "last_message_iso": _serialize_dt(thread.last_message_at),
-            }
+            _thread_payload(thread, last_message=_latest_message(thread))
             for thread in threads_from_db
         ]
 
@@ -418,10 +433,14 @@ def get_messages(thread_id):
 
         ordered_messages = sorted(
             thread.messages,
-            key=lambda message: _serialize_dt(message.created_at) or "",
+            key=lambda message: message.created_at or datetime.min,
+        )
+        thread_payload = _thread_payload(
+            thread,
+            last_message=ordered_messages[-1] if ordered_messages else None,
         )
         return {
-            "thread": _thread_payload(thread),
+            "thread": thread_payload,
             "messages": [
                 {
                     "id": message.id,
@@ -468,9 +487,11 @@ def create_thread():
         db.add(new_message)
         db.flush()
 
+        thread_payload = _thread_payload(new_thread, last_message=new_message)
+
         return {
             "id": new_thread.id,
-            "thread": _thread_payload(new_thread),
+            "thread": thread_payload,
             "message": {
                 "id": new_message.id,
                 "author": new_message.author,
@@ -542,7 +563,7 @@ def send_message(thread_id):
             "author": new_message.author,
             "content": new_message.content,
             "created_at": _serialize_dt(new_message.created_at),
-            "thread": _thread_payload(thread),
+            "thread": _thread_payload(thread, last_message=new_message),
         }
         return payload
 
