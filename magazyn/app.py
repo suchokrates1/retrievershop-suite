@@ -543,63 +543,76 @@ def get_messages(thread_id):
     # Sprawdź typ wątku (messaging vs issue)
     thread_source = request.args.get("source", "messaging")
     
-    try:
-        if thread_source == "issue":
-            # Dyskusja/reklamacja
+    def try_fetch_messages(source_type):
+        """Helper to fetch messages from the appropriate API."""
+        if source_type == "issue":
             data = allegro_api.fetch_discussion_chat(token, thread_id)
             raw_messages = data.get("chat", [])
-            
-            # Konwertuj format dyskusji
-            messages = []
-            for msg in raw_messages:
-                author_data = msg.get("author", {})
-                messages.append({
-                    "id": msg.get("id"),
-                    "author": author_data.get("login", "System"),
-                    "author_role": author_data.get("role", ""),
-                    "content": msg.get("text", ""),
-                    "created_at": msg.get("createdAt"),
-                })
         else:
-            # Centrum wiadomości
             data = allegro_api.fetch_thread_messages(token, thread_id)
             raw_messages = data.get("messages", [])
-            
-            # Konwertuj format wiadomości
-            messages = []
-            for msg in raw_messages:
-                author_data = msg.get("author", {})
-                messages.append({
-                    "id": msg.get("id"),
-                    "author": author_data.get("login", "System"),
-                    "author_role": author_data.get("role", ""),
-                    "content": msg.get("text", ""),
-                    "created_at": msg.get("createdAt"),
-                })
         
-        # Sortuj od najstarszej do najnowszej
-        messages.sort(key=lambda m: m.get("created_at") or "")
-        
-        return {
-            "thread": {
-                "id": thread_id,
-                "source": thread_source,
-            },
-            "messages": messages,
-        }
+        # Konwertuj format
+        messages = []
+        for msg in raw_messages:
+            author_data = msg.get("author", {})
+            messages.append({
+                "id": msg.get("id"),
+                "author": author_data.get("login", "System"),
+                "author_role": author_data.get("role", ""),
+                "content": msg.get("text", ""),
+                "created_at": msg.get("createdAt"),
+            })
+        return messages, source_type
+    
+    try:
+        # Try the specified source first
+        messages, actual_source = try_fetch_messages(thread_source)
         
     except HTTPError as exc:
         status_code = getattr(getattr(exc, "response", None), "status_code", 0)
-        if status_code == 401:
+        
+        # If 422 and we tried messaging, try issue instead (auto-detect)
+        if status_code == 422 and thread_source == "messaging":
+            try:
+                current_app.logger.info(f"Thread {thread_id} returned 422 as messaging, trying as issue...")
+                messages, actual_source = try_fetch_messages("issue")
+            except Exception as retry_exc:
+                current_app.logger.exception("Retry as issue also failed")
+                return {"error": "Nie udało się pobrać wiadomości z żadnego API"}, 502
+        
+        # If 422 and we tried issue, try messaging instead
+        elif status_code == 422 and thread_source == "issue":
+            try:
+                current_app.logger.info(f"Thread {thread_id} returned 422 as issue, trying as messaging...")
+                messages, actual_source = try_fetch_messages("messaging")
+            except Exception as retry_exc:
+                current_app.logger.exception("Retry as messaging also failed")
+                return {"error": "Nie udało się pobrać wiadomości z żadnego API"}, 502
+        
+        # Other HTTP errors
+        elif status_code == 401:
             return {"error": "Token wygasł"}, 401
         elif status_code == 404:
             return {"error": "Wątek nie znaleziony"}, 404
         else:
             current_app.logger.exception("Błąd API Allegro przy pobieraniu wiadomości")
             return {"error": f"Błąd API: {status_code}"}, 502
+            
     except RequestException:
         current_app.logger.exception("Błąd sieci przy pobieraniu wiadomości")
         return {"error": "Błąd połączenia z Allegro"}, 502
+    
+    # Sortuj od najstarszej do najnowszej
+    messages.sort(key=lambda m: m.get("created_at") or "")
+    
+    return {
+        "thread": {
+            "id": thread_id,
+            "source": actual_source,
+        },
+        "messages": messages,
+    }
 
 
 @bp.route("/discussions/create", methods=["POST"])

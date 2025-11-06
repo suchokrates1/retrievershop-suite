@@ -41,6 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
 COPY --from=builder /app /app
 
+COPY magazyn/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 RUN groupadd --system magazyn && \
     useradd --system --gid magazyn --home /app magazyn && \
     chown -R magazyn:magazyn /app "$VIRTUAL_ENV"
@@ -49,4 +52,4 @@ USER magazyn
 
 EXPOSE 8000
 
-CMD ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
+ENTRYPOINT ["/app/entrypoint.sh"]

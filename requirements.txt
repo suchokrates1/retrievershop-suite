@@ -8,6 +8,7 @@ Flask==3.0.3
 Flask-SocketIO==5.3.4
 Flask-WTF==1.2.2
 gevent==24.2.1
+gevent-websocket==0.10.1
 python-socketio==5.9.0
 greenlet==3.2.4
 gunicorn==23.0.0
