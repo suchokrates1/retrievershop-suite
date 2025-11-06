@@ -350,7 +350,11 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) ->
     response = _request_with_retry(
         requests.get, url, endpoint="discussion_chat", headers=headers, params=params
     )
-    return response.json()
+    data = response.json()
+    # Debug: log structure
+    import logging
+    logging.info(f"[DEBUG] fetch_discussion_chat({issue_id}): keys={list(data.keys())}, message_count={len(data.get('messages', []))}")
+    return data
 
 def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 100) -> dict:
     """Fetch messages for a specific thread."""
@@ -363,7 +367,11 @@ def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 100) -
     response = _request_with_retry(
         requests.get, url, endpoint="thread_messages", headers=headers, params=params
     )
-    return response.json()
+    data = response.json()
+    # Debug: log structure
+    import logging
+    logging.info(f"[DEBUG] fetch_thread_messages({thread_id}): keys={list(data.keys())}, message_count={len(data.get('messages', []))}")
+    return data
 
 
 def send_thread_message(access_token: str, thread_id: str, text: str) -> dict:

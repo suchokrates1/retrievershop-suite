@@ -976,6 +976,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const threadId = threadEl.dataset.threadId;
         const source = threadEl.dataset.source || 'messaging';
+        
         if (!threadId || (!forceReload && currentThreadId === threadId)) {
             return;
         }
@@ -1308,8 +1309,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     credentials: 'same-origin' 
                 });
                 
+                // Cicho ignoruj błędy (404, 422 itp.) - wątek może być pusty
                 if (!response.ok) {
-                    return; // Cicho ignoruj błędy
+                    if (response.status === 404) {
+                        // Wątek nie istnieje lub jest pusty - zatrzymaj auto-refresh dla tego wątku
+                        stopAutoRefresh();
+                    }
+                    return;
                 }
                 
                 const payload = await response.json();
@@ -1334,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             } catch (error) {
-                console.error('Auto-refresh error:', error);
+                // Cicho ignoruj błędy sieciowe - nie loguj do konsoli
             }
         }, 30000); // 30 sekund
         
