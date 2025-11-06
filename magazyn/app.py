@@ -443,7 +443,24 @@ def discussions():
         except HTTPError as exc:
             status_code = getattr(getattr(exc, "response", None), "status_code", 0)
             if status_code == 401:
-                error_message = "Token Allegro wygasł. Odśwież autoryzację w ustawieniach."
+                # Token wygasł - spróbuj odświeżyć
+                refresh_token = getattr(settings, "ALLEGRO_REFRESH_TOKEN", None)
+                if refresh_token:
+                    try:
+                        current_app.logger.info("Próba odświeżenia tokena Allegro...")
+                        new_tokens = allegro_api.refresh_token(refresh_token)
+                        # Zaktualizuj tokeny w settings
+                        settings.ALLEGRO_ACCESS_TOKEN = new_tokens.get("access_token")
+                        if new_tokens.get("refresh_token"):
+                            settings.ALLEGRO_REFRESH_TOKEN = new_tokens["refresh_token"]
+                        current_app.logger.info("Token Allegro odświeżony pomyślnie")
+                        # Retry request
+                        return discussions()  # Rekurencyjne wywołanie po odświeżeniu
+                    except Exception as refresh_exc:
+                        current_app.logger.error("Nie udało się odświeżyć tokena: %s", refresh_exc)
+                        error_message = "Token Allegro wygasł i nie udało się go odświeżyć. Przejdź do ustawień i autoryzuj ponownie."
+                else:
+                    error_message = "Token Allegro wygasł. Odśwież autoryzację w ustawieniach."
             else:
                 error_message = f"Błąd API Allegro: {status_code}"
             current_app.logger.exception("Błąd pobierania wątków z Allegro")
