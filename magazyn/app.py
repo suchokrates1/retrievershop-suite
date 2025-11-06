@@ -406,16 +406,17 @@ def discussions():
             # Konwertuj wątki z Centrum Wiadomości
             for thread in messaging_threads:
                 last_msg = thread.get("lastMessage", {})
+                
                 threads.append({
                     "id": thread.get("id"),
                     "title": _get_thread_title(thread),
                     "author": _get_thread_author(thread),
                     "type": "wiadomość",
                     "read": thread.get("read", False),
-                    "last_message_at": last_msg.get("createdAt"),
-                    "last_message_iso": last_msg.get("createdAt"),
-                    "last_message_preview": _message_preview(last_msg.get("text")),
-                    "last_message_author": _get_message_author(last_msg),
+                    "last_message_at": last_msg.get("createdAt") if last_msg else None,
+                    "last_message_iso": last_msg.get("createdAt") if last_msg else None,
+                    "last_message_preview": _message_preview(last_msg.get("text")) if last_msg else "Brak wiadomości",
+                    "last_message_author": _get_message_author(last_msg) if last_msg else "System",
                     "source": "messaging",
                 })
             
@@ -564,9 +565,11 @@ def get_messages(thread_id):
         """Helper to fetch messages from the appropriate API."""
         if source_type == "issue":
             data = allegro_api.fetch_discussion_chat(token, thread_id)
-            raw_messages = data.get("chat", [])
+            # API zwraca { "messages": [...] }
+            raw_messages = data.get("messages", [])
         else:
             data = allegro_api.fetch_thread_messages(token, thread_id)
+            # API zwraca { "messages": [...] }
             raw_messages = data.get("messages", [])
         
         # Konwertuj format
