@@ -9,48 +9,32 @@ on:
 jobs:
   deploy:
     name: Deploy to RPi5 Production
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          tags: tag:ci
+      - name: Pull latest changes
+        run: |
+          cd /home/suchokrates1/retrievershop-suite
+          git pull origin main
+          echo "✅ Code updated to latest version"
       
-      - name: Deploy to production server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          password: ${{ secrets.PROD_PASSWORD }}
-          port: ${{ secrets.PROD_PORT || 22 }}
-          script: |
-            cd /home/suchokrates1/retrievershop-suite
-            git pull origin main
-            docker compose down || true
-            docker compose up -d --build
-            echo "✅ Deployment completed successfully"
+      - name: Restart Docker containers
+        run: |
+          cd /home/suchokrates1/retrievershop-suite
+          docker compose down || true
+          docker compose up -d --build
+          echo "✅ Containers restarted"
       
       - name: Verify deployment
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          password: ${{ secrets.PROD_PASSWORD }}
-          port: ${{ secrets.PROD_PORT || 22 }}
-          script: |
-            docker compose logs web --tail=20
-            echo "🔍 Checking containers..."
-            docker ps | grep retrievershop || echo "⚠️ Container not found"
-            echo "✅ Deployment verification completed"
-      
-      - name: Notify on failure
-        if: failure()
         run: |
-          echo "❌ Deployment failed! Check logs above."
-          exit 1
+          cd /home/suchokrates1/retrievershop-suite
+          echo "🔍 Checking containers..."
+          docker compose ps
+          echo ""
+          echo "📋 Recent logs:"
+          docker compose logs web --tail=20
+          echo ""
+          echo "✅ Deployment completed successfully!"
