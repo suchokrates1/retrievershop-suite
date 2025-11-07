@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -25,7 +25,13 @@ def _to_decimal(value) -> Decimal:
         return Decimal("0.00")
     if isinstance(value, str):
         value = value.replace(" ", "").replace(",", ".")
-    return Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    try:
+        return Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError) as e:
+        # Jeśli konwersja się nie powiedzie, zaloguj błąd i zwróć 0
+        import logging
+        logging.warning(f"Nie można skonwertować wartości '{value}' na Decimal: {e}")
+        return Decimal("0.00")
 
 
 def _clean_barcode(value) -> Optional[str]:
