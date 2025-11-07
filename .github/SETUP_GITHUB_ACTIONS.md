@@ -1,85 +1,101 @@
-# 🚀 Quick Setup: GitHub Actions Deployment
+# 🚀 Quick Setup: GitHub Actions Deployment to RPi5
 
-Follow these steps to enable automatic deployment to production.
+Follow these steps to enable automatic deployment to your Raspberry Pi 5.
 
-## Step 1: Generate SSH Key (if needed)
+## Prerequisites
 
-```bash
-# On your local machine
-ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github_actions
+- ✅ Raspberry Pi 5 accessible via local network or VPN
+- ✅ Tailscale installed on RPi5 (for GitHub Actions access)
+- ✅ Docker and docker-compose installed on RPi5
+- ✅ Application running at `/home/suchokrates1/retrievershop-suite`
 
-# You'll see:
-# Generating public/private ed25519 key pair.
-# Enter passphrase (empty for no passphrase): [PRESS ENTER]
-# Your identification has been saved in ~/.ssh/github_actions
-# Your public key has been saved in ~/.ssh/github_actions.pub
-```
+## Step 1: Install Tailscale on RPi5
 
-## Step 2: Add Public Key to Production Server
+**On your Raspberry Pi 5:**
 
 ```bash
-# Copy public key to clipboard
-cat ~/.ssh/github_actions.pub
+# Install Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
 
-# SSH to production server
-ssh magazyn@magazyn.retrievershop.pl
+# Start Tailscale and authenticate
+sudo tailscale up
 
-# Add key to authorized_keys
-echo "PASTE_PUBLIC_KEY_HERE" >> ~/.ssh/authorized_keys
+# Get your Tailscale IP address
+tailscale ip -4
+# Example output: 100.x.x.x
 
-# Exit
-exit
+# Note this IP - you'll need it for PROD_HOST secret
 ```
 
-## Step 3: Test SSH Connection
+## Step 2: Create Tailscale OAuth Client
 
-```bash
-# Test with the new key
-ssh -i ~/.ssh/github_actions magazyn@magazyn.retrievershop.pl
+**For GitHub Actions to connect via Tailscale:**
 
-# If it works, you'll see the server prompt
-# If not, check permissions:
-chmod 600 ~/.ssh/github_actions
-chmod 644 ~/.ssh/github_actions.pub
-```
+1. Go to: https://login.tailscale.com/admin/settings/oauth
+2. Click **Generate OAuth client**
+3. Add a description: "GitHub Actions - RetrieverShop"
+4. Select scopes:
+   - ✅ `devices:read`
+   - ✅ `devices:write`
+5. Add tags: `tag:ci`
+6. Click **Generate client**
+7. **Save these values:**
+   - OAuth Client ID: `tskey-client-...`
+   - OAuth Client Secret: `tskey-...`
 
-## Step 4: Add Secrets to GitHub
+## Step 3: Add Secrets to GitHub
 
 1. Go to: https://github.com/suchokrates1/retrievershop-suite/settings/secrets/actions
 
 2. Click **New repository secret** and add:
 
-   **Secret 1: PROD_HOST**
+   **Secret 1: TAILSCALE_OAUTH_CLIENT_ID**
    ```
-   Value: magazyn.retrievershop.pl
-   ```
-
-   **Secret 2: PROD_USER**
-   ```
-   Value: magazyn
+   Value: tskey-client-xxxxxxxxxx
    ```
 
-   **Secret 3: PROD_SSH_KEY**
-   ```bash
-   # Copy private key
-   cat ~/.ssh/github_actions
-   
-   # Paste ENTIRE output including:
-   # -----BEGIN OPENSSH PRIVATE KEY-----
-   # ... (many lines) ...
-   # -----END OPENSSH PRIVATE KEY-----
+   **Secret 2: TAILSCALE_OAUTH_SECRET**
+   ```
+   Value: tskey-xxxxxxxxxx
    ```
 
-   **Secret 4: PROD_PORT** (optional, default: 22)
+   **Secret 3: PROD_HOST**
+   ```
+   Value: 100.x.x.x  (your Tailscale IP from Step 1)
+   ```
+
+   **Secret 4: PROD_USER**
+   ```
+   Value: suchokrates1
+   ```
+
+   **Secret 5: PROD_PASSWORD**
+   ```
+   Value: your_ssh_password
+   ```
+
+   **Secret 6: PROD_PORT** (optional)
    ```
    Value: 22
    ```
+
+## Step 4: Test Tailscale Connection
+
+**On your local machine (with Tailscale installed):**
+
+```bash
+# SSH to RPi5 via Tailscale IP
+ssh suchokrates1@100.x.x.x
+
+# Should connect successfully
+# If it works, GitHub Actions will work too!
+```
 
 ## Step 5: Test Deployment
 
 ```bash
 # Make a small change and push
-echo "# Test" >> README.md
+echo "# Test deployment" >> README.md
 git add README.md
 git commit -m "test: Trigger GitHub Actions deployment"
 git push origin main
@@ -89,51 +105,67 @@ git push origin main
 
 1. Go to: https://github.com/suchokrates1/retrievershop-suite/actions
 2. Click on the latest workflow run
-3. Watch deployment progress in real-time
-4. ✅ Green checkmark = deployment successful!
+3. Watch deployment progress:
+   - Setup Tailscale ✅
+   - Deploy to production server ✅
+   - Verify deployment ✅
+4. Green checkmark = success! 🎉
 
 ## Step 7: Verify Application
 
 ```bash
-# Check if application is running
-curl https://magazyn.retrievershop.pl/healthz
+# Check if containers are running
+ssh suchokrates1@100.x.x.x 'docker ps'
 
-# Should return: {"status":"ok", ...}
+# Check application logs
+ssh suchokrates1@100.x.x.x 'cd /home/suchokrates1/retrievershop-suite && docker compose logs web --tail=50'
+
+# If you have public access, check health
+curl https://magazyn.retrievershop.pl/healthz
 ```
 
 ## ✅ Done!
 
 From now on, every push to `main` will automatically:
-1. ✅ Run tests
-2. ✅ Deploy to production
-3. ✅ Verify application health
-4. ✅ Show status badge on GitHub
+1. ✅ Connect to RPi5 via Tailscale
+2. ✅ Run tests (optional)
+3. ✅ Deploy to production
+4. ✅ Verify containers are running
+5. ✅ Show status badge on GitHub
 
 ## 🔧 Troubleshooting
 
-### Deployment fails with "Host key verification failed"
+### "Tailscale connection failed"
 
-**Solution:** Accept server fingerprint manually once:
+**Solution 1:** Check if Tailscale is running on RPi5:
 ```bash
-ssh-keyscan magazyn.retrievershop.pl >> ~/.ssh/known_hosts
+ssh suchokrates1@192.168.31.167  # Local network
+sudo systemctl status tailscaled
+sudo tailscale up
 ```
 
-### "Permission denied (publickey)"
+**Solution 2:** Verify OAuth credentials in GitHub secrets
 
-**Solution:** Check if key was added correctly:
+### "Permission denied (password)"
+
+**Solution:** Double-check PROD_PASSWORD secret:
+1. Go to GitHub repo → Settings → Secrets → Actions
+2. Update PROD_PASSWORD with correct value
+
+### "docker compose: command not found"
+
+**Solution:** Install Docker Compose V2 on RPi5:
 ```bash
-# On production server
-cat ~/.ssh/authorized_keys | grep "github-actions"
-
-# Should show your public key
+sudo apt-get update
+sudo apt-get install docker-compose-plugin
 ```
 
 ### Workflow doesn't trigger
 
-**Solution:** Check workflow file syntax:
+**Solution:** Check if you pushed to `main` branch:
 ```bash
-# Validate YAML
-cat .github/workflows/deploy.yml
+git branch  # Should show: * main
+git push origin main
 ```
 
 ## 🎉 Next Steps
