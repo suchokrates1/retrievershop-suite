@@ -9,7 +9,7 @@ on:
 jobs:
   deploy:
     name: Deploy to RPi5 Production
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, ARM64, retrievershop]  # ← Dodaj label!
     
     steps:
       - name: Checkout code
@@ -35,6 +35,6 @@ jobs:
           docker compose ps
           echo ""
           echo "📋 Recent logs:"
-          docker compose logs web --tail=20
+          docker compose logs magazyn_app --tail=20
           echo ""
           echo "✅ Deployment completed successfully!"
