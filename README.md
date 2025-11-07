@@ -1,6 +1,36 @@
 # RetrieverShop Suite
 
-This repository contains the code for the RetrieverShop warehouse application and the built-in printing agent.
+This repository contains the code for the RetrieverShop warehouse application with integrated Allegro marketplace features, printing agent, and real-time messaging system.
+
+## Features
+
+- **Inventory Management** - Track products, sizes, barcodes, and stock levels
+- **Sales Recording** - Log sales with automatic cost calculation and profit margins
+- **Invoice Import** - Parse Excel/PDF invoices and import product data
+- **Allegro Integration** - OAuth authentication, offer synchronization, price monitoring
+- **Real-time Discussions** - WebSocket-powered messaging with Allegro buyers
+- **Automatic Printing** - Background agent for order label printing
+- **Reports & Analytics** - Weekly/monthly sales reports with visual charts
+- **Multi-user Support** - Role-based access with secure authentication
+
+## Quick Start
+
+1. **Clone and configure:**
+   ```bash
+   git clone https://github.com/suchokrates1/retrievershop-suite.git
+   cd retrievershop-suite
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
+
+2. **Run with Docker:**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Access the application:**
+   - Web interface: http://localhost:8000
+   - Health check: http://localhost:8000/healthz
 
 ## Configuration
 
@@ -93,6 +123,18 @@ not appear on this page.
 
 ## Allegro integration
 
+### Features
+
+- **OAuth 2.0 Authentication** - Secure token management with automatic refresh
+- **Offer Synchronization** - Import and update product listings from Allegro
+- **Price Monitoring** - Track competitor prices and get notifications
+- **Real-time Discussions** - Two-way messaging system with buyers:
+  - **Messaging API** - Standard buyer-seller messages
+  - **Issues API** - Handle disputes and claims
+  - **WebSocket Support** - Live message updates without page refresh
+  - **Attachment Handling** - Send/receive images and documents
+  - **Typing Indicators** - See when buyers are composing messages
+
 ### Obtaining tokens
 
 1. Register an application in [Allegro's Developer Console](https://developer.allegro.pl/) and note the client ID and secret.
@@ -162,6 +204,39 @@ WantedBy=timers.target
 ```
 
 Enable the timer with `sudo systemctl enable --now allegro_price_monitor.timer`.
+
+## Real-time Discussions
+
+The application provides a full-featured messaging interface for communicating with Allegro buyers:
+
+### Access
+
+Navigate to `/discussions` after logging in to view all message threads.
+
+### Features
+
+- **Unified Interface** - View both standard messages and issues in one place
+- **Real-time Updates** - New messages appear instantly via WebSocket
+- **Thread Management** - Mark as read/unread, filter by status
+- **Rich Messaging** - Send text with image/document attachments
+- **Search & Filter** - Find specific conversations quickly
+- **Responsive Design** - Works on desktop and mobile devices
+
+### Architecture
+
+The system integrates two separate Allegro APIs:
+
+1. **Messaging API** (`/messaging/threads`)
+   - Standard buyer-seller communication
+   - Max 20 messages per request
+   - Response: `{"messages": [...]}`
+
+2. **Issues API** (`/sale/issues`)
+   - Disputes and claims handling
+   - Max 100 messages per request
+   - Response: `{"chat": [...]}`
+
+Both APIs are handled transparently with automatic fallback and error recovery.
 
 ## Running Tests
 
@@ -283,3 +358,27 @@ page works even without internet access.
 
 This project is licensed under the terms of the [MIT License](LICENSE).
 
+## Recent Changes
+
+### 2025-11-07
+- **Fixed:** Invoice import crash on invalid decimal values - added error handling in `_to_decimal()`
+- **Fixed:** HTTP 422 errors in discussions - corrected Messaging API limit parameter (100→20)
+
+### 2025-11-06
+- **Added:** WebSocket support for real-time message updates
+- **Added:** Typing indicators in discussions
+- **Improved:** Enhanced error logging for Allegro API debugging
+- **Refactored:** Simplified message fetching logic
+
+### 2025-11-05
+- **Added:** Complete attachment upload/download for both Messaging and Issues APIs
+- **Added:** Dual API support for discussions (Messaging + Issues)
+- **Fixed:** Empty thread filtering during synchronization
+
+## Contributing
+
+This is a private project, but suggestions and bug reports are welcome.
+
+## Support
+
+For issues or questions, contact the repository maintainer or check the AI agent instructions in `.github/AGENT_INSTRUCTIONS.md`.
