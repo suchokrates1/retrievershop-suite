@@ -1,5 +1,9 @@
 # RetrieverShop Suite
 
+[![Deploy to Production](https://github.com/suchokrates1/retrievershop-suite/actions/workflows/deploy.yml/badge.svg)](https://github.com/suchokrates1/retrievershop-suite/actions/workflows/deploy.yml)
+[![Run Tests](https://github.com/suchokrates1/retrievershop-suite/actions/workflows/test.yml/badge.svg)](https://github.com/suchokrates1/retrievershop-suite/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This repository contains the code for the RetrieverShop warehouse application with integrated Allegro marketplace features, printing agent, and real-time messaging system.
 
 ## Features
