@@ -9,7 +9,7 @@ on:
 jobs:
   deploy:
     name: Deploy to RPi5 Production
-    runs-on: [self-hosted, linux, ARM64, retrievershop]  # ← Dodaj label!
+    runs-on: self-hosted
     
     steps:
       - name: Checkout code
