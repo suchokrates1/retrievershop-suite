@@ -41,9 +41,28 @@ git commit -m "refactor: Simplify message fetching logic in discussions"
 
 ## 🚀 Deployment Process
 
-### Standard Deployment (Manual)
+### Automatic Deployment (GitHub Actions) ⭐ RECOMMENDED
 
-**After pushing to GitHub:**
+**After pushing to `main`, GitHub Actions automatically deploys!**
+
+1. **Push changes:**
+   ```bash
+   git push origin main
+   ```
+
+2. **Monitor deployment:**
+   - Go to GitHub → **Actions** tab
+   - Watch workflow progress in real-time
+   - Green checkmark = success ✅
+   - Red X = failure (check logs) ❌
+
+3. **Manual trigger (if needed):**
+   - GitHub → **Actions** → **Deploy to Production**
+   - Click **Run workflow** → Choose `main` → **Run workflow**
+
+### Manual Deployment (SSH Fallback)
+
+**Use if GitHub Actions is down or misconfigured:**
 
 ```bash
 # SSH to production server
@@ -543,8 +562,16 @@ docker-compose logs web | grep -c "HTTP 422"
 ## 🎯 Quick Reference Commands
 
 ```bash
-# Deploy to production
+# ===== GIT & DEPLOYMENT =====
+
+# Push and auto-deploy (GitHub Actions)
+git push origin main
+# Then watch: https://github.com/suchokrates1/retrievershop-suite/actions
+
+# Manual deployment (fallback)
 ssh magazyn@magazyn.retrievershop.pl "cd /app && git pull && docker-compose restart web"
+
+# ===== MONITORING =====
 
 # View logs
 docker-compose logs -f web --tail=100
