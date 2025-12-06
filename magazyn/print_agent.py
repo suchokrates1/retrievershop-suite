@@ -872,8 +872,14 @@ class LabelAgent:
             self.logger.error("Błąd testowego druku: %s", exc)
             return False
 
-    def send_messenger_message(self, data: Dict[str, Any]) -> None:
+    def send_messenger_message(self, data: Dict[str, Any], print_success: bool = True) -> None:
         try:
+            # Status etykiety
+            if print_success:
+                label_status = "✅ Etykieta gotowa"
+            else:
+                label_status = "❌ Błąd drukowania etykiety"
+
             message = (
                 f"📦 Nowe zamówienie od: {data.get('customer', '-')}\n"
                 f"🛒 Produkty:\n"
@@ -884,7 +890,8 @@ class LabelAgent:
                 + f"🚚 Wysyłka: {data.get('shipping', '-')}\n"
                 f"🚛 Kurier: {data.get('courier_code', '-')}\n"
                 f"🌐 Platforma: {data.get('platform', '-')}\n"
-                f"📎 ID: {data.get('order_id', '-')}"
+                f"📎 ID: {data.get('order_id', '-')}\n"
+                f"🏷️ {label_status}"
             )
 
             response = requests.post(
@@ -1342,7 +1349,8 @@ class LabelAgent:
                                         "status": "queued",
                                     }
                                 )
-                            self.send_messenger_message(self.last_order_data)
+                            # W quiet_hours etykieta jest w kolejce - wysyłamy info o sukcesie
+                            self.send_messenger_message(self.last_order_data, print_success=True)
                             self.mark_as_printed(order_id, self.last_order_data)
                             printed[order_id] = datetime.now()
                         else:
@@ -1359,6 +1367,7 @@ class LabelAgent:
                                 queue.append(entry)
                                 entries.append(entry)
                             self.save_queue(queue)
+                            print_success = True
                             try:
                                 for entry in entries:
                                     self._retry(
@@ -1372,7 +1381,6 @@ class LabelAgent:
                                 consume_order_stock(
                                     self.last_order_data.get("products", [])
                                 )
-                                self.send_messenger_message(self.last_order_data)
                                 self.mark_as_printed(order_id, self.last_order_data)
                                 printed[order_id] = datetime.now()
                                 for entry in entries:
@@ -1382,9 +1390,12 @@ class LabelAgent:
                                 self.logger.error(
                                     "Błąd drukowania zamówienia %s: %s", order_id, exc
                                 )
+                                print_success = False
                                 for entry in entries:
                                     entry["status"] = "queued"
                                 self.save_queue(queue)
+                            # Zawsze wysyłaj wiadomość - z info o statusie drukowania
+                            self.send_messenger_message(self.last_order_data, print_success=print_success)
             except Exception as exc:
                 self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
