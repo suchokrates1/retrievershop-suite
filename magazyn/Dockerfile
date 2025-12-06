@@ -36,7 +36,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     chromium \
     chromium-driver \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /etc/cups \
+    && echo "ServerName /var/run/cups/cups.sock" > /etc/cups/client.conf
 
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
 COPY --from=builder /app /app
