@@ -1018,6 +1018,8 @@ class LabelAgent:
                     it["retry_count"] = retry_count + 1
                 new_queue.extend(items)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue").inc()
+                # NIE wysyłamy wiadomości - była już wysłana przy pierwszej próbie
+                # Wiadomość zostanie wysłana tylko przy sukcesie lub przekroczeniu limitu
         return new_queue
 
     def _check_allegro_discussions(self, access_token: str) -> None:
