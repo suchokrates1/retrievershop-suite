@@ -388,18 +388,27 @@ class LabelAgent:
                 cur.execute("PRAGMA table_info(label_queue)")
                 queue_cols = [row[1] for row in cur.fetchall()]
                 if "queued_at" not in queue_cols:
-                    cur.execute("ALTER TABLE label_queue ADD COLUMN queued_at TEXT")
-                    conn.commit()
+                    try:
+                        cur.execute("ALTER TABLE label_queue ADD COLUMN queued_at TEXT")
+                        conn.commit()
+                    except sqlite3.OperationalError:
+                        pass  # kolumna już istnieje (race condition z innym workerem)
                 if "status" not in queue_cols:
-                    cur.execute(
-                        "ALTER TABLE label_queue ADD COLUMN status TEXT DEFAULT 'queued'"
-                    )
-                    conn.commit()
+                    try:
+                        cur.execute(
+                            "ALTER TABLE label_queue ADD COLUMN status TEXT DEFAULT 'queued'"
+                        )
+                        conn.commit()
+                    except sqlite3.OperationalError:
+                        pass  # kolumna już istnieje (race condition z innym workerem)
                 if "retry_count" not in queue_cols:
-                    cur.execute(
-                        "ALTER TABLE label_queue ADD COLUMN retry_count INTEGER DEFAULT 0"
-                    )
-                    conn.commit()
+                    try:
+                        cur.execute(
+                            "ALTER TABLE label_queue ADD COLUMN retry_count INTEGER DEFAULT 0"
+                        )
+                        conn.commit()
+                    except sqlite3.OperationalError:
+                        pass  # kolumna już istnieje (race condition z innym workerem)
                 conn.commit()
             except sqlite3.OperationalError as exc:
                 if self._handle_readonly_error("database migrations", exc):
