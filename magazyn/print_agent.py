@@ -395,6 +395,11 @@ class LabelAgent:
                         "ALTER TABLE label_queue ADD COLUMN status TEXT DEFAULT 'queued'"
                     )
                     conn.commit()
+                if "retry_count" not in queue_cols:
+                    cur.execute(
+                        "ALTER TABLE label_queue ADD COLUMN retry_count INTEGER DEFAULT 0"
+                    )
+                    conn.commit()
                 conn.commit()
             except sqlite3.OperationalError as exc:
                 if self._handle_readonly_error("database migrations", exc):
@@ -589,12 +594,14 @@ class LabelAgent:
         conn = sqlite_connect(self.config.db_file)
         cur = conn.cursor()
         cur.execute(
-            "SELECT order_id, label_data, ext, last_order_data, queued_at, status FROM label_queue"
+            "SELECT order_id, label_data, ext, last_order_data, queued_at, status, retry_count FROM label_queue"
         )
         rows = cur.fetchall()
         conn.close()
         items: List[Dict[str, Any]] = []
-        for order_id, label_data, ext, last_order_json, queued_at, status in rows:
+        for row in rows:
+            order_id, label_data, ext, last_order_json, queued_at, status = row[:6]
+            retry_count = row[6] if len(row) > 6 else 0
             try:
                 last_data = json.loads(last_order_json) if last_order_json else {}
             except Exception:  # pragma: no cover - defensive
@@ -609,6 +616,7 @@ class LabelAgent:
                     "last_order_data": last_data,
                     "queued_at": queued_at,
                     "status": status or "queued",
+                    "retry_count": retry_count or 0,
                 }
             )
         deduped = self._deduplicate_queue(items)
@@ -629,8 +637,8 @@ class LabelAgent:
             cur.execute("DELETE FROM label_queue")
             for item in items_list:
                 cur.execute(
-                    "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at, status)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at, status, retry_count)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         item.get("order_id"),
                         item.get("label_data"),
@@ -638,6 +646,7 @@ class LabelAgent:
                         json.dumps(item.get("last_order_data", {})),
                         item.get("queued_at"),
                         item.get("status", "queued"),
+                        item.get("retry_count", 0),
                     ),
                 )
             conn.commit()
@@ -951,6 +960,8 @@ class LabelAgent:
             self._last_monthly_report = now
 
     def _process_queue(self, queue: List[Dict[str, Any]], printed: Dict[str, Any]) -> List[Dict[str, Any]]:
+        MAX_QUEUE_RETRIES = 10  # Maksymalna liczba prób drukowania z kolejki
+        
         if self.is_quiet_time():
             return queue
         grouped: Dict[str, List[Dict[str, Any]]] = {}
@@ -959,6 +970,20 @@ class LabelAgent:
 
         new_queue: List[Dict[str, Any]] = []
         for oid, items in grouped.items():
+            # Sprawdź liczbę prób - każdy element ma swój licznik
+            retry_count = items[0].get("retry_count", 0)
+            
+            if retry_count >= MAX_QUEUE_RETRIES:
+                self.logger.error(
+                    "Zamówienie %s przekroczyło limit %d prób drukowania - usuwam z kolejki",
+                    oid, MAX_QUEUE_RETRIES
+                )
+                # Oznacz jako przetworzone żeby nie wracało
+                self.mark_as_printed(oid, items[0].get("last_order_data"))
+                # Wyślij powiadomienie o permanentnym błędzie
+                self.send_messenger_message(items[0].get("last_order_data", {}), print_success=False)
+                continue
+            
             try:
                 for it in items:
                     it["status"] = "in_progress"
@@ -975,10 +1000,13 @@ class LabelAgent:
                 consume_order_stock(items[0].get("last_order_data", {}).get("products", []))
                 self.mark_as_printed(oid, items[0].get("last_order_data"))
                 printed[oid] = datetime.now()
+                # Wysyłamy powiadomienie o sukcesie z kolejki
+                self.send_messenger_message(items[0].get("last_order_data", {}), print_success=True)
             except Exception as exc:
-                self.logger.error("Błąd przetwarzania z kolejki: %s", exc)
+                self.logger.error("Błąd przetwarzania z kolejki (próba %d/%d): %s", retry_count + 1, MAX_QUEUE_RETRIES, exc)
                 for it in items:
                     it["status"] = "queued"
+                    it["retry_count"] = retry_count + 1
                 new_queue.extend(items)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue").inc()
         return new_queue
@@ -1287,6 +1315,11 @@ class LabelAgent:
                     }
 
                     if order_id in printed:
+                        continue
+
+                    # Sprawdź czy zamówienie jest już w kolejce oczekującej
+                    queued_order_ids = {item["order_id"] for item in queue}
+                    if order_id in queued_order_ids:
                         continue
 
                     try:
