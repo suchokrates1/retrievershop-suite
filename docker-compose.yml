@@ -14,6 +14,8 @@ services:
         bind:
           propagation: rshared
     env_file: .env
+    environment:
+      - CUPS_SERVER=/var/run/cups/cups.sock
     command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     healthcheck:
