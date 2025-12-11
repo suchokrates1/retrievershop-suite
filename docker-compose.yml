@@ -7,12 +7,17 @@ services:
       - ./magazyn/database.db:/app/database.db
       - ./.env:/app/.env
       - ./.env.example:/app/.env.example:ro
-      - /var/run/cups/cups.sock:/var/run/cups/cups.sock
+      # Mount full CUPS run dir with rshared so new sockets are visible after cupsd restarts
+      - type: bind
+        source: /var/run/cups
+        target: /var/run/cups
+        bind:
+          propagation: rshared
     env_file: .env
     command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      test: ["CMD-SHELL", "lpstat -h /var/run/cups/cups.sock -t >/dev/null 2>&1 && curl -f http://localhost:8000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

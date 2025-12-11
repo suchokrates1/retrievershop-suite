@@ -561,15 +561,19 @@ class LabelAgent:
 
     def _deduplicate_queue(self, queue: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         items = list(queue)
-        seen: set[str] = set()
+        seen: set[tuple] = set()
         unique: List[Dict[str, Any]] = []
         for item in items:
-            order_id = item.get("order_id")
-            if order_id is not None and order_id in seen:
-                self.logger.debug("Dropping duplicate queue entry for %s", order_id)
+            # Allow multiple labels per order (multi-package). Only drop exact duplicates.
+            key = (
+                item.get("order_id"),
+                item.get("ext"),
+                item.get("label_data"),
+            )
+            if key in seen:
+                self.logger.debug("Dropping duplicate queue entry for %s", item.get("order_id"))
                 continue
-            if order_id is not None:
-                seen.add(order_id)
+            seen.add(key)
             unique.append(item)
         return unique
 
