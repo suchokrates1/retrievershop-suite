@@ -67,4 +67,8 @@ ENV_INFO = {
         "Raport miesięczny",
         "Wysyłaj raport miesięczny",
     ),
+    "BASELINKER_WEBHOOK_TOKEN": (
+        "Token webhook BaseLinker",
+        "Sekretny token do wywołań URL z BaseLinker (Wywołaj URL)",
+    ),
 }
