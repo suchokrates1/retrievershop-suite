@@ -1444,6 +1444,14 @@ class LabelAgent:
                                 self.save_queue(queue)
                             # Zawsze wysyłaj wiadomość - z info o statusie drukowania
                             self.send_messenger_message(self.last_order_data, print_success=print_success)
+                    else:
+                        # Brak etykiety z Baselinkera - poinformuj i nie oznaczaj jako wydrukowane
+                        self.logger.error(
+                            "Brak etykiety dla zamówienia %s (Baselinker nie zwrócił danych)",
+                            order_id,
+                        )
+                        PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
+                        self.send_messenger_message(self.last_order_data, print_success=False)
             except Exception as exc:
                 self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
