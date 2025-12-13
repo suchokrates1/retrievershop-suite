@@ -10,18 +10,20 @@ from flask import (
     has_request_context,
     has_app_context,
     make_response,
+    jsonify,
 )
 from datetime import datetime, timezone
 import os
 import sys
 import uuid
+import hmac
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 from typing import Optional
 
 from requests.exceptions import HTTPError, RequestException
 
-from .models import User, Thread, Message
+from .models import User, Thread, Message, Product, ProductSize
 from .forms import LoginForm
 from sqlalchemy.orm import joinedload
 
@@ -179,11 +181,63 @@ def _thread_payload(thread: Thread, last_message: Optional[Message] = None) -> d
     }
 
 
+def _api_token_ok(value: Optional[str]) -> bool:
+    expected = settings.BASELINKER_WEBHOOK_TOKEN or settings.API_TOKEN
+    if not expected:
+        return False
+    return hmac.compare_digest(str(value or ""), str(expected))
+
+
 @bp.app_context_processor
 def inject_current_year():
     with get_session() as db:
         unread_count = db.query(Thread).filter_by(read=False).count()
     return {"current_year": datetime.now().year, "unread_count": unread_count}
+
+
+@bp.route("/api/eans", methods=["GET"])
+def api_eans():
+    provided = request.headers.get("X-Auth-Token") or request.args.get("token")
+    if not _api_token_ok(provided):
+        return make_response(jsonify({"error": "unauthorized"}), 401)
+
+    with get_session() as db:
+        rows = (
+            db.query(
+                ProductSize.barcode,
+                Product.name,
+                Product.color,
+                ProductSize.size,
+                ProductSize.quantity,
+            )
+            .join(Product, ProductSize.product_id == Product.id)
+            .filter(ProductSize.barcode.isnot(None))
+            .filter(ProductSize.barcode != "")
+            .all()
+        )
+
+    items = [
+        {
+            "ean": barcode,
+            "barcode": barcode,
+            "name": name,
+            "color": color,
+            "size": size,
+            "quantity": quantity,
+        }
+        for barcode, name, color, size, quantity in rows
+    ]
+
+    payload = {
+        "count": len(items),
+        "eans": [item["ean"] for item in items],
+        "items": items,
+    }
+
+    resp = make_response(jsonify(payload), 200)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 def start_print_agent(app_obj=None):
