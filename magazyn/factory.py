@@ -6,7 +6,6 @@ import atexit
 from typing import Optional, Mapping, Any
 
 from flask import Flask
-from flask_wtf import CSRFProtect
 
 from .config import settings
 from .constants import ALL_SIZES
@@ -19,6 +18,7 @@ from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
 from .socketio_extension import socketio
+from .csrf_extension import csrf
 from .db import configure_engine, create_default_user_if_needed, Base, engine
 
 _shutdown_registered = False
@@ -43,7 +43,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     configure_engine(settings.DB_PATH)
 
-    CSRFProtect(app)
+    csrf.init_app(app)
     app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
 
     app.register_blueprint(main_bp)
