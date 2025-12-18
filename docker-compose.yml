@@ -7,6 +7,7 @@ services:
       - ./magazyn/database.db:/app/database.db
       - ./.env:/app/.env
       - ./.env.example:/app/.env.example:ro
+      - ./agent.log:/app/agent.log
       # Mount full CUPS run dir with rshared so new sockets are visible after cupsd restarts
       - type: bind
         source: /var/run/cups
@@ -16,6 +17,7 @@ services:
     env_file: .env
     environment:
       - CUPS_SERVER=/var/run/cups/cups.sock
+    user: root
     command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     healthcheck:

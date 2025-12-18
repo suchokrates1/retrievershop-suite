@@ -253,6 +253,8 @@ class SettingsStore:
     def _build_namespace(self, values: Mapping[str, str]) -> SimpleNamespace:
         processed_values = {}
         defaults = settings_io.load_settings(include_hidden=True)
+        # Settings not present in .env.example but still expected across the codebase
+        defaults.setdefault("ALLEGRO_SELLER_NAME", "")
         all_keys = set(values.keys()) | set(defaults.keys())
 
         for key in all_keys:
