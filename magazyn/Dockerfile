@@ -40,15 +40,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /etc/cups \
     && echo "ServerName /var/run/cups/cups.sock" > /etc/cups/client.conf
 
-COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
-COPY --from=builder /app /app
-
-COPY magazyn/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
 RUN groupadd --system magazyn && \
-    useradd --system --gid magazyn --home /app magazyn && \
-    chown -R magazyn:magazyn /app "$VIRTUAL_ENV"
+    useradd --system --gid magazyn --home /app magazyn
+
+COPY --from=builder --chown=magazyn:magazyn $VIRTUAL_ENV $VIRTUAL_ENV
+COPY --from=builder --chown=magazyn:magazyn /app /app
+
+COPY --chown=magazyn:magazyn magazyn/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 USER magazyn
 
