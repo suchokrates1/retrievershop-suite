@@ -29,6 +29,19 @@ MAX_RETRY_ATTEMPTS = 5
 MAX_BACKOFF_SECONDS = 30
 
 
+def _force_clear_allegro_tokens() -> None:
+    """Clear Allegro tokens directly from the settings store (monkeypatch-safe)."""
+
+    settings_store.update(
+        {
+            "ALLEGRO_ACCESS_TOKEN": None,
+            "ALLEGRO_REFRESH_TOKEN": None,
+            "ALLEGRO_TOKEN_EXPIRES_IN": None,
+            "ALLEGRO_TOKEN_METADATA": None,
+        }
+    )
+
+
 def _parse_retry_after(value: Optional[str]) -> float:
     if not value:
         return 0.0
@@ -622,6 +635,7 @@ def fetch_product_listing(
                 token_data = refresh_token(refresh)
             except Exception as refresh_exc:  # pragma: no cover - defensive
                 clear_allegro_tokens()
+                _force_clear_allegro_tokens()
                 record(
                     "Listing Allegro: odświeżanie nieudane",
                     str(refresh_exc),
@@ -631,6 +645,7 @@ def fetch_product_listing(
             new_token = token_data.get("access_token")
             if not new_token:
                 clear_allegro_tokens()
+                _force_clear_allegro_tokens()
                 record(
                     "Listing Allegro: brak tokenu po odświeżeniu",
                     token_data,

@@ -1,12 +1,18 @@
 {% extends "base.html" %}
 
+{% block page_vars %}
+    {% set barcode_mode = 'auto' %}
+    {% set label_barcode_endpoint = url_for('products.label_barcode_scan') %}
+{% endblock %}
+
 {% block content %}
 <div class="container text-center mt-5">
     <h3>Zalogowany jako {{ username }}</h3>
     <div class="d-grid gap-2 col-md-6 mx-auto mt-4">
         <a href="{{ url_for('products.add_item') }}" class="btn btn-primary">Dodaj nowy przedmiot</a>
         <a href="{{ url_for('products.items') }}" class="btn btn-primary">Wyświetl przedmioty</a>
-        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
+        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-outline-primary">Skanuj kod kreskowy (tryb ręczny)</a>
+        <a href="{{ url_for('products.label_scan_page', next=url_for('home')) }}" class="btn btn-outline-primary">Skanuj etykietę paczki (tryb ręczny)</a>
         <a href="{{ url_for('products.export_products') }}" class="btn btn-primary">Eksportuj produkty do Excel</a>
         <a href="{{ url_for('products.import_products') }}" class="btn btn-primary">Importuj produkty z Excel</a>
         <a href="{{ url_for('products.import_invoice') }}" class="btn btn-primary">Importuj fakturę</a>

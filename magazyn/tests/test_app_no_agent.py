@@ -4,8 +4,7 @@ import magazyn.config as cfg
 
 
 def setup_app_missing_agent(tmp_path, monkeypatch):
-    # Use existing production database for tests
-    db_path = r"d:\Serwer\obecność\templates\docx_templates\database.db"
+    db_path = tmp_path / "test_app_no_agent.db"
     monkeypatch.setattr(cfg.settings, "DB_PATH", str(db_path))
     monkeypatch.setattr(cfg.settings, "API_TOKEN", "")
     monkeypatch.setattr(cfg.settings, "PAGE_ACCESS_TOKEN", "")
@@ -40,8 +39,9 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     )
 
     app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
+    with app.app_context():
+        db_mod.reset_db()
     app_mod.app = app
-    # Note: We use existing production database, so we don't call reset_db()
     return app_mod
 
 

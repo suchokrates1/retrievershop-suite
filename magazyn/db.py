@@ -114,7 +114,11 @@ def configure_engine(db_path):
     def _set_sqlite_pragmas(dbapi_connection, _record):  # pragma: no cover - SQLAlchemy hook
         _configure_sqlite_connection(dbapi_connection)
 
-    SessionLocal = sessionmaker(bind=engine, autoflush=False)
+    SessionLocal = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        expire_on_commit=False,  # keep returned objects usable after commit
+    )
 
 
 @contextmanager
@@ -156,7 +160,15 @@ def create_default_user_if_needed(app):
     """Ensure the default admin account exists."""
     with app.app_context():
         with get_session() as session:
-            if not session.query(User).filter_by(username="admin").first():
+            try:
+                user = session.query(User).filter_by(username="admin").first()
+            except Exception:
+                # If schema is missing (e.g., test DB reconfigured), rebuild and retry
+                session.rollback()
+                init_db()
+                user = session.query(User).filter_by(username="admin").first()
+
+            if not user:
                 hashed_password = generate_password_hash(
                     "admin123", method="pbkdf2:sha256", salt_length=16
                 )

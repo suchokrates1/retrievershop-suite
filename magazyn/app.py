@@ -444,6 +444,36 @@ def discussions():
     threads = []
     error_message = None
     
+    if not token:
+        try:
+            from .models import Thread, Message
+
+            with get_session() as db:
+                db_threads = (
+                    db.query(Thread)
+                    .order_by(Thread.last_message_at.desc())
+                    .all()
+                )
+                for thread in db_threads:
+                    last_msg = thread.messages[-1] if thread.messages else None
+                    last_at = last_msg.created_at if last_msg else thread.last_message_at
+                    threads.append(
+                        {
+                            "id": thread.id,
+                            "title": thread.title,
+                            "author": thread.author,
+                            "type": thread.type,
+                            "read": thread.read,
+                            "last_message_at": last_at,
+                            "last_message_iso": last_at.isoformat() if last_at else None,
+                            "last_message_preview": (last_msg.content if last_msg else ""),
+                            "last_message_author": last_msg.author if last_msg else thread.author,
+                            "source": "local",
+                        }
+                    )
+        except Exception as exc:  # pragma: no cover - defensive
+            current_app.logger.warning("Nie udało się odczytać lokalnych dyskusji: %s", exc)
+
     if token:
         try:
             # Pobierz wątki z Centrum Wiadomości Allegro
