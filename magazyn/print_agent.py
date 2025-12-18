@@ -1370,7 +1370,7 @@ class LabelAgent:
                     for package in packages:
                         package_id = package.get("package_id")
                         code = package.get("courier_code")
-                        tracking_number = package.get("tracking_number")
+                        tracking_number = package.get("tracking_number") or package.get("courier_package_nr") or package.get("courier_inner_number")
                         if code and not courier_code:
                             courier_code = code
                         if package_id:
