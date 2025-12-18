@@ -7,6 +7,7 @@
 <div class="container text-center mt-5">
     <div class="mb-3 text-center">
         <a href="{{ url_for('products.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
+        <a href="{{ url_for('products.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj etykietę paczki</a>
     </div>
 <div class="table-responsive">
     {# wrapper adds overflow-x:auto so columns never get cut off #}

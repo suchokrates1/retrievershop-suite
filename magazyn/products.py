@@ -1,3 +1,6 @@
+import json
+import sqlite3
+
 from flask import (
     Blueprint,
     render_template,
@@ -16,7 +19,7 @@ import tempfile
 import os
 import io
 
-from .db import get_session, record_purchase
+from .db import get_session, record_purchase, sqlite_connect
 from .domain.inventory import (
     export_rows,
     get_product_sizes,
@@ -39,7 +42,8 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import ProductSize
+from .models import PrintedOrder, ProductSize
+from .parsing import parse_product_info
 
 bp = Blueprint("products", __name__)
 
@@ -159,6 +163,100 @@ def barcode_scan():
 def barcode_scan_page():
     next_url = request.args.get("next", url_for("products.items"))
     return render_template("scan_barcode.html", next=next_url)
+
+
+def _parse_last_order_data(raw):
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def _load_order_for_barcode(barcode: str):
+    matched_order_id = None
+    order_data = None
+
+    with get_session() as session:
+        direct = session.get(PrintedOrder, barcode)
+        if direct:
+            matched_order_id = direct.order_id
+            order_data = _parse_last_order_data(direct.last_order_data)
+
+        if not order_data:
+            for po in session.query(PrintedOrder).all():
+                data = _parse_last_order_data(po.last_order_data)
+                package_ids = data.get("package_ids") or []
+                if barcode in package_ids:
+                    matched_order_id = po.order_id
+                    order_data = data
+                    break
+
+    if order_data:
+        return matched_order_id, order_data
+
+    try:
+        with sqlite_connect() as conn:
+            cur = conn.execute(
+                "SELECT order_id, last_order_data FROM label_queue"
+            )
+            for oid, data_json in cur.fetchall():
+                data = _parse_last_order_data(data_json)
+                package_ids = data.get("package_ids") or []
+                if barcode == oid or barcode in package_ids:
+                    return oid, data
+    except sqlite3.Error:
+        pass
+
+    return None, None
+
+
+@bp.route("/label_scan", methods=["POST"])
+@login_required
+def label_barcode_scan():
+    payload = request.get_json(silent=True) or {}
+    barcode = (payload.get("barcode") or "").strip()
+    if not barcode:
+        return ("", 400)
+
+    order_id, order_data = _load_order_for_barcode(barcode)
+    if not order_data:
+        return jsonify({"error": "Nie znaleziono paczki dla zeskanowanej etykiety."}), 404
+
+    products = []
+    for item in order_data.get("products", []) or []:
+        name, size, color = parse_product_info(item)
+        products.append(
+            {
+                "name": name or item.get("name", ""),
+                "size": size,
+                "color": color,
+                "quantity": item.get("quantity", 0),
+            }
+        )
+
+    response = {
+        "order_id": order_id or order_data.get("order_id") or "",
+        "package_ids": order_data.get("package_ids") or [],
+        "products": products,
+    }
+    return jsonify(response)
+
+
+@bp.route("/scan_label")
+@login_required
+def label_scan_page():
+    next_url = request.args.get("next", url_for("products.items"))
+    return render_template(
+        "scan_label.html",
+        next=next_url,
+        barcode_mode="label",
+        barcode_endpoint=url_for("products.label_barcode_scan"),
+        barcode_error_message="Nie znaleziono paczki dla zeskanowanej etykiety.",
+    )
 
 
 @bp.route("/export_products")

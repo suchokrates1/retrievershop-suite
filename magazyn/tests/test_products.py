@@ -1,6 +1,8 @@
+import json
+
 from magazyn.constants import ALL_SIZES
 from magazyn.domain.products import _to_int, create_product, get_product_details
-from magazyn.models import Product, ProductSize
+from magazyn.models import PrintedOrder, Product, ProductSize
 
 
 def test_add_and_edit_item(app_mod, client, login):
@@ -77,6 +79,57 @@ def test_barcode_scan_invalid(app_mod, client, login):
 def test_barcode_scan_empty(app_mod, client, login):
     resp = client.post("/barcode_scan", json={"barcode": ""})
     assert resp.status_code == 400
+
+
+def test_label_scan_by_order_id(app_mod, client, login):
+    order_payload = {
+        "order_id": "ORD-1",
+        "products": [{"name": "Prod X", "quantity": 2, "attributes": []}],
+        "package_ids": ["PKG-1"],
+    }
+    with app_mod.get_session() as db:
+        db.add(
+            PrintedOrder(
+                order_id="ORD-1",
+                printed_at="2025-01-01T00:00:00",
+                last_order_data=json.dumps(order_payload),
+            )
+        )
+
+    resp = client.post("/label_scan", json={"barcode": "ORD-1"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["order_id"] == "ORD-1"
+    assert data["products"]
+    assert data["products"][0]["name"] == "Prod X"
+    assert data["products"][0]["quantity"] == 2
+
+
+def test_label_scan_by_package_id(app_mod, client, login):
+    order_payload = {
+        "order_id": "ORD-2",
+        "products": [{"name": "Prod Y", "quantity": 1, "attributes": []}],
+        "package_ids": ["PKG-XYZ"],
+    }
+    with app_mod.get_session() as db:
+        db.add(
+            PrintedOrder(
+                order_id="ORD-2",
+                printed_at="2025-01-01T00:00:00",
+                last_order_data=json.dumps(order_payload),
+            )
+        )
+
+    resp = client.post("/label_scan", json={"barcode": "PKG-XYZ"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["order_id"] == "ORD-2"
+    assert data["products"][0]["name"] == "Prod Y"
+
+
+def test_label_scan_not_found(app_mod, client, login):
+    resp = client.post("/label_scan", json={"barcode": "NOPE"})
+    assert resp.status_code == 404
 
 
 def test_delete_item(app_mod, client, login):
