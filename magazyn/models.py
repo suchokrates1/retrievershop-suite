@@ -68,6 +68,9 @@ class LabelQueue(Base):
     label_data = Column(Text)
     ext = Column(String)
     last_order_data = Column(Text)
+    queued_at = Column(String)
+    status = Column(String, default="queued")
+    retry_count = Column(Integer, default=0)
 
 
 class PurchaseBatch(Base):

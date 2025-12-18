@@ -1,13 +1,14 @@
 import pytest
 from magazyn.factory import create_app
+from magazyn.db import reset_db
 from magazyn.settings_store import settings_store
 from collections import OrderedDict
 
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     """Create and configure a new app instance for each test."""
-    # Use existing production database for tests
-    db_path = r"d:\Serwer\obecność\templates\docx_templates\database.db"
+    # Use an isolated temporary database per test to avoid leaking state
+    db_path = tmp_path / "test.db"
     log_path = tmp_path / "test.log"
     lock_path = tmp_path / "agent.lock"
 
@@ -18,6 +19,9 @@ def app(tmp_path, monkeypatch):
         ("LOCK_FILE", str(lock_path)),
         ("API_TOKEN", "test-token"),
         ("PAGE_ACCESS_TOKEN", "test-token"),
+        ("ALLEGRO_ACCESS_TOKEN", ""),
+        ("ALLEGRO_REFRESH_TOKEN", ""),
+        ("ALLEGRO_SELLER_NAME", "Retriever Shop"),
         ("RECIPIENT_ID", "test-id"),
         ("PRINTER_NAME", "test-printer"),
         ("CUPS_SERVER", ""),
@@ -51,7 +55,23 @@ def app(tmp_path, monkeypatch):
     ])
 
     # 1. Prevent reading from .env files by patching the loader
-    monkeypatch.setattr('magazyn.settings_io.load_settings', lambda *args, **kwargs: test_settings)
+    from magazyn import settings_io
+
+    def _fake_load_settings(*, include_hidden=False, example_path=settings_io.EXAMPLE_PATH, env_path=settings_io.ENV_PATH, logger=None, on_error=None):
+        values = OrderedDict(test_settings)
+        if not example_path.exists():
+            if on_error:
+                on_error(f"Settings template missing: {example_path}")
+        
+        if not include_hidden:
+            for hidden in settings_io.HIDDEN_KEYS:
+                values.pop(hidden, None)
+        return values
+
+    monkeypatch.setattr('magazyn.settings_io.load_settings', _fake_load_settings)
+    # Skip creating a default user or starting background threads during app factory
+    monkeypatch.setattr('magazyn.factory.create_default_user_if_needed', lambda *args, **kwargs: None)
+    monkeypatch.setattr('magazyn.factory.start_print_agent', lambda *args, **kwargs: None)
 
     # 2. Reset the internal state of the global settings_store singleton for test isolation
     monkeypatch.setattr(settings_store, '_loaded', False)
@@ -65,10 +85,26 @@ def app(tmp_path, monkeypatch):
         'SERVER_NAME': 'localhost',
     })
 
-    # 4. Now we are in an app context with the correct DB engine.
-    # Note: We use existing production database, so we don't call reset_db()
+    # 4. Ensure the test database schema is freshly created for each test
     with app.app_context():
+        reset_db()
         yield app
+
+
+@pytest.fixture
+def allegro_tokens():
+    """Helper fixture to set Allegro OAuth tokens for a test."""
+
+    from magazyn.env_tokens import update_allegro_tokens, clear_allegro_tokens
+
+    def _set(access_token="test-access", refresh_token="test-refresh", expires_in=3600, metadata=None):
+        update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
+        return access_token, refresh_token
+
+    try:
+        yield _set
+    finally:
+        clear_allegro_tokens()
 
 @pytest.fixture
 def client(app):

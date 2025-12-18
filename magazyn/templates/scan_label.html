@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block page_vars %}
+    {% set barcode_mode = 'label' %}
+    {% set barcode_endpoint = url_for('products.label_barcode_scan') %}
+    {% set label_barcode_endpoint = url_for('products.label_barcode_scan') %}
+    {% set barcode_error_message = 'Nie znaleziono paczki dla zeskanowanej etykiety.' %}
+{% endblock %}
+{% block content %}
+    <div class="container text-center">
+        <h2 class="mb-4">Skanuj etykietę paczki</h2>
+        <p class="lead">Przyłóż kod kreskowy z etykiety lub wpisz numer ręcznie, aby odsłuchać produkty w paczce.</p>
+        <form class="row justify-content-center">
+            <div class="col-md-6">
+                <label for="label-barcode-input" class="form-label visually-hidden">Kod etykiety</label>
+                <input type="text"
+                       id="label-barcode-input"
+                       class="form-control form-control-lg text-center"
+                       placeholder="Przyłóż czytnik lub wpisz kod z etykiety"
+                       autocomplete="off"
+                       data-barcode-source="manual">
+            </div>
+        </form>
+        <div class="alert alert-success mt-4 d-none" data-barcode-result></div>
+        <div class="alert alert-danger mt-4 d-none" data-barcode-error></div>
+        <div class="mt-3">
+            <a href="{{ next or url_for('products.items') }}" class="btn btn-outline-secondary">Wróć</a>
+        </div>
+    </div>
+{% endblock %}

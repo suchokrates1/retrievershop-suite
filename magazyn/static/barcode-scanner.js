@@ -2,7 +2,21 @@
     const SUCCESS_CLASS = 'alert-success';
     const ERROR_CLASS = 'alert-danger';
     const HIDDEN_CLASS = 'd-none';
-    const SCAN_ERROR_MESSAGE = 'Nie znaleziono produktu o podanym kodzie kreskowym.';
+    const configElement = document.getElementById('barcode-config');
+    const BARCODE_ENDPOINT = (configElement && configElement.dataset && configElement.dataset.barcodeEndpoint)
+        ? configElement.dataset.barcodeEndpoint
+        : '/barcode_scan';
+    const LABEL_ENDPOINT = (configElement && configElement.dataset && configElement.dataset.labelEndpoint)
+        ? configElement.dataset.labelEndpoint
+        : '/label_scan';
+    const BARCODE_MODE = (configElement && configElement.dataset && configElement.dataset.barcodeMode)
+        ? configElement.dataset.barcodeMode.toLowerCase()
+        : 'product';
+    const SCAN_ERROR_MESSAGE = (configElement && configElement.dataset && configElement.dataset.barcodeError)
+        ? configElement.dataset.barcodeError
+        : 'Nie znaleziono produktu o podanym kodzie kreskowym.';
+    const isLabelMode = BARCODE_MODE === 'label';
+    const isAutoMode = BARCODE_MODE === 'auto';
 
     const speechSupport = () => 'speechSynthesis' in window;
 
@@ -68,7 +82,7 @@
         input.select();
     };
 
-    const buildInfoText = (data) => {
+    const buildProductInfoText = (data) => {
         const infoParts = [];
         if (data.name) {
             infoParts.push(data.name);
@@ -82,7 +96,7 @@
         return infoParts.join(', ');
     };
 
-    const buildSpeechText = (data) => {
+    const buildProductSpeechText = (data) => {
         const speechParts = [];
         if (data.name) {
             speechParts.push(`Produkt ${data.name}`);
@@ -96,13 +110,53 @@
         return speechParts.join('. ');
     };
 
-    const showSuccess = (data, beepElement) => {
-        const info = buildInfoText(data);
-        const message = info ? `Znaleziono produkt: ${info}` : 'Znaleziono produkt.';
+    const buildLabelInfoText = (data) => {
+        const parts = [];
+        const products = Array.isArray(data.products) ? data.products : [];
+        products.forEach((item) => {
+            const name = item.name || 'Produkt';
+            const qty = item.quantity ? ` x${item.quantity}` : '';
+            const size = item.size ? `, rozmiar ${item.size}` : '';
+            const color = item.color ? `, kolor ${item.color}` : '';
+            parts.push(`${name}${size}${color}${qty}`);
+        });
+        const headline = data.order_id ? `Paczka ${data.order_id}` : '';
+        const summary = parts.join(' | ');
+        return [headline, summary].filter(Boolean).join(' — ');
+    };
+
+    const buildLabelSpeechText = (data) => {
+        const products = Array.isArray(data.products) ? data.products : [];
+        if (!products.length) {
+            return data.order_id ? `Paczka ${data.order_id}` : '';
+        }
+
+        const speechParts = [];
+        if (data.order_id) {
+            speechParts.push(`Paczka ${data.order_id}`);
+        }
+
+        products.forEach((item) => {
+            const qtyText = item.quantity ? `sztuk ${item.quantity}` : 'sztuk 1';
+            const name = item.name || 'produkt';
+            const size = item.size ? `rozmiar ${item.size}` : '';
+            const color = item.color ? `kolor ${item.color}` : '';
+            const desc = [name, size, color].filter(Boolean).join(', ');
+            speechParts.push(`${qtyText}: ${desc}`.trim());
+        });
+
+        return speechParts.join('. ');
+    };
+
+    const showSuccess = (data, beepElement, asLabel) => {
+        const info = asLabel ? buildLabelInfoText(data) : buildProductInfoText(data);
+        const message = asLabel
+            ? (info || 'Znaleziono paczkę.')
+            : (info ? `Znaleziono produkt: ${info}` : 'Znaleziono produkt.');
         getResultElements().forEach((element) => showElement(element, message, SUCCESS_CLASS));
         getErrorElements().forEach((element) => hideElement(element));
         playBeep(beepElement);
-        const speechMessage = buildSpeechText(data);
+        const speechMessage = asLabel ? buildLabelSpeechText(data) : buildProductSpeechText(data);
         speak(speechMessage);
     };
 
@@ -111,6 +165,24 @@
         getErrorElements().forEach((element) => showElement(element, errorMessage, ERROR_CLASS));
         getResultElements().forEach((element) => hideElement(element));
         speak(errorMessage);
+    };
+
+    const fetchBarcode = (endpoint, barcode, csrfToken) => {
+        return fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken || ''
+            },
+            body: JSON.stringify({ barcode })
+        }).then((response) => {
+            if (!response.ok) {
+                const error = new Error('request-failed');
+                error.status = response.status;
+                throw error;
+            }
+            return response.json();
+        });
     };
 
     const submitBarcode = (barcode, options) => {
@@ -123,32 +195,40 @@
             }
             return;
         }
-        fetch('/barcode_scan', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken || ''
-            },
-            body: JSON.stringify({ barcode })
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error('request-failed');
-                }
-                return response.json();
-            })
-            .then((data) => {
-                showSuccess(data, beepElement);
-            })
-            .catch(() => {
+        const endpoints = isLabelMode
+            ? [{ url: LABEL_ENDPOINT, asLabel: true }]
+            : isAutoMode
+                ? [
+                    { url: LABEL_ENDPOINT, asLabel: true },
+                    { url: BARCODE_ENDPOINT, asLabel: false },
+                ]
+                : [{ url: BARCODE_ENDPOINT, asLabel: false }];
+
+        const tryNext = (index) => {
+            if (index >= endpoints.length) {
                 showError(SCAN_ERROR_MESSAGE);
-            })
-            .finally(() => {
                 if (input) {
                     input.value = '';
                     focusScannerInput(input);
                 }
-            });
+                return;
+            }
+
+            const { url, asLabel } = endpoints[index];
+            fetchBarcode(url, barcode, csrfToken)
+                .then((data) => {
+                    showSuccess(data, beepElement, asLabel);
+                    if (input) {
+                        input.value = '';
+                        focusScannerInput(input);
+                    }
+                })
+                .catch(() => {
+                    tryNext(index + 1);
+                });
+        };
+
+        tryNext(0);
     };
 
     document.addEventListener('DOMContentLoaded', () => {
