@@ -179,6 +179,7 @@ def _parse_last_order_data(raw):
 def _load_order_for_barcode(barcode: str):
     matched_order_id = None
     order_data = None
+    barcode = barcode.strip()
 
     with get_session() as session:
         direct = session.get(PrintedOrder, barcode)
@@ -190,7 +191,8 @@ def _load_order_for_barcode(barcode: str):
             for po in session.query(PrintedOrder).all():
                 data = _parse_last_order_data(po.last_order_data)
                 package_ids = data.get("package_ids") or []
-                if barcode in package_ids:
+                tracking_numbers = data.get("tracking_numbers") or []
+                if barcode in package_ids or barcode in tracking_numbers:
                     matched_order_id = po.order_id
                     order_data = data
                     break
@@ -206,7 +208,8 @@ def _load_order_for_barcode(barcode: str):
             for oid, data_json in cur.fetchall():
                 data = _parse_last_order_data(data_json)
                 package_ids = data.get("package_ids") or []
-                if barcode == oid or barcode in package_ids:
+                tracking_numbers = data.get("tracking_numbers") or []
+                if barcode == oid or barcode in package_ids or barcode in tracking_numbers:
                     return oid, data
     except sqlite3.Error:
         pass
