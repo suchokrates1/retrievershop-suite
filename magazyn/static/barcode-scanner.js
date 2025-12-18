@@ -127,25 +127,21 @@
 
     const buildLabelSpeechText = (data) => {
         const products = Array.isArray(data.products) ? data.products : [];
+        const courier = data.courier_code ? data.courier_code : 'paczka';
         if (!products.length) {
-            return data.order_id ? `Paczka ${data.order_id}` : '';
+            return `Paczka ${courier}`;
         }
 
-        const speechParts = [];
-        if (data.order_id) {
-            speechParts.push(`Paczka ${data.order_id}`);
-        }
-
-        products.forEach((item) => {
-            const qtyText = item.quantity ? `sztuk ${item.quantity}` : 'sztuk 1';
+        const productTexts = products.map((item) => {
+            const qtyText = item.quantity ? `${item.quantity} sztuki` : '1 sztuka';
             const name = item.name || 'produkt';
             const size = item.size ? `rozmiar ${item.size}` : '';
             const color = item.color ? `kolor ${item.color}` : '';
-            const desc = [name, size, color].filter(Boolean).join(', ');
-            speechParts.push(`${qtyText}: ${desc}`.trim());
+            const details = [name, size, color].filter(Boolean).join(', ');
+            return `${qtyText}: ${details}`.trim();
         });
 
-        return speechParts.join('. ');
+        return `Paczka ${courier} zawiera: ${productTexts.join('; ')}`;
     };
 
     const showSuccess = (data, beepElement, asLabel) => {
