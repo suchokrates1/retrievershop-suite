@@ -21,14 +21,8 @@ from flask import (
     stream_with_context,
 )
 
-from sqlalchemy import case, or_
-
-from requests.exceptions import HTTPError, RequestException
-
-from . import allegro_api
-from .auth import login_required
-from .config import settings
-from .db import get_session
+from sqlalchemy import case, or_, text
+from .db import get_session, SessionLocal
 from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
@@ -368,6 +362,107 @@ def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
     return f"{value:.2f}"
 
 
+def fetch_price_via_local_scraper(offer_url: str) -> Optional[Decimal]:
+    """
+    Fetch price from local scraper API running on PC.
+    Returns price as Decimal or None if unavailable/error.
+    """
+    import requests
+    
+    scraper_url = settings.ALLEGRO_SCRAPER_API_URL
+    if not scraper_url or not scraper_url.strip():
+        return None
+    
+    scraper_url = scraper_url.rstrip('/')
+    
+    try:
+        response = requests.get(
+            f"{scraper_url}/check_price",
+            params={"url": offer_url},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            price_str = data.get("price")
+            if price_str:
+                # Parse price: "159.89" or "159,89"
+                price_str = price_str.replace(",", ".")
+                return Decimal(price_str).quantize(Decimal("0.01"))
+        elif response.status_code == 503:
+            # CAPTCHA - log but don't fail
+            current_app.logger.warning(
+                "CAPTCHA detected by local scraper for %s", offer_url
+            )
+        else:
+            current_app.logger.error(
+                "Local scraper error %s: %s", response.status_code, response.text
+            )
+    except requests.RequestException as e:
+        current_app.logger.error(
+            "Failed to connect to local scraper at %s: %s", scraper_url, e
+        )
+    except (ValueError, TypeError) as e:
+        current_app.logger.error("Failed to parse price from scraper: %s", e)
+    
+    return None
+
+
+def fetch_prices_batch_via_scraper(eans: list[str]) -> dict[str, Optional[Decimal]]:
+    """
+    Fetch prices for multiple EANs via local scraper API.
+    Returns dict: {ean: price_decimal or None}
+    """
+    import requests
+    
+    scraper_url = settings.ALLEGRO_SCRAPER_API_URL
+    if not scraper_url or not scraper_url.strip():
+        return {}
+    
+    scraper_url = scraper_url.rstrip('/')
+    
+    try:
+        response = requests.post(
+            f"{scraper_url}/check_prices_batch",
+            json={"eans": eans},
+            timeout=len(eans) * 5 + 30  # 5 seconds per EAN + 30s buffer
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            results = {}
+            
+            for item in data.get("results", []):
+                ean = item.get("ean")
+                price_str = item.get("price")
+                
+                if price_str:
+                    try:
+                        price_str = price_str.replace(",", ".")
+                        results[ean] = Decimal(price_str).quantize(Decimal("0.01"))
+                    except (ValueError, TypeError):
+                        results[ean] = None
+                else:
+                    results[ean] = None
+                    if item.get("error"):
+                        current_app.logger.warning(
+                            "Scraper error for EAN %s: %s", ean, item["error"]
+                        )
+            
+            return results
+        else:
+            current_app.logger.error(
+                "Batch scraper error %s: %s", response.status_code, response.text
+            )
+            return {}
+            
+    except requests.RequestException as e:
+        current_app.logger.error(
+            "Failed to connect to batch scraper at %s: %s", scraper_url, e
+        )
+        return {}
+
+
 def build_price_checks(
     debug_steps: Optional[list[dict[str, str]]] = None,
     debug_logs: Optional[list[str]] = None,
@@ -468,6 +563,71 @@ def build_price_checks(
         )
 
     results_by_offer: dict[str, dict[str, object]] = {}
+    
+    # Create scraping tasks for all EANs
+    all_eans = list(offers_by_barcode.keys())
+    
+    if all_eans:
+        session = SessionLocal()
+        try:
+            record_debug("Tworzenie zadań scrapowania", {"count": len(all_eans), "eans": all_eans})
+            
+            for ean in all_eans:
+                session.execute(
+                    text("""
+                    INSERT INTO scraper_tasks (ean, status, created_at)
+                    VALUES (:ean, 'pending', CURRENT_TIMESTAMP)
+                    """),
+                    {"ean": ean}
+                )
+                session.commit()
+                
+                # Check for existing results from scraper
+                placeholders = ",".join([f":ean{i}" for i in range(len(all_eans))])
+                params = {f"ean{i}": ean for i, ean in enumerate(all_eans)}
+                
+                result_query = session.execute(
+                    text(f"""
+                    SELECT ean, price, url, error
+                    FROM scraper_tasks
+                    WHERE ean IN ({placeholders})
+                      AND status = 'done'
+                      AND completed_at > datetime('now', '-1 hour')
+                    ORDER BY completed_at DESC
+                    """),
+                    params
+                )
+                rows = result_query.fetchall()
+                
+                # Use latest results
+                ean_results = {}
+                for row in rows:
+                    ean = row[0]
+                    if ean not in ean_results:  # Take first (latest) result
+                        ean_results[ean] = {
+                            "price": row[1],
+                            "url": row[2],
+                            "error": row[3]
+                        }
+                
+                # Map results to offers
+                for barcode, grouped_offers in offers_by_barcode.items():
+                    result = ean_results.get(barcode)
+                    
+                    if result and result["price"]:
+                        # Found price
+                        for offer in grouped_offers:
+                            results_by_offer[offer["offer_id"]] = {
+                                "competitor_price": result["price"],
+                                "competitor_url": result["url"],
+                                "error": None,
+                            }
+                        record_debug(
+                            "Najniższa cena dla EAN (z cache)",
+                            {"ean": barcode, "price": _format_decimal(result["price"])}
+                        )
+        finally:
+            session.close()
 
     def process_competitor_lookup(
         *,
@@ -491,95 +651,115 @@ def build_price_checks(
         competitor_min_price: Optional[Decimal] = None
         competitor_min_url: Optional[str] = None
         error: Optional[str] = None
-
-        def stream_scrape_log(message: str) -> None:
-            log_context = {"offer_id": offer_id, "message": message}
-            if barcode:
-                log_context["barcode"] = barcode
-            record_debug("Log Selenium", log_context)
-
-        scraper_callback = stream_scrape_log if log_callback is not None else None
-
-        def stream_screenshot(image: bytes, stage: str) -> None:
-            if screenshot_callback is None:
-                return
-            payload = {
-                "offer_id": offer_id,
-                "stage": stage,
-                "image": base64.b64encode(image).decode("ascii"),
-            }
-            if barcode:
-                payload["barcode"] = barcode
-            screenshot_callback(payload)
-
-        screenshot_handler = stream_screenshot if screenshot_callback is not None else None
-
-        try:
-            competitor_offers, scrape_logs = fetch_competitors_for_offer(
-                offer_id,
-                stop_seller=settings.ALLEGRO_SELLER_NAME,
-                log_callback=scraper_callback,
-                screenshot_callback=screenshot_handler,
-            )
-        except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
-            error = str(exc)
-            error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
-            if barcode:
-                error_context["barcode"] = barcode
-            record_debug("Błąd pobierania ofert Allegro", error_context)
-            competitor_offers = []
-            scrape_logs = exc.logs
-        except Exception as exc:  # pragma: no cover - selenium/network errors
-            error = str(exc)
-            error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
-            if barcode:
-                error_context["barcode"] = barcode
-            record_debug("Błąd pobierania ofert Allegro", error_context)
-            competitor_offers = []
-            scrape_logs = []
-
-        if log_callback is None:
-            for entry in scrape_logs:
-                log_context = {"offer_id": offer_id, "message": entry}
+        
+        # Try local scraper first if configured
+        if settings.ALLEGRO_SCRAPER_API_URL:
+            record_debug("Używanie lokalnego scrapera", {"url": settings.ALLEGRO_SCRAPER_API_URL})
+            try:
+                price = fetch_price_via_local_scraper(offer_url)
+                if price is not None:
+                    competitor_min_price = price
+                    competitor_min_url = offer_url
+                    record_debug(
+                        "Cena z lokalnego scrapera",
+                        {"price": _format_decimal(price), "url": offer_url}
+                    )
+                else:
+                    record_debug("Lokalny scraper nie zwrócił ceny", {})
+            except Exception as exc:
+                record_debug("Błąd lokalnego scrapera", {"error": str(exc)})
+                # Fall through to selenium scraper below
+        
+        # If local scraper didn't work, use selenium (old method)
+        if competitor_min_price is None:
+            def stream_scrape_log(message: str) -> None:
+                log_context = {"offer_id": offer_id, "message": message}
                 if barcode:
                     log_context["barcode"] = barcode
                 record_debug("Log Selenium", log_context)
 
-        count_context = {"offer_id": offer_id, "offers": len(competitor_offers)}
-        if barcode:
-            count_context["barcode"] = barcode
-        record_debug("Oferty konkurencji – liczba ofert", count_context)
+            scraper_callback = stream_scrape_log if log_callback is not None else None
 
-        for competitor in competitor_offers:
-            seller_name = (competitor.seller or "").strip().lower()
-            if (
-                settings.ALLEGRO_SELLER_NAME
-                and seller_name
-                and seller_name == settings.ALLEGRO_SELLER_NAME.lower()
-            ):
-                continue
-            price_value = parse_price_amount(competitor.price)
-            if price_value is None:
-                continue
-            if (
-                competitor_min_price is None
-                or price_value < competitor_min_price
-                or (
-                    price_value == competitor_min_price and competitor_min_url is None
+            def stream_screenshot(image: bytes, stage: str) -> None:
+                if screenshot_callback is None:
+                    return
+                payload = {
+                    "offer_id": offer_id,
+                    "stage": stage,
+                    "image": base64.b64encode(image).decode("ascii"),
+                }
+                if barcode:
+                    payload["barcode"] = barcode
+                screenshot_callback(payload)
+
+            screenshot_handler = stream_screenshot if screenshot_callback is not None else None
+
+            try:
+                competitor_offers, scrape_logs = fetch_competitors_for_offer(
+                    offer_id,
+                    stop_seller=settings.ALLEGRO_SELLER_NAME,
+                    log_callback=scraper_callback,
+                    screenshot_callback=screenshot_handler,
                 )
-            ):
-                competitor_min_price = price_value
-                competitor_min_url = competitor.url
+            except AllegroScrapeError as exc:  # pragma: no cover - selenium/network errors
+                error = str(exc)
+                error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
+                if barcode:
+                    error_context["barcode"] = barcode
+                record_debug("Błąd pobierania ofert Allegro", error_context)
+                competitor_offers = []
+                scrape_logs = exc.logs
+            except Exception as exc:  # pragma: no cover - selenium/network errors
+                error = str(exc)
+                error_context = {"offer_id": offer_id, "url": offer_url, "error": str(exc)}
+                if barcode:
+                    error_context["barcode"] = barcode
+                record_debug("Błąd pobierania ofert Allegro", error_context)
+                competitor_offers = []
+                scrape_logs = []
 
-        if barcode:
-            record_debug(
-                "Najniższa cena konkurencji dla kodu",
-                {
-                    "barcode": barcode,
-                    "price": _format_decimal(competitor_min_price),
-                    "url": competitor_min_url,
-                },
-            )
+            if log_callback is None:
+                for entry in scrape_logs:
+                    log_context = {"offer_id": offer_id, "message": entry}
+                    if barcode:
+                        log_context["barcode"] = barcode
+                    record_debug("Log Selenium", log_context)
+
+            count_context = {"offer_id": offer_id, "offers": len(competitor_offers)}
+            if barcode:
+                count_context["barcode"] = barcode
+            record_debug("Oferty konkurencji – liczba ofert", count_context)
+
+            for competitor in competitor_offers:
+                seller_name = (competitor.seller or "").strip().lower()
+                if (
+                    settings.ALLEGRO_SELLER_NAME
+                    and seller_name
+                    and seller_name == settings.ALLEGRO_SELLER_NAME.lower()
+                ):
+                    continue
+                price_value = parse_price_amount(competitor.price)
+                if price_value is None:
+                    continue
+                if (
+                    competitor_min_price is None
+                    or price_value < competitor_min_price
+                    or (
+                        price_value == competitor_min_price and competitor_min_url is None
+                    )
+                ):
+                    competitor_min_price = price_value
+                    competitor_min_url = competitor.url
+
+            if barcode:
+                record_debug(
+                    "Najniższa cena konkurencji dla kodu",
+                    {
+                        "barcode": barcode,
+                        "price": _format_decimal(competitor_min_price),
+                        "url": competitor_min_url,
+                    },
+                )
 
         if competitor_min_price is not None:
             error = None
@@ -592,8 +772,17 @@ def build_price_checks(
             }
 
     for barcode, grouped_offers in offers_by_barcode.items():
+        # Skip if already processed by batch scraper
+        first_offer_id = grouped_offers[0]["offer_id"]
+        if first_offer_id in results_by_offer:
+            record_debug(
+                "Grupa ofert już przetworzona przez batch scraper",
+                {"barcode": barcode, "offers": len(grouped_offers)}
+            )
+            continue
+            
         record_debug(
-            "Grupa ofert dla kodu kreskowego",
+            "Grupa ofert dla kodu kreskowego - fallback Selenium",
             {
                 "barcode": barcode,
                 "offers": [
