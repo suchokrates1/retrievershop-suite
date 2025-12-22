@@ -28,6 +28,7 @@ from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
 from .print_agent import agent
+from .auth import login_required
 from .allegro_scraper import (
     AllegroScrapeError,
     fetch_competitors_for_offer,
