@@ -58,15 +58,15 @@ def get_tasks(session):
     # Only check offers that haven't been checked in the last hour
     result = session.execute(
         text("""
-        SELECT 
+        SELECT
             ao.offer_id,
             ao.title,
             ao.price as my_price,
-            COALESCE(aph.competitor_min_price, 0) as last_competitor_price,
+            COALESCE(aph.price, 0) as last_competitor_price,
             aph.recorded_at as last_check
         FROM allegro_offers ao
         LEFT JOIN (
-            SELECT offer_id, competitor_min_price, recorded_at
+            SELECT offer_id, price, recorded_at
             FROM allegro_price_history
             WHERE (offer_id, recorded_at) IN (
                 SELECT offer_id, MAX(recorded_at)
