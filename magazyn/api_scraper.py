@@ -150,14 +150,13 @@ def submit_results(session):
                 price = :price,
                 url = :url,
                 error = :error,
-                completed_at = :completed_at
+                completed_at = CURRENT_TIMESTAMP
             WHERE id = :id
             """),
             {
                 "price": price_decimal,
                 "url": url,
                 "error": error,
-                "completed_at": datetime.now(),
                 "id": task_id
             }
         )

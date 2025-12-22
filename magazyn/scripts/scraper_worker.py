@@ -72,20 +72,54 @@ def search_allegro_price(driver, ean):
         driver.get(search_url)
         
         # Wait for page load
-        time.sleep(2)
+        time.sleep(3)
         
-        # Extract prices with regex from HTML
+        # Check for CAPTCHA
+        if "captcha" in driver.page_source.lower() or "datadome" in driver.page_source.lower():
+            print("\n⚠️  CAPTCHA DETECTED! Please solve it manually in the browser...")
+            print("    Waiting for you to solve it...")
+            
+            # Wait until CAPTCHA is solved (check every 5 seconds)
+            while True:
+                time.sleep(5)
+                if "captcha" not in driver.page_source.lower() and "datadome" not in driver.page_source.lower():
+                    print("✓ CAPTCHA solved! Continuing...\n")
+                    time.sleep(2)  # Extra wait after CAPTCHA
+                    break
+        
         html = driver.page_source
-        price_pattern = r'data-price="(\d+\.?\d*)"'
-        matches = re.findall(price_pattern, html)
         
-        if not matches:
+        # Try multiple price patterns
+        patterns = [
+            r'"price":{"amount":"([\d.]+)"',  # JSON in page
+            r'"price":([\d.]+)',  # Simple JSON
+            r'<meta\s+itemprop="price"\s+content="([\d.]+)"',  # Meta tag
+            r'data-price="([\d.]+)"',  # Data attribute
+            r'aria-label="[^"]*?([\d]+[,.]\d{2})\s*zł"',  # Aria label
+        ]
+        
+        all_matches = []
+        for pattern in patterns:
+            matches = re.findall(pattern, html)
+            all_matches.extend(matches)
+        
+        if not all_matches:
             return None, "No prices found"
         
-        # Convert to Decimal and find minimum
-        prices = [Decimal(p) for p in matches]
-        min_price = min(prices)
+        # Convert to Decimal (handle both . and , as decimal separator)
+        prices = []
+        for match in all_matches:
+            try:
+                # Replace comma with dot
+                price_str = match.replace(',', '.')
+                prices.append(Decimal(price_str))
+            except:
+                continue
         
+        if not prices:
+            return None, "Could not parse prices"
+        
+        min_price = min(prices)
         return str(min_price), search_url
         
     except Exception as e:
