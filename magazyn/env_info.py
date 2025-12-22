@@ -71,4 +71,8 @@ ENV_INFO = {
         "Token webhook BaseLinker",
         "Sekretny token do wywołań URL z BaseLinker (Wywołaj URL)",
     ),
+    "ALLEGRO_SCRAPER_API_URL": (
+        "URL Scrapera Allegro",
+        "Adres API lokalnego scrapera (np. http://192.168.31.150:5555) - pozostaw puste aby używać wbudowanego Selenium",
+    ),
 }

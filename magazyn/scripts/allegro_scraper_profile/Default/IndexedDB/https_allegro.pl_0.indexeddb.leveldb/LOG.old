@@ -1,0 +1,25 @@
+2025/12/22-01:19:08.590 6450 Reusing MANIFEST C:\Users\sucho\retrievershop-suite\magazyn\scripts\allegro_scraper_profile\Default\IndexedDB\https_allegro.pl_0.indexeddb.leveldb/MANIFEST-000001
+2025/12/22-01:19:08.590 6450 Recovering log #32
+2025/12/22-01:19:08.590 6450 Reusing old log C:\Users\sucho\retrievershop-suite\magazyn\scripts\allegro_scraper_profile\Default\IndexedDB\https_allegro.pl_0.indexeddb.leveldb/000032.log 
+2025/12/22-01:19:08.590 6450 Delete type=2 #31
+2025/12/22-01:19:08.638 4cb4 Level-0 table #37: started
+2025/12/22-01:19:08.641 4cb4 Level-0 table #37: 640 bytes OK
+2025/12/22-01:19:08.641 4cb4 Delete type=0 #32
+2025/12/22-01:19:08.642 6450 Manual compaction at level-0 from '\x00\x0e\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0f\x00\x00\x00' @ 0 : 0; will stop at '\x00\x0e\x00\x00\x05' @ 287 : 1
+2025/12/22-01:19:08.642 6450 Compacting 1@0 + 1@1 files
+2025/12/22-01:19:08.643 6450 Generated table #38@0: 82 keys, 1596 bytes
+2025/12/22-01:19:08.643 6450 Compacted 1@0 + 1@1 files => 1596 bytes
+2025/12/22-01:19:08.643 6450 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/12/22-01:19:08.644 6450 Delete type=2 #37
+2025/12/22-01:19:08.644 6450 Manual compaction at level-0 from '\x00\x0e\x00\x00\x05' @ 287 : 1 .. '\x00\x0f\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/12/22-01:19:08.659 4cb4 Level-0 table #40: started
+2025/12/22-01:19:08.661 4cb4 Level-0 table #40: 642 bytes OK
+2025/12/22-01:19:08.662 4cb4 Delete type=2 #34
+2025/12/22-01:19:08.662 4cb4 Delete type=0 #36
+2025/12/22-01:19:08.662 7624 Manual compaction at level-0 from '\x00\x0f\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x10\x00\x00\x00' @ 0 : 0; will stop at '\x00\x0f\x00\x00\x05' @ 304 : 1
+2025/12/22-01:19:08.662 7624 Compacting 1@0 + 1@1 files
+2025/12/22-01:19:08.663 7624 Generated table #41@0: 82 keys, 1593 bytes
+2025/12/22-01:19:08.663 7624 Compacted 1@0 + 1@1 files => 1593 bytes
+2025/12/22-01:19:08.664 7624 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/12/22-01:19:08.664 7624 Delete type=2 #40
+2025/12/22-01:19:08.664 7624 Manual compaction at level-0 from '\x00\x0f\x00\x00\x05' @ 304 : 1 .. '\x00\x10\x00\x00\x00' @ 0 : 0; will stop at (end)

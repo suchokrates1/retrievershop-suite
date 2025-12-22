@@ -71,6 +71,54 @@
         <button type="submit" class="btn btn-outline-secondary">Połącz z Allegro</button>
     </form>
 </div>
+
+<hr class="my-4">
+
+<div class="card col-md-8 mx-auto">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Allegro Scraper - Sprawdzanie cen</h5>
+    </div>
+    <div class="card-body">
+        <p class="card-text">
+            Lokalny scraper omija blokady DataDome i szybko sprawdza ceny konkurencji.
+        </p>
+        
+        <div class="alert alert-info">
+            <strong>Jak to działa?</strong>
+            <ol class="mb-0 mt-2">
+                <li>Pobierz scraper i zainstaluj na swoim PC z Windows</li>
+                <li>Wpisz adres API scrapera w polu "URL Scrapera Allegro" powyżej</li>
+                <li>Kliknij "Monitor cen Allegro" w menu - ceny będą pobierane z Twojego PC!</li>
+            </ol>
+        </div>
+        
+        <h6 class="mt-3">Instalacja scrapera (jednorazowo):</h6>
+        <ol>
+            <li><a href="{{ url_for('main.download_scraper') }}" class="btn btn-sm btn-success">
+                <i class="bi bi-download"></i> Pobierz AllegroScraper_Portable.zip
+            </a></li>
+            <li>Rozpakuj ZIP na swoim PC</li>
+            <li>Uruchom <code>SETUP.bat</code> (instaluje Chrome driver)</li>
+            <li>Uruchom <code>RUN_SCRAPER.bat</code> (startuje API)</li>
+            <li>Zaloguj się na Allegro w oknie Chrome (jednorazowo)</li>
+            <li>Wpisz adres w polu powyżej, np: <code>http://192.168.31.150:5555</code></li>
+        </ol>
+        
+        <h6 class="mt-3">Zalety:</h6>
+        <ul class="mb-0">
+            <li>✅ Brak captcha (używa prawdziwego Chrome z logowaniem)</li>
+            <li>✅ Szybkie - 3-5 sekund na ofertę</li>
+            <li>✅ Nie blokuje Brave (dedykowany profil Chrome)</li>
+            <li>✅ Działa na każdym PC z Windows</li>
+            <li>✅ Jeśli scraper nie jest dostępny - automatycznie fallback do wbudowanego Selenium</li>
+        </ul>
+        
+        <small class="text-muted d-block mt-3">
+            <strong>Uwaga:</strong> Pozostaw pole "URL Scrapera Allegro" puste aby używać wbudowanego Selenium (wolniejsze, czasem captcha).
+        </small>
+    </div>
+</div>
+
 <script>
     document.querySelectorAll('.toggle-password').forEach(btn => {
         btn.addEventListener('click', () => {
