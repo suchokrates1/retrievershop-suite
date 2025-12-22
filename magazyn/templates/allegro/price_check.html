@@ -12,7 +12,39 @@
     <h2 class="h4 mb-3">Pełne logi price-check</h2>
     <pre id="price-check-log-content" class="bg-dark text-white p-3 rounded small mb-0">{{ debug_log }}</pre>
 </div>
-<h1 class="mb-4">Monitor cen Allegro</h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Monitor cen Allegro</h1>
+    <div class="d-flex gap-2">
+        <a href="allegro-scraper://start" class="btn btn-success">
+            <i class="bi bi-play-circle"></i> Uruchom Scraper Worker
+        </a>
+        <a href="/download/scraper" class="btn btn-outline-primary">
+            <i class="bi bi-download"></i> Pobierz Worker
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info" role="alert">
+    <strong>Jak to działa?</strong>
+    <ol class="mb-0 mt-2">
+        <li>Kliknij "Uruchom Scraper Worker" (pierwszy raz wymaga instalacji)</li>
+        <li>Worker będzie działał w tle i sprawdzał ceny na Allegro</li>
+        <li>Wyniki pojawią się automatycznie poniżej (cache 1h)</li>
+    </ol>
+</div>
+
+<div id="scraper-queue-status" class="alert alert-secondary d-none">
+    <div class="d-flex justify-content-between align-items-center">
+        <span>Status kolejki:</span>
+        <div>
+            <span class="badge bg-warning">Oczekujące: <span id="queue-pending">0</span></span>
+            <span class="badge bg-primary">W trakcie: <span id="queue-processing">0</span></span>
+            <span class="badge bg-success">Gotowe: <span id="queue-done">0</span></span>
+            <span class="badge bg-danger">Błędy: <span id="queue-errors">0</span></span>
+        </div>
+    </div>
+</div>
+
 {% if auth_error %}
 <div class="alert alert-warning" role="alert">
     {{ auth_error }}

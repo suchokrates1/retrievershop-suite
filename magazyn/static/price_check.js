@@ -267,4 +267,30 @@
     }
 
     document.addEventListener('DOMContentLoaded', startPriceCheckStream);
+    
+    // Poll scraper queue status every 5 seconds
+    function updateQueueStatus() {
+        fetch('/api/scraper/status')
+            .then(res => res.json())
+            .then(data => {
+                const statusDiv = document.getElementById('scraper-queue-status');
+                if (!statusDiv) return;
+                
+                // Show status if there are any tasks
+                if (data.pending > 0 || data.processing > 0 || data.done > 0) {
+                    statusDiv.classList.remove('d-none');
+                    document.getElementById('queue-pending').textContent = data.pending || 0;
+                    document.getElementById('queue-processing').textContent = data.processing || 0;
+                    document.getElementById('queue-done').textContent = data.done || 0;
+                    document.getElementById('queue-errors').textContent = data.errors || 0;
+                }
+            })
+            .catch(() => {
+                // Silently fail if API not available
+            });
+    }
+    
+    // Update status every 5 seconds
+    setInterval(updateQueueStatus, 5000);
+    updateQueueStatus(); // Initial call
 })();
