@@ -10,3 +10,7 @@ agent.lock
 agent.lock.heartbeat
 .idea/
 .vscode/
+
+# Chrome scraper profiles contain cached data
+magazyn/scripts/allegro_scraper_profile/
+magazyn/scripts/venv/
