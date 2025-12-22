@@ -148,21 +148,20 @@ def submit_results(session):
             except:
                 error = f"Invalid price format: {competitor_price}"
         
-        # Insert into allegro_price_history
-        session.execute(
-            text("""
-            INSERT INTO allegro_price_history 
-                (offer_id, competitor_min_price, competitor_min_url, error, recorded_at)
-            VALUES 
-                (:offer_id, :price, :url, :error, CURRENT_TIMESTAMP)
-            """),
-            {
-                "offer_id": offer_id,
-                "price": price_decimal,
-                "url": competitor_url,
-                "error": error
-            }
-        )
+        # Insert into allegro_price_history (only if we have a valid price)
+        if price_decimal:
+            session.execute(
+                text("""
+                INSERT INTO allegro_price_history 
+                    (offer_id, price, recorded_at)
+                VALUES 
+                    (:offer_id, :price, CURRENT_TIMESTAMP)
+                """),
+                {
+                    "offer_id": offer_id,
+                    "price": price_decimal
+                }
+            )
         processed += 1
     
     session.commit()
