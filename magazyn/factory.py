@@ -45,6 +45,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     configure_engine(settings.DB_PATH)
 
     csrf.init_app(app)
+    csrf.exempt(api_scraper_bp)  # Exempt scraper API from CSRF protection
     app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
 
     app.register_blueprint(main_bp)
