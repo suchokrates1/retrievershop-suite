@@ -33,83 +33,88 @@ def with_session(func):
 @with_session
 def get_tasks(session):
     """
-    Returns pending scraper tasks.
+    Returns Allegro offers that need price checking.
     
     Query params:
-        limit (int): Max tasks to return (default: 10)
+        limit (int): Max offers to return (default: 10)
     
     Returns:
         {
-            "tasks": [
-                {"id": 1, "ean": "5903229331393"},
-                {"id": 2, "ean": "5903033320434"}
+            "offers": [
+                {
+                    "offer_id": "12345678901",
+                    "url": "https://allegro.pl/oferta/12345678901",
+                    "title": "Product name",
+                    "my_price": "159.99"
+                }
             ],
             "count": 2
         }
     """
     limit = request.args.get("limit", 10, type=int)
-    limit = min(limit, 100)  # Max 100 tasks at once
+    limit = min(limit, 100)  # Max 100 at once
     
-    # Mark old processing tasks as pending again (timeout: 5 minutes)
-    timeout = datetime.now() - timedelta(minutes=5)
-    session.execute(
-        text("""
-        UPDATE scraper_tasks
-        SET status = 'pending', processing_started_at = NULL
-        WHERE status = 'processing' AND processing_started_at < :timeout
-        """),
-        {"timeout": timeout}
-    )
-    session.commit()
-    
-    # Get pending tasks
+    # Get active offers that need price check
+    # Only check offers that haven't been checked in the last hour
     result = session.execute(
         text("""
-        SELECT id, ean
-        FROM scraper_tasks
-        WHERE status = 'pending'
-        ORDER BY created_at ASC
+        SELECT 
+            ao.offer_id,
+            ao.title,
+            ao.price as my_price,
+            COALESCE(aph.competitor_min_price, 0) as last_competitor_price,
+            aph.recorded_at as last_check
+        FROM allegro_offers ao
+        LEFT JOIN (
+            SELECT offer_id, competitor_min_price, recorded_at
+            FROM allegro_price_history
+            WHERE (offer_id, recorded_at) IN (
+                SELECT offer_id, MAX(recorded_at)
+                FROM allegro_price_history
+                GROUP BY offer_id
+            )
+        ) aph ON ao.offer_id = aph.offer_id
+        WHERE ao.offer_id IS NOT NULL
+            AND (aph.recorded_at IS NULL 
+                 OR aph.recorded_at < datetime('now', '-1 hour'))
+        ORDER BY COALESCE(aph.recorded_at, '1970-01-01') ASC
         LIMIT :limit
         """),
         {"limit": limit}
     )
     rows = result.fetchall()
     
-    if not rows:
-        return jsonify({"tasks": [], "count": 0})
+    offers = [
+        {
+            "offer_id": row[0],
+            "url": f"https://allegro.pl/oferta/{row[0]}",
+            "title": row[1],
+            "my_price": str(row[2])
+        }
+        for row in rows
+    ]
     
-    # Mark as processing
-    task_ids = [row[0] for row in rows]  # row[0] is id
-    placeholders = ",".join([f":id{i}" for i in range(len(task_ids))])
-    params = {f"id{i}": task_id for i, task_id in enumerate(task_ids)}
-    params["now"] = datetime.now()
-    
-    session.execute(
-        text(f"""
-        UPDATE scraper_tasks
-        SET status = 'processing', processing_started_at = :now
-        WHERE id IN ({placeholders})
-        """),
-        params
-    )
-    session.commit()
-    
-    tasks = [{"id": row[0], "ean": row[1]} for row in rows]
-    
-    return jsonify({"tasks": tasks, "count": len(tasks)})
+    return jsonify({"offers": offers, "count": len(offers)})
 
 
 @api_scraper_bp.route("/submit_results", methods=["POST"])
 @with_session
 def submit_results(session):
     """
-    Accepts scraper results.
+    Accepts scraper results for Allegro offers.
     
     Body:
         {
             "results": [
-                {"id": 1, "price": "159.89", "url": "https://allegro.pl/..."},
-                {"id": 2, "error": "Not found"}
+                {
+                    "offer_id": "12345678901",
+                    "competitor_price": "149.99",
+                    "competitor_url": "https://allegro.pl/oferta/98765"
+                },
+                {
+                    "offer_id": "12345678902",
+                    "error": "No competitors found"
+                }
             ]
         }
     
@@ -127,37 +132,35 @@ def submit_results(session):
     processed = 0
     
     for result in results:
-        task_id = result.get("id")
-        if not task_id:
+        offer_id = result.get("offer_id")
+        if not offer_id:
             continue
         
-        price = result.get("price")
-        url = result.get("url")
+        competitor_price = result.get("competitor_price")
+        competitor_url = result.get("competitor_url")
         error = result.get("error")
         
         # Convert price string to Decimal
         price_decimal = None
-        if price:
+        if competitor_price:
             try:
-                price_decimal = Decimal(str(price))
+                price_decimal = Decimal(str(competitor_price))
             except:
-                error = f"Invalid price format: {price}"
+                error = f"Invalid price format: {competitor_price}"
         
+        # Insert into allegro_price_history
         session.execute(
             text("""
-            UPDATE scraper_tasks
-            SET status = 'done',
-                price = :price,
-                url = :url,
-                error = :error,
-                completed_at = CURRENT_TIMESTAMP
-            WHERE id = :id
+            INSERT INTO allegro_price_history 
+                (offer_id, competitor_min_price, competitor_min_url, error, recorded_at)
+            VALUES 
+                (:offer_id, :price, :url, :error, CURRENT_TIMESTAMP)
             """),
             {
+                "offer_id": offer_id,
                 "price": price_decimal,
-                "url": url,
-                "error": error,
-                "id": task_id
+                "url": competitor_url,
+                "error": error
             }
         )
         processed += 1
@@ -171,49 +174,61 @@ def submit_results(session):
 @with_session
 def status(session):
     """
-    Returns scraper queue status.
+    Returns statistics about price checking.
     
     Returns:
         {
-            "pending": 5,
-            "processing": 2,
-            "done": 100,
-            "errors": 3
+            "total_offers": 150,
+            "checked_today": 120,
+            "pending": 30,
+            "last_check": "2025-12-22 10:30:00"
         }
     """
-    result_stats = session.execute(
+    # Count total offers
+    total_result = session.execute(
+        text("SELECT COUNT(*) FROM allegro_offers WHERE offer_id IS NOT NULL")
+    )
+    total_offers = total_result.fetchone()[0]
+    
+    # Count checked today
+    checked_today_result = session.execute(
         text("""
-        SELECT 
-            status,
-            COUNT(*) as count
-        FROM scraper_tasks
-        GROUP BY status
+        SELECT COUNT(DISTINCT offer_id)
+        FROM allegro_price_history
+        WHERE DATE(recorded_at) = DATE('now')
         """)
     )
-    stats = result_stats.fetchall()
+    checked_today = checked_today_result.fetchone()[0]
     
-    result = {
-        "pending": 0,
-        "processing": 0,
-        "done": 0,
-        "errors": 0
-    }
-    
-    for row in stats:
-        status = row[0]  # First column
-        count = row[1]   # Second column
-        if status in result:
-            result[status] = count
-    
-    # Count errors separately
-    error_result = session.execute(
+    # Count pending (not checked in last hour)
+    pending_result = session.execute(
         text("""
-        SELECT COUNT(*) as count
-        FROM scraper_tasks
-        WHERE status = 'done' AND error IS NOT NULL
+        SELECT COUNT(*)
+        FROM allegro_offers ao
+        LEFT JOIN (
+            SELECT offer_id, MAX(recorded_at) as last_check
+            FROM allegro_price_history
+            GROUP BY offer_id
+        ) aph ON ao.offer_id = aph.offer_id
+        WHERE ao.offer_id IS NOT NULL
+            AND (aph.last_check IS NULL 
+                 OR aph.last_check < datetime('now', '-1 hour'))
         """)
     )
-    error_count = error_result.fetchone()
-    result["errors"] = error_count[0] if error_count else 0
+    pending = pending_result.fetchone()[0]
     
-    return jsonify(result)
+    # Get last check time
+    last_check_result = session.execute(
+        text("""
+        SELECT MAX(recorded_at)
+        FROM allegro_price_history
+        """)
+    )
+    last_check = last_check_result.fetchone()[0]
+    
+    return jsonify({
+        "total_offers": total_offers,
+        "checked_today": checked_today,
+        "pending": pending,
+        "last_check": last_check
+    })

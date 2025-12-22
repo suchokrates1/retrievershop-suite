@@ -1,0 +1,113 @@
+[
+  {
+    "name": "_cmuid",
+    "value": "76438f8f-3f1a-4d48-a5db-59c63ad87dcc",
+    "domain": ".allegro.pl",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1773424389
+  },
+  {
+    "name": "OptOutOnRequest",
+    "value": "groups=googleAnalytics:0,googleAdvertisingProducts:0,tikTok:0,allegroAdsNetwork:0,facebook:0,rtbHouse:0,rasp:0",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false,
+    "expiry": 1781638955
+  },
+  {
+    "name": "__gfp_64b",
+    "value": "-TURNEDOFF",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false,
+    "expiry": 1781638956
+  },
+  {
+    "name": "gdpr_permission_given",
+    "value": "0",
+    "domain": ".allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false,
+    "expiry": 1777741679
+  },
+  {
+    "name": "QXLSESSID",
+    "value": "1f3829f52022e63689c5ccc8c9e4df3eabe5af3b846f2f//03",
+    "domain": ".allegro.pl",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1781638955
+  },
+  {
+    "name": "gdpr_permission_given",
+    "value": "0",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "name": "LithiumPerformanceCookiesAccepted",
+    "value": "2",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "name": "LithiumNecessaryCookiesAccepted",
+    "value": "1",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "name": "LithiumFunctionalCookiesAccepted",
+    "value": "2",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "name": "LithiumTargetingCookiesAccepted",
+    "value": "2",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "name": "parcelsChecksum",
+    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "domain": "allegro.pl",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "name": "wdctx",
+    "value": "v5.pf8moWZG5-uP-HZHM0H65PnonrDCVRqZoRgn2IVDFrC-6RY3UKNA87UBxRkcPfqelOqLgcjGyYFYewGYVRlUp1R-jsEgHd1PpM4gA2r0TDEZLq9gktFzpcmLCu5Jkkt6MPjuLUJnk1QJMLeVn1uUwdQwLgVoP5x_cJWrhXEsxOe0MlzH7xcXrlNtpdAGFYJgRHyQShAtoMQ7opDoyTCcbyq3b1GUv68NQfvAeDYvQGioD070.tmmTSs1YQai9T5XO0iHG7g.BvDSE8dPndU",
+    "domain": ".allegro.pl",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1768678955
+  },
+  {
+    "name": "datadome",
+    "value": "s~dqhUtMnI7JjZihq331YbaE2oZzQxFlqk1PcBkL_OmDsHX5hiVvlo82b6IWn1UvbCpIAj09QKiIqUiZyEmlBA8tArjVHBZhRSoFloCZRw3BvrLz~~IiwSzFySogZ_Be",
+    "domain": ".allegro.pl",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1781638966
+  }
+]

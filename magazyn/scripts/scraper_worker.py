@@ -1,49 +1,36 @@
 """
-Allegro Price Scraper - Polling Worker
+Allegro Price Scraper Worker
 
-This script runs as a background worker that:
-1. Polls magazyn API for scraping tasks
-2. Searches Allegro for prices
-3. Submits results back to magazyn
-
-Usage:
-    python scraper_worker.py --url https://magazyn.retrievershop.pl
-
-The scraper uses Chrome with a dedicated profile (allegro_scraper_profile/)
-to bypass DataDome bot detection.
+Checks competitor prices for your Allegro offers.
+Goes directly to each offer page and finds cheapest competitor.
 """
 
-import os
-import sys
+import argparse
 import time
 import re
-import argparse
 import requests
 from decimal import Decimal
-from pathlib import Path
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-# Configuration
-MAGAZYN_URL = None  # Will be set from command line
-POLL_INTERVAL = 30  # seconds between polls
-BATCH_SIZE = 10  # max tasks per batch
-CHROME_PROFILE_DIR = Path(__file__).parent / "allegro_scraper_profile"
+MAGAZYN_URL = "https://magazyn.retrievershop.pl"
+BATCH_SIZE = 10
+POLL_INTERVAL = 30  # seconds
 
 
 def setup_chrome_driver():
-    """Initialize Chrome with dedicated profile."""
+    """Setup Chrome driver with anti-detection measures."""
     chrome_options = Options()
     
-    # Use dedicated profile directory
-    CHROME_PROFILE_DIR.mkdir(exist_ok=True)
-    chrome_options.add_argument(f"--user-data-dir={CHROME_PROFILE_DIR.absolute()}")
-    chrome_options.add_argument("--profile-directory=Default")
+    # Use persistent profile to keep cookies/login
+    profile_path = "./allegro_scraper_profile"
+    chrome_options.add_argument(f"--user-data-dir={profile_path}")
     
-    # Not headless - we need real browser to bypass DataDome
+    # Anti-detection
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
@@ -60,74 +47,115 @@ def setup_chrome_driver():
     return driver
 
 
-def search_allegro_price(driver, ean):
+def check_offer_price(driver, offer_url):
     """
-    Search Allegro for EAN and return lowest price.
+    Go to Allegro offer page and find cheapest competitor price.
+    
+    Strategy:
+    1. Open offer page with sorting by price (?order=p)
+    2. Look for "Inne oferty" (similar offers) section
+    3. Extract competitor prices
+    4. Return cheapest (excluding our own price which should be first)
     
     Returns:
-        (price, url) or (None, error_message)
+        (competitor_price, competitor_url) or (None, error_message)
     """
     try:
-        search_url = f"https://allegro.pl/listing?string={ean}"
-        driver.get(search_url)
+        # Add sorting by price parameter
+        if '?' in offer_url:
+            sorted_url = f"{offer_url}&order=p"
+        else:
+            sorted_url = f"{offer_url}?order=p"
         
-        # Wait for page load
+        print(f"    Opening: {sorted_url[:60]}...")
+        driver.get(sorted_url)
         time.sleep(3)
         
         # Check for CAPTCHA
-        if "captcha" in driver.page_source.lower() or "datadome" in driver.page_source.lower():
-            print("\n⚠️  CAPTCHA DETECTED! Please solve it manually in the browser...")
-            print("    Waiting for you to solve it...")
+        page_content = driver.page_source.lower()
+        if "captcha" in page_content or "datadome" in page_content:
+            print("\n" + "="*60)
+            print("⚠️  CAPTCHA DETECTED!")
+            print("="*60)
+            print("Please solve the CAPTCHA manually in the Chrome window.")
+            print("The script will wait and continue automatically once solved.")
+            print("="*60 + "\n")
             
-            # Wait until CAPTCHA is solved (check every 5 seconds)
+            # Wait until CAPTCHA is solved
+            captcha_start = time.time()
             while True:
                 time.sleep(5)
-                if "captcha" not in driver.page_source.lower() and "datadome" not in driver.page_source.lower():
-                    print("✓ CAPTCHA solved! Continuing...\n")
-                    time.sleep(2)  # Extra wait after CAPTCHA
+                page_content = driver.page_source.lower()
+                if "captcha" not in page_content and "datadome" not in page_content:
+                    elapsed = int(time.time() - captcha_start)
+                    print(f"✓ CAPTCHA solved after {elapsed}s! Continuing...\n")
+                    time.sleep(2)
                     break
+                else:
+                    print("    Still waiting for CAPTCHA to be solved...")
         
         html = driver.page_source
         
-        # Try multiple price patterns
-        patterns = [
-            r'"price":{"amount":"([\d.]+)"',  # JSON in page
-            r'"price":([\d.]+)',  # Simple JSON
-            r'<meta\s+itemprop="price"\s+content="([\d.]+)"',  # Meta tag
-            r'data-price="([\d.]+)"',  # Data attribute
-            r'aria-label="[^"]*?([\d]+[,.]\d{2})\s*zł"',  # Aria label
-        ]
+        # Multiple strategies to find competitor prices
         
-        all_matches = []
-        for pattern in patterns:
-            matches = re.findall(pattern, html)
-            all_matches.extend(matches)
+        # Strategy 1: Look for JSON price data
+        json_pattern = r'"price":\s*{\s*"amount":\s*"?([\d.]+)"?'
+        json_matches = re.findall(json_pattern, html)
         
-        if not all_matches:
-            return None, "No prices found"
+        # Strategy 2: Look for meta price tags
+        meta_pattern = r'<meta[^>]+itemprop="price"[^>]+content="([\d.]+)"'
+        meta_matches = re.findall(meta_pattern, html)
         
-        # Convert to Decimal (handle both . and , as decimal separator)
+        # Strategy 3: Look for data-price attributes
+        data_pattern = r'data-price="([\d.]+)"'
+        data_matches = re.findall(data_pattern, html)
+        
+        # Strategy 4: Look for offers in "Inne oferty" section
+        # This section usually contains similar offers from other sellers
+        inne_pattern = r'ofert[ay][^}]*?"price"[^}]*?"amount":\s*"?([\d.]+)"?'
+        inne_matches = re.findall(inne_pattern, html, re.IGNORECASE)
+        
+        # Combine all found prices
+        all_price_strings = json_matches + meta_matches + data_matches + inne_matches
+        
+        if not all_price_strings:
+            return None, "No competitor prices found"
+        
+        # Convert to Decimal and deduplicate
         prices = []
-        for match in all_matches:
+        seen = set()
+        for price_str in all_price_strings:
             try:
-                # Replace comma with dot
-                price_str = match.replace(',', '.')
-                prices.append(Decimal(price_str))
+                price_str = price_str.replace(',', '.')
+                price = Decimal(price_str)
+                price_key = str(price)
+                if price_key not in seen and price > 0:
+                    seen.add(price_key)
+                    prices.append(price)
             except:
                 continue
         
         if not prices:
-            return None, "Could not parse prices"
+            return None, "Could not parse any valid prices"
         
-        min_price = min(prices)
-        return str(min_price), search_url
+        # Sort prices
+        prices.sort()
+        
+        # If only one price found, it's probably our own
+        if len(prices) < 2:
+            return None, "No competitors found (only our offer)"
+        
+        # First price is likely ours, second is cheapest competitor
+        competitor_price = prices[1]
+        
+        return str(competitor_price), sorted_url
         
     except Exception as e:
-        return None, str(e)
+        return None, f"Error: {str(e)}"
 
 
-def get_tasks():
-    """Fetch pending tasks from magazyn API."""
+def get_offers():
+    """Fetch offers that need price checking from magazyn API."""
     try:
         response = requests.get(
             f"{MAGAZYN_URL}/api/scraper/get_tasks",
@@ -136,14 +164,14 @@ def get_tasks():
         )
         response.raise_for_status()
         data = response.json()
-        return data.get("tasks", [])
+        return data.get("offers", [])
     except Exception as e:
-        print(f"Error fetching tasks: {e}")
+        print(f"Error fetching offers: {e}")
         return []
 
 
 def submit_results(results):
-    """Submit results to magazyn API."""
+    """Submit price check results to magazyn API."""
     try:
         response = requests.post(
             f"{MAGAZYN_URL}/api/scraper/submit_results",
@@ -152,7 +180,8 @@ def submit_results(results):
         )
         response.raise_for_status()
         data = response.json()
-        print(f"✓ Submitted {data.get('processed', 0)} results")
+        processed = data.get('processed', 0)
+        print(f"✓ Submitted {processed} results")
         return True
     except Exception as e:
         print(f"Error submitting results: {e}")
@@ -162,7 +191,7 @@ def submit_results(results):
 def main():
     global MAGAZYN_URL
     
-    parser = argparse.ArgumentParser(description="Allegro Price Scraper Worker")
+    parser = argparse.ArgumentParser(description="Allegro Competitor Price Checker")
     parser.add_argument("--url", required=True, help="Magazyn URL (e.g., https://magazyn.retrievershop.pl)")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Poll interval in seconds")
     args = parser.parse_args()
@@ -170,10 +199,13 @@ def main():
     MAGAZYN_URL = args.url.rstrip("/")
     poll_interval = args.interval
     
-    print(f"Starting scraper worker...")
+    print("="*70)
+    print("Allegro Competitor Price Checker")
+    print("="*70)
     print(f"Magazyn URL: {MAGAZYN_URL}")
     print(f"Poll interval: {poll_interval}s")
-    print(f"Chrome profile: {CHROME_PROFILE_DIR}/")
+    print(f"Batch size: {BATCH_SIZE}")
+    print("="*70)
     print()
     
     driver = None
@@ -184,48 +216,66 @@ def main():
         print()
         
         while True:
-            tasks = get_tasks()
+            offers = get_offers()
             
-            if not tasks:
-                print(f"No tasks. Waiting {poll_interval}s...")
+            if not offers:
+                print(f"No offers to check. Waiting {poll_interval}s...")
                 time.sleep(poll_interval)
                 continue
             
-            print(f"Processing {len(tasks)} tasks...")
+            print(f"Checking {len(offers)} offers...")
+            print()
+            
             results = []
             
-            for task in tasks:
-                task_id = task["id"]
-                ean = task["ean"]
+            for i, offer in enumerate(offers, 1):
+                offer_id = offer["offer_id"]
+                title = offer.get("title", "Unknown")
+                my_price = offer.get("my_price", "0")
+                url = offer["url"]
                 
-                print(f"  Task {task_id}: EAN {ean}...", end=" ")
+                # Truncate title for display
+                display_title = title[:40] + "..." if len(title) > 40 else title
                 
-                price, url_or_error = search_allegro_price(driver, ean)
+                print(f"  [{i}/{len(offers)}] {display_title}")
+                print(f"       My price: {my_price} zł")
                 
-                if price:
-                    print(f"✓ {price} zł")
+                competitor_price, competitor_url = check_offer_price(driver, url)
+                
+                if competitor_price:
+                    print(f"       Competitor: {competitor_price} zł ✓")
                     results.append({
-                        "id": task_id,
-                        "price": price,
-                        "url": url_or_error
+                        "offer_id": offer_id,
+                        "competitor_price": competitor_price,
+                        "competitor_url": competitor_url
                     })
                 else:
-                    print(f"✗ {url_or_error}")
+                    print(f"       Error: {competitor_url}")
                     results.append({
-                        "id": task_id,
-                        "error": url_or_error
+                        "offer_id": offer_id,
+                        "error": competitor_url
                     })
+                
+                print()
+                
+                # Small delay between offers
+                time.sleep(2)
             
-            # Submit results
-            submit_results(results)
+            # Submit all results
+            if results:
+                submit_results(results)
+            
             print()
             
     except KeyboardInterrupt:
         print("\nShutting down...")
     except Exception as e:
         print(f"Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         if driver:
+            print("Closing browser...")
             driver.quit()
 
 
