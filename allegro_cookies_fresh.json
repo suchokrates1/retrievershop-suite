@@ -1,0 +1,113 @@
+[
+  {
+    "domain": ".allegro.pl",
+    "name": "parcelsChecksum",
+    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "path": "/oferta",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "_cmuid",
+    "value": "76438f8f-3f1a-4d48-a5db-59c63ad87dcc",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1773424389
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "OptOutOnRequest",
+    "value": "groups=googleAnalytics:0,googleAdvertisingProducts:0,tikTok:0,allegroAdsNetwork:0,facebook:0,rtbHouse:0,rasp:0",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false,
+    "expiry": 1781648889
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "__gfp_64b",
+    "value": "-TURNEDOFF",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false,
+    "expiry": 1781648890
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "gdpr_permission_given",
+    "value": "0",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false,
+    "expiry": 1777741679
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "QXLSESSID",
+    "value": "1f3829f52022e63689c5ccc8c9e4df3eabe5af3b846f2f//03",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1781648889
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "wdctx",
+    "value": "v5.ylqQ3SAvlgIPaUjz_HP9p-nNyVXnuOpi71UHn39zMntTjbZ8Obos04Rps1fkHo3EV43vK1ng8IJxgrBIMistrSRL8y8gb4b8CkooRRwEvt-UY8DM9pYcPndC5e-3zTCTAkwDpcH-Dmn1G3AB1ymJHiR0BNCxSxk611mhMco5y3spv8W0SMeBrv_RbsgZqgR8SS5BPpqqA1R7Vm0iRwkv8vTdQaoOpDGENgeOSd5TwxFtCx_5.tmmTSs1YQai9T5XO0iHG7g.vosfTu3QZsw",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1768688553
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "LithiumNecessaryCookiesAccepted",
+    "value": "1",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "LithiumFunctionalCookiesAccepted",
+    "value": "2",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "LithiumPerformanceCookiesAccepted",
+    "value": "2",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "LithiumTargetingCookiesAccepted",
+    "value": "2",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "gdpr_permission_given",
+    "value": "0",
+    "path": "/",
+    "secure": false,
+    "httpOnly": false
+  },
+  {
+    "domain": ".allegro.pl",
+    "name": "datadome",
+    "value": "2df6e10Orp0tQ4w1anzAFxZ51mdcSOmanF5K8kJnIwW3DeJRldoWoqacsFhJ1XHOJfR3ezt1wFju01DH6Ty1rGahVQ19rImtYiQThWsxHAY4VVSMZiC8U9GPkuYebb0M",
+    "path": "/",
+    "secure": true,
+    "httpOnly": false,
+    "expiry": 1781648900
+  }
+]

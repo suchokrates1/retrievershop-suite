@@ -255,6 +255,7 @@ class SettingsStore:
         defaults = settings_io.load_settings(include_hidden=True)
         # Settings not present in .env.example but still expected across the codebase
         defaults.setdefault("ALLEGRO_SELLER_NAME", "")
+        defaults.setdefault("ALLEGRO_SCRAPER_API_URL", "")  # e.g. http://192.168.31.150:5555
         all_keys = set(values.keys()) | set(defaults.keys())
 
         for key in all_keys:

@@ -18,6 +18,8 @@ services:
     environment:
       - CUPS_SERVER=/var/run/cups/cups.sock
     user: root
+    ports:
+      - "9222:9222"
     command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     healthcheck:
