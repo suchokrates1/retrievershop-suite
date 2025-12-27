@@ -173,6 +173,7 @@ class LabelAgent:
         self._api_calls_success = 0
         self._last_api_log = datetime.now()
         self._api_call_times: Deque[float] = deque()
+        self._label_error_notifications: Dict[str, int] = {}  # Śledzenie ile razy wysłano powiadomienie o błędzie
         self._headers = {
             "X-BLToken": config.api_token,
             "Content-Type": "application/x-www-form-urlencoded",
@@ -904,6 +905,35 @@ class LabelAgent:
             self.logger.error("Błąd testowego druku: %s", exc)
             return False
 
+    def _should_send_error_notification(self, order_id: str) -> bool:
+        """Sprawdza czy należy wysłać powiadomienie o błędzie (przy próbie 1 i 10)."""
+        count = self._label_error_notifications.get(order_id, 0)
+        return count == 0 or count == 9  # 0 = pierwsza próba, 9 = dziesiąta próba
+
+    def _send_label_error_notification(self, order_id: str) -> None:
+        """Wysyła krótkie powiadomienie o braku etykiety."""
+        try:
+            message = f"Brak etykiety do zamówienia nr: {order_id}"
+            response = requests.post(
+                "https://graph.facebook.com/v17.0/me/messages",
+                headers={
+                    "Authorization": f"Bearer {self.config.page_access_token}",
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps(
+                    {
+                        "recipient": {"id": self.config.recipient_id},
+                        "message": {"text": message},
+                    }
+                ),
+                timeout=10,
+            )
+            response.raise_for_status()
+            # Inkrementuj licznik
+            self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
+        except Exception as exc:
+            self.logger.error("Błąd wysyłania wiadomości: %s", exc)
+
     def send_messenger_message(self, data: Dict[str, Any], print_success: bool = True) -> None:
         try:
             # Status etykiety
@@ -1474,7 +1504,12 @@ class LabelAgent:
                             order_id,
                         )
                         PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
-                        self._notify_messenger(self.last_order_data, print_success=False)
+                        # Wyślij powiadomienie tylko przy 1 i 10 próbie
+                        if self._should_send_error_notification(order_id):
+                            self._send_label_error_notification(order_id)
+                        else:
+                            # Inkrementuj licznik bez wysyłania
+                            self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
             except Exception as exc:
                 self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()

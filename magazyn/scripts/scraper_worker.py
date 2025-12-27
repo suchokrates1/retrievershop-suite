@@ -6,12 +6,14 @@ Goes directly to each offer page and finds cheapest competitor.
 """
 
 import argparse
+import os
 import time
 import re
 import requests
 from decimal import Decimal
 
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
@@ -27,8 +29,15 @@ def setup_chrome_driver():
     chrome_options = Options()
     
     # Use persistent profile to keep cookies/login
-    profile_path = "./allegro_scraper_profile"
+    profile_path = os.path.abspath("./allegro_scraper_profile")
+    os.makedirs(profile_path, exist_ok=True)
     chrome_options.add_argument(f"--user-data-dir={profile_path}")
+    chrome_options.add_argument("--profile-directory=Default")
+    
+    # Windows stability options
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     
     # Anti-detection
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -71,9 +80,24 @@ def check_offer_price(driver, offer_url):
         driver.get(sorted_url)
         time.sleep(3)
         
-        # Check for CAPTCHA
-        page_content = driver.page_source.lower()
-        if "captcha" in page_content or "datadome" in page_content:
+        # Check for CAPTCHA - more specific detection
+        # Look for actual CAPTCHA elements, not just word "captcha" in source
+        captcha_detected = False
+        try:
+            # Check for DataDome CAPTCHA iframe
+            if len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")) > 0:
+                captcha_detected = True
+            # Check for visible CAPTCHA containers
+            elif len(driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container, [class*='captcha']")) > 0:
+                # Verify it's actually visible
+                for elem in driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container, [class*='captcha']"):
+                    if elem.is_displayed() and elem.size['height'] > 100:
+                        captcha_detected = True
+                        break
+        except:
+            pass
+        
+        if captcha_detected:
             print("\n" + "="*60)
             print("⚠️  CAPTCHA DETECTED!")
             print("="*60)
@@ -85,14 +109,23 @@ def check_offer_price(driver, offer_url):
             captcha_start = time.time()
             while True:
                 time.sleep(5)
-                page_content = driver.page_source.lower()
-                if "captcha" not in page_content and "datadome" not in page_content:
-                    elapsed = int(time.time() - captcha_start)
-                    print(f"✓ CAPTCHA solved after {elapsed}s! Continuing...\n")
-                    time.sleep(2)
+                # Re-check for CAPTCHA elements
+                try:
+                    captcha_still_there = False
+                    if len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")) > 0:
+                        captcha_still_there = True
+                    elif len(driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container")) > 0:
+                        captcha_still_there = True
+                    
+                    if not captcha_still_there:
+                        elapsed = int(time.time() - captcha_start)
+                        print(f"✓ CAPTCHA solved after {elapsed}s! Continuing...\n")
+                        time.sleep(2)
+                        break
+                    else:
+                        print("    Still waiting for CAPTCHA to be solved...")
+                except:
                     break
-                else:
-                    print("    Still waiting for CAPTCHA to be solved...")
         
         html = driver.page_source
         
