@@ -87,7 +87,7 @@ def get_tasks(session):
     offers = [
         {
             "offer_id": row[0],
-            "url": f"https://allegro.pl/oferta/{row[0]}",
+            "url": f"https://allegro.pl/oferta/{row[0]}#inne-oferty-produktu",
             "title": row[1],
             "my_price": str(row[2])
         }
@@ -137,7 +137,9 @@ def submit_results(session):
             continue
         
         competitor_price = result.get("competitor_price")
+        competitor_seller = result.get("competitor_seller")
         competitor_url = result.get("competitor_url")
+        competitor_delivery_days = result.get("competitor_delivery_days")
         error = result.get("error")
         
         # Convert price string to Decimal
@@ -150,16 +152,28 @@ def submit_results(session):
         
         # Insert into allegro_price_history (only if we have a valid price)
         if price_decimal:
+            # Get current price from allegro_offers
+            my_price_result = session.execute(
+                text("SELECT price FROM allegro_offers WHERE offer_id = :offer_id"),
+                {"offer_id": offer_id}
+            )
+            my_price_row = my_price_result.fetchone()
+            my_price = my_price_row[0] if my_price_row else 0
+            
             session.execute(
                 text("""
                 INSERT INTO allegro_price_history 
-                    (offer_id, price, recorded_at)
+                    (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, competitor_delivery_days)
                 VALUES 
-                    (:offer_id, :price, CURRENT_TIMESTAMP)
+                    (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :competitor_delivery_days)
                 """),
                 {
                     "offer_id": offer_id,
-                    "price": price_decimal
+                    "my_price": my_price,
+                    "competitor_price": price_decimal,
+                    "competitor_seller": competitor_seller,
+                    "competitor_url": competitor_url,
+                    "competitor_delivery_days": competitor_delivery_days
                 }
             )
         processed += 1
