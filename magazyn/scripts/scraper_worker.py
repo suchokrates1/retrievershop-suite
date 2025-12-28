@@ -10,6 +10,7 @@ import os
 import time
 import re
 import requests
+import random
 from decimal import Decimal
 
 try:
@@ -26,8 +27,18 @@ from selenium.webdriver.common.by import By
 
 
 MAGAZYN_URL = "https://magazyn.retrievershop.pl"
-BATCH_SIZE = 10
+BATCH_SIZE = 5  # Reduced from 10 to avoid rate limiting
 POLL_INTERVAL = 30  # seconds
+MIN_DELAY_BETWEEN_OFFERS = 5  # Minimum 5 seconds between offers
+MAX_DELAY_BETWEEN_OFFERS = 15  # Maximum 15 seconds (random)
+
+# Rotate user agents to avoid detection
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+]
 
 
 def setup_chrome_driver():
@@ -35,6 +46,9 @@ def setup_chrome_driver():
     # Use persistent profile to keep cookies/login
     profile_path = os.path.abspath("./allegro_scraper_profile")
     os.makedirs(profile_path, exist_ok=True)
+    
+    # Random user agent
+    user_agent = random.choice(USER_AGENTS)
     
     if UNDETECTED_AVAILABLE:
         print("Using undetected-chromedriver for better anti-detection")
@@ -44,6 +58,7 @@ def setup_chrome_driver():
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--start-maximized")
+        options.add_argument(f"--user-agent={user_agent}")
         
         driver = uc.Chrome(options=options, version_main=None)
         return driver
@@ -62,6 +77,7 @@ def setup_chrome_driver():
         chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument(f"--user-agent={user_agent}")
         
         service = ChromeService(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -94,6 +110,24 @@ def check_offer_price(driver, offer_url, my_price):
         print(f"  Checking: {offer_url}")
         driver.get(offer_url)
         time.sleep(3)  # Wait for page load
+        
+        # Check for IP block or CAPTCHA
+        page_source = driver.page_source.lower()
+        
+        # Check for IP block
+        if "zostałeś zablokowany" in page_source or "you have been blocked" in page_source:
+            print("\n" + "="*60)
+            print("⛔ IP BLOCKED BY ALLEGRO!")
+            print("="*60)
+            print("Your IP has been blocked by Allegro's anti-bot protection.")
+            print("This happens when scraping too fast or too many requests.")
+            print("\nRECOMMENDATIONS:")
+            print("1. Wait 30-60 minutes before retrying")
+            print("2. Use VPN or change IP address")
+            print("3. Reduce scraping speed (already set to 5-15s delay)")
+            print("4. Reduce batch size (currently 5 offers)")
+            print("="*60 + "\n")
+            raise Exception("IP_BLOCKED")
         
         # Check for CAPTCHA
         captcha_detected = False
@@ -337,26 +371,39 @@ def main():
                 print(f"  [{i}/{len(offers)}] {display_title}")
                 print(f"       My price: {my_price} zł")
                 
-                competitor_data = check_offer_price(driver, url, my_price)
-                
-                if competitor_data:
-                    print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) ✓")
-                    if competitor_data['delivery_days']:
-                        print(f"       Delivery: {competitor_data['delivery_days']} days")
-                    results.append({
-                        "offer_id": offer_id,
-                        "competitor_price": competitor_data['price'],
-                        "competitor_seller": competitor_data['seller'],
-                        "competitor_url": competitor_data['url'],
-                        "competitor_delivery_days": competitor_data.get('delivery_days')
-                    })
-                else:
-                    print(f"       No cheaper competitor found")
+                try:
+                    competitor_data = check_offer_price(driver, url, my_price)
+                    
+                    if competitor_data:
+                        print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) ✓")
+                        if competitor_data['delivery_days']:
+                            print(f"       Delivery: {competitor_data['delivery_days']} days")
+                        results.append({
+                            "offer_id": offer_id,
+                            "competitor_price": competitor_data['price'],
+                            "competitor_seller": competitor_data['seller'],
+                            "competitor_url": competitor_data['url'],
+                            "competitor_delivery_days": competitor_data.get('delivery_days')
+                        })
+                    else:
+                        print(f"       No cheaper competitor found")
+                except Exception as e:
+                    if "IP_BLOCKED" in str(e):
+                        print("\n⛔ Stopping scraper due to IP block")
+                        # Submit results collected so far
+                        if results:
+                            submit_results(results)
+                        return  # Exit the program
+                    else:
+                        print(f"       Error: {e}")
+                        continue
                 
                 print()
                 
-                # Small delay between offers
-                time.sleep(2)
+                # Random delay between offers to avoid rate limiting
+                delay = random.randint(MIN_DELAY_BETWEEN_OFFERS, MAX_DELAY_BETWEEN_OFFERS)
+                print(f"  Waiting {delay}s before next offer...")
+                time.sleep(delay)
             
             # Submit all results
             if results:
