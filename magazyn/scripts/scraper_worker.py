@@ -48,8 +48,16 @@ def setup_chrome_driver():
     
     if UNDETECTED_AVAILABLE:
         print("Using undetected-chromedriver for better anti-detection")
+        
+        # Use PERSISTENT profile to avoid looking like a bot
+        # (new session each time = suspicious)
+        profile_path = os.path.abspath("./allegro_scraper_profile")
+        os.makedirs(profile_path, exist_ok=True)
+        
         options = uc.ChromeOptions()
-        # NO PROFILE - causes hangs/locks
+        # PROFILE - needed to avoid block (persistent cookies/fingerprint)
+        options.add_argument(f"--user-data-dir={profile_path}")
+        options.add_argument("--profile-directory=ScraperSession")  # Unique name
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument(f"--user-agent={user_agent}")
@@ -107,29 +115,49 @@ def check_offer_price(driver, offer_url, my_price):
         # Check for IP block or CAPTCHA
         page_source = driver.page_source.lower()
         
-        # Debug: show page title and snippet
+        # Debug: show page title and snippet + save full HTML
         try:
             page_title = driver.title
             snippet = page_source[:500].replace('\n', ' ')[:200]
             print(f"  [DEBUG] Page title: {page_title}")
             print(f"  [DEBUG] Page snippet: {snippet}...")
-        except:
-            pass
+            
+            # Save full page to file for debugging
+            with open("last_page_debug.html", "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+            print(f"  [DEBUG] Full page saved to: last_page_debug.html")
+        except Exception as e:
+            print(f"  [DEBUG] Error saving page: {e}")
         
-        # Check for IP block
-        if "zostałeś zablokowany" in page_source or "you have been blocked" in page_source or "zablokowano" in page_source:
-            print("\n" + "="*60)
-            print("[!] IP BLOCKED BY ALLEGRO!")
-            print("="*60)
-            print("Your IP has been blocked by Allegro's anti-bot protection.")
-            print("This happens when scraping too fast or too many requests.")
-            print("\nRECOMMENDATIONS:")
-            print("1. Wait 30-60 minutes before retrying")
-            print("2. Use VPN or change IP address")
-            print("3. Reduce scraping speed (already set to 5-15s delay)")
-            print("4. Reduce batch size (currently 5 offers)")
-            print("="*60 + "\n")
-            raise Exception("IP_BLOCKED")
+        # Check for IP block - expanded keywords
+        block_keywords = [
+            "zostałeś zablokowany",
+            "you have been blocked", 
+            "zablokowano",
+            "access denied",
+            "dostęp zablokowany",
+            "robot detection",
+            "wykryto robota",
+            "captcha-delivery",  # Cloudflare captcha often = block
+            "cf-wrapper",  # Cloudflare wrapper
+            "attention required"
+        ]
+        
+        for keyword in block_keywords:
+            if keyword in page_source:
+                print(f"  [DEBUG] BLOCK DETECTED! Keyword: '{keyword}'")
+                print("\n" + "="*60)
+                print("[!] IP BLOCKED BY ALLEGRO!")
+                print("="*60)
+                print("Your IP has been blocked by Allegro's anti-bot protection.")
+                print("This happens when scraping too fast or too many requests.")
+                print("\nRECOMMENDATIONS:")
+                print("1. Wait 30-60 minutes before retrying")
+                print("2. Use VPN or change IP address")
+                print("3. Reduce scraping speed (already set to 5-15s delay)")
+                print("4. Reduce batch size (currently 5 offers)")
+                print("="*60 + "\n")
+                raise Exception("IP_BLOCKED")
         
         # Check for CAPTCHA
         captcha_detected = False
