@@ -166,10 +166,11 @@ def check_offer_price(driver, offer_url, my_price):
                 print("\nRECOMMENDATIONS:")
                 print("1. Wait 30-60 minutes before retrying")
                 print("2. Use VPN or change IP address")
-                print("3. Reduce scraping speed (already set to 5-15s delay)")
-                print("4. Reduce batch size (currently 5 offers)")
+                print("3. Reduce scraping speed (already set to 30-60s delay)")
+                print("4. Reduce batch size (currently 3 offers)")
+                print("5. Consider using different proxy or residential IP")
                 print("="*60 + "\n")
-                raise Exception("IP_BLOCKED")
+                return None  # Return immediately, don't check for CAPTCHA
         
         # Check for CAPTCHA (including DataDome)
         captcha_detected = False
