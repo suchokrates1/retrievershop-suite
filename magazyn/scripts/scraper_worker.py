@@ -311,9 +311,8 @@ def setup_chrome_driver():
         
         options_selenium = webdriver.ChromeOptions()
         
-        # Use persistent profile to keep cookies/CAPTCHA solutions
-        profile_dir = os.path.join(os.path.dirname(__file__), "chrome_profile")
-        options_selenium.add_argument(f"--user-data-dir={profile_dir}")
+        # NO persistent profile - it causes Chrome process leaks
+        # Each run creates new session = clean start + proper cleanup
         
         # NO HEADLESS - keep browser open for debugging
         # options_selenium.add_argument("--headless=new")
