@@ -760,6 +760,15 @@ def warm_up_session(driver):
 def main():
     global MAGAZYN_URL, PROXY_URL, MOBILE_MODE
     
+    # CRITICAL: Kill orphaned Chrome/ChromeDriver before starting
+    print("[CLEANUP] Killing orphaned Chrome processes...")
+    try:
+        os.system("taskkill /F /IM chrome.exe /T >nul 2>&1")
+        os.system("taskkill /F /IM chromedriver.exe /T >nul 2>&1")
+        time.sleep(1)
+    except Exception as e:
+        print(f"[CLEANUP] Warning: {e}")
+    
     parser = argparse.ArgumentParser(description="Allegro Competitor Price Checker")
     parser.add_argument("--url", required=True, help="Magazyn URL (e.g., https://magazyn.retrievershop.pl)")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Poll interval in seconds")
@@ -901,7 +910,17 @@ def main():
     finally:
         if driver:
             print("Closing browser...")
-            driver.quit()
+            try:
+                driver.quit()
+            except Exception as e:
+                print(f"[!] Error closing driver: {e}")
+        # Final cleanup - kill any remaining Chrome/ChromeDriver
+        print("[CLEANUP] Final Chrome cleanup...")
+        try:
+            os.system("taskkill /F /IM chrome.exe /T >nul 2>&1")
+            os.system("taskkill /F /IM chromedriver.exe /T >nul 2>&1")
+        except:
+            pass
 
 
 if __name__ == "__main__":
