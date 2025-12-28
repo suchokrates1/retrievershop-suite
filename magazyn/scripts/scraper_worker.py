@@ -591,7 +591,7 @@ def warm_up_session(driver):
 
 
 def main():
-    global MAGAZYN_URL, PROXY_URL, MOBILE_MODE
+    global MAGAZYN_URL, PROXY_URL, MOBILE_MODE, BATCH_SIZE
     
     # CRITICAL: Kill orphaned Chrome/ChromeDriver before starting
     print("[CLEANUP] Killing orphaned Chrome processes...")
