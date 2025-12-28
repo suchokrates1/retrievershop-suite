@@ -152,11 +152,11 @@ def submit_results(session):
             my_price_row = my_price_result.fetchone()
             my_price = my_price_row[0] if my_price_row else 0
             
-            # Convert price string to Decimal
-            price_decimal = None
+            # Convert price string to float (SQLite doesn't support Decimal)
+            price_float = None
             if competitor_price:
                 try:
-                    price_decimal = Decimal(str(competitor_price))
+                    price_float = float(str(competitor_price))
                 except:
                     pass
             
@@ -171,7 +171,7 @@ def submit_results(session):
                 {
                     "offer_id": offer_id,
                     "my_price": my_price,
-                    "competitor_price": price_decimal,
+                    "competitor_price": price_float,
                     "competitor_seller": competitor_seller if status == 'competitor_cheaper' else None,
                     "competitor_url": competitor_url if status == 'competitor_cheaper' else None,
                     "competitor_delivery_days": competitor_delivery_days if status == 'competitor_cheaper' else None
