@@ -416,7 +416,7 @@ def check_offer_price(driver, offer_url, my_price):
         # Parse JSON data embedded in page
         html = driver.page_source
         
-        # Allegro stores data in JSON - extract "mainPrice" and "seller" fields
+        # Allegro stores data in JSON - extract "mainPrice", "seller" and "delivery" fields
         # Pattern: "mainPrice":{"amount":"230.99","currency":"PLN"}
         price_pattern = r'"mainPrice":\{"amount":"([^"]+)","currency":"PLN"\}'
         price_matches = re.findall(price_pattern, html)
@@ -425,15 +425,35 @@ def check_offer_price(driver, offer_url, my_price):
         seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
         seller_matches = re.findall(seller_pattern, html)
         
-        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers")
+        # Pattern: "delivery":{"from":"2","to":"4"} or "from":"14","to":"21" (Chiny!)
+        delivery_pattern = r'"delivery":\{"from":"(\d+)","to":"(\d+)"\}'
+        delivery_matches = re.findall(delivery_pattern, html)
         
-        # Match prices with sellers
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_matches)} delivery times")
+        
+        # Match prices with sellers and delivery times
         offers = []
         for i, price_str in enumerate(price_matches):
             try:
                 price = Decimal(price_str.replace(',', '.'))
                 seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
-                offers.append({'price': price, 'seller': seller, 'url': offer_url})
+                
+                # Get delivery time (max days)
+                delivery_to = None
+                if i < len(delivery_matches):
+                    delivery_to = int(delivery_matches[i][1])  # "to" value
+                
+                # FILTER: Skip offers with delivery > 4 days (Chińscy sprzedawcy)
+                if delivery_to and delivery_to > 4:
+                    print(f"  Skipping {seller} - delivery {delivery_to} days (China?)")
+                    continue
+                
+                offers.append({
+                    'price': price, 
+                    'seller': seller, 
+                    'url': offer_url,
+                    'delivery_days': delivery_to
+                })
             except (ValueError, IndexError):
                 continue
         
@@ -467,12 +487,25 @@ def check_offer_price(driver, offer_url, my_price):
             'price': str(cheapest['price']),
             'seller': cheapest['seller'],
             'url': cheapest['url'],
-            'delivery_days': None
+            'delivery_days': cheapest.get('delivery_days')
         }
         
     except Exception as e:
         print(f"  Error checking offer: {e}")
         return None
+
+
+def get_offers_total():
+    """Get total count of offers waiting for check."""
+    try:
+        url = f"{MAGAZYN_URL}/api/scraper/get_tasks"
+        response = requests.get(url, params={"limit": 1}, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("total", 0)
+    except Exception as e:
+        print(f"[!] Error fetching total: {e}")
+        return 0
 
 
 def get_offers():
@@ -613,6 +646,8 @@ def main():
         
         # Main scraping loop
         while True:
+            # Get total count first
+            total_offers = get_offers_total()
             offers = get_offers()
             
             if not offers:
@@ -620,7 +655,7 @@ def main():
                 time.sleep(poll_interval)
                 continue
             
-            print(f"\nChecking {len(offers)} offers...")
+            print(f"\nChecking {len(offers)} offers (total pending: {total_offers})...")
             results = []
             
             for i, offer in enumerate(offers, 1):
@@ -629,10 +664,13 @@ def main():
                 my_price = offer.get("my_price", "0")
                 url = offer["url"]
                 
+                # Calculate global position (batch start + current index)
+                global_index = (total_offers - len(offers)) + i
+                
                 # Truncate title for display
                 display_title = title[:40] + "..." if len(title) > 40 else title
                 
-                print(f"\n[{i}/{len(offers)}] {display_title}")
+                print(f"\n[{global_index}/{total_offers}] {display_title}")
                 print(f"  My price: {my_price} zł")
                 
                 try:
