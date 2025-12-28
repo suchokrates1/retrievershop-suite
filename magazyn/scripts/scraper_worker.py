@@ -425,15 +425,18 @@ def check_offer_price(driver, offer_url, my_price):
         seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
         seller_matches = re.findall(seller_pattern, html)
         
-        # Pattern: "dostawa za X dni" - text visible on page
-        delivery_pattern = r'dostawa\s+za\s+(\d+)\s+dn'
-        delivery_text_matches = re.findall(delivery_pattern, html, re.IGNORECASE)
+        # Pattern: "dostawa za X dni" - explicit days format
+        delivery_days_pattern = r'dostawa\s+za\s+(\d+)\s+dn'
+        delivery_days_matches = re.findall(delivery_days_pattern, html, re.IGNORECASE)
         
-        # Pattern: JSON delivery time (if exists)
-        delivery_json_pattern = r'"delivery[^"]*"[^}]*?(\d+)[^}]*?(\d+)'
-        delivery_json_matches = re.findall(delivery_json_pattern, html)
+        # Pattern: "dostawa za 8 dni" or "dostawa za 8 do 14 dni" (range)
+        delivery_range_pattern = r'dostawa\s+(?:za\s+)?(?:\d+\s+do\s+)?(\d+)\s+dn'
+        delivery_range_matches = re.findall(delivery_range_pattern, html, re.IGNORECASE)
         
-        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_text_matches)} delivery (text), {len(delivery_json_matches)} delivery (JSON)")
+        # Combine both patterns (use range if more matches)
+        delivery_text_matches = delivery_range_matches if len(delivery_range_matches) > len(delivery_days_matches) else delivery_days_matches
+        
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_text_matches)} delivery times")
         
         # Match prices with sellers and delivery times
         offers = []
@@ -450,8 +453,9 @@ def check_offer_price(driver, offer_url, my_price):
                     except (ValueError, IndexError):
                         pass
                 
-                # FILTER: Skip offers with delivery > 7 days (Chinese sellers)
-                if delivery_days and delivery_days > 7:
+                # FILTER: Skip ONLY if explicitly > 7 days
+                # If delivery_days = None (no info), we ACCEPT (don't exclude local sellers)
+                if delivery_days is not None and delivery_days > 7:
                     print(f"  Skipping {seller} - delivery {delivery_days} days (China?)")
                     continue
                 
