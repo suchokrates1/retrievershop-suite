@@ -440,6 +440,11 @@ def check_offer_price(driver, offer_url, my_price):
                     search_area = html[seller_pos:seller_pos + 500]
                     delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', search_area, re.IGNORECASE)
                     delivery_days = int(delivery_match.group(1)) if delivery_match else None
+                    
+                    # DEBUG: For Chinese sellers, show search area
+                    if not delivery_match and seller in ['Helen_pl', 'xiaomi_cn', 'iamron', 'Ship_Store1']:
+                        print(f"  [DEBUG] {seller}: No delivery found in search_area")
+                        print(f"  [DEBUG] Search area sample: {search_area[:200]}")
                 else:
                     delivery_days = None
                 
