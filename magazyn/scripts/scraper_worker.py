@@ -425,34 +425,19 @@ def check_offer_price(driver, offer_url, my_price):
         seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
         seller_matches = re.findall(seller_pattern, html)
         
-        # Pattern: "delivery":{"from":"2","to":"4"} or "from":"14","to":"21" (Chiny!)
-        delivery_pattern = r'"delivery":\{"from":"(\d+)","to":"(\d+)"\}'
-        delivery_matches = re.findall(delivery_pattern, html)
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers")
         
-        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_matches)} delivery times")
-        
-        # Match prices with sellers and delivery times
+        # Match prices with sellers
         offers = []
         for i, price_str in enumerate(price_matches):
             try:
                 price = Decimal(price_str.replace(',', '.'))
                 seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
                 
-                # Get delivery time (max days)
-                delivery_to = None
-                if i < len(delivery_matches):
-                    delivery_to = int(delivery_matches[i][1])  # "to" value
-                
-                # FILTER: Skip offers with delivery > 4 days (Chińscy sprzedawcy)
-                if delivery_to and delivery_to > 4:
-                    print(f"  Skipping {seller} - delivery {delivery_to} days (China?)")
-                    continue
-                
                 offers.append({
                     'price': price, 
                     'seller': seller, 
-                    'url': offer_url,
-                    'delivery_days': delivery_to
+                    'url': offer_url
                 })
             except (ValueError, IndexError):
                 continue
@@ -486,8 +471,7 @@ def check_offer_price(driver, offer_url, my_price):
             'status': 'competitor_cheaper',
             'price': str(cheapest['price']),
             'seller': cheapest['seller'],
-            'url': cheapest['url'],
-            'delivery_days': cheapest.get('delivery_days')
+            'url': cheapest['url']
         }
         
     except Exception as e:

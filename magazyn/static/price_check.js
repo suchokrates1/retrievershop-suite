@@ -341,8 +341,16 @@
             
             competitorCell.appendChild(wrapper);
         } else {
-            competitorCell.className = 'text-muted';
-            competitorCell.textContent = 'Brak konkurencji';
+            // Rozróżnij: brak ofert vs jesteśmy najtańsi
+            competitorCell.className = 'text-center';
+            if (check.status === 'no_offers') {
+                competitorCell.innerHTML = '<span class="text-muted"><i class="bi bi-search"></i> Brak ofert</span>';
+            } else if (check.status === 'cheapest') {
+                competitorCell.innerHTML = '<span class="text-success fw-bold"><i class="bi bi-trophy"></i> Najtańsza oferta</span>';
+            } else {
+                competitorCell.className = 'text-muted';
+                competitorCell.textContent = 'Brak danych';
+            }
         }
         row.appendChild(competitorCell);
         

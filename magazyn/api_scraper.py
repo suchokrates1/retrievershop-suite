@@ -160,7 +160,6 @@ def submit_results(session):
             competitor_price = result.get("competitor_price")
             competitor_seller = result.get("competitor_seller")
             competitor_url = result.get("competitor_url")
-            competitor_delivery_days = result.get("competitor_delivery_days")
             
             # Get current price from allegro_offers
             my_price_result = session.execute(
@@ -182,9 +181,9 @@ def submit_results(session):
             session.execute(
                 text("""
                 INSERT INTO allegro_price_history 
-                    (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, competitor_delivery_days)
+                    (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, status)
                 VALUES 
-                    (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :competitor_delivery_days)
+                    (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :status)
                 """),
                 {
                     "offer_id": offer_id,
@@ -192,7 +191,7 @@ def submit_results(session):
                     "competitor_price": price_float,
                     "competitor_seller": competitor_seller if status == 'competitor_cheaper' else None,
                     "competitor_url": competitor_url if status == 'competitor_cheaper' else None,
-                    "competitor_delivery_days": competitor_delivery_days if status == 'competitor_cheaper' else None
+                    "status": status
                 }
             )
             processed += 1
@@ -314,7 +313,8 @@ def recent_checks(session):
         aph.competitor_price,
         aph.competitor_seller,
         aph.competitor_url,
-        aph.recorded_at
+        aph.recorded_at,
+        aph.status
     FROM allegro_price_history aph
     LEFT JOIN allegro_offers ao ON aph.offer_id = ao.offer_id
     WHERE 1=1
@@ -344,6 +344,7 @@ def recent_checks(session):
             "competitor_seller": row[4],
             "competitor_url": row[5],
             "recorded_at": row[6],
+            "status": row[7] or 'unknown',
             "is_cheaper": my_price <= competitor_price if competitor_price else True
         })
     
