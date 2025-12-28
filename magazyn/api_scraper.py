@@ -254,3 +254,79 @@ def status(session):
         "errors": 0,
         "last_check": last_check
     })
+
+
+@api_scraper_bp.route("/recent_checks", methods=["GET"])
+@with_session
+def recent_checks(session):
+    """
+    Returns recently checked offers (last 50).
+    Used for live updates on frontend.
+    
+    Query params:
+        since (str): ISO timestamp - only return checks after this time
+        limit (int): Max results (default: 50)
+    
+    Returns:
+        {
+            "checks": [
+                {
+                    "offer_id": "12345678901",
+                    "title": "Product name",
+                    "my_price": 199.99,
+                    "competitor_price": 189.99,
+                    "competitor_seller": "CompetitorName",
+                    "recorded_at": "2025-12-28 19:30:15",
+                    "is_cheaper": false
+                }
+            ],
+            "count": 5
+        }
+    """
+    since = request.args.get("since")
+    limit = request.args.get("limit", 50, type=int)
+    limit = min(limit, 100)  # Max 100
+    
+    # Build query
+    query = """
+    SELECT 
+        aph.offer_id,
+        ao.title,
+        aph.price as my_price,
+        aph.competitor_price,
+        aph.competitor_seller,
+        aph.competitor_url,
+        aph.recorded_at
+    FROM allegro_price_history aph
+    LEFT JOIN allegro_offers ao ON aph.offer_id = ao.offer_id
+    WHERE 1=1
+    """
+    
+    params = {"limit": limit}
+    
+    if since:
+        query += " AND aph.recorded_at > :since"
+        params["since"] = since
+    
+    query += " ORDER BY aph.recorded_at DESC LIMIT :limit"
+    
+    result = session.execute(text(query), params)
+    rows = result.fetchall()
+    
+    checks = []
+    for row in rows:
+        my_price = float(row[2]) if row[2] else 0
+        competitor_price = float(row[3]) if row[3] else None
+        
+        checks.append({
+            "offer_id": row[0],
+            "title": row[1] or "Unknown",
+            "my_price": my_price,
+            "competitor_price": competitor_price,
+            "competitor_seller": row[4],
+            "competitor_url": row[5],
+            "recorded_at": row[6],
+            "is_cheaper": my_price <= competitor_price if competitor_price else True
+        })
+    
+    return jsonify({"checks": checks, "count": len(checks)})
