@@ -41,8 +41,108 @@ USER_AGENTS = [
 ]
 
 
+def find_chrome_binary():
+    """Find Chrome binary in common locations across different systems."""
+    import platform
+    import glob
+    
+    system = platform.system()
+    chrome_paths = []
+    
+    if system == "Windows":
+        # Standard locations
+        chrome_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
+        ]
+        
+        # Search all user profiles (handles C:\Users\sucho\... and others)
+        try:
+            for user_dir in glob.glob(r"C:\Users\*"):
+                user_chrome = os.path.join(user_dir, r"AppData\Local\Google\Chrome\Application\chrome.exe")
+                if os.path.exists(user_chrome):
+                    chrome_paths.insert(0, user_chrome)  # Prioritize user-specific Chrome
+        except:
+            pass
+            
+    elif system == "Darwin":  # macOS
+        chrome_paths = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ]
+    else:  # Linux
+        chrome_paths = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/snap/bin/chromium",
+        ]
+    
+    # Check chrome_config.txt (created by BOOTSTRAP.bat)
+    if os.path.exists("chrome_config.txt"):
+        try:
+            with open("chrome_config.txt", "r") as f:
+                for line in f:
+                    if line.startswith("CHROME_BINARY="):
+                        config_path = line.split("=", 1)[1].strip()
+                        if os.path.exists(config_path):
+                            return config_path
+        except:
+            pass
+    
+    # Find first existing path
+    for path in chrome_paths:
+        if os.path.exists(path):
+            print(f"Found Chrome: {path}")
+            return path
+    
+    print("Warning: Chrome not found in standard locations, using system default")
+    return None
+
+
+def auto_install_dependencies():
+    """Auto-install missing Python packages."""
+    import subprocess
+    import sys
+    
+    required_packages = {
+        'selenium': 'selenium',
+        'requests': 'requests',
+        'webdriver_manager': 'webdriver-manager',
+    }
+    
+    # Try to import undetected_chromedriver
+    try:
+        import undetected_chromedriver
+    except ImportError:
+        print("Installing undetected-chromedriver...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "undetected-chromedriver", "--quiet"])
+        print("✓ undetected-chromedriver installed")
+    
+    missing = []
+    for module, package in required_packages.items():
+        try:
+            __import__(module)
+        except ImportError:
+            missing.append(package)
+    
+    if missing:
+        print(f"Installing missing dependencies: {', '.join(missing)}")
+        subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing + ["--quiet"])
+        print("✓ Dependencies installed")
+
+
 def setup_chrome_driver():
     """Setup Chrome driver with anti-detection measures."""
+    # Auto-install dependencies if missing
+    try:
+        auto_install_dependencies()
+    except Exception as e:
+        print(f"Warning: Could not auto-install dependencies: {e}")
+    
     # Use persistent profile to keep cookies/login
     profile_path = os.path.abspath("./allegro_scraper_profile")
     os.makedirs(profile_path, exist_ok=True)
@@ -50,9 +150,16 @@ def setup_chrome_driver():
     # Random user agent
     user_agent = random.choice(USER_AGENTS)
     
+    # Find Chrome binary
+    chrome_binary = find_chrome_binary()
+    
     if UNDETECTED_AVAILABLE:
         print("Using undetected-chromedriver for better anti-detection")
         options = uc.ChromeOptions()
+        
+        if chrome_binary:
+            options.binary_location = chrome_binary
+            
         options.add_argument(f"--user-data-dir={profile_path}")
         options.add_argument("--profile-directory=Default")
         options.add_argument("--no-sandbox")
@@ -60,30 +167,59 @@ def setup_chrome_driver():
         options.add_argument("--start-maximized")
         options.add_argument(f"--user-agent={user_agent}")
         
-        driver = uc.Chrome(options=options, version_main=None)
-        return driver
-    else:
-        print("Warning: undetected-chromedriver not installed, using standard selenium")
-        print("Install with: pip install undetected-chromedriver")
-        chrome_options = Options()
-        chrome_options.add_argument(f"--user-data-dir={profile_path}")
-        chrome_options.add_argument("--profile-directory=Default")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
-        chrome_options.add_argument("--start-maximized")
-        chrome_options.add_argument("--no-first-run")
-        chrome_options.add_argument("--no-default-browser-check")
-        chrome_options.add_argument(f"--user-agent={user_agent}")
+        try:
+            driver = uc.Chrome(options=options, version_main=None)
+            return driver
+        except Exception as e:
+            print(f"undetected-chromedriver failed: {e}")
+            print("Falling back to standard selenium...")
+            # Fall through to standard selenium
+    
+    # Standard selenium fallback
+    print("Using standard selenium webdriver")
+    if not UNDETECTED_AVAILABLE:
+        print("Tip: Install undetected-chromedriver for better anti-detection")
+        print("  pip install undetected-chromedriver")
+    
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service as ChromeService
+    from selenium.webdriver.chrome.options import Options
+    from webdriver_manager.chrome import ChromeDriverManager
+    
+    chrome_options = Options()
+    
+    if chrome_binary:
+        chrome_options.binary_location = chrome_binary
         
+    chrome_options.add_argument(f"--user-data-dir={profile_path}")
+    chrome_options.add_argument("--profile-directory=Default")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--no-default-browser-check")
+    chrome_options.add_argument(f"--user-agent={user_agent}")
+    
+    try:
         service = ChromeService(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        print(f"Error starting Chrome: {e}")
+        print("\nTroubleshooting:")
+        print("1. Make sure Chrome is installed")
+        print("2. Try running BOOTSTRAP.bat to auto-configure")
+        print("3. Check if Chrome is not already running")
+        raise
     
     # Hide webdriver property
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    try:
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    except:
+        pass
     
     return driver
 
