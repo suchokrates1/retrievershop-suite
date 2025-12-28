@@ -416,43 +416,40 @@ def check_offer_price(driver, offer_url, my_price):
         # Parse JSON data embedded in page
         html = driver.page_source
         
-        # Allegro stores data in JSON - extract "mainPrice", "seller" and "delivery" fields
-        # Pattern: "mainPrice":{"amount":"230.99","currency":"PLN"}
-        price_pattern = r'"mainPrice":\{"amount":"([^"]+)","currency":"PLN"\}'
-        price_matches = re.findall(price_pattern, html)
+        # Find all offer blocks (each offer is a separate div with price/seller/delivery)
+        # Pattern: each offer block contains: mainPrice, seller, and optionally delivery text
+        offer_blocks = re.findall(
+            r'"mainPrice":\{"amount":"([^"]+)"[^}]+\}[^{]*?"seller":\{[^}]*"login":"([^"]+)"[^}]*?\}(.*?)(?="mainPrice"|$)',
+            html,
+            re.DOTALL
+        )
         
-        # Pattern: "seller":{"id":"...","title":"...","login":"tiptop24pl"
-        seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
-        seller_matches = re.findall(seller_pattern, html)
+        print(f"  Found {len(offer_blocks)} offer blocks")
         
-        # Pattern: "dostawa za X dni" - explicit days format
-        delivery_days_pattern = r'dostawa\s+za\s+(\d+)\s+dn'
-        delivery_days_matches = re.findall(delivery_days_pattern, html, re.IGNORECASE)
-        
-        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_days_matches)} delivery times (NOT MAPPED - disabled)")
-        
-        # NOTE: Delivery filtering DISABLED - can't reliably map delivery times to specific offers
-        # Allegro HTML doesn't preserve order between price/seller/delivery blocks
-        # TODO: Parse each offer block separately instead of global regex
-        
-        # Match prices with sellers
+        # Parse each offer block separately
         offers = []
-        for i, price_str in enumerate(price_matches):
+        for price_str, seller, block_content in offer_blocks:
             try:
                 price = Decimal(price_str.replace(',', '.'))
-                seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
                 
-                # Delivery filtering DISABLED - unreliable index mapping
-                # Keep delivery_days = None for all offers
+                # Look for delivery time WITHIN this specific block
                 delivery_days = None
+                delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', block_content, re.IGNORECASE)
+                if delivery_match:
+                    delivery_days = int(delivery_match.group(1))
+                
+                # FILTER: Skip if delivery > 7 days (Chinese sellers)
+                if delivery_days is not None and delivery_days > 7:
+                    print(f"  Skipping {seller} - delivery {delivery_days} days (China?)")
+                    continue
                 
                 offers.append({
-                    'price': price, 
-                    'seller': seller, 
+                    'price': price,
+                    'seller': seller,
                     'url': offer_url,
                     'delivery_days': delivery_days
                 })
-            except (ValueError, IndexError):
+            except (ValueError, IndexError) as e:
                 continue
         
         # Deduplicate by seller (keep lowest price per seller)
