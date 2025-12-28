@@ -75,6 +75,7 @@ def get_tasks(session):
             )
         ) aph ON ao.offer_id = aph.offer_id
         WHERE ao.offer_id IS NOT NULL
+            AND ao.price > 0
             AND (aph.recorded_at IS NULL 
                  OR aph.recorded_at < datetime('now', '-1 hour'))
         ORDER BY COALESCE(aph.recorded_at, '1970-01-01') ASC
