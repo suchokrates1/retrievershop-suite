@@ -170,13 +170,13 @@ def apply_stealth_scripts(driver):
 
 
 def create_proxy_extension(proxy_url):
-    """Create a Chrome extension for proxy authentication.
+    """Create a Chrome extension for proxy authentication and return ZIP path.
     
     Args:
         proxy_url: Proxy URL in format http://user:pass@host:port
         
     Returns:
-        Path to the unpacked extension directory
+        Path to the zipped extension (.crx)
     """
     # Parse proxy URL
     parsed = urlparse(proxy_url)
@@ -201,7 +201,7 @@ def create_proxy_extension(proxy_url):
     background_js = background_js.replace("PROXY_USER", proxy_user)
     background_js = background_js.replace("PROXY_PASS", proxy_pass)
     
-    # Write configured extension
+    # Write configured extension to temp dir
     configured_ext_dir = os.path.abspath("./proxy_auth_configured")
     os.makedirs(configured_ext_dir, exist_ok=True)
     
@@ -212,8 +212,15 @@ def create_proxy_extension(proxy_url):
     with open(os.path.join(configured_ext_dir, "background.js"), 'w') as f:
         f.write(background_js)
     
+    # Create ZIP file (Chrome extension format)
+    zip_path = os.path.abspath("./proxy_auth.zip")
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        zipf.write(os.path.join(configured_ext_dir, "manifest.json"), "manifest.json")
+        zipf.write(os.path.join(configured_ext_dir, "background.js"), "background.js")
+    
     print(f"[PROXY] Extension created: {proxy_host}:{proxy_port} (user: {proxy_user})")
-    return configured_ext_dir
+    print(f"[PROXY] Extension ZIP: {zip_path}")
+    return zip_path
 
 
 def human_like_mouse_movement(driver):
@@ -251,7 +258,8 @@ def setup_chrome_driver():
     print(f"[STEALTH] Window: {window_size[0]}x{window_size[1]}")
     print(f"[STEALTH] Mobile mode: {MOBILE_MODE}")
     
-    if UNDETECTED_AVAILABLE:
+    if UNDETECTED_AVAILABLE and not PROXY_URL:
+        # Use undetected-chromedriver ONLY when no proxy (it blocks extensions)
         print("Using undetected-chromedriver for better anti-detection")
         
         # Use PERSISTENT profile to avoid looking like a bot
@@ -274,21 +282,54 @@ def setup_chrome_driver():
         # Anti-detection args
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--disable-infobars")
-        # DON'T disable extensions if using proxy auth
-        if not PROXY_URL:
-            options.add_argument("--disable-extensions")
         options.add_argument("--disable-popup-blocking")
         
         # Make it look more human
         options.add_argument("--enable-features=NetworkService,NetworkServiceInProcess")
         
-        # PROXY configuration with authentication
+        # PROXY - undetected-chromedriver BLOCKS extensions, handled below
+        proxy_ext_zip_path = None
         if PROXY_URL:
-            proxy_ext_dir = create_proxy_extension(PROXY_URL)
-            options.add_argument(f"--load-extension={proxy_ext_dir}")
-            print(f"[STEALTH] Proxy extension loaded from {proxy_ext_dir}")
-        
+            proxy_ext_zip_path = create_proxy_extension(PROXY_URL)
+            
         driver = uc.Chrome(options=options, version_main=None)
+        
+    elif PROXY_URL:
+        # MUST use regular Selenium when proxy auth is needed (extensions)
+        print("Using regular Selenium + proxy extension (undetected blocks extensions)")
+        from selenium import webdriver
+        from selenium.webdriver.chrome.service import Service as ChromeService
+        from webdriver_manager.chrome import ChromeDriverManager
+        
+        # Use PERSISTENT profile
+        profile_path = os.path.abspath("./allegro_scraper_profile")
+        os.makedirs(profile_path, exist_ok=True)
+        
+        options_selenium = webdriver.ChromeOptions()
+        
+        # Profile
+        options_selenium.add_argument(f"--user-data-dir={profile_path}")
+        options_selenium.add_argument("--profile-directory=ScraperSession")
+        
+        # Basic args
+        options_selenium.add_argument("--no-sandbox")
+        options_selenium.add_argument("--disable-dev-shm-usage")
+        options_selenium.add_argument(f"--user-agent={user_agent}")
+        options_selenium.add_argument(f"--window-size={window_size[0]},{window_size[1]}")
+        options_selenium.add_argument(f"--lang={language.split(',')[0]}")
+        
+        # Anti-detection
+        options_selenium.add_argument("--disable-blink-features=AutomationControlled")
+        options_selenium.add_argument("--disable-infobars")
+        options_selenium.add_argument("--disable-popup-blocking")
+        
+        # Create and add proxy extension
+        proxy_ext_zip_path = create_proxy_extension(PROXY_URL)
+        options_selenium.add_extension(proxy_ext_zip_path)
+        print(f"[PROXY] Extension added: {proxy_ext_zip_path}")
+        
+        service = ChromeService(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options_selenium)
         
         # Apply stealth scripts via CDP
         driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
