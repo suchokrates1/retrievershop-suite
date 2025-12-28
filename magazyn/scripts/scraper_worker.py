@@ -19,15 +19,11 @@ import shutil
 from decimal import Decimal
 from urllib.parse import urlparse
 
-try:
-    import undetected_chromedriver as uc
-    UNDETECTED_AVAILABLE = True
-except ImportError:
-    UNDETECTED_AVAILABLE = False
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service as ChromeService
-    from selenium.webdriver.chrome.options import Options
-    from webdriver_manager.chrome import ChromeDriverManager
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Try selenium-stealth for extra protection
 try:
@@ -35,8 +31,6 @@ try:
     SELENIUM_STEALTH_AVAILABLE = True
 except ImportError:
     SELENIUM_STEALTH_AVAILABLE = False
-
-from selenium.webdriver.common.by import By
 
 
 MAGAZYN_URL = "https://magazyn.retrievershop.pl"
@@ -76,95 +70,27 @@ MOBILE_MODE = False
 
 
 def apply_stealth_scripts(driver):
-    """Apply comprehensive stealth JavaScript to hide automation."""
+    """Apply minimal stealth JavaScript to hide automation.
+    
+    Note: Most stealth is already handled by selenium-stealth library.
+    This function only applies additional patches not covered by the library.
+    """
     stealth_scripts = [
-        # 1. Hide webdriver property
+        # Hide webdriver property (critical)
         "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});",
         
-        # 2. Override plugins to look real
-        """
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => [
-                {name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer'},
-                {name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai'},
-                {name: 'Native Client', filename: 'internal-nacl-plugin'}
-            ]
-        });
-        """,
-        
-        # 3. Override languages
-        "Object.defineProperty(navigator, 'languages', {get: () => ['pl-PL', 'pl', 'en-US', 'en']});",
-        
-        # 4. Hide automation flags
-        "window.chrome = {runtime: {}};",
-        
-        # 5. Override permissions query
-        """
-        const originalQuery = window.navigator.permissions.query;
-        window.navigator.permissions.query = (parameters) => (
-            parameters.name === 'notifications' ?
-                Promise.resolve({state: Notification.permission}) :
-                originalQuery(parameters)
-        );
-        """,
-        
-        # 6. Realistic screen dimensions (override if headless)
-        """
-        Object.defineProperty(screen, 'availWidth', {get: () => screen.width});
-        Object.defineProperty(screen, 'availHeight', {get: () => screen.height});
-        """,
-        
-        # 7. Hide automation-related properties
+        # Hide automation-related properties
         """
         delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
         delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
         delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
         """,
-        
-        # 8. Mock battery API
-        """
-        navigator.getBattery = () => Promise.resolve({
-            charging: true,
-            chargingTime: 0,
-            dischargingTime: Infinity,
-            level: 1.0
-        });
-        """,
-        
-        # 9. Override connection info
-        """
-        Object.defineProperty(navigator, 'connection', {
-            get: () => ({
-                effectiveType: '4g',
-                rtt: 50,
-                downlink: 10,
-                saveData: false
-            })
-        });
-        """,
-        
-        # 10. Hardware concurrency (realistic CPU cores)
-        "Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});",
-        
-        # 11. Device memory
-        "Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});",
-        
-        # 12. Override toString to hide modifications
-        """
-        const oldToString = Function.prototype.toString;
-        Function.prototype.toString = function() {
-            if (this === navigator.permissions.query) {
-                return 'function query() { [native code] }';
-            }
-            return oldToString.call(this);
-        };
-        """
     ]
     
     for script in stealth_scripts:
         try:
             driver.execute_script(script)
-        except Exception as e:
+        except Exception:
             pass  # Some scripts may fail, continue with others
     
     return driver
@@ -259,63 +185,14 @@ def setup_chrome_driver():
     print(f"[STEALTH] Window: {window_size[0]}x{window_size[1]}")
     print(f"[STEALTH] Mobile mode: {MOBILE_MODE}")
     
-    if UNDETECTED_AVAILABLE and not PROXY_URL:
-        # Use undetected-chromedriver ONLY when no proxy (it blocks extensions)
-        print("Using undetected-chromedriver for better anti-detection")
-        
-        # Use PERSISTENT profile to avoid looking like a bot
-        profile_path = os.path.abspath("./allegro_scraper_profile")
-        os.makedirs(profile_path, exist_ok=True)
-        
-        options = uc.ChromeOptions()
-        
-        # PROFILE - persistent cookies/fingerprint
-        options.add_argument(f"--user-data-dir={profile_path}")
-        options.add_argument("--profile-directory=ScraperSession")
-        
-        # Basic Chrome args
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument(f"--user-agent={user_agent}")
-        options.add_argument(f"--window-size={window_size[0]},{window_size[1]}")
-        options.add_argument(f"--lang={language.split(',')[0]}")
-        
-        # Anti-detection args
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--disable-infobars")
-        options.add_argument("--disable-popup-blocking")
-        
-        # Make it look more human
-        options.add_argument("--enable-features=NetworkService,NetworkServiceInProcess")
-        
-        # PROXY - undetected-chromedriver BLOCKS extensions, handled below
-        proxy_ext_zip_path = None
-        if PROXY_URL:
-            proxy_ext_zip_path = create_proxy_extension(PROXY_URL)
-            
-        driver = uc.Chrome(options=options, version_main=None)
-        
-    elif PROXY_URL:
+    if PROXY_URL:
         # Use regular Selenium + Chrome extension (extension sets proxy)
         print("Using regular Selenium + proxy extension")
-        from selenium import webdriver
-        from selenium.webdriver.chrome.service import Service as ChromeService
-        from webdriver_manager.chrome import ChromeDriverManager
-        
-        # Parse proxy URL
-        parsed = urlparse(PROXY_URL)
-        proxy_user = parsed.username
-        proxy_pass = parsed.password
-        proxy_host = parsed.hostname
-        proxy_port = parsed.port
         
         options_selenium = webdriver.ChromeOptions()
         
         # NO persistent profile - it causes Chrome process leaks
         # Each run creates new session = clean start + proper cleanup
-        
-        # NO HEADLESS - keep browser open for debugging
-        # options_selenium.add_argument("--headless=new")
         
         # Set page load strategy
         options_selenium.page_load_strategy = 'normal'
@@ -336,7 +213,9 @@ def setup_chrome_driver():
         proxy_ext_zip_path = create_proxy_extension(PROXY_URL)
         options_selenium.add_extension(proxy_ext_zip_path)
         
-        print(f"[PROXY] Extension loaded: {proxy_host}:{proxy_port} (user: {proxy_user})")
+        # Parse proxy for logging
+        parsed = urlparse(PROXY_URL)
+        print(f"[PROXY] Extension loaded: {parsed.hostname}:{parsed.port} (user: {parsed.username})")
         
         service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(
@@ -368,11 +247,10 @@ def setup_chrome_driver():
         
         return driver
     else:
-        print("Warning: undetected-chromedriver not installed, using standard selenium")
-        print("Install with: pip install undetected-chromedriver")
+        # No proxy - use standard selenium
+        print("Using standard Selenium (no proxy)")
         
         chrome_options = Options()
-        # NO PROFILE - causes hangs/locks
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
@@ -382,11 +260,8 @@ def setup_chrome_driver():
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-default-browser-check")
         chrome_options.add_argument(f"--user-agent={user_agent}")
-        
-        # PROXY configuration
-        if PROXY_URL:
-            chrome_options.add_argument(f"--proxy-server={PROXY_URL}")
-            print(f"Using proxy: {PROXY_URL}")
+        chrome_options.add_argument(f"--window-size={window_size[0]},{window_size[1]}")
+        chrome_options.add_argument(f"--lang={language.split(',')[0]}")
         
         service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -401,64 +276,42 @@ def check_offer_price(driver, offer_url, my_price):
     """
     Go to Allegro offer page and find cheapest competitor price from "Inne oferty" section.
     
-    The offer_url already contains #inne-oferty-produktu fragment.
-    
     Strategy:
     1. Open offer page (link includes #inne-oferty-produktu)
     2. Wait for "Inne oferty" section to load
-    3. Extract all offers with price, seller, and delivery time
-    4. Filter: only offers with delivery time <= 4 days
-    5. Find cheapest competitor (excluding offers >= our price)
-    6. Return: competitor_price, competitor_seller, competitor_url, delivery_days
-    
-    Returns:
-        dict with keys: price, seller, url, delivery_days
-        or None if no cheaper competitor found
+    3. Extract all offers with price and seller
+    4. Find cheapest competitor (excluding offers >= our price)
+    5. Return: competitor_price, competitor_seller, competitor_url
     """
     try:
         print(f"  Checking: {offer_url}")
-        print(f"  [DEBUG] Loading offer page...")
         driver.get(offer_url)
-        print(f"  [DEBUG] Page loaded")
         
-        # Wait longer for SPA to load (Allegro is React-based)
+        # Wait for SPA to load (Allegro is React-based)
         time.sleep(random.uniform(5, 8))
         
-        print(f"  [DEBUG] Applying stealth...")
         # Apply stealth scripts on every page load
         apply_stealth_scripts(driver)
         
-        # Random wait (human-like)
-        time.sleep(random.uniform(2.5, 4.5))
-        
-        # Human-like scrolling behavior
+        # Human-like behavior
+        time.sleep(random.uniform(2, 4))
         scroll_amount = random.randint(300, 700)
         driver.execute_script(f"window.scrollTo(0, {scroll_amount});")
         time.sleep(random.uniform(0.5, 1.5))
-        
-        # Simulate mouse movement
         human_like_mouse_movement(driver)
-        
-        # Scroll back up slowly
         driver.execute_script("window.scrollTo(0, 0);")
         time.sleep(random.uniform(0.3, 0.8))
         
         # Check for IP block or CAPTCHA
         page_source = driver.page_source.lower()
         
-        # Debug: show page title and snippet + save full HTML
-        try:
-            page_title = driver.title
-            snippet = page_source[:500].replace('\n', ' ')[:200]
-            print(f"  [DEBUG] Page title: {page_title}")
-            print(f"  [DEBUG] Page snippet: {snippet}...")
-            
-            # Save full page to file for debugging
-            with open("last_page_debug.html", "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
-            print(f"  [DEBUG] Full page saved to: last_page_debug.html")
-        except Exception as e:
-            print(f"  [DEBUG] Error saving page: {e}")
+        # Save page for debugging (only on errors)
+        def save_debug_page():
+            try:
+                with open("last_page_debug.html", "w", encoding="utf-8") as f:
+                    f.write(driver.page_source)
+            except:
+                pass
         
         # Check for IP block - hard blocks only (NOT captcha)
         block_keywords = [
@@ -471,60 +324,46 @@ def check_offer_price(driver, offer_url, my_price):
         
         for keyword in block_keywords:
             if keyword in page_source:
-                print(f"  [DEBUG] BLOCK DETECTED! Keyword: '{keyword}'")
-                print("\n" + "="*60)
+                print(f"\n{'='*60}")
                 print("[!] IP BLOCKED BY ALLEGRO!")
-                print("="*60)
-                print("Your IP has been blocked by Allegro's anti-bot protection.")
-                print("This happens when scraping too fast or too many requests.")
+                print(f"{'='*60}")
+                print(f"Block keyword detected: '{keyword}'")
                 print("\nRECOMMENDATIONS:")
                 print("1. Wait 30-60 minutes before retrying")
                 print("2. Use VPN or change IP address")
-                print("3. Reduce scraping speed (already set to 30-60s delay)")
-                print("4. Reduce batch size (currently 3 offers)")
-                print("5. Consider using different proxy or residential IP")
-                print("="*60 + "\n")
-                return None  # Return immediately, don't check for CAPTCHA
+                print("3. Consider using different proxy or residential IP")
+                print(f"{'='*60}\n")
+                save_debug_page()
+                return None
         
         # Check for CAPTCHA (including DataDome)
         captcha_detected = False
         try:
-            # Check page source for CAPTCHA keywords
             if 'captcha-delivery' in page_source or 'datadome' in page_source:
                 captcha_detected = True
             
-            # Look for specific CAPTCHA elements
             if not captcha_detected:
                 captcha_iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery'], iframe[title*='captcha'], iframe[title*='DataDome']")
                 if captcha_iframes and len(captcha_iframes) > 0:
                     iframe = captcha_iframes[0]
                     if iframe.is_displayed() and iframe.size['width'] > 0:
                         captcha_detected = True
-            
-            if not captcha_detected:
-                captcha_forms = driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container")
-                for elem in captcha_forms:
-                    if elem.is_displayed() and elem.size['width'] > 0:
-                        captcha_detected = True
-                        break
         except Exception as e:
             print(f"  CAPTCHA check error: {e}")
         
         if captcha_detected:
-            print("\n" + "="*60)
+            print(f"\n{'='*60}")
             print("[!] CAPTCHA DETECTED!")
-            print("="*60)
+            print(f"{'='*60}")
             print("Please solve the CAPTCHA manually in the Chrome window.")
             print("The script will wait and continue automatically once solved.")
-            print("="*60 + "\n")
+            print(f"{'='*60}\n")
             
             # Wait until CAPTCHA is solved
             captcha_start = time.time()
             while True:
                 time.sleep(5)
                 try:
-                    # Check if we're still on CAPTCHA page
-                    # Method 1: Check page title (CAPTCHA page has generic "allegro.pl" title)
                     current_title = driver.title.lower()
                     page_source_check = driver.page_source.lower()
                     
@@ -536,54 +375,30 @@ def check_offer_price(driver, offer_url, my_price):
                     # If page has real content (not CAPTCHA), continue
                     if not has_captcha_iframe and not has_captcha_text and not is_generic_title:
                         elapsed = int(time.time() - captcha_start)
-                        print(f"[OK] CAPTCHA solved after {elapsed}s! Page loaded: {driver.title[:50]}")
+                        print(f"[OK] CAPTCHA solved after {elapsed}s!")
                         time.sleep(2)
                         break
-                    else:
-                        print(f"    Still waiting... (title: {current_title[:30]}, iframe: {has_captcha_iframe})")
                         
                     # Timeout after 5 minutes
                     if time.time() - captcha_start > 300:
                         print("[!] CAPTCHA timeout (5min) - skipping offer")
-                        return None, None, None, None
+                        return None
                 except Exception as e:
                     print(f"[!] Error checking CAPTCHA status: {e}")
                     break
         
         # Check for block page AFTER CAPTCHA solved
         page_source_after = driver.page_source.lower()
-        block_keywords_check = [
-            "zostałeś zablokowany",
-            "you have been blocked",
-            "zablokowano",
-            "access denied",
-            "dostęp zablokowany",
-            "coś w zachowaniu twojej przeglądarki"
-        ]
-        
-        for keyword in block_keywords_check:
+        for keyword in block_keywords + ["coś w zachowaniu twojej przeglądarki"]:
             if keyword in page_source_after:
-                print(f"\n  [!] ALLEGRO BLOCK PAGE detected after CAPTCHA!")
-                print(f"  Block keyword found: '{keyword}'")
-                print("\n" + "="*60)
-                print("[!] IP BLOCKED BY ALLEGRO!")
-                print("="*60)
+                print(f"\n[!] IP BLOCKED AFTER CAPTCHA (keyword: '{keyword}')")
                 print("Allegro blocked your IP even after solving CAPTCHA.")
-                print("Your IP: Check the block message for details")
-                print("\nRECOMMENDATIONS:")
-                print("1. Wait 1-2 hours before retrying")
-                print("2. Use VPN or mobile hotspot (different IP)")
-                print("3. This IP is flagged - switching required")
-                print("="*60 + "\n")
+                print("This IP is flagged - switching required.\n")
+                save_debug_page()
                 raise Exception("IP_BLOCKED_AFTER_CAPTCHA")
         
-        # Wait for "Inne oferty" section to load
-        time.sleep(3)
-        
-        html = driver.page_source
-        
         # Parse JSON data embedded in page
-        offers = []
+        html = driver.page_source
         
         # Allegro stores data in JSON - extract "mainPrice" and "seller" fields
         # Pattern: "mainPrice":{"amount":"230.99","currency":"PLN"}
@@ -594,25 +409,19 @@ def check_offer_price(driver, offer_url, my_price):
         seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
         seller_matches = re.findall(seller_pattern, html)
         
-        print(f"  Found {len(price_matches)} prices and {len(seller_matches)} sellers in HTML")
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers")
         
-        # Match prices with sellers (they appear in same order in HTML)
+        # Match prices with sellers
+        offers = []
         for i, price_str in enumerate(price_matches):
             try:
                 price = Decimal(price_str.replace(',', '.'))
                 seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
-                
-                offers.append({
-                    'price': price,
-                    'seller': seller,
-                    'url': offer_url,
-                    'delivery_days': None
-                })
-            except (ValueError, IndexError) as e:
-                print(f"  Error parsing offer {i}: {e}")
+                offers.append({'price': price, 'seller': seller, 'url': offer_url})
+            except (ValueError, IndexError):
                 continue
         
-        # Deduplicate offers by seller (keep lowest price per seller)
+        # Deduplicate by seller (keep lowest price per seller)
         unique_offers = {}
         for offer in offers:
             seller = offer['seller']
@@ -621,27 +430,12 @@ def check_offer_price(driver, offer_url, my_price):
         
         offers = list(unique_offers.values())
         
-        print(f"  Found {len(offers)} offers on page")
-        
         if not offers:
             return {'status': 'no_offers', 'message': 'Nie znaleziono ofert konkurencji'}
         
-        # Filter offers by delivery time (max 4 days) and price (cheaper than ours)
+        # Filter: only cheaper than our price
         my_price_decimal = Decimal(str(my_price).replace(',', '.'))
-        
-        print(f"  My price: {my_price_decimal}, filtering...")
-        
-        filtered_offers = []
-        for offer in offers:
-            # Skip if delivery time is known and > 4 days
-            if offer['delivery_days'] is not None and offer['delivery_days'] > 4:
-                continue
-            
-            # Skip if price >= our price
-            if offer['price'] >= my_price_decimal:
-                continue
-            
-            filtered_offers.append(offer)
+        filtered_offers = [o for o in offers if o['price'] < my_price_decimal]
         
         print(f"  After filter: {len(filtered_offers)} cheaper offers")
         
@@ -657,7 +451,7 @@ def check_offer_price(driver, offer_url, my_price):
             'price': str(cheapest['price']),
             'seller': cheapest['seller'],
             'url': cheapest['url'],
-            'delivery_days': cheapest['delivery_days']
+            'delivery_days': None
         }
         
     except Exception as e:
@@ -669,22 +463,13 @@ def get_offers():
     """Fetch offers that need price checking from magazyn API."""
     try:
         url = f"{MAGAZYN_URL}/api/scraper/get_tasks"
-        print(f"[API] Fetching offers from: {url}")
-        response = requests.get(
-            url,
-            params={"limit": BATCH_SIZE},
-            timeout=10
-        )
-        print(f"[API] Response status: {response.status_code}")
+        response = requests.get(url, params={"limit": BATCH_SIZE}, timeout=10)
         response.raise_for_status()
         data = response.json()
         offers = data.get("offers", [])
-        print(f"[API] Got {len(offers)} offers")
         return offers
     except Exception as e:
         print(f"[!] Error fetching offers: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 
 
@@ -702,7 +487,7 @@ def submit_results(results):
         print(f"[OK] Submitted {processed} results")
         return True
     except Exception as e:
-        print(f"Error submitting results: {e}")
+        print(f"[!] Error submitting results: {e}")
         return False
 
 
@@ -802,24 +587,14 @@ def main():
         
         # Warmup - visit homepage first
         if not args.no_warmup:
-            print("[DEBUG] Starting warmup...")
-            try:
-                warmup_result = warm_up_session(driver)
-                print(f"[DEBUG] Warmup result: {warmup_result}")
-                if not warmup_result:
-                    print("[!] Warmup failed - IP may be blocked")
-                    print("[!] Try using --proxy or wait and try again later")
-                    return
-            except Exception as e:
-                print(f"[!] Warmup exception: {e}")
-                import traceback
-                traceback.print_exc()
+            warmup_result = warm_up_session(driver)
+            if not warmup_result:
+                print("[!] Warmup failed - IP may be blocked")
+                print("[!] Try using --proxy or wait and try again later")
                 return
         
-        print("[DEBUG] Starting main loop...")
-        
+        # Main scraping loop
         while True:
-            print("[DEBUG] Fetching offers from API...")
             offers = get_offers()
             
             if not offers:
@@ -827,9 +602,7 @@ def main():
                 time.sleep(poll_interval)
                 continue
             
-            print(f"Checking {len(offers)} offers...")
-            print()
-            
+            print(f"\nChecking {len(offers)} offers...")
             results = []
             
             for i, offer in enumerate(offers, 1):
@@ -841,8 +614,8 @@ def main():
                 # Truncate title for display
                 display_title = title[:40] + "..." if len(title) > 40 else title
                 
-                print(f"  [{i}/{len(offers)}] {display_title}")
-                print(f"       My price: {my_price} zł")
+                print(f"\n[{i}/{len(offers)}] {display_title}")
+                print(f"  My price: {my_price} zł")
                 
                 try:
                     competitor_data = check_offer_price(driver, url, my_price)
@@ -851,9 +624,7 @@ def main():
                         status = competitor_data.get('status')
                         
                         if status == 'competitor_cheaper':
-                            print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) [OK]")
-                            if competitor_data.get('delivery_days'):
-                                print(f"       Delivery: {competitor_data['delivery_days']} days")
+                            print(f"  Competitor: {competitor_data['price']} zł ({competitor_data['seller']})")
                             results.append({
                                 "offer_id": offer_id,
                                 "status": "competitor_cheaper",
@@ -863,42 +634,32 @@ def main():
                                 "competitor_delivery_days": competitor_data.get('delivery_days')
                             })
                         elif status == 'cheapest':
-                            print(f"       [OK] Retriever_Shop najtanszy!")
-                            results.append({
-                                "offer_id": offer_id,
-                                "status": "cheapest"
-                            })
+                            print(f"  [OK] Retriever_Shop najtanszy!")
+                            results.append({"offer_id": offer_id, "status": "cheapest"})
                         elif status == 'no_offers':
-                            print(f"       [!] Brak ofert konkurencji")
-                            results.append({
-                                "offer_id": offer_id,
-                                "status": "no_offers"
-                            })
+                            print(f"  [!] Brak ofert konkurencji")
+                            results.append({"offer_id": offer_id, "status": "no_offers"})
                     else:
-                        print(f"       Error: no data returned")
+                        print(f"  [!] No data returned")
+                        
                 except Exception as e:
                     if "IP_BLOCKED" in str(e):
                         print("\n[!] Stopping scraper due to IP block")
-                        # Submit results collected so far
                         if results:
                             submit_results(results)
-                        return  # Exit the program
+                        return
                     else:
-                        print(f"       Error: {e}")
+                        print(f"  [!] Error: {e}")
                         continue
                 
-                print()
-                
-                # Random delay between offers to avoid rate limiting
+                # Random delay between offers
                 delay = random.randint(MIN_DELAY_BETWEEN_OFFERS, MAX_DELAY_BETWEEN_OFFERS)
-                print(f"  Waiting {delay}s before next offer...")
+                print(f"  Waiting {delay}s...")
                 time.sleep(delay)
             
             # Submit all results
             if results:
                 submit_results(results)
-            
-            print()
             
     except KeyboardInterrupt:
         print("\nShutting down...")
