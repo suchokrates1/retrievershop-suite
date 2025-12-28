@@ -95,7 +95,25 @@ def get_tasks(session):
         for row in rows
     ]
     
-    return jsonify({"offers": offers, "count": len(offers)})
+    # Get total count of pending offers
+    total_result = session.execute(
+        text("""
+        SELECT COUNT(*)
+        FROM allegro_offers ao
+        LEFT JOIN (
+            SELECT offer_id, MAX(recorded_at) as last_check
+            FROM allegro_price_history
+            GROUP BY offer_id
+        ) aph ON ao.offer_id = aph.offer_id
+        WHERE ao.offer_id IS NOT NULL
+            AND ao.price > 0
+            AND (aph.last_check IS NULL 
+                 OR aph.last_check < datetime('now', '-1 hour'))
+        """)
+    )
+    total = total_result.fetchone()[0]
+    
+    return jsonify({"offers": offers, "count": len(offers), "total": total})
 
 
 @api_scraper_bp.route("/submit_results", methods=["POST"])
