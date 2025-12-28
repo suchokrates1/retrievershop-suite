@@ -504,20 +504,31 @@ def check_offer_price(driver, offer_url, my_price):
             while True:
                 time.sleep(5)
                 try:
-                    captcha_still_there = False
-                    if len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")) > 0:
-                        captcha_still_there = True
-                    elif len(driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container")) > 0:
-                        captcha_still_there = True
+                    # Check if we're still on CAPTCHA page
+                    # Method 1: Check page title (CAPTCHA page has generic "allegro.pl" title)
+                    current_title = driver.title.lower()
+                    page_source_check = driver.page_source.lower()
                     
-                    if not captcha_still_there:
+                    # CAPTCHA indicators
+                    has_captcha_iframe = len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")) > 0
+                    has_captcha_text = "captcha-delivery" in page_source_check
+                    is_generic_title = current_title.strip() == "allegro.pl"
+                    
+                    # If page has real content (not CAPTCHA), continue
+                    if not has_captcha_iframe and not has_captcha_text and not is_generic_title:
                         elapsed = int(time.time() - captcha_start)
-                        print(f"[OK] CAPTCHA solved after {elapsed}s! Continuing...\n")
+                        print(f"[OK] CAPTCHA solved after {elapsed}s! Page loaded: {driver.title[:50]}")
                         time.sleep(2)
                         break
                     else:
-                        print("    Still waiting for CAPTCHA to be solved...")
-                except:
+                        print(f"    Still waiting... (title: {current_title[:30]}, iframe: {has_captcha_iframe})")
+                        
+                    # Timeout after 5 minutes
+                    if time.time() - captcha_start > 300:
+                        print("[!] CAPTCHA timeout (5min) - skipping offer")
+                        return None, None, None, None
+                except Exception as e:
+                    print(f"[!] Error checking CAPTCHA status: {e}")
                     break
         
         # Check for block page AFTER CAPTCHA solved
