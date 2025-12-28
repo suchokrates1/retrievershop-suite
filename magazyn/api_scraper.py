@@ -130,57 +130,57 @@ def submit_results(session):
         results = data["results"]
         if not isinstance(results, list):
             return jsonify({"error": "'results' must be an array"}), 400
-    
-    processed = 0
-    
-    for result in results:
-        offer_id = result.get("offer_id")
-        if not offer_id:
-            continue
         
-        status = result.get("status", "unknown")
-        competitor_price = result.get("competitor_price")
-        competitor_seller = result.get("competitor_seller")
-        competitor_url = result.get("competitor_url")
-        competitor_delivery_days = result.get("competitor_delivery_days")
+        processed = 0
         
-        # Get current price from allegro_offers
-        my_price_result = session.execute(
-            text("SELECT price FROM allegro_offers WHERE offer_id = :offer_id"),
-            {"offer_id": offer_id}
-        )
-        my_price_row = my_price_result.fetchone()
-        my_price = my_price_row[0] if my_price_row else 0
+        for result in results:
+            offer_id = result.get("offer_id")
+            if not offer_id:
+                continue
+            
+            status = result.get("status", "unknown")
+            competitor_price = result.get("competitor_price")
+            competitor_seller = result.get("competitor_seller")
+            competitor_url = result.get("competitor_url")
+            competitor_delivery_days = result.get("competitor_delivery_days")
+            
+            # Get current price from allegro_offers
+            my_price_result = session.execute(
+                text("SELECT price FROM allegro_offers WHERE offer_id = :offer_id"),
+                {"offer_id": offer_id}
+            )
+            my_price_row = my_price_result.fetchone()
+            my_price = my_price_row[0] if my_price_row else 0
+            
+            # Convert price string to Decimal
+            price_decimal = None
+            if competitor_price:
+                try:
+                    price_decimal = Decimal(str(competitor_price))
+                except:
+                    pass
+            
+            # Always insert record - with or without competitor data
+            session.execute(
+                text("""
+                INSERT INTO allegro_price_history 
+                    (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, competitor_delivery_days)
+                VALUES 
+                    (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :competitor_delivery_days)
+                """),
+                {
+                    "offer_id": offer_id,
+                    "my_price": my_price,
+                    "competitor_price": price_decimal,
+                    "competitor_seller": competitor_seller if status == 'competitor_cheaper' else None,
+                    "competitor_url": competitor_url if status == 'competitor_cheaper' else None,
+                    "competitor_delivery_days": competitor_delivery_days if status == 'competitor_cheaper' else None
+                }
+            )
+            processed += 1
         
-        # Convert price string to Decimal
-        price_decimal = None
-        if competitor_price:
-            try:
-                price_decimal = Decimal(str(competitor_price))
-            except:
-                pass
-        
-        # Always insert record - with or without competitor data
-        session.execute(
-            text("""
-            INSERT INTO allegro_price_history 
-                (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, competitor_delivery_days)
-            VALUES 
-                (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :competitor_delivery_days)
-            """),
-            {
-                "offer_id": offer_id,
-                "my_price": my_price,
-                "competitor_price": price_decimal,
-                "competitor_seller": competitor_seller if status == 'competitor_cheaper' else None,
-                "competitor_url": competitor_url if status == 'competitor_cheaper' else None,
-                "competitor_delivery_days": competitor_delivery_days if status == 'competitor_cheaper' else None
-            }
-        )
-        processed += 1
-    
+        # Commit AFTER processing all results
         session.commit()
-    
         return jsonify({"success": True, "processed": processed})
     
     except Exception as e:
