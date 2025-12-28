@@ -107,8 +107,17 @@ def check_offer_price(driver, offer_url, my_price):
         # Check for IP block or CAPTCHA
         page_source = driver.page_source.lower()
         
+        # Debug: show page title and snippet
+        try:
+            page_title = driver.title
+            snippet = page_source[:500].replace('\n', ' ')[:200]
+            print(f"  [DEBUG] Page title: {page_title}")
+            print(f"  [DEBUG] Page snippet: {snippet}...")
+        except:
+            pass
+        
         # Check for IP block
-        if "zostałeś zablokowany" in page_source or "you have been blocked" in page_source:
+        if "zostałeś zablokowany" in page_source or "you have been blocked" in page_source or "zablokowano" in page_source:
             print("\n" + "="*60)
             print("⛔ IP BLOCKED BY ALLEGRO!")
             print("="*60)
