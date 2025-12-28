@@ -3,6 +3,8 @@ Allegro Price Scraper Worker
 
 Checks competitor prices for your Allegro offers.
 Goes directly to each offer page and finds cheapest competitor.
+
+STEALTH MODE: Multiple anti-detection techniques implemented.
 """
 
 import argparse
@@ -11,7 +13,11 @@ import time
 import re
 import requests
 import random
+import json
+import zipfile
+import shutil
 from decimal import Decimal
+from urllib.parse import urlparse
 
 try:
     import undetected_chromedriver as uc
@@ -23,52 +29,289 @@ except ImportError:
     from selenium.webdriver.chrome.options import Options
     from webdriver_manager.chrome import ChromeDriverManager
 
+# Try selenium-stealth for extra protection
+try:
+    from selenium_stealth import stealth
+    SELENIUM_STEALTH_AVAILABLE = True
+except ImportError:
+    SELENIUM_STEALTH_AVAILABLE = False
+
 from selenium.webdriver.common.by import By
 
 
 MAGAZYN_URL = "https://magazyn.retrievershop.pl"
 BATCH_SIZE = 3  # Reduced to 3 to avoid DataDome
 POLL_INTERVAL = 30  # seconds
-MIN_DELAY_BETWEEN_OFFERS = 30  # Minimum 30 seconds between offers (DataDome protection)
-MAX_DELAY_BETWEEN_OFFERS = 60  # Maximum 60 seconds (random)
-PROXY_URL = None  # Proxy server (e.g., http://user:pass@host:port or host:port)
+MIN_DELAY_BETWEEN_OFFERS = 30  # Minimum 30 seconds between offers
+MAX_DELAY_BETWEEN_OFFERS = 90  # Maximum 90 seconds (increased randomness)
+PROXY_URL = None  # Proxy server
 
-# Rotate user agents to avoid detection
+# ===== STEALTH CONFIG =====
+# Real Chrome user agents from real browsers (updated Dec 2024)
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
 ]
+
+# Mobile user agents (for mobile mode)
+MOBILE_USER_AGENTS = [
+    "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+]
+
+# Random screen resolutions (common desktop)
+SCREEN_RESOLUTIONS = [
+    (1920, 1080), (1366, 768), (1536, 864), (1440, 900),
+    (1280, 720), (1600, 900), (2560, 1440), (1680, 1050),
+]
+
+# Languages for Accept-Language header
+LANGUAGES = ["pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7", "pl,en-US;q=0.7,en;q=0.3"]
+
+# Mobile mode flag
+MOBILE_MODE = False
+
+
+def apply_stealth_scripts(driver):
+    """Apply comprehensive stealth JavaScript to hide automation."""
+    stealth_scripts = [
+        # 1. Hide webdriver property
+        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});",
+        
+        # 2. Override plugins to look real
+        """
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => [
+                {name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer'},
+                {name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai'},
+                {name: 'Native Client', filename: 'internal-nacl-plugin'}
+            ]
+        });
+        """,
+        
+        # 3. Override languages
+        "Object.defineProperty(navigator, 'languages', {get: () => ['pl-PL', 'pl', 'en-US', 'en']});",
+        
+        # 4. Hide automation flags
+        "window.chrome = {runtime: {}};",
+        
+        # 5. Override permissions query
+        """
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+            parameters.name === 'notifications' ?
+                Promise.resolve({state: Notification.permission}) :
+                originalQuery(parameters)
+        );
+        """,
+        
+        # 6. Realistic screen dimensions (override if headless)
+        """
+        Object.defineProperty(screen, 'availWidth', {get: () => screen.width});
+        Object.defineProperty(screen, 'availHeight', {get: () => screen.height});
+        """,
+        
+        # 7. Hide automation-related properties
+        """
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+        """,
+        
+        # 8. Mock battery API
+        """
+        navigator.getBattery = () => Promise.resolve({
+            charging: true,
+            chargingTime: 0,
+            dischargingTime: Infinity,
+            level: 1.0
+        });
+        """,
+        
+        # 9. Override connection info
+        """
+        Object.defineProperty(navigator, 'connection', {
+            get: () => ({
+                effectiveType: '4g',
+                rtt: 50,
+                downlink: 10,
+                saveData: false
+            })
+        });
+        """,
+        
+        # 10. Hardware concurrency (realistic CPU cores)
+        "Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});",
+        
+        # 11. Device memory
+        "Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});",
+        
+        # 12. Override toString to hide modifications
+        """
+        const oldToString = Function.prototype.toString;
+        Function.prototype.toString = function() {
+            if (this === navigator.permissions.query) {
+                return 'function query() { [native code] }';
+            }
+            return oldToString.call(this);
+        };
+        """
+    ]
+    
+    for script in stealth_scripts:
+        try:
+            driver.execute_script(script)
+        except Exception as e:
+            pass  # Some scripts may fail, continue with others
+    
+    return driver
+
+
+def create_proxy_extension(proxy_url):
+    """Create a Chrome extension for proxy authentication.
+    
+    Args:
+        proxy_url: Proxy URL in format http://user:pass@host:port
+        
+    Returns:
+        Path to the unpacked extension directory
+    """
+    # Parse proxy URL
+    parsed = urlparse(proxy_url)
+    proxy_user = parsed.username or ""
+    proxy_pass = parsed.password or ""
+    proxy_host = parsed.hostname
+    proxy_port = parsed.port or 8080
+    
+    # Extension directory
+    ext_dir = os.path.abspath("./proxy_auth_extension")
+    
+    # Read template files
+    manifest_path = os.path.join(ext_dir, "manifest.json")
+    background_path = os.path.join(ext_dir, "background.js")
+    
+    with open(background_path, 'r') as f:
+        background_js = f.read()
+    
+    # Replace placeholders
+    background_js = background_js.replace("PROXY_HOST", proxy_host)
+    background_js = background_js.replace("PROXY_PORT", str(proxy_port))
+    background_js = background_js.replace("PROXY_USER", proxy_user)
+    background_js = background_js.replace("PROXY_PASS", proxy_pass)
+    
+    # Write configured extension
+    configured_ext_dir = os.path.abspath("./proxy_auth_configured")
+    os.makedirs(configured_ext_dir, exist_ok=True)
+    
+    # Copy manifest
+    shutil.copy(manifest_path, os.path.join(configured_ext_dir, "manifest.json"))
+    
+    # Write configured background.js
+    with open(os.path.join(configured_ext_dir, "background.js"), 'w') as f:
+        f.write(background_js)
+    
+    print(f"[PROXY] Extension created: {proxy_host}:{proxy_port} (user: {proxy_user})")
+    return configured_ext_dir
+
+
+def human_like_mouse_movement(driver):
+    """Simulate human-like mouse movement using JavaScript."""
+    try:
+        # Random mouse movements
+        movements = random.randint(3, 7)
+        for _ in range(movements):
+            x = random.randint(100, 800)
+            y = random.randint(100, 600)
+            driver.execute_script(f"""
+                var evt = new MouseEvent('mousemove', {{
+                    bubbles: true, cancelable: true, clientX: {x}, clientY: {y}
+                }});
+                document.dispatchEvent(evt);
+            """)
+            time.sleep(random.uniform(0.1, 0.3))
+    except:
+        pass
 
 
 def setup_chrome_driver():
-    """Setup Chrome driver with anti-detection measures."""
+    """Setup Chrome driver with MAXIMUM anti-detection measures."""
     # Random user agent
-    user_agent = random.choice(USER_AGENTS)
+    if MOBILE_MODE:
+        user_agent = random.choice(MOBILE_USER_AGENTS)
+        window_size = (412, 915)  # Mobile size
+    else:
+        user_agent = random.choice(USER_AGENTS)
+        window_size = random.choice(SCREEN_RESOLUTIONS)
+    
+    language = random.choice(LANGUAGES)
+    
+    print(f"[STEALTH] User-Agent: {user_agent[:50]}...")
+    print(f"[STEALTH] Window: {window_size[0]}x{window_size[1]}")
+    print(f"[STEALTH] Mobile mode: {MOBILE_MODE}")
     
     if UNDETECTED_AVAILABLE:
         print("Using undetected-chromedriver for better anti-detection")
         
         # Use PERSISTENT profile to avoid looking like a bot
-        # (new session each time = suspicious)
         profile_path = os.path.abspath("./allegro_scraper_profile")
         os.makedirs(profile_path, exist_ok=True)
         
         options = uc.ChromeOptions()
-        # PROFILE - needed to avoid block (persistent cookies/fingerprint)
+        
+        # PROFILE - persistent cookies/fingerprint
         options.add_argument(f"--user-data-dir={profile_path}")
-        options.add_argument("--profile-directory=ScraperSession")  # Unique name
+        options.add_argument("--profile-directory=ScraperSession")
+        
+        # Basic Chrome args
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument(f"--user-agent={user_agent}")
+        options.add_argument(f"--window-size={window_size[0]},{window_size[1]}")
+        options.add_argument(f"--lang={language.split(',')[0]}")
         
-        # PROXY configuration
+        # Anti-detection args
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--disable-infobars")
+        # DON'T disable extensions if using proxy auth
+        if not PROXY_URL:
+            options.add_argument("--disable-extensions")
+        options.add_argument("--disable-popup-blocking")
+        
+        # Make it look more human
+        options.add_argument("--enable-features=NetworkService,NetworkServiceInProcess")
+        
+        # PROXY configuration with authentication
         if PROXY_URL:
-            options.add_argument(f"--proxy-server={PROXY_URL}")
-            print(f"Using proxy: {PROXY_URL}")
+            proxy_ext_dir = create_proxy_extension(PROXY_URL)
+            options.add_argument(f"--load-extension={proxy_ext_dir}")
+            print(f"[STEALTH] Proxy extension loaded from {proxy_ext_dir}")
         
         driver = uc.Chrome(options=options, version_main=None)
+        
+        # Apply stealth scripts via CDP
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": """
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['pl-PL', 'pl', 'en-US', 'en']});
+                window.chrome = {runtime: {}};
+            """
+        })
+        
+        # Apply selenium-stealth if available
+        if SELENIUM_STEALTH_AVAILABLE:
+            print("[STEALTH] Applying selenium-stealth patches...")
+            stealth(driver,
+                languages=["pl-PL", "pl", "en-US", "en"],
+                vendor="Google Inc.",
+                platform="Win32",
+                webgl_vendor="Intel Inc.",
+                renderer="Intel Iris OpenGL Engine",
+                fix_hairline=True,
+            )
+        
         return driver
     else:
         print("Warning: undetected-chromedriver not installed, using standard selenium")
@@ -121,13 +364,24 @@ def check_offer_price(driver, offer_url, my_price):
     try:
         print(f"  Checking: {offer_url}")
         driver.get(offer_url)
-        time.sleep(3)  # Wait for page load
         
-        # Scroll to simulate human behavior
-        driver.execute_script("window.scrollTo(0, 500);")
-        time.sleep(1)
+        # Apply stealth scripts on every page load
+        apply_stealth_scripts(driver)
+        
+        # Random wait (human-like)
+        time.sleep(random.uniform(2.5, 4.5))
+        
+        # Human-like scrolling behavior
+        scroll_amount = random.randint(300, 700)
+        driver.execute_script(f"window.scrollTo(0, {scroll_amount});")
+        time.sleep(random.uniform(0.5, 1.5))
+        
+        # Simulate mouse movement
+        human_like_mouse_movement(driver)
+        
+        # Scroll back up slowly
         driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(1)
+        time.sleep(random.uniform(0.3, 0.8))
         
         # Check for IP block or CAPTCHA
         page_source = driver.page_source.lower()
@@ -383,25 +637,75 @@ def submit_results(results):
         return False
 
 
+def warm_up_session(driver):
+    """Visit Allegro homepage first to establish cookies and look human."""
+    print("[WARMUP] Visiting Allegro homepage first to establish session...")
+    
+    try:
+        # Visit homepage
+        driver.get("https://allegro.pl")
+        time.sleep(random.uniform(3, 5))
+        
+        # Apply stealth scripts
+        apply_stealth_scripts(driver)
+        
+        # Simulate browsing behavior
+        human_like_mouse_movement(driver)
+        
+        # Random scroll
+        scroll_amount = random.randint(200, 500)
+        driver.execute_script(f"window.scrollTo(0, {scroll_amount});")
+        time.sleep(random.uniform(1, 2))
+        
+        # Scroll back
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(random.uniform(0.5, 1))
+        
+        # Check if we landed on homepage or block page
+        page_source = driver.page_source.lower()
+        if "zostałeś zablokowany" in page_source:
+            print("[!] IP BLOCKED even on homepage!")
+            return False
+        
+        print("[OK] Homepage visited successfully, cookies established")
+        
+        # Wait a bit before starting actual work
+        wait_time = random.randint(5, 15)
+        print(f"[WARMUP] Waiting {wait_time}s to look more natural...")
+        time.sleep(wait_time)
+        
+        return True
+        
+    except Exception as e:
+        print(f"[!] Warmup failed: {e}")
+        return False
+
+
 def main():
-    global MAGAZYN_URL, PROXY_URL
+    global MAGAZYN_URL, PROXY_URL, MOBILE_MODE
     
     parser = argparse.ArgumentParser(description="Allegro Competitor Price Checker")
     parser.add_argument("--url", required=True, help="Magazyn URL (e.g., https://magazyn.retrievershop.pl)")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Poll interval in seconds")
     parser.add_argument("--proxy", type=str, default=None, help="Proxy server (e.g., http://host:port or socks5://host:port)")
+    parser.add_argument("--mobile", action="store_true", help="Use mobile user-agent and viewport")
+    parser.add_argument("--no-warmup", action="store_true", help="Skip warmup (visit homepage first)")
     args = parser.parse_args()
     
     MAGAZYN_URL = args.url.rstrip("/")
     poll_interval = args.interval
     PROXY_URL = args.proxy
+    MOBILE_MODE = args.mobile
     
     print("="*70)
-    print("Allegro Competitor Price Checker")
+    print("Allegro Competitor Price Checker - STEALTH MODE")
     print("="*70)
     print(f"Magazyn URL: {MAGAZYN_URL}")
     print(f"Poll interval: {poll_interval}s")
     print(f"Batch size: {BATCH_SIZE}")
+    print(f"Mobile mode: {MOBILE_MODE}")
+    if PROXY_URL:
+        print(f"Proxy: {PROXY_URL}")
     print("="*70)
     print()
     
@@ -409,8 +713,16 @@ def main():
     
     try:
         driver = setup_chrome_driver()
-        print("OK Chrome driver initialized")
+        print("[OK] Chrome driver initialized")
         print()
+        
+        # Warmup - visit homepage first
+        if not args.no_warmup:
+            if not warm_up_session(driver):
+                print("[!] Warmup failed - IP may be blocked")
+                print("[!] Try using --proxy or wait and try again later")
+                return
+        
         
         while True:
             offers = get_offers()
