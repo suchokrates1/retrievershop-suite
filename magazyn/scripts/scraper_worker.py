@@ -27,10 +27,10 @@ from selenium.webdriver.common.by import By
 
 
 MAGAZYN_URL = "https://magazyn.retrievershop.pl"
-BATCH_SIZE = 5  # Reduced from 10 to avoid rate limiting
+BATCH_SIZE = 3  # Reduced to 3 to avoid DataDome
 POLL_INTERVAL = 30  # seconds
-MIN_DELAY_BETWEEN_OFFERS = 5  # Minimum 5 seconds between offers
-MAX_DELAY_BETWEEN_OFFERS = 15  # Maximum 15 seconds (random)
+MIN_DELAY_BETWEEN_OFFERS = 30  # Minimum 30 seconds between offers (DataDome protection)
+MAX_DELAY_BETWEEN_OFFERS = 60  # Maximum 60 seconds (random)
 
 # Rotate user agents to avoid detection
 USER_AGENTS = [
@@ -111,6 +111,12 @@ def check_offer_price(driver, offer_url, my_price):
         print(f"  Checking: {offer_url}")
         driver.get(offer_url)
         time.sleep(3)  # Wait for page load
+        
+        # Scroll to simulate human behavior
+        driver.execute_script("window.scrollTo(0, 500);")
+        time.sleep(1)
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)
         
         # Check for IP block or CAPTCHA
         page_source = driver.page_source.lower()
