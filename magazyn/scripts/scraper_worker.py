@@ -31,6 +31,7 @@ BATCH_SIZE = 3  # Reduced to 3 to avoid DataDome
 POLL_INTERVAL = 30  # seconds
 MIN_DELAY_BETWEEN_OFFERS = 30  # Minimum 30 seconds between offers (DataDome protection)
 MAX_DELAY_BETWEEN_OFFERS = 60  # Maximum 60 seconds (random)
+PROXY_URL = None  # Proxy server (e.g., http://user:pass@host:port or host:port)
 
 # Rotate user agents to avoid detection
 USER_AGENTS = [
@@ -62,6 +63,11 @@ def setup_chrome_driver():
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument(f"--user-agent={user_agent}")
         
+        # PROXY configuration
+        if PROXY_URL:
+            options.add_argument(f"--proxy-server={PROXY_URL}")
+            print(f"Using proxy: {PROXY_URL}")
+        
         driver = uc.Chrome(options=options, version_main=None)
         return driver
     else:
@@ -79,6 +85,11 @@ def setup_chrome_driver():
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-default-browser-check")
         chrome_options.add_argument(f"--user-agent={user_agent}")
+        
+        # PROXY configuration
+        if PROXY_URL:
+            chrome_options.add_argument(f"--proxy-server={PROXY_URL}")
+            print(f"Using proxy: {PROXY_URL}")
         
         service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -372,15 +383,17 @@ def submit_results(results):
 
 
 def main():
-    global MAGAZYN_URL
+    global MAGAZYN_URL, PROXY_URL
     
     parser = argparse.ArgumentParser(description="Allegro Competitor Price Checker")
     parser.add_argument("--url", required=True, help="Magazyn URL (e.g., https://magazyn.retrievershop.pl)")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Poll interval in seconds")
+    parser.add_argument("--proxy", type=str, default=None, help="Proxy server (e.g., http://host:port or socks5://host:port)")
     args = parser.parse_args()
     
     MAGAZYN_URL = args.url.rstrip("/")
     poll_interval = args.interval
+    PROXY_URL = args.proxy
     
     print("="*70)
     print("Allegro Competitor Price Checker")
