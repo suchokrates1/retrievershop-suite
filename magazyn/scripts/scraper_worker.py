@@ -416,27 +416,32 @@ def check_offer_price(driver, offer_url, my_price):
         # Parse JSON data embedded in page
         html = driver.page_source
         
-        # Find all offer blocks (each offer is a separate div with price/seller/delivery)
-        # Pattern: each offer block contains: mainPrice, seller, and optionally delivery text
-        offer_blocks = re.findall(
-            r'"mainPrice":\{"amount":"([^"]+)"[^}]+\}[^{]*?"seller":\{[^}]*"login":"([^"]+)"[^}]*?\}(.*?)(?="mainPrice"|$)',
-            html,
-            re.DOTALL
-        )
+        # Extract all prices and sellers first (original approach)
+        price_pattern = r'"mainPrice":\{"amount":"([^"]+)","currency":"PLN"\}'
+        price_matches = re.findall(price_pattern, html)
         
-        print(f"  Found {len(offer_blocks)} offer blocks")
+        seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
+        seller_matches = re.findall(seller_pattern, html)
         
-        # Parse each offer block separately
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers")
+        
+        # For each price+seller pair, search for delivery text NEAR that seller
+        # Strategy: split HTML by seller name, search for delivery in that section
         offers = []
-        for price_str, seller, block_content in offer_blocks:
+        for i, price_str in enumerate(price_matches):
             try:
                 price = Decimal(price_str.replace(',', '.'))
+                seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
                 
-                # Look for delivery time WITHIN this specific block
-                delivery_days = None
-                delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', block_content, re.IGNORECASE)
-                if delivery_match:
-                    delivery_days = int(delivery_match.group(1))
+                # Find position of this seller in HTML
+                seller_pos = html.find(f'"login":"{seller}"')
+                if seller_pos > 0:
+                    # Look for delivery text in 500 chars after seller
+                    search_area = html[seller_pos:seller_pos + 500]
+                    delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', search_area, re.IGNORECASE)
+                    delivery_days = int(delivery_match.group(1)) if delivery_match else None
+                else:
+                    delivery_days = None
                 
                 # FILTER: Skip if delivery > 7 days (Chinese sellers)
                 if delivery_days is not None and delivery_days > 7:
