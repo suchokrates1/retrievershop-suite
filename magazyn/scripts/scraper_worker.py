@@ -43,48 +43,76 @@ USER_AGENTS = [
 
 def setup_chrome_driver():
     """Setup Chrome driver with anti-detection measures."""
-    # Use persistent profile to keep cookies/login
-    profile_path = os.path.abspath("./allegro_scraper_profile")
-    os.makedirs(profile_path, exist_ok=True)
+    print("[DEBUG] setup_chrome_driver() START")
+    print(f"[DEBUG] UNDETECTED_AVAILABLE = {UNDETECTED_AVAILABLE}")
     
     # Random user agent
     user_agent = random.choice(USER_AGENTS)
+    print(f"[DEBUG] Selected user agent: {user_agent[:50]}...")
     
     if UNDETECTED_AVAILABLE:
-        print("Using undetected-chromedriver for better anti-detection")
+        print("[DEBUG] Branch: UNDETECTED_AVAILABLE = True")
+        print("[DEBUG] Creating uc.ChromeOptions()...")
         options = uc.ChromeOptions()
-        options.add_argument(f"--user-data-dir={profile_path}")
-        options.add_argument("--profile-directory=Default")
+        print(f"[DEBUG] Adding arguments...")
+        # NO PROFILE - causes hangs/locks
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--start-maximized")
         options.add_argument(f"--user-agent={user_agent}")
+        print("[DEBUG] Options configured (NO PROFILE)")
         
-        driver = uc.Chrome(options=options, version_main=None)
-        return driver
+        print("[DEBUG] Calling uc.Chrome()...")
+        try:
+            driver = uc.Chrome(options=options, version_main=None)
+            print("[DEBUG] uc.Chrome() SUCCESS - driver created")
+            return driver
+        except Exception as e:
+            print(f"[DEBUG] uc.Chrome() FAILED: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     else:
+        print("[DEBUG] Branch: UNDETECTED_AVAILABLE = False (using selenium)")
         print("Warning: undetected-chromedriver not installed, using standard selenium")
         print("Install with: pip install undetected-chromedriver")
+        
+        print("[DEBUG] Creating Options()...")
         chrome_options = Options()
-        chrome_options.add_argument(f"--user-data-dir={profile_path}")
-        chrome_options.add_argument("--profile-directory=Default")
+        print("[DEBUG] Adding arguments...")
+        # NO PROFILE - causes hangs/locks
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
-        chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-default-browser-check")
         chrome_options.add_argument(f"--user-agent={user_agent}")
+        print("[DEBUG] Options configured (NO PROFILE)")
         
+        print("[DEBUG] Creating ChromeService with ChromeDriverManager...")
         service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        print("[DEBUG] Service created, calling webdriver.Chrome()...")
+        
+        try:
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("[DEBUG] webdriver.Chrome() SUCCESS - driver created")
+        except Exception as e:
+            print(f"[DEBUG] webdriver.Chrome() FAILED: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         # Hide webdriver property
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        print("[DEBUG] Hiding webdriver property...")
+        try:
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            print("[DEBUG] Webdriver property hidden")
+        except Exception as e:
+            print(f"[DEBUG] Failed to hide webdriver property: {e}")
         
+        print("[DEBUG] Returning driver")
         return driver
 
 
