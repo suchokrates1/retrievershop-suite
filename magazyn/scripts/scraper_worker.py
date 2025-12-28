@@ -209,6 +209,15 @@ def setup_chrome_driver():
         options_selenium.add_argument("--disable-infobars")
         options_selenium.add_argument("--disable-popup-blocking")
         
+        # Bandwidth optimization - disable images to save proxy transfer
+        # Images on Allegro can be 1-3 MB per page, we only need JSON data
+        prefs = {
+            "profile.managed_default_content_settings.images": 2,  # Block images
+            "profile.default_content_setting_values.notifications": 2,  # Block notifications
+        }
+        options_selenium.add_experimental_option("prefs", prefs)
+        print("[PROXY] Bandwidth saver: images DISABLED (saves ~2-3 MB per page)")
+        
         # Load proxy extension (extension will set proxy + handle auth)
         proxy_ext_zip_path = create_proxy_extension(PROXY_URL)
         options_selenium.add_extension(proxy_ext_zip_path)
@@ -262,6 +271,13 @@ def setup_chrome_driver():
         chrome_options.add_argument(f"--user-agent={user_agent}")
         chrome_options.add_argument(f"--window-size={window_size[0]},{window_size[1]}")
         chrome_options.add_argument(f"--lang={language.split(',')[0]}")
+        
+        # Bandwidth optimization - disable images (even without proxy, faster loading)
+        prefs = {
+            "profile.managed_default_content_settings.images": 2,
+            "profile.default_content_setting_values.notifications": 2,
+        }
+        chrome_options.add_experimental_option("prefs", prefs)
         
         service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -556,7 +572,7 @@ def main():
     parser = argparse.ArgumentParser(description="Allegro Competitor Price Checker")
     parser.add_argument("--url", required=True, help="Magazyn URL (e.g., https://magazyn.retrievershop.pl)")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Poll interval in seconds")
-    parser.add_argument("--proxy", type=str, default=None, help="Proxy server (e.g., http://host:port or socks5://host:port)")
+    parser.add_argument("--proxy", type=str, default=None, help="Proxy server (e.g., http://user:pass@host:port)")
     parser.add_argument("--mobile", action="store_true", help="Use mobile user-agent and viewport")
     parser.add_argument("--no-warmup", action="store_true", help="Skip warmup (visit homepage first)")
     args = parser.parse_args()
