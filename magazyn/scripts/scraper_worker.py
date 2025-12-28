@@ -135,18 +135,13 @@ def check_offer_price(driver, offer_url, my_price):
         except Exception as e:
             print(f"  [DEBUG] Error saving page: {e}")
         
-        # Check for IP block - expanded keywords
+        # Check for IP block - hard blocks only (NOT captcha)
         block_keywords = [
             "zostałeś zablokowany",
             "you have been blocked", 
             "zablokowano",
             "access denied",
-            "dostęp zablokowany",
-            "robot detection",
-            "wykryto robota",
-            "captcha-delivery",  # Cloudflare captcha often = block
-            "cf-wrapper",  # Cloudflare wrapper
-            "attention required"
+            "dostęp zablokowany"
         ]
         
         for keyword in block_keywords:
@@ -165,15 +160,20 @@ def check_offer_price(driver, offer_url, my_price):
                 print("="*60 + "\n")
                 raise Exception("IP_BLOCKED")
         
-        # Check for CAPTCHA
+        # Check for CAPTCHA (including DataDome)
         captcha_detected = False
         try:
+            # Check page source for CAPTCHA keywords
+            if 'captcha-delivery' in page_source or 'datadome' in page_source:
+                captcha_detected = True
+            
             # Look for specific CAPTCHA elements
-            captcha_iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")
-            if captcha_iframes and len(captcha_iframes) > 0:
-                iframe = captcha_iframes[0]
-                if iframe.is_displayed() and iframe.size['width'] > 0:
-                    captcha_detected = True
+            if not captcha_detected:
+                captcha_iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery'], iframe[title*='captcha'], iframe[title*='DataDome']")
+                if captcha_iframes and len(captcha_iframes) > 0:
+                    iframe = captcha_iframes[0]
+                    if iframe.is_displayed() and iframe.size['width'] > 0:
+                        captcha_detected = True
             
             if not captcha_detected:
                 captcha_forms = driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container")
