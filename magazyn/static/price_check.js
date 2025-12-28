@@ -228,42 +228,147 @@
     }
 
     function startPriceCheckStream() {
-        const streamUrl = window.location.pathname + '/stream';
-        const source = new EventSource(streamUrl);
-
-        source.addEventListener('log', (event) => {
-            try {
-                const payload = JSON.parse(event.data || '{}');
-                appendDebugStep(payload.label, payload.value, payload.line);
-            } catch (err) {
-                // Ignore malformed events
-            }
-        });
-
-        source.addEventListener('result', (event) => {
-            try {
-                const payload = JSON.parse(event.data || '{}');
-                renderPriceChecks(payload);
-            } catch (err) {
+        // OLD: SSE stream for internal scraping (not used with external worker)
+        // Instead, load recent checks immediately from API
+        loadInitialData();
+    }
+    
+    function loadInitialData() {
+        const loading = document.getElementById('price-check-loading');
+        const tableContainer = document.getElementById('price-check-table-container');
+        const tableBody = document.getElementById('price-check-table-body');
+        
+        if (!loading || !tableContainer || !tableBody) {
+            return;
+        }
+        
+        // Load recent checks from API
+        fetch('/api/scraper/recent_checks?limit=50')
+            .then(res => res.json())
+            .then(data => {
+                loading.classList.add('d-none');
+                
+                if (!data.checks || data.checks.length === 0) {
+                    // Show empty state
+                    tableContainer.classList.remove('d-none');
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.colSpan = 5;
+                    cell.className = 'text-center text-muted py-4';
+                    cell.innerHTML = '<i class="bi bi-clock-history me-2"></i>Brak danych. Uruchom scraper worker aby rozpocząć monitorowanie cen.';
+                    row.appendChild(cell);
+                    tableBody.appendChild(row);
+                    return;
+                }
+                
+                // Set last check time for incremental updates
+                if (data.checks.length > 0) {
+                    lastCheckTime = data.checks[0].recorded_at;
+                }
+                
+                // Render all checks
+                data.checks.reverse().forEach(check => {
+                    addCheckRow(check, false); // false = don't animate
+                });
+                
+                tableContainer.classList.remove('d-none');
+            })
+            .catch(err => {
+                console.error('Failed to load initial data:', err);
+                loading.classList.add('d-none');
                 handleStreamError();
-            } finally {
-                source.close();
+            });
+    }
+    
+    function addCheckRow(check, animate = true) {
+        const tableBody = document.getElementById('price-check-table-body');
+        if (!tableBody) return;
+        
+        const row = document.createElement('tr');
+        
+        // Offer ID column
+        const offerCell = document.createElement('td');
+        if (check.offer_id) {
+            const link = createLink(
+                'https://allegro.pl/oferta/' + check.offer_id,
+                '',
+                check.title || 'Oferta Allegro'
+            );
+            offerCell.appendChild(link);
+        }
+        row.appendChild(offerCell);
+        
+        // Product title column
+        const titleCell = document.createElement('td');
+        titleCell.textContent = check.title || '';
+        titleCell.style.maxWidth = '300px';
+        titleCell.style.overflow = 'hidden';
+        titleCell.style.textOverflow = 'ellipsis';
+        titleCell.style.whiteSpace = 'nowrap';
+        row.appendChild(titleCell);
+        
+        // My price column
+        const myPriceCell = document.createElement('td');
+        myPriceCell.textContent = check.my_price ? check.my_price.toFixed(2) + ' zł' : '–';
+        row.appendChild(myPriceCell);
+        
+        // Competitor price column
+        const competitorCell = document.createElement('td');
+        if (check.competitor_price) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'd-flex align-items-center gap-2';
+            
+            const priceSpan = document.createElement('span');
+            priceSpan.textContent = check.competitor_price.toFixed(2) + ' zł';
+            wrapper.appendChild(priceSpan);
+            
+            if (check.competitor_seller) {
+                const sellerBadge = document.createElement('span');
+                sellerBadge.className = 'badge bg-secondary';
+                sellerBadge.textContent = check.competitor_seller;
+                wrapper.appendChild(sellerBadge);
             }
-        });
-
-        source.addEventListener('screenshot', (event) => {
-            try {
-                const payload = JSON.parse(event.data || '{}');
-                renderScreenshot(payload);
-            } catch (err) {
-                // ignore invalid payloads
+            
+            if (check.competitor_url) {
+                const link = createLink(
+                    check.competitor_url,
+                    null,
+                    'Zobacz ofertę konkurencji',
+                    'btn btn-outline-secondary btn-sm'
+                );
+                wrapper.appendChild(link);
             }
-        });
-
-        source.addEventListener('error', () => {
-            source.close();
-            handleStreamError();
-        });
+            
+            competitorCell.appendChild(wrapper);
+        } else {
+            competitorCell.className = 'text-muted';
+            competitorCell.textContent = 'Brak konkurencji';
+        }
+        row.appendChild(competitorCell);
+        
+        // Is cheapest column
+        const cheapestCell = document.createElement('td');
+        cheapestCell.className = 'text-center';
+        if (check.is_cheaper) {
+            cheapestCell.innerHTML = '<span class="text-success" title="Nasza oferta jest najtańsza">✓</span>';
+            row.className = 'table-success';
+        } else {
+            cheapestCell.innerHTML = '<span class="text-danger" title="Konkurencja ma niższą cenę">✗</span>';
+            row.className = 'table-warning';
+        }
+        row.appendChild(cheapestCell);
+        
+        // Add row at the TOP
+        tableBody.insertBefore(row, tableBody.firstChild);
+        
+        // Animate row (fade in) if requested
+        if (animate) {
+            row.style.opacity = '0';
+            setTimeout(() => {
+                row.style.transition = 'opacity 0.5s';
+                row.style.opacity = '1';
+            }, 10);
+        }
     }
 
     document.addEventListener('DOMContentLoaded', startPriceCheckStream);
@@ -314,91 +419,9 @@
                     lastCheckTime = data.checks[0].recorded_at;
                 }
                 
-                // Add new rows at the TOP of table (newest first)
+                // Add new rows using shared function (with animation)
                 data.checks.reverse().forEach(check => {
-                    const row = document.createElement('tr');
-                    
-                    // Offer ID column
-                    const offerCell = document.createElement('td');
-                    if (check.offer_id) {
-                        const link = createLink(
-                            'https://allegro.pl/oferta/' + check.offer_id,
-                            '',
-                            check.title || 'Oferta Allegro'
-                        );
-                        offerCell.appendChild(link);
-                    }
-                    row.appendChild(offerCell);
-                    
-                    // Product title column
-                    const titleCell = document.createElement('td');
-                    titleCell.textContent = check.title || '';
-                    titleCell.style.maxWidth = '300px';
-                    titleCell.style.overflow = 'hidden';
-                    titleCell.style.textOverflow = 'ellipsis';
-                    titleCell.style.whiteSpace = 'nowrap';
-                    row.appendChild(titleCell);
-                    
-                    // My price column
-                    const myPriceCell = document.createElement('td');
-                    myPriceCell.textContent = check.my_price ? check.my_price.toFixed(2) + ' zł' : '–';
-                    row.appendChild(myPriceCell);
-                    
-                    // Competitor price column
-                    const competitorCell = document.createElement('td');
-                    if (check.competitor_price) {
-                        const wrapper = document.createElement('div');
-                        wrapper.className = 'd-flex align-items-center gap-2';
-                        
-                        const priceSpan = document.createElement('span');
-                        priceSpan.textContent = check.competitor_price.toFixed(2) + ' zł';
-                        wrapper.appendChild(priceSpan);
-                        
-                        if (check.competitor_seller) {
-                            const sellerBadge = document.createElement('span');
-                            sellerBadge.className = 'badge bg-secondary';
-                            sellerBadge.textContent = check.competitor_seller;
-                            wrapper.appendChild(sellerBadge);
-                        }
-                        
-                        if (check.competitor_url) {
-                            const link = createLink(
-                                check.competitor_url,
-                                null,
-                                'Zobacz ofertę konkurencji',
-                                'btn btn-outline-secondary btn-sm'
-                            );
-                            wrapper.appendChild(link);
-                        }
-                        
-                        competitorCell.appendChild(wrapper);
-                    } else {
-                        competitorCell.className = 'text-muted';
-                        competitorCell.textContent = 'Brak konkurencji';
-                    }
-                    row.appendChild(competitorCell);
-                    
-                    // Is cheapest column
-                    const cheapestCell = document.createElement('td');
-                    cheapestCell.className = 'text-center';
-                    if (check.is_cheaper) {
-                        cheapestCell.innerHTML = '<span class=\"text-success\" title=\"Nasza oferta jest najtańsza\">✓</span>';
-                        row.className = 'table-success';
-                    } else {
-                        cheapestCell.innerHTML = '<span class=\"text-danger\" title=\"Konkurencja ma niższą cenę\">✗</span>';
-                        row.className = 'table-warning';
-                    }
-                    row.appendChild(cheapestCell);
-                    
-                    // Add row at the TOP
-                    tableBody.insertBefore(row, tableBody.firstChild);
-                    
-                    // Animate row (fade in)
-                    row.style.opacity = '0';
-                    setTimeout(() => {
-                        row.style.transition = 'opacity 0.5s';
-                        row.style.opacity = '1';
-                    }, 10);
+                    addCheckRow(check, true);
                 });
                 
                 // Show table if it was hidden
