@@ -658,16 +658,23 @@ def check_offer_price(driver, offer_url, my_price):
 def get_offers():
     """Fetch offers that need price checking from magazyn API."""
     try:
+        url = f"{MAGAZYN_URL}/api/scraper/get_tasks"
+        print(f"[API] Fetching offers from: {url}")
         response = requests.get(
-            f"{MAGAZYN_URL}/api/scraper/get_tasks",
+            url,
             params={"limit": BATCH_SIZE},
             timeout=10
         )
+        print(f"[API] Response status: {response.status_code}")
         response.raise_for_status()
         data = response.json()
-        return data.get("offers", [])
+        offers = data.get("offers", [])
+        print(f"[API] Got {len(offers)} offers")
+        return offers
     except Exception as e:
-        print(f"Error fetching offers: {e}")
+        print(f"[!] Error fetching offers: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
