@@ -572,6 +572,7 @@ def main():
     parser = argparse.ArgumentParser(description="Allegro Competitor Price Checker")
     parser.add_argument("--url", required=True, help="Magazyn URL (e.g., https://magazyn.retrievershop.pl)")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Poll interval in seconds")
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Number of offers to check per batch")
     parser.add_argument("--proxy", type=str, default=None, help="Proxy server (e.g., http://user:pass@host:port)")
     parser.add_argument("--mobile", action="store_true", help="Use mobile user-agent and viewport")
     parser.add_argument("--no-warmup", action="store_true", help="Skip warmup (visit homepage first)")
@@ -579,6 +580,7 @@ def main():
     
     MAGAZYN_URL = args.url.rstrip("/")
     poll_interval = args.interval
+    BATCH_SIZE = args.batch_size
     PROXY_URL = args.proxy
     MOBILE_MODE = args.mobile
     
