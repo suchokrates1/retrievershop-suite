@@ -80,12 +80,12 @@ def setup_chrome_driver():
         chrome_options.add_argument(f"--user-agent={user_agent}")
         
         service = ChromeService(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    
-    # Hide webdriver property
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    
-    return driver
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Hide webdriver property
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+        return driver
 
 
 def check_offer_price(driver, offer_url, my_price):
