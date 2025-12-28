@@ -436,8 +436,8 @@ def check_offer_price(driver, offer_url, my_price):
                 # Find position of this seller in HTML
                 seller_pos = html.find(f'"login":"{seller}"')
                 if seller_pos > 0:
-                    # Look for delivery text in 500 chars after seller
-                    search_area = html[seller_pos:seller_pos + 500]
+                    # Look for delivery text in 3000 chars after seller (was 500 - too short!)
+                    search_area = html[seller_pos:seller_pos + 3000]
                     delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', search_area, re.IGNORECASE)
                     delivery_days = int(delivery_match.group(1)) if delivery_match else None
                     
