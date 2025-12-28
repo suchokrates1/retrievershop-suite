@@ -249,5 +249,8 @@ def status(session):
         "total_offers": total_offers,
         "checked_today": checked_today,
         "pending": pending,
+        "processing": 0,  # No queue system yet
+        "done": checked_today,
+        "errors": 0,
         "last_check": last_check
     })
