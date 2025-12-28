@@ -329,6 +329,20 @@
                 wrapper.appendChild(sellerBadge);
             }
             
+            // Show delivery time if > 7 days (WARNING)
+            if (check.delivery_days && check.delivery_days > 7) {
+                const deliveryBadge = document.createElement('span');
+                deliveryBadge.className = 'badge bg-warning text-dark';
+                deliveryBadge.innerHTML = `<i class="bi bi-clock"></i> ${check.delivery_days} dni`;
+                deliveryBadge.title = 'Długi czas dostawy - prawdopodobnie sprzedawca z Chin';
+                wrapper.appendChild(deliveryBadge);
+            } else if (check.delivery_days) {
+                const deliveryBadge = document.createElement('span');
+                deliveryBadge.className = 'badge bg-info text-dark';
+                deliveryBadge.innerHTML = `<i class="bi bi-truck"></i> ${check.delivery_days} dni`;
+                wrapper.appendChild(deliveryBadge);
+            }
+            
             if (check.competitor_url) {
                 const link = createLink(
                     check.competitor_url,
