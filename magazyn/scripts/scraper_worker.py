@@ -119,7 +119,7 @@ def check_offer_price(driver, offer_url, my_price):
         # Check for IP block
         if "zostałeś zablokowany" in page_source or "you have been blocked" in page_source or "zablokowano" in page_source:
             print("\n" + "="*60)
-            print("⛔ IP BLOCKED BY ALLEGRO!")
+            print("[!] IP BLOCKED BY ALLEGRO!")
             print("="*60)
             print("Your IP has been blocked by Allegro's anti-bot protection.")
             print("This happens when scraping too fast or too many requests.")
@@ -152,7 +152,7 @@ def check_offer_price(driver, offer_url, my_price):
         
         if captcha_detected:
             print("\n" + "="*60)
-            print("⚠️  CAPTCHA DETECTED!")
+            print("[!] CAPTCHA DETECTED!")
             print("="*60)
             print("Please solve the CAPTCHA manually in the Chrome window.")
             print("The script will wait and continue automatically once solved.")
@@ -171,7 +171,7 @@ def check_offer_price(driver, offer_url, my_price):
                     
                     if not captcha_still_there:
                         elapsed = int(time.time() - captcha_start)
-                        print(f"✓ CAPTCHA solved after {elapsed}s! Continuing...\n")
+                        print(f"[OK] CAPTCHA solved after {elapsed}s! Continuing...\n")
                         time.sleep(2)
                         break
                     else:
@@ -303,7 +303,7 @@ def submit_results(results):
         response.raise_for_status()
         data = response.json()
         processed = data.get('processed', 0)
-        print(f"✓ Submitted {processed} results")
+        print(f"[OK] Submitted {processed} results")
         return True
     except Exception as e:
         print(f"Error submitting results: {e}")
@@ -334,7 +334,7 @@ def main():
     
     try:
         driver = setup_chrome_driver()
-        print("✓ Chrome driver initialized")
+        print("OK Chrome driver initialized")
         print()
         
         while True:
@@ -369,7 +369,7 @@ def main():
                         status = competitor_data.get('status')
                         
                         if status == 'competitor_cheaper':
-                            print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) ✓")
+                            print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) [OK]")
                             if competitor_data.get('delivery_days'):
                                 print(f"       Delivery: {competitor_data['delivery_days']} days")
                             results.append({
@@ -381,13 +381,13 @@ def main():
                                 "competitor_delivery_days": competitor_data.get('delivery_days')
                             })
                         elif status == 'cheapest':
-                            print(f"       ✓ Retriever_Shop najtańszy!")
+                            print(f"       [OK] Retriever_Shop najtanszy!")
                             results.append({
                                 "offer_id": offer_id,
                                 "status": "cheapest"
                             })
                         elif status == 'no_offers':
-                            print(f"       ⚠ Brak ofert konkurencji")
+                            print(f"       [!] Brak ofert konkurencji")
                             results.append({
                                 "offer_id": offer_id,
                                 "status": "no_offers"
@@ -396,7 +396,7 @@ def main():
                         print(f"       Error: no data returned")
                 except Exception as e:
                     if "IP_BLOCKED" in str(e):
-                        print("\n⛔ Stopping scraper due to IP block")
+                        print("\n[!] Stopping scraper due to IP block")
                         # Submit results collected so far
                         if results:
                             submit_results(results)
