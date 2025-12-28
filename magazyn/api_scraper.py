@@ -137,11 +137,19 @@ def submit_results(session):
         if not offer_id:
             continue
         
+        status = result.get("status", "unknown")
         competitor_price = result.get("competitor_price")
         competitor_seller = result.get("competitor_seller")
         competitor_url = result.get("competitor_url")
         competitor_delivery_days = result.get("competitor_delivery_days")
-        error = result.get("error")
+        
+        # Get current price from allegro_offers
+        my_price_result = session.execute(
+            text("SELECT price FROM allegro_offers WHERE offer_id = :offer_id"),
+            {"offer_id": offer_id}
+        )
+        my_price_row = my_price_result.fetchone()
+        my_price = my_price_row[0] if my_price_row else 0
         
         # Convert price string to Decimal
         price_decimal = None
@@ -149,34 +157,25 @@ def submit_results(session):
             try:
                 price_decimal = Decimal(str(competitor_price))
             except:
-                error = f"Invalid price format: {competitor_price}"
+                pass
         
-        # Insert into allegro_price_history (only if we have a valid price)
-        if price_decimal:
-            # Get current price from allegro_offers
-            my_price_result = session.execute(
-                text("SELECT price FROM allegro_offers WHERE offer_id = :offer_id"),
-                {"offer_id": offer_id}
-            )
-            my_price_row = my_price_result.fetchone()
-            my_price = my_price_row[0] if my_price_row else 0
-            
-            session.execute(
-                text("""
-                INSERT INTO allegro_price_history 
-                    (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, competitor_delivery_days)
-                VALUES 
-                    (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :competitor_delivery_days)
-                """),
-                {
-                    "offer_id": offer_id,
-                    "my_price": my_price,
-                    "competitor_price": price_decimal,
-                    "competitor_seller": competitor_seller,
-                    "competitor_url": competitor_url,
-                    "competitor_delivery_days": competitor_delivery_days
-                }
-            )
+        # Always insert record - with or without competitor data
+        session.execute(
+            text("""
+            INSERT INTO allegro_price_history 
+                (offer_id, price, recorded_at, competitor_price, competitor_seller, competitor_url, competitor_delivery_days)
+            VALUES 
+                (:offer_id, :my_price, CURRENT_TIMESTAMP, :competitor_price, :competitor_seller, :competitor_url, :competitor_delivery_days)
+            """),
+            {
+                "offer_id": offer_id,
+                "my_price": my_price,
+                "competitor_price": price_decimal,
+                "competitor_seller": competitor_seller if status == 'competitor_cheaper' else None,
+                "competitor_url": competitor_url if status == 'competitor_cheaper' else None,
+                "competitor_delivery_days": competitor_delivery_days if status == 'competitor_cheaper' else None
+            }
+        )
         processed += 1
     
     session.commit()

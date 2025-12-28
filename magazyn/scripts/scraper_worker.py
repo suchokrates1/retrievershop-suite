@@ -233,7 +233,7 @@ def check_offer_price(driver, offer_url, my_price):
         print(f"  Found {len(offers)} offers on page")
         
         if not offers:
-            return None
+            return {'status': 'no_offers', 'message': 'Nie znaleziono ofert konkurencji'}
         
         # Filter offers by delivery time (max 4 days) and price (cheaper than ours)
         my_price_decimal = Decimal(str(my_price).replace(',', '.'))
@@ -255,13 +255,14 @@ def check_offer_price(driver, offer_url, my_price):
         print(f"  After filter: {len(filtered_offers)} cheaper offers")
         
         if not filtered_offers:
-            return None
+            return {'status': 'cheapest', 'message': 'Retriever_Shop ma najtańszą cenę'}
         
         # Sort by price and return cheapest
         filtered_offers.sort(key=lambda x: x['price'])
         cheapest = filtered_offers[0]
         
         return {
+            'status': 'competitor_cheaper',
             'price': str(cheapest['price']),
             'seller': cheapest['seller'],
             'url': cheapest['url'],
@@ -363,18 +364,34 @@ def main():
                     competitor_data = check_offer_price(driver, url, my_price)
                     
                     if competitor_data:
-                        print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) ✓")
-                        if competitor_data['delivery_days']:
-                            print(f"       Delivery: {competitor_data['delivery_days']} days")
-                        results.append({
-                            "offer_id": offer_id,
-                            "competitor_price": competitor_data['price'],
-                            "competitor_seller": competitor_data['seller'],
-                            "competitor_url": competitor_data['url'],
-                            "competitor_delivery_days": competitor_data.get('delivery_days')
-                        })
+                        status = competitor_data.get('status')
+                        
+                        if status == 'competitor_cheaper':
+                            print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) ✓")
+                            if competitor_data.get('delivery_days'):
+                                print(f"       Delivery: {competitor_data['delivery_days']} days")
+                            results.append({
+                                "offer_id": offer_id,
+                                "status": "competitor_cheaper",
+                                "competitor_price": competitor_data['price'],
+                                "competitor_seller": competitor_data['seller'],
+                                "competitor_url": competitor_data['url'],
+                                "competitor_delivery_days": competitor_data.get('delivery_days')
+                            })
+                        elif status == 'cheapest':
+                            print(f"       ✓ Retriever_Shop najtańszy!")
+                            results.append({
+                                "offer_id": offer_id,
+                                "status": "cheapest"
+                            })
+                        elif status == 'no_offers':
+                            print(f"       ⚠ Brak ofert konkurencji")
+                            results.append({
+                                "offer_id": offer_id,
+                                "status": "no_offers"
+                            })
                     else:
-                        print(f"       No cheaper competitor found")
+                        print(f"       Error: no data returned")
                 except Exception as e:
                     if "IP_BLOCKED" in str(e):
                         print("\n⛔ Stopping scraper due to IP block")
