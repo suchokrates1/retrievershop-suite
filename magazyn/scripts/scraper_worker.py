@@ -429,35 +429,22 @@ def check_offer_price(driver, offer_url, my_price):
         delivery_days_pattern = r'dostawa\s+za\s+(\d+)\s+dn'
         delivery_days_matches = re.findall(delivery_days_pattern, html, re.IGNORECASE)
         
-        # Pattern: "dostawa za 8 dni" or "dostawa za 8 do 14 dni" (range)
-        delivery_range_pattern = r'dostawa\s+(?:za\s+)?(?:\d+\s+do\s+)?(\d+)\s+dn'
-        delivery_range_matches = re.findall(delivery_range_pattern, html, re.IGNORECASE)
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_days_matches)} delivery times (NOT MAPPED - disabled)")
         
-        # Combine both patterns (use range if more matches)
-        delivery_text_matches = delivery_range_matches if len(delivery_range_matches) > len(delivery_days_matches) else delivery_days_matches
+        # NOTE: Delivery filtering DISABLED - can't reliably map delivery times to specific offers
+        # Allegro HTML doesn't preserve order between price/seller/delivery blocks
+        # TODO: Parse each offer block separately instead of global regex
         
-        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers, {len(delivery_text_matches)} delivery times")
-        
-        # Match prices with sellers and delivery times
+        # Match prices with sellers
         offers = []
         for i, price_str in enumerate(price_matches):
             try:
                 price = Decimal(price_str.replace(',', '.'))
                 seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
                 
-                # Get delivery time (max days)
+                # Delivery filtering DISABLED - unreliable index mapping
+                # Keep delivery_days = None for all offers
                 delivery_days = None
-                if i < len(delivery_text_matches):
-                    try:
-                        delivery_days = int(delivery_text_matches[i])
-                    except (ValueError, IndexError):
-                        pass
-                
-                # FILTER: Skip ONLY if explicitly > 7 days
-                # If delivery_days = None (no info), we ACCEPT (don't exclude local sellers)
-                if delivery_days is not None and delivery_days > 7:
-                    print(f"  Skipping {seller} - delivery {delivery_days} days (China?)")
-                    continue
                 
                 offers.append({
                     'price': price, 
