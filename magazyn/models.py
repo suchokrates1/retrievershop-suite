@@ -154,6 +154,12 @@ class AllegroPriceHistory(Base):
     )
     price = Column(Numeric(10, 2), nullable=False)
     recorded_at = Column(String, nullable=False)
+    
+    # Competitor data
+    competitor_price = Column(Numeric(10, 2), nullable=True)
+    competitor_seller = Column(String, nullable=True)
+    competitor_url = Column(String, nullable=True)
+    competitor_delivery_days = Column(Integer, nullable=True)
 
     product_size = relationship("ProductSize", back_populates="price_history")
 
