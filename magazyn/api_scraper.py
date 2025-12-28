@@ -122,13 +122,14 @@ def submit_results(session):
     Returns:
         {"success": true, "processed": 2}
     """
-    data = request.get_json()
-    if not data or "results" not in data:
-        return jsonify({"error": "Missing 'results' field"}), 400
-    
-    results = data["results"]
-    if not isinstance(results, list):
-        return jsonify({"error": "'results' must be an array"}), 400
+    try:
+        data = request.get_json()
+        if not data or "results" not in data:
+            return jsonify({"error": "Missing 'results' field"}), 400
+        
+        results = data["results"]
+        if not isinstance(results, list):
+            return jsonify({"error": "'results' must be an array"}), 400
     
     processed = 0
     
@@ -178,9 +179,14 @@ def submit_results(session):
         )
         processed += 1
     
-    session.commit()
+        session.commit()
     
-    return jsonify({"success": True, "processed": processed})
+        return jsonify({"success": True, "processed": processed})
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
 @api_scraper_bp.route("/status", methods=["GET"])

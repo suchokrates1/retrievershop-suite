@@ -42,8 +42,9 @@ from selenium.webdriver.common.by import By
 MAGAZYN_URL = "https://magazyn.retrievershop.pl"
 BATCH_SIZE = 3  # Reduced to 3 to avoid DataDome
 POLL_INTERVAL = 30  # seconds
-MIN_DELAY_BETWEEN_OFFERS = 30  # Minimum 30 seconds between offers
-MAX_DELAY_BETWEEN_OFFERS = 90  # Maximum 90 seconds (increased randomness)
+# With rotating proxy (new IP per request) we can be much faster
+MIN_DELAY_BETWEEN_OFFERS = 5   # Minimum 5 seconds between offers  
+MAX_DELAY_BETWEEN_OFFERS = 15  # Maximum 15 seconds (rotating proxy = new IP each time)
 PROXY_URL = None  # Proxy server
 
 # ===== STEALTH CONFIG =====
@@ -295,14 +296,30 @@ def setup_chrome_driver():
         driver = uc.Chrome(options=options, version_main=None)
         
     elif PROXY_URL:
-        # MUST use regular Selenium when proxy auth is needed (extensions)
-        print("Using regular Selenium + proxy extension (undetected blocks extensions)")
+        # Use regular Selenium + Chrome extension (extension sets proxy)
+        print("Using regular Selenium + proxy extension")
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service as ChromeService
         from webdriver_manager.chrome import ChromeDriverManager
         
-        # DON'T use persistent profile with extension - causes crashes
+        # Parse proxy URL
+        parsed = urlparse(PROXY_URL)
+        proxy_user = parsed.username
+        proxy_pass = parsed.password
+        proxy_host = parsed.hostname
+        proxy_port = parsed.port
+        
         options_selenium = webdriver.ChromeOptions()
+        
+        # Use persistent profile to keep cookies/CAPTCHA solutions
+        profile_dir = os.path.join(os.path.dirname(__file__), "chrome_profile")
+        options_selenium.add_argument(f"--user-data-dir={profile_dir}")
+        
+        # NO HEADLESS - keep browser open for debugging
+        # options_selenium.add_argument("--headless=new")
+        
+        # Set page load strategy
+        options_selenium.page_load_strategy = 'normal'
         
         # Basic args
         options_selenium.add_argument("--no-sandbox")
@@ -316,13 +333,17 @@ def setup_chrome_driver():
         options_selenium.add_argument("--disable-infobars")
         options_selenium.add_argument("--disable-popup-blocking")
         
-        # Create and add proxy extension
+        # Load proxy extension (extension will set proxy + handle auth)
         proxy_ext_zip_path = create_proxy_extension(PROXY_URL)
         options_selenium.add_extension(proxy_ext_zip_path)
-        print(f"[PROXY] Extension added: {proxy_ext_zip_path}")
+        
+        print(f"[PROXY] Extension loaded: {proxy_host}:{proxy_port} (user: {proxy_user})")
         
         service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options_selenium)
+        driver = webdriver.Chrome(
+            service=service,
+            options=options_selenium
+        )
         
         # Apply stealth scripts via CDP
         driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
@@ -397,8 +418,14 @@ def check_offer_price(driver, offer_url, my_price):
     """
     try:
         print(f"  Checking: {offer_url}")
+        print(f"  [DEBUG] Loading offer page...")
         driver.get(offer_url)
+        print(f"  [DEBUG] Page loaded")
         
+        # Wait longer for SPA to load (Allegro is React-based)
+        time.sleep(random.uniform(5, 8))
+        
+        print(f"  [DEBUG] Applying stealth...")
         # Apply stealth scripts on every page load
         apply_stealth_scripts(driver)
         
@@ -559,50 +586,41 @@ def check_offer_price(driver, offer_url, my_price):
         # Parse JSON data embedded in page
         offers = []
         
-        # Look for JSON with offer data
-        json_pattern = r'"offers":\s*\[(.*?)\]'
-        json_match = re.search(json_pattern, html, re.DOTALL)
+        # Allegro stores data in JSON - extract "mainPrice" and "seller" fields
+        # Pattern: "mainPrice":{"amount":"230.99","currency":"PLN"}
+        price_pattern = r'"mainPrice":\{"amount":"([^"]+)","currency":"PLN"\}'
+        price_matches = re.findall(price_pattern, html)
         
-        if json_match:
+        # Pattern: "seller":{"id":"...","title":"...","login":"tiptop24pl"
+        seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
+        seller_matches = re.findall(seller_pattern, html)
+        
+        print(f"  Found {len(price_matches)} prices and {len(seller_matches)} sellers in HTML")
+        
+        # Match prices with sellers (they appear in same order in HTML)
+        for i, price_str in enumerate(price_matches):
             try:
-                offers_json = json_match.group(1)
-                # Extract individual offers
-                offer_pattern = r'\{[^}]*"price"[^}]*"amount":\s*"?(\d+(?:\.\d+)?)"?[^}]*"sellerLogin":\s*"([^"]+)"[^}]*\}'
-                matches = re.findall(offer_pattern, offers_json)
+                price = Decimal(price_str.replace(',', '.'))
+                seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
                 
-                for price_str, seller in matches:
-                    try:
-                        price = Decimal(price_str.replace(',', '.'))
-                        offers.append({
-                            'price': price,
-                            'seller': seller,
-                            'url': offer_url,
-                            'delivery_days': None
-                        })
-                    except:
-                        continue
-            except Exception as e:
-                print(f"  JSON parse error: {e}")
+                offers.append({
+                    'price': price,
+                    'seller': seller,
+                    'url': offer_url,
+                    'delivery_days': None
+                })
+            except (ValueError, IndexError) as e:
+                print(f"  Error parsing offer {i}: {e}")
+                continue
         
-        # Fallback: simple price extraction from HTML
-        if not offers:
-            price_pattern = r'data-price="(\d+(?:\.\d+)?)"|"amount":\s*"?(\d+(?:\.\d+)?)"?'
-            price_matches = re.findall(price_pattern, html)
-            
-            for match in price_matches:
-                price_str = match[0] or match[1]
-                if price_str:
-                    try:
-                        price = Decimal(price_str.replace(',', '.'))
-                        if price > 0:
-                            offers.append({
-                                'price': price,
-                                'seller': 'Unknown',
-                                'url': offer_url,
-                                'delivery_days': None
-                            })
-                    except:
-                        continue
+        # Deduplicate offers by seller (keep lowest price per seller)
+        unique_offers = {}
+        for offer in offers:
+            seller = offer['seller']
+            if seller not in unique_offers or offer['price'] < unique_offers[seller]['price']:
+                unique_offers[seller] = offer
+        
+        offers = list(unique_offers.values())
         
         print(f"  Found {len(offers)} offers on page")
         
@@ -695,8 +713,14 @@ def warm_up_session(driver):
     
     try:
         # Visit homepage
+        print("[WARMUP] Loading allegro.pl...")
         driver.get("https://allegro.pl")
+        print("[WARMUP] Page loaded, waiting...")
         time.sleep(random.uniform(3, 5))
+        
+        # Check what we got
+        print(f"[WARMUP] Page title: {driver.title}")
+        print(f"[WARMUP] Current URL: {driver.current_url}")
         
         # Apply stealth scripts
         apply_stealth_scripts(driver)
@@ -770,11 +794,18 @@ def main():
         
         # Warmup - visit homepage first
         if not args.no_warmup:
-            warmup_result = warm_up_session(driver)
-            print(f"[DEBUG] Warmup result: {warmup_result}")
-            if not warmup_result:
-                print("[!] Warmup failed - IP may be blocked")
-                print("[!] Try using --proxy or wait and try again later")
+            print("[DEBUG] Starting warmup...")
+            try:
+                warmup_result = warm_up_session(driver)
+                print(f"[DEBUG] Warmup result: {warmup_result}")
+                if not warmup_result:
+                    print("[!] Warmup failed - IP may be blocked")
+                    print("[!] Try using --proxy or wait and try again later")
+                    return
+            except Exception as e:
+                print(f"[!] Warmup exception: {e}")
+                import traceback
+                traceback.print_exc()
                 return
         
         print("[DEBUG] Starting main loop...")
