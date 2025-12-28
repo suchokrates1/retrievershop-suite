@@ -301,15 +301,8 @@ def setup_chrome_driver():
         from selenium.webdriver.chrome.service import Service as ChromeService
         from webdriver_manager.chrome import ChromeDriverManager
         
-        # Use PERSISTENT profile
-        profile_path = os.path.abspath("./allegro_scraper_profile")
-        os.makedirs(profile_path, exist_ok=True)
-        
+        # DON'T use persistent profile with extension - causes crashes
         options_selenium = webdriver.ChromeOptions()
-        
-        # Profile
-        options_selenium.add_argument(f"--user-data-dir={profile_path}")
-        options_selenium.add_argument("--profile-directory=ScraperSession")
         
         # Basic args
         options_selenium.add_argument("--no-sandbox")
@@ -777,13 +770,17 @@ def main():
         
         # Warmup - visit homepage first
         if not args.no_warmup:
-            if not warm_up_session(driver):
+            warmup_result = warm_up_session(driver)
+            print(f"[DEBUG] Warmup result: {warmup_result}")
+            if not warmup_result:
                 print("[!] Warmup failed - IP may be blocked")
                 print("[!] Try using --proxy or wait and try again later")
                 return
         
+        print("[DEBUG] Starting main loop...")
         
         while True:
+            print("[DEBUG] Fetching offers from API...")
             offers = get_offers()
             
             if not offers:
