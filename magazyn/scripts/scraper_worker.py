@@ -178,81 +178,67 @@ def check_offer_price(driver, offer_url, my_price):
                     break
         
         # Wait for "Inne oferty" section to load
-        time.sleep(2)
+        time.sleep(3)
         
         html = driver.page_source
         
-        # Parse offers from "Inne oferty" section
-        # Look for offer cards containing price, seller name, and delivery time
-        
+        # Parse JSON data embedded in page
         offers = []
         
-        # Strategy 1: Find offer cards with data-box-name="offer-items"
-        try:
-            offer_cards = driver.find_elements(By.CSS_SELECTOR, "[data-box-name='offer-items'] > article, [data-box-name='offer-items'] > div > article")
-            
-            for card in offer_cards:
-                try:
-                    # Extract price
-                    price_elem = card.find_element(By.CSS_SELECTOR, "[data-price], [data-analytics-click-label*='price']")
-                    price_text = price_elem.text if price_elem else ""
-                    
-                    # Extract delivery time (in days)
-                    delivery_elem = card.find_elements(By.XPATH, ".//*[contains(text(), 'dni') or contains(text(), 'dzień')]")
-                    delivery_days = None
-                    if delivery_elem:
-                        delivery_text = delivery_elem[0].text
-                        # Extract number from "dostawa w 2 dni" or similar
-                        match = re.search(r'(\d+)\s*dzi', delivery_text)
-                        if match:
-                            delivery_days = int(match.group(1))
-                    
-                    # Extract seller name
-                    seller_elem = card.find_elements(By.CSS_SELECTOR, "[data-role='seller-link'], a[href*='/uzytkownik/']")
-                    seller_name = seller_elem[0].text if seller_elem else "Unknown"
-                    
-                    # Extract offer URL
-                    offer_link_elem = card.find_elements(By.CSS_SELECTOR, "a[href*='/oferta/']")
-                    offer_link = offer_link_elem[0].get_attribute("href") if offer_link_elem else ""
-                    
-                    # Parse price
-                    price_match = re.search(r'([\d\s,]+)', price_text.replace(' ', ''))
-                    if price_match:
-                        price_str = price_match.group(1).replace(',', '.').replace(' ', '')
-                        price = Decimal(price_str)
-                        
+        # Look for JSON with offer data
+        json_pattern = r'"offers":\s*\[(.*?)\]'
+        json_match = re.search(json_pattern, html, re.DOTALL)
+        
+        if json_match:
+            try:
+                offers_json = json_match.group(1)
+                # Extract individual offers
+                offer_pattern = r'\{[^}]*"price"[^}]*"amount":\s*"?(\d+(?:\.\d+)?)"?[^}]*"sellerLogin":\s*"([^"]+)"[^}]*\}'
+                matches = re.findall(offer_pattern, offers_json)
+                
+                for price_str, seller in matches:
+                    try:
+                        price = Decimal(price_str.replace(',', '.'))
                         offers.append({
                             'price': price,
-                            'seller': seller_name,
-                            'url': offer_link,
-                            'delivery_days': delivery_days
+                            'seller': seller,
+                            'url': offer_url,
+                            'delivery_days': None
                         })
-                except Exception as e:
-                    continue
-        except Exception as e:
-            print(f"  Error parsing offer cards: {e}")
+                    except:
+                        continue
+            except Exception as e:
+                print(f"  JSON parse error: {e}")
         
-        # Strategy 2: Fallback - parse HTML for JSON data
+        # Fallback: simple price extraction from HTML
         if not offers:
-            json_pattern = r'"sellerLogin":\s*"([^"]+)"[^}]*"price"[^}]*"amount":\s*"?([\d.]+)"?'
-            matches = re.findall(json_pattern, html)
-            for seller, price_str in matches:
-                try:
-                    price = Decimal(price_str.replace(',', '.'))
-                    offers.append({
-                        'price': price,
-                        'seller': seller,
-                        'url': offer_url,  # Fallback URL
-                        'delivery_days': None
-                    })
-                except:
-                    continue
+            price_pattern = r'data-price="(\d+(?:\.\d+)?)"|"amount":\s*"?(\d+(?:\.\d+)?)"?'
+            price_matches = re.findall(price_pattern, html)
+            
+            for match in price_matches:
+                price_str = match[0] or match[1]
+                if price_str:
+                    try:
+                        price = Decimal(price_str.replace(',', '.'))
+                        if price > 0:
+                            offers.append({
+                                'price': price,
+                                'seller': 'Unknown',
+                                'url': offer_url,
+                                'delivery_days': None
+                            })
+                    except:
+                        continue
+        
+        print(f"  Found {len(offers)} offers on page")
         
         if not offers:
             return None
         
         # Filter offers by delivery time (max 4 days) and price (cheaper than ours)
         my_price_decimal = Decimal(str(my_price).replace(',', '.'))
+        
+        print(f"  My price: {my_price_decimal}, filtering...")
         
         filtered_offers = []
         for offer in offers:
@@ -265,6 +251,8 @@ def check_offer_price(driver, offer_url, my_price):
                 continue
             
             filtered_offers.append(offer)
+        
+        print(f"  After filter: {len(filtered_offers)} cheaper offers")
         
         if not filtered_offers:
             return None
