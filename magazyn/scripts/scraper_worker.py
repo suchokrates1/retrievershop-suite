@@ -213,6 +213,33 @@ def check_offer_price(driver, offer_url, my_price):
                 except:
                     break
         
+        # Check for block page AFTER CAPTCHA solved
+        page_source_after = driver.page_source.lower()
+        block_keywords_check = [
+            "zostałeś zablokowany",
+            "you have been blocked",
+            "zablokowano",
+            "access denied",
+            "dostęp zablokowany",
+            "coś w zachowaniu twojej przeglądarki"
+        ]
+        
+        for keyword in block_keywords_check:
+            if keyword in page_source_after:
+                print(f"\n  [!] ALLEGRO BLOCK PAGE detected after CAPTCHA!")
+                print(f"  Block keyword found: '{keyword}'")
+                print("\n" + "="*60)
+                print("[!] IP BLOCKED BY ALLEGRO!")
+                print("="*60)
+                print("Allegro blocked your IP even after solving CAPTCHA.")
+                print("Your IP: Check the block message for details")
+                print("\nRECOMMENDATIONS:")
+                print("1. Wait 1-2 hours before retrying")
+                print("2. Use VPN or mobile hotspot (different IP)")
+                print("3. This IP is flagged - switching required")
+                print("="*60 + "\n")
+                raise Exception("IP_BLOCKED_AFTER_CAPTCHA")
+        
         # Wait for "Inne oferty" section to load
         time.sleep(3)
         
