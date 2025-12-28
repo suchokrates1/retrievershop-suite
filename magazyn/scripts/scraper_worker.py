@@ -12,11 +12,17 @@ import re
 import requests
 from decimal import Decimal
 
-from selenium import webdriver
+try:
+    import undetected_chromedriver as uc
+    UNDETECTED_AVAILABLE = True
+except ImportError:
+    UNDETECTED_AVAILABLE = False
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service as ChromeService
+    from selenium.webdriver.chrome.options import Options
+    from webdriver_manager.chrome import ChromeDriverManager
+
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 
 
 MAGAZYN_URL = "https://magazyn.retrievershop.pl"
@@ -26,28 +32,38 @@ POLL_INTERVAL = 30  # seconds
 
 def setup_chrome_driver():
     """Setup Chrome driver with anti-detection measures."""
-    chrome_options = Options()
-    
     # Use persistent profile to keep cookies/login
     profile_path = os.path.abspath("./allegro_scraper_profile")
     os.makedirs(profile_path, exist_ok=True)
-    chrome_options.add_argument(f"--user-data-dir={profile_path}")
-    chrome_options.add_argument("--profile-directory=Default")
     
-    # Windows stability options
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    
-    # Anti-detection
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("--no-first-run")
-    chrome_options.add_argument("--no-default-browser-check")
-    
-    service = ChromeService(ChromeDriverManager().install())
+    if UNDETECTED_AVAILABLE:
+        print("Using undetected-chromedriver for better anti-detection")
+        options = uc.ChromeOptions()
+        options.add_argument(f"--user-data-dir={profile_path}")
+        options.add_argument("--profile-directory=Default")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--start-maximized")
+        
+        driver = uc.Chrome(options=options, version_main=None)
+        return driver
+    else:
+        print("Warning: undetected-chromedriver not installed, using standard selenium")
+        print("Install with: pip install undetected-chromedriver")
+        chrome_options = Options()
+        chrome_options.add_argument(f"--user-data-dir={profile_path}")
+        chrome_options.add_argument("--profile-directory=Default")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
+        
+        service = ChromeService(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     
     # Hide webdriver property
@@ -56,46 +72,47 @@ def setup_chrome_driver():
     return driver
 
 
-def check_offer_price(driver, offer_url):
+def check_offer_price(driver, offer_url, my_price):
     """
-    Go to Allegro offer page and find cheapest competitor price.
+    Go to Allegro offer page and find cheapest competitor price from "Inne oferty" section.
+    
+    The offer_url already contains #inne-oferty-produktu fragment.
     
     Strategy:
-    1. Open offer page with sorting by price (?order=p)
-    2. Look for "Inne oferty" (similar offers) section
-    3. Extract competitor prices
-    4. Return cheapest (excluding our own price which should be first)
+    1. Open offer page (link includes #inne-oferty-produktu)
+    2. Wait for "Inne oferty" section to load
+    3. Extract all offers with price, seller, and delivery time
+    4. Filter: only offers with delivery time <= 4 days
+    5. Find cheapest competitor (excluding offers >= our price)
+    6. Return: competitor_price, competitor_seller, competitor_url, delivery_days
     
     Returns:
-        (competitor_price, competitor_url) or (None, error_message)
+        dict with keys: price, seller, url, delivery_days
+        or None if no cheaper competitor found
     """
     try:
-        # Add sorting by price parameter
-        if '?' in offer_url:
-            sorted_url = f"{offer_url}&order=p"
-        else:
-            sorted_url = f"{offer_url}?order=p"
+        print(f"  Checking: {offer_url}")
+        driver.get(offer_url)
+        time.sleep(3)  # Wait for page load
         
-        print(f"    Opening: {sorted_url[:60]}...")
-        driver.get(sorted_url)
-        time.sleep(3)
-        
-        # Check for CAPTCHA - more specific detection
-        # Look for actual CAPTCHA elements, not just word "captcha" in source
+        # Check for CAPTCHA
         captcha_detected = False
         try:
-            # Check for DataDome CAPTCHA iframe
-            if len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")) > 0:
-                captcha_detected = True
-            # Check for visible CAPTCHA containers
-            elif len(driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container, [class*='captcha']")) > 0:
-                # Verify it's actually visible
-                for elem in driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container, [class*='captcha']"):
-                    if elem.is_displayed() and elem.size['height'] > 100:
+            # Look for specific CAPTCHA elements
+            captcha_iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")
+            if captcha_iframes and len(captcha_iframes) > 0:
+                iframe = captcha_iframes[0]
+                if iframe.is_displayed() and iframe.size['width'] > 0:
+                    captcha_detected = True
+            
+            if not captcha_detected:
+                captcha_forms = driver.find_elements(By.CSS_SELECTOR, "#captcha-form, .captcha-container")
+                for elem in captcha_forms:
+                    if elem.is_displayed() and elem.size['width'] > 0:
                         captcha_detected = True
                         break
-        except:
-            pass
+        except Exception as e:
+            print(f"  CAPTCHA check error: {e}")
         
         if captcha_detected:
             print("\n" + "="*60)
@@ -109,7 +126,6 @@ def check_offer_price(driver, offer_url):
             captcha_start = time.time()
             while True:
                 time.sleep(5)
-                # Re-check for CAPTCHA elements
                 try:
                     captcha_still_there = False
                     if len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha-delivery']")) > 0:
@@ -127,64 +143,112 @@ def check_offer_price(driver, offer_url):
                 except:
                     break
         
+        # Wait for "Inne oferty" section to load
+        time.sleep(2)
+        
         html = driver.page_source
         
-        # Multiple strategies to find competitor prices
+        # Parse offers from "Inne oferty" section
+        # Look for offer cards containing price, seller name, and delivery time
         
-        # Strategy 1: Look for JSON price data
-        json_pattern = r'"price":\s*{\s*"amount":\s*"?([\d.]+)"?'
-        json_matches = re.findall(json_pattern, html)
+        offers = []
         
-        # Strategy 2: Look for meta price tags
-        meta_pattern = r'<meta[^>]+itemprop="price"[^>]+content="([\d.]+)"'
-        meta_matches = re.findall(meta_pattern, html)
+        # Strategy 1: Find offer cards with data-box-name="offer-items"
+        try:
+            offer_cards = driver.find_elements(By.CSS_SELECTOR, "[data-box-name='offer-items'] > article, [data-box-name='offer-items'] > div > article")
+            
+            for card in offer_cards:
+                try:
+                    # Extract price
+                    price_elem = card.find_element(By.CSS_SELECTOR, "[data-price], [data-analytics-click-label*='price']")
+                    price_text = price_elem.text if price_elem else ""
+                    
+                    # Extract delivery time (in days)
+                    delivery_elem = card.find_elements(By.XPATH, ".//*[contains(text(), 'dni') or contains(text(), 'dzień')]")
+                    delivery_days = None
+                    if delivery_elem:
+                        delivery_text = delivery_elem[0].text
+                        # Extract number from "dostawa w 2 dni" or similar
+                        match = re.search(r'(\d+)\s*dzi', delivery_text)
+                        if match:
+                            delivery_days = int(match.group(1))
+                    
+                    # Extract seller name
+                    seller_elem = card.find_elements(By.CSS_SELECTOR, "[data-role='seller-link'], a[href*='/uzytkownik/']")
+                    seller_name = seller_elem[0].text if seller_elem else "Unknown"
+                    
+                    # Extract offer URL
+                    offer_link_elem = card.find_elements(By.CSS_SELECTOR, "a[href*='/oferta/']")
+                    offer_link = offer_link_elem[0].get_attribute("href") if offer_link_elem else ""
+                    
+                    # Parse price
+                    price_match = re.search(r'([\d\s,]+)', price_text.replace(' ', ''))
+                    if price_match:
+                        price_str = price_match.group(1).replace(',', '.').replace(' ', '')
+                        price = Decimal(price_str)
+                        
+                        offers.append({
+                            'price': price,
+                            'seller': seller_name,
+                            'url': offer_link,
+                            'delivery_days': delivery_days
+                        })
+                except Exception as e:
+                    continue
+        except Exception as e:
+            print(f"  Error parsing offer cards: {e}")
         
-        # Strategy 3: Look for data-price attributes
-        data_pattern = r'data-price="([\d.]+)"'
-        data_matches = re.findall(data_pattern, html)
+        # Strategy 2: Fallback - parse HTML for JSON data
+        if not offers:
+            json_pattern = r'"sellerLogin":\s*"([^"]+)"[^}]*"price"[^}]*"amount":\s*"?([\d.]+)"?'
+            matches = re.findall(json_pattern, html)
+            for seller, price_str in matches:
+                try:
+                    price = Decimal(price_str.replace(',', '.'))
+                    offers.append({
+                        'price': price,
+                        'seller': seller,
+                        'url': offer_url,  # Fallback URL
+                        'delivery_days': None
+                    })
+                except:
+                    continue
         
-        # Strategy 4: Look for offers in "Inne oferty" section
-        # This section usually contains similar offers from other sellers
-        inne_pattern = r'ofert[ay][^}]*?"price"[^}]*?"amount":\s*"?([\d.]+)"?'
-        inne_matches = re.findall(inne_pattern, html, re.IGNORECASE)
+        if not offers:
+            return None
         
-        # Combine all found prices
-        all_price_strings = json_matches + meta_matches + data_matches + inne_matches
+        # Filter offers by delivery time (max 4 days) and price (cheaper than ours)
+        my_price_decimal = Decimal(str(my_price).replace(',', '.'))
         
-        if not all_price_strings:
-            return None, "No competitor prices found"
-        
-        # Convert to Decimal and deduplicate
-        prices = []
-        seen = set()
-        for price_str in all_price_strings:
-            try:
-                price_str = price_str.replace(',', '.')
-                price = Decimal(price_str)
-                price_key = str(price)
-                if price_key not in seen and price > 0:
-                    seen.add(price_key)
-                    prices.append(price)
-            except:
+        filtered_offers = []
+        for offer in offers:
+            # Skip if delivery time is known and > 4 days
+            if offer['delivery_days'] is not None and offer['delivery_days'] > 4:
                 continue
+            
+            # Skip if price >= our price
+            if offer['price'] >= my_price_decimal:
+                continue
+            
+            filtered_offers.append(offer)
         
-        if not prices:
-            return None, "Could not parse any valid prices"
+        if not filtered_offers:
+            return None
         
-        # Sort prices
-        prices.sort()
+        # Sort by price and return cheapest
+        filtered_offers.sort(key=lambda x: x['price'])
+        cheapest = filtered_offers[0]
         
-        # If only one price found, it's probably our own
-        if len(prices) < 2:
-            return None, "No competitors found (only our offer)"
-        
-        # First price is likely ours, second is cheapest competitor
-        competitor_price = prices[1]
-        
-        return str(competitor_price), sorted_url
+        return {
+            'price': str(cheapest['price']),
+            'seller': cheapest['seller'],
+            'url': cheapest['url'],
+            'delivery_days': cheapest['delivery_days']
+        }
         
     except Exception as e:
-        return None, f"Error: {str(e)}"
+        print(f"  Error checking offer: {e}")
+        return None
 
 
 def get_offers():
@@ -273,21 +337,21 @@ def main():
                 print(f"  [{i}/{len(offers)}] {display_title}")
                 print(f"       My price: {my_price} zł")
                 
-                competitor_price, competitor_url = check_offer_price(driver, url)
+                competitor_data = check_offer_price(driver, url, my_price)
                 
-                if competitor_price:
-                    print(f"       Competitor: {competitor_price} zł ✓")
+                if competitor_data:
+                    print(f"       Competitor: {competitor_data['price']} zł ({competitor_data['seller']}) ✓")
+                    if competitor_data['delivery_days']:
+                        print(f"       Delivery: {competitor_data['delivery_days']} days")
                     results.append({
                         "offer_id": offer_id,
-                        "competitor_price": competitor_price,
-                        "competitor_url": competitor_url
+                        "competitor_price": competitor_data['price'],
+                        "competitor_seller": competitor_data['seller'],
+                        "competitor_url": competitor_data['url'],
+                        "competitor_delivery_days": competitor_data.get('delivery_days')
                     })
                 else:
-                    print(f"       Error: {competitor_url}")
-                    results.append({
-                        "offer_id": offer_id,
-                        "error": competitor_url
-                    })
+                    print(f"       No cheaper competitor found")
                 
                 print()
                 
