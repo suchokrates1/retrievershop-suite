@@ -10,15 +10,9 @@ import requests
 from requests.exceptions import HTTPError
 from sqlalchemy import or_
 
-from . import allegro_api
-from .models import AllegroOffer, Product, ProductSize
-from .db import get_session
-from .parsing import parse_offer_title, normalize_color
-from .env_tokens import clear_allegro_tokens, update_allegro_tokens
-from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
-from .domain import allegro_prices
-from .settings_store import SettingsPersistenceError, settings_store
-from . import allegro_responder
+from .db import get_session, configure_engine
+from .settings_store import settings_store
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +57,8 @@ def _clear_cached_tokens():
 
 
 def sync_offers():
-    """Synchronize offers from Allegro with local database.
-
-    Returns
-    -------
-    dict
-        Dictionary containing two keys:
-
-        ``fetched``
-            Number of offers fetched from Allegro across all pages.
-
-        ``matched``
+    print("sync_offers called")
+    return {}
             Number of offers that were matched with local products and
             saved or updated in the database.
 
@@ -457,6 +442,22 @@ def _extract_pagination(next_data, current_limit):
 
 
 if __name__ == "__main__":
+    print("Starting allegro_sync")
     logging.basicConfig(level=logging.INFO)
+    try:
+        print("Reloading settings_store...")
+        settings_store.reload()
+        print("Reload successful")
+    except Exception as e:
+        print(f"Error in reload: {e}")
+        raise
+    try:
+        print(f"DB_PATH: {settings.DB_PATH}")
+        print("Configuring engine...")
+        configure_engine(settings.DB_PATH)
+        print("Engine configured, starting sync...")
+    except Exception as e:
+        print(f"Error during setup: {e}")
+        raise
     sync_offers()
 
