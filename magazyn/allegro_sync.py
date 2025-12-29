@@ -122,7 +122,7 @@ def sync_offers():
     with get_session() as session:
         while True:
             try:
-                data = allegro_api.fetch_offers(token, offset=offset, limit=limit)
+                data = allegro_api.fetch_offers(token, offset=offset, limit=limit, **{"publication.status": "ACTIVE"})
             except HTTPError as exc:
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
                 if status_code == 401:
