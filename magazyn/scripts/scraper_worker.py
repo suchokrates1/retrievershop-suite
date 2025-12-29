@@ -18,11 +18,14 @@ import zipfile
 import shutil
 from decimal import Decimal
 from urllib.parse import urlparse
+from datetime import datetime, timedelta
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Try selenium-stealth for extra protection
@@ -40,6 +43,9 @@ POLL_INTERVAL = 30  # seconds
 MIN_DELAY_BETWEEN_OFFERS = 5   # Minimum 5 seconds between offers  
 MAX_DELAY_BETWEEN_OFFERS = 15  # Maximum 15 seconds (rotating proxy = new IP each time)
 PROXY_URL = None  # Proxy server
+
+# DELIVERY FILTER: Skip offers with delivery time > 7 days (Chinese sellers)
+MAX_DELIVERY_DAYS = 7  # Filter out offers with delivery longer than 7 days
 
 # ===== STEALTH CONFIG =====
 # Real Chrome user agents from real browsers (updated Dec 2024)
@@ -413,47 +419,128 @@ def check_offer_price(driver, offer_url, my_price):
                 save_debug_page()
                 raise Exception("IP_BLOCKED_AFTER_CAPTCHA")
         
-        # Parse JSON data embedded in page
+        # Wait for "Inne oferty produktu" section to load
+        try:
+            print("  Waiting for 'Inne oferty produktu' section...")
+            WebDriverWait(driver, 10).until(
+                lambda d: 'Inne oferty produktu' in d.page_source
+            )
+            print("  ✓ Section found")
+        except Exception as e:
+            print(f"  ⚠ Section not found: {e}")
+            return {'status': 'no_offers', 'message': 'Brak sekcji "Inne oferty produktu"'}
+        
+        # Wait for delivery information to be loaded by JavaScript
+        try:
+            print("  Waiting for delivery data to load...")
+            WebDriverWait(driver, 10).until(
+                lambda d: 'dostawa' in d.page_source.lower()
+            )
+            print("  ✓ Delivery data loaded")
+        except Exception as e:
+            print(f"  ⚠ Timeout waiting for delivery data (continuing anyway): {e}")
+        
+        # Parse HTML after JS has rendered everything
         html = driver.page_source
         
-        # Extract all prices and sellers first (original approach)
-        price_pattern = r'"mainPrice":\{"amount":"([^"]+)","currency":"PLN"\}'
-        price_matches = re.findall(price_pattern, html)
+        # Extract only "Inne oferty produktu" section (other offers of the same product)
+        # This avoids parsing carousels with different products/ads
+        section_start = html.find('Inne oferty produktu')
+        if section_start < 0:
+            print("  ⚠ Could not find 'Inne oferty produktu' section in HTML")
+            return {'status': 'no_offers', 'message': 'Nie znaleziono sekcji "Inne oferty produktu"'}
         
-        seller_pattern = r'"seller":\{[^}]*"login":"([^"]+)"'
-        seller_matches = re.findall(seller_pattern, html)
+        # Take large chunk after section start (1MB should be enough)
+        section_html = html[section_start:section_start + 1000000]
         
-        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers")
+        # Parse offers from HTML (not JSON - this section uses HTML rendering)
+        # Pattern without 'ł<' at end - HTML may have &nbsp; or other entities
+        price_pattern = r'>(\d+),<.*?>(\d+)</.*?z'
+        price_matches = re.findall(price_pattern, section_html)
         
-        # For each price+seller pair, search for delivery text NEAR that seller
-        # Strategy: split HTML by seller name, search for delivery in that section
+        # Extract seller names - use negative lookbehind to EXCLUDE ratings
+        # Ratings have "Poleca sprzedającego: " before <span>
+        # Seller names have only whitespace/tags before <span>
+        # (?<!...) = negative lookbehind - asserts text before does NOT match
+        seller_pattern = r'(?<!Poleca sprzedającego: )<span class=["\']?mgmw_wo["\']?>([^<]+)</span>'
+        seller_matches = re.findall(seller_pattern, section_html)
+        
+        print(f"  Found {len(price_matches)} prices, {len(seller_matches)} sellers in 'Inne oferty'")
+        
+        # Parse delivery information for each seller
         offers = []
-        for i, price_str in enumerate(price_matches):
+        for i in range(min(len(price_matches), len(seller_matches))):
             try:
-                price = Decimal(price_str.replace(',', '.'))
-                seller = seller_matches[i] if i < len(seller_matches) else 'Unknown'
+                # Build price from groups (e.g. "139" and "89" -> 139.89)
+                price = Decimal(f"{price_matches[i][0]}.{price_matches[i][1]}")
+                seller = seller_matches[i]
                 
-                # Find position of this seller in HTML
-                seller_pos = html.find(f'"login":"{seller}"')
-                if seller_pos > 0:
-                    # Look for delivery text in 3000 chars after seller (was 500 - too short!)
-                    search_area = html[seller_pos:seller_pos + 3000]
-                    delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', search_area, re.IGNORECASE)
-                    delivery_days = int(delivery_match.group(1)) if delivery_match else None
+                # Find delivery time for this seller
+                # Use same pattern as extraction to find correct occurrence
+                seller_match = re.search(rf'<p[^>]*><span class=["\']?mgmw_wo["\']?>{re.escape(seller)}</span></p>', section_html)
+                delivery_days = None
+                delivery_text = None
+                
+                if seller_match:
+                    seller_pos = seller_match.start()
+                    # Search 5000 chars after seller name
+                    search_area = section_html[seller_pos:seller_pos + 5000]
                     
-                    # DEBUG: For Chinese sellers, ALWAYS show search area
-                    if seller in ['Helen_pl', 'xiaomi_cn', 'iamron', 'Ship_Store1']:
-                        if delivery_match:
-                            print(f"  [DEBUG] {seller}: Found delivery={delivery_days} days")
+                    # Try "za X dni" pattern first
+                    delivery_match = re.search(r'dostawa\s+za\s+(\d+)\s+dn', search_area, re.IGNORECASE)
+                    if delivery_match:
+                        delivery_days = int(delivery_match.group(1))
+                        delivery_text = f"za {delivery_days} dni"
+                    else:
+                        # Check for "pt. 2 sty." format (weekday + date)
+                        delivery_weekday = re.search(r'dostawa\s+\w+\.\s+(\d+)\s+(\w+)', search_area, re.IGNORECASE)
+                        if delivery_weekday:
+                            # Parse date and calculate days from today
+                            day = int(delivery_weekday.group(1))
+                            month_abbr = delivery_weekday.group(2).lower()
+                            
+                            # Map Polish month abbreviations to numbers
+                            months = {
+                                'sty': 1, 'lut': 2, 'mar': 3, 'kwi': 4, 'maj': 5, 'cze': 6,
+                                'lip': 7, 'sie': 8, 'wrz': 9, 'paź': 10, 'lis': 11, 'gru': 12
+                            }
+                            
+                            if month_abbr in months:
+                                month = months[month_abbr]
+                                today = datetime.now()
+                                
+                                # Determine year - if month < current month, assume next year
+                                year = today.year
+                                if month < today.month or (month == today.month and day < today.day):
+                                    year += 1
+                                
+                                try:
+                                    delivery_date = datetime(year, month, day)
+                                    delivery_days = (delivery_date - today).days
+                                    delivery_text = f"{delivery_weekday.group(0)} ({delivery_days} dni)"
+                                except ValueError:
+                                    # Invalid date (e.g. 31 Feb)
+                                    delivery_days = None
+                                    delivery_text = None
+                            else:
+                                delivery_days = None
+                                delivery_text = None
                         else:
-                            print(f"  [DEBUG] {seller}: No delivery found")
-                            print(f"  [DEBUG] Search area: {search_area[:300]}")
-                else:
-                    delivery_days = None
+                            # Check for "przed [date]" pattern (no numeric days, accept it)
+                            delivery_before = re.search(r'dostawa\s+przed\s+[^<]+', search_area, re.IGNORECASE)
+                            if delivery_before:
+                                delivery_text = "przed datą (ok)"
+                                delivery_days = 0  # Treat as fast delivery
                 
-                # FILTER: Skip if delivery > 7 days (Chinese sellers)
-                if delivery_days is not None and delivery_days > 7:
-                    print(f"  Skipping {seller} - delivery {delivery_days} days (China?)")
+                # DEBUG: Always log what we found for debugging
+                print(f"  [{seller}] price={price} zł, delivery={delivery_text or 'BRAK'}, days={delivery_days}")
+                
+                # FILTER: Block if no delivery info (suspicious) OR delivery > MAX_DELIVERY_DAYS
+                if delivery_days is None:
+                    print(f"    -> BLOCKED (no delivery info - suspicious)")
+                    continue
+                if delivery_days > MAX_DELIVERY_DAYS:
+                    print(f"    -> BLOCKED (delivery {delivery_days} > {MAX_DELIVERY_DAYS} days)")
                     continue
                 
                 offers.append({
@@ -462,7 +549,8 @@ def check_offer_price(driver, offer_url, my_price):
                     'url': offer_url,
                     'delivery_days': delivery_days
                 })
-            except (ValueError, IndexError) as e:
+                
+            except (ValueError, IndexError, AttributeError) as e:
                 continue
         
         # Deduplicate by seller (keep lowest price per seller)

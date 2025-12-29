@@ -117,6 +117,7 @@ def sync_offers():
     fetched_count = 0
     matched_count = 0
     trend_report: list = []
+    fetched_offer_ids: set = set()
 
     with get_session() as session:
         while True:
@@ -204,6 +205,9 @@ def sync_offers():
                 offers = []
             fetched_count += len(offers)
             for offer in offers:
+                offer_id = offer.get("id")
+                if offer_id:
+                    fetched_offer_ids.add(offer_id)
                 price_data = offer.get("price")
                 if price_data is None:
                     selling_mode = offer.get("sellingMode")
@@ -227,6 +231,59 @@ def sync_offers():
                     price = Decimal("0.00")
 
                 title = offer.get("name") or offer.get("title", "")
+                
+                # Get EAN for offer
+                ean = None
+                try:
+                    url = f"https://api.allegro.pl/sale/product-offers/{offer_id}"
+                    response = requests.get(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.allegro.public.v1+json"}, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        product_set = data.get("productSet", [])
+                        if product_set:
+                            product_id_api = product_set[0]["product"]["id"]
+                            url2 = f"https://api.allegro.pl/sale/products/{product_id_api}"
+                            response2 = requests.get(url2, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.allegro.public.v1+json"}, timeout=10)
+                            if response2.status_code == 200:
+                                data2 = response2.json()
+                                parameters = data2.get("parameters", [])
+                                for param in parameters:
+                                    if param.get("name") == "EAN (GTIN)":
+                                        ean = param.get("values", [None])[0]
+                                        break
+                except Exception as e:
+                    logger.warning(f"Failed to get EAN for offer {offer_id}: {e}")
+                
+                # Try to match by EAN first
+                matched_size = None
+                if ean:
+                    matched_size = session.query(ProductSize).filter(ProductSize.barcode == ean).first()
+                    if matched_size:
+                        matched_count += 1
+                        # Update or create offer with EAN match
+                        existing = session.query(AllegroOffer).filter_by(offer_id=offer_id).first()
+                        timestamp_dt = datetime.now(timezone.utc)
+                        timestamp = timestamp_dt.isoformat()
+                        if existing:
+                            existing.title = title
+                            existing.price = price
+                            existing.product_id = matched_size.product_id
+                            existing.product_size_id = matched_size.id
+                            existing.synced_at = timestamp
+                            existing.publication_status = "ACTIVE"
+                        else:
+                            session.add(AllegroOffer(
+                                offer_id=offer_id,
+                                title=title,
+                                price=price,
+                                product_id=matched_size.product_id,
+                                product_size_id=matched_size.id,
+                                synced_at=timestamp,
+                                publication_status="ACTIVE"
+                            ))
+                        continue
+                
+                # Existing matching logic by title parsing
                 name, color, size = parse_offer_title(title)
                 color = normalize_color(color)
                 normalized_offer_color_key = _normalize_color_key(color)
@@ -289,6 +346,7 @@ def sync_offers():
                         existing.product_id = product_id
                         existing.product_size_id = product_size_id
                     existing.synced_at = timestamp
+                    existing.publication_status = "ACTIVE"
                 else:
                     session.add(
                         AllegroOffer(
@@ -298,6 +356,7 @@ def sync_offers():
                             product_id=product_id,
                             product_size_id=product_size_id,
                             synced_at=timestamp,
+                            publication_status="ACTIVE",
                         )
                     )
 
@@ -323,6 +382,21 @@ def sync_offers():
             limit = next_limit
 
         session.flush()
+        
+        # Mark offers not in current fetch as ENDED
+        if fetched_offer_ids:
+            ended_count = (
+                session.query(AllegroOffer)
+                .filter(
+                    AllegroOffer.offer_id.notin_(fetched_offer_ids),
+                    AllegroOffer.publication_status != "ENDED"
+                )
+                .update({"publication_status": "ENDED"}, synchronize_session=False)
+            )
+            session.flush()
+            if ended_count > 0:
+                logger.info("Marked %d offers as ENDED (no longer in API response)", ended_count)
+        
         trend_report = allegro_prices.generate_trend_report(session)
 
     if trend_report:

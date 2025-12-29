@@ -11,6 +11,7 @@
         <thead>
             <tr>
                 <th scope="col">ID</th>
+                <th scope="col">EAN</th>
                 <th scope="col">Tytuł</th>
                 <th scope="col">Cena</th>
                 <th scope="col" class="w-50">Powiązanie z magazynem</th>
@@ -20,6 +21,7 @@
         {% for offer in offers %}
             <tr>
                 <td>{{ offer.offer_id }}</td>
+                <td>{{ offer.ean }}</td>
                 <td>{{ offer.title }}</td>
                 <td>{{ offer.price }}</td>
                 <td>
