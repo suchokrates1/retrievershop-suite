@@ -419,12 +419,25 @@ def offers_and_prices():
 
         offers_data = []
         for offer, size, product in rows:
-            # Get competitor prices for this offer
+            # Get latest competitor data from database (saved by scraper)
+            latest_competitor = (
+                db.query(AllegroPriceHistory)
+                .filter(
+                    AllegroPriceHistory.offer_id == offer.offer_id,
+                    AllegroPriceHistory.competitor_price.isnot(None)
+                )
+                .order_by(AllegroPriceHistory.recorded_at.desc())
+                .first()
+            )
+
             competitors = []
-            try:
-                competitors = fetch_competitors_for_offer(offer.offer_id)
-            except AllegroScrapeError as e:
-                current_app.logger.warning(f"Failed to fetch competitors for {offer.offer_id}: {e}")
+            if latest_competitor:
+                competitors = [{
+                    'price': float(latest_competitor.competitor_price),
+                    'seller': latest_competitor.competitor_seller,
+                    'url': latest_competitor.competitor_url,
+                    'delivery_days': latest_competitor.competitor_delivery_days
+                }]
 
             # Calculate price statistics
             competitor_prices = [c['price'] for c in competitors if c.get('price')]
