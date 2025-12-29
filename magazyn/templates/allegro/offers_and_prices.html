@@ -105,7 +105,7 @@
                         <div class="mt-1">
                             {% for competitor in offer.competitors[:3] %}
                                 <div class="small text-muted">
-                                    {{ competitor.price }} zł - {{ competitor.title|truncate(30) }}
+                                    {{ competitor.price }} zł - {{ competitor.seller|truncate(30) }}
                                 </div>
                             {% endfor %}
                             {% if offer.competitor_count > 3 %}
