@@ -223,7 +223,7 @@ def refresh_token(refresh_token: str) -> dict:
     return response.json()
 
 
-def fetch_offers(access_token: str, offset: int = 0, limit: int = 100) -> dict:
+def fetch_offers(access_token: str, offset: int = 0, limit: int = 100, **kwargs) -> dict:
     """Fetch offers from Allegro using a valid access token.
 
     Parameters
@@ -235,6 +235,8 @@ def fetch_offers(access_token: str, offset: int = 0, limit: int = 100) -> dict:
         Defaults to ``0``.
     limit : int
         Number of results to fetch per request. Defaults to ``100``.
+    **kwargs
+        Additional query parameters.
 
     Returns
     -------
@@ -245,7 +247,7 @@ def fetch_offers(access_token: str, offset: int = 0, limit: int = 100) -> dict:
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
-    params = {"offset": offset, "limit": limit}
+    params = {"offset": offset, "limit": limit, **kwargs}
     url = f"{API_BASE_URL}/sale/offers"
 
     response = _request_with_retry(
