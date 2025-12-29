@@ -11,7 +11,7 @@ from requests.exceptions import HTTPError
 from sqlalchemy import or_
 
 from .db import get_session, configure_engine
-from .settings_store import settings_store
+from .settings_store import SettingsPersistenceError, settings_store
 from .config import settings
 
 logger = logging.getLogger(__name__)
