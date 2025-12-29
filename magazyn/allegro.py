@@ -24,7 +24,7 @@ from flask import (
 
 from sqlalchemy import case, or_, text
 from .db import get_session, SessionLocal
-from .models import AllegroOffer, Product, ProductSize
+from .models import AllegroOffer, Product, ProductSize, AllegroPriceHistory
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
