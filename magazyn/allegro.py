@@ -74,6 +74,13 @@ def _sse_event(event: str, payload: dict[str, object]) -> str:
     return f"event: {event}\ndata: {data}\n\n"
 
 
+def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
+    """Format decimal value for display."""
+    if value is None:
+        return None
+    return f"{value:.2f}"
+
+
 def _process_oauth_response() -> dict[str, object]:
     debug_steps: list[dict[str, str]] = []
 
