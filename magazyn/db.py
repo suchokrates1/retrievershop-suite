@@ -104,6 +104,7 @@ def sqlite_connect(db_path=None, *, apply_pragmas=True, **kwargs):
 def configure_engine(db_path):
     """Create SQLAlchemy engine and session factory for ``db_path``."""
     global engine, SessionLocal
+    print(f"Configuring engine for {db_path}")
     engine = create_engine(
         f"sqlite:///{db_path}",
         future=True,
@@ -119,6 +120,7 @@ def configure_engine(db_path):
         autoflush=False,
         expire_on_commit=False,  # keep returned objects usable after commit
     )
+    print(f"SessionLocal set to: {SessionLocal}")
 
 
 @contextmanager

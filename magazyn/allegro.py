@@ -400,6 +400,155 @@ def offers():
     return response
 
 
+@bp.route("/allegro/offers-and-prices")
+@login_required
+def offers_and_prices():
+    with get_session() as db:
+        # Get all active offers with their linked products
+        rows = (
+            db.query(AllegroOffer, ProductSize, Product)
+            .filter(AllegroOffer.publication_status == 'ACTIVE')
+            .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
+            .outerjoin(Product, AllegroOffer.product_id == Product.id)
+            .order_by(
+                case((AllegroOffer.product_size_id.is_(None), 0), else_=1),
+                AllegroOffer.title,
+            )
+            .all()
+        )
+
+        offers_data = []
+        for offer, size, product in rows:
+            # Get competitor prices for this offer
+            competitors = []
+            try:
+                competitors = fetch_competitors_for_offer(offer.offer_id)
+            except AllegroScrapeError as e:
+                current_app.logger.warning(f"Failed to fetch competitors for {offer.offer_id}: {e}")
+
+            # Calculate price statistics
+            competitor_prices = [c['price'] for c in competitors if c.get('price')]
+            avg_price = None
+            min_price = None
+            max_price = None
+            if competitor_prices:
+                avg_price = sum(competitor_prices) / len(competitor_prices)
+                min_price = min(competitor_prices)
+                max_price = max(competitor_prices)
+
+            # Create label for linked product
+            label = None
+            product_for_label = product or (size.product if size else None)
+            if product_for_label and size:
+                parts = [product_for_label.name]
+                if product_for_label.color:
+                    parts.append(product_for_label.color)
+                label = " – ".join([" ".join(parts), size.size])
+            elif product_for_label:
+                parts = [product_for_label.name]
+                if product_for_label.color:
+                    parts.append(product_for_label.color)
+                label = " ".join(parts)
+
+            offer_data = {
+                "offer_id": offer.offer_id,
+                "title": offer.title,
+                "price": offer.price,
+                "product_size_id": offer.product_size_id,
+                "product_id": offer.product_id,
+                "selected_label": label,
+                "barcode": size.barcode if size else None,
+                "ean": _get_ean_for_offer(offer.offer_id),
+                "competitors": competitors,
+                "competitor_count": len(competitors),
+                "avg_competitor_price": _format_decimal(avg_price),
+                "min_competitor_price": _format_decimal(min_price),
+                "max_competitor_price": _format_decimal(max_price),
+                "is_linked": bool(offer.product_size_id or offer.product_id),
+            }
+            offers_data.append(offer_data)
+
+        # Build inventory for dropdown
+        inventory_rows = (
+            db.query(ProductSize, Product)
+            .join(Product, ProductSize.product_id == Product.id)
+            .order_by(Product.name, ProductSize.size)
+            .all()
+        )
+        product_rows = db.query(Product).order_by(Product.name).all()
+        inventory: list[dict] = []
+        product_inventory: list[dict] = []
+        for product in product_rows:
+            name_parts = [product.name]
+            if product.color:
+                name_parts.append(product.color)
+            label = " ".join(name_parts)
+            sizes = list(product.sizes or [])
+            total_quantity = sum(
+                size.quantity or 0 for size in sizes if size.quantity is not None
+            )
+            barcodes = sorted({size.barcode for size in sizes if size.barcode})
+            extra_parts = ["Powiązanie na poziomie produktu"]
+            if barcodes:
+                extra_parts.append(f"EAN: {', '.join(barcodes)}")
+            if sizes:
+                extra_parts.append(f"Stan łączny: {total_quantity}")
+            filter_values = [label, "produkt"]
+            filter_values.extend(barcodes)
+            if total_quantity:
+                filter_values.append(str(total_quantity))
+            product_inventory.append(
+                {
+                    "id": product.id,
+                    "label": label,
+                    "extra": ", ".join(extra_parts),
+                    "filter": " ".join(filter_values).strip().lower(),
+                    "type": "product",
+                    "type_label": "Produkt",
+                }
+            )
+        for size, product in inventory_rows:
+            name_parts = [product.name]
+            if product.color:
+                name_parts.append(product.color)
+            main_label = " ".join(name_parts)
+            label = f"{main_label} – {size.size}"
+            extra_parts = []
+            if size.barcode:
+                extra_parts.append(f"EAN: {size.barcode}")
+            quantity = size.quantity if size.quantity is not None else 0
+            extra_parts.append(f"Stan: {quantity}")
+            filter_text = " ".join(
+                [
+                    label,
+                    size.barcode or "",
+                    str(quantity),
+                    "rozmiar",
+                ]
+            ).strip().lower()
+            inventory.append(
+                {
+                    "id": size.id,
+                    "label": label,
+                    "extra": ", ".join(extra_parts),
+                    "filter": filter_text,
+                    "type": "size",
+                    "type_label": "Rozmiar",
+                }
+            )
+        inventory = product_inventory + inventory
+
+    response = make_response(render_template(
+        "allegro/offers_and_prices.html",
+        offers=offers_data,
+        inventory=inventory,
+    ))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
     if value is None:
         return None

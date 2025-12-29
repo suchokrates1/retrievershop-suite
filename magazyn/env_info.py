@@ -75,4 +75,8 @@ ENV_INFO = {
         "URL Scrapera Allegro",
         "Adres API lokalnego scrapera (np. http://192.168.31.150:5555) - pozostaw puste aby używać wbudowanego Selenium",
     ),
+    "ALLEGRO_PROXY_URL": (
+        "URL Proxy Allegro",
+        "Adres proxy dla scrapera Allegro (format: user:pass@host:port)",
+    ),
 }

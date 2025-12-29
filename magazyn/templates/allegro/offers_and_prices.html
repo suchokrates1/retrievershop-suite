@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Oferty i ceny Allegro</h1>
+    <div class="d-flex gap-2">
+        <form method="post" action="{{ url_for('allegro.refresh') }}" class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-arrow-clockwise"></i> Odśwież oferty
+            </button>
+        </form>
+        <a href="allegro-scraper://start" class="btn btn-success">
+            <i class="bi bi-play-circle"></i> Uruchom Scraper Worker
+        </a>
+        <a href="/download/scraper" class="btn btn-outline-primary">
+            <i class="bi bi-download"></i> Pobierz Worker
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info" role="alert">
+    <strong>Jak to działa?</strong>
+    <ol class="mb-0 mt-2">
+        <li>Kliknij "Odśwież oferty" aby pobrać najnowsze oferty z Allegro</li>
+        <li>Kliknij "Uruchom Scraper Worker" aby sprawdzić ceny konkurencji (pierwszy raz wymaga instalacji)</li>
+        <li>Worker działa w tle i aktualizuje ceny automatycznie</li>
+        <li>Powiąż oferty z produktami z magazynu używając dropdownów</li>
+    </ol>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">EAN</th>
+                <th scope="col">Tytuł</th>
+                <th scope="col">Nasza cena</th>
+                <th scope="col">Powiązanie z magazynem</th>
+                <th scope="col">Konkurencja</th>
+                <th scope="col">Średnia cena</th>
+                <th scope="col">Najniższa</th>
+                <th scope="col">Najwyższa</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for offer in offers %}
+            <tr>
+                <td>{{ offer.offer_id }}</td>
+                <td>{{ offer.ean or '-' }}</td>
+                <td>
+                    <div class="fw-semibold">{{ offer.title }}</div>
+                    {% if offer.is_linked %}
+                        <span class="badge bg-success">Powiązana</span>
+                    {% else %}
+                        <span class="badge bg-warning">Niepowiązana</span>
+                    {% endif %}
+                </td>
+                <td class="fw-semibold">{{ offer.price }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="product_id" value="{{ offer.product_id or '' }}" data-product-input>
+                        <input type="hidden" name="product_size_id" value="{{ offer.product_size_id or '' }}" data-size-input>
+                        <div class="dropdown flex-grow-1 search-dropdown" data-offer-id="{{ offer.offer_id }}">
+                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-selected-label data-placeholder="Wybierz z magazynu">
+                                {{ offer.selected_label or 'Wybierz z magazynu' }}
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
+                                <input type="text" class="form-control form-control-sm mb-2 search-dropdown-input" placeholder="Szukaj..." autocomplete="off" data-search-input>
+                                <div class="list-group search-dropdown-options" data-options>
+                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="none" data-value="" data-label="Wybierz z magazynu" data-filter="">
+                                        <div class="fw-semibold">Brak powiązania</div>
+                                        <div class="small text-muted">Zostaw ofertę bez przypisania</div>
+                                    </button>
+                                    {% for item in inventory %}
+                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="{{ item.type }}" data-value="{{ item.id }}" data-label="{{ item.label }}" data-filter="{{ item.filter }}">
+                                        <div class="fw-semibold">{{ item.label }}</div>
+                                        <div class="small text-muted">
+                                            <span class="badge bg-secondary me-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
+                                        </div>
+                                    </button>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Zapisz</button>
+                    </form>
+                </td>
+                <td>
+                    {% if offer.competitors %}
+                        <span class="badge bg-info">{{ offer.competitor_count }} ofert</span>
+                        <div class="mt-1">
+                            {% for competitor in offer.competitors[:3] %}
+                                <div class="small text-muted">
+                                    {{ competitor.price }} zł - {{ competitor.title|truncate(30) }}
+                                </div>
+                            {% endfor %}
+                            {% if offer.competitor_count > 3 %}
+                                <div class="small text-muted">...i {{ offer.competitor_count - 3 }} więcej</div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <span class="text-muted">Brak danych</span>
+                    {% endif %}
+                </td>
+                <td class="fw-semibold">{{ offer.avg_competitor_price or '-' }}</td>
+                <td class="{% if offer.min_competitor_price and offer.price|float < offer.min_competitor_price|float %}text-success fw-bold{% endif %}">{{ offer.min_competitor_price or '-' }}</td>
+                <td>{{ offer.max_competitor_price or '-' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+// Search dropdown functionality
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.search-dropdown').forEach(function(dropdown) {
+        const input = dropdown.querySelector('[data-search-input]');
+        const options = dropdown.querySelectorAll('[data-option]');
+        const selectedLabel = dropdown.querySelector('[data-selected-label]');
+        const productInput = dropdown.querySelector('[data-product-input]');
+        const sizeInput = dropdown.querySelector('[data-size-input]');
+        const offerId = dropdown.dataset.offerId;
+
+        function filterOptions() {
+            const query = input.value.toLowerCase();
+            options.forEach(function(option) {
+                const filter = option.dataset.filter;
+                const isVisible = !query || filter.includes(query);
+                option.style.display = isVisible ? '' : 'none';
+            });
+        }
+
+        input.addEventListener('input', filterOptions);
+
+        options.forEach(function(option) {
+            option.addEventListener('click', function() {
+                const kind = this.dataset.kind;
+                const value = this.dataset.value;
+                const label = this.dataset.label;
+
+                selectedLabel.textContent = label;
+                selectedLabel.classList.remove('text-muted');
+                selectedLabel.classList.add('text-dark');
+
+                if (kind === 'size') {
+                    productInput.value = '';
+                    sizeInput.value = value;
+                } else if (kind === 'product') {
+                    productInput.value = value;
+                    sizeInput.value = '';
+                } else {
+                    productInput.value = '';
+                    sizeInput.value = '';
+                }
+
+                // Close dropdown
+                const bsDropdown = new bootstrap.Dropdown(dropdown.querySelector('.dropdown-toggle'));
+                bsDropdown.hide();
+            });
+        });
+    });
+});
+</script>
+
+{% endblock %}
