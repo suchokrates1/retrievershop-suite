@@ -46,7 +46,6 @@ RUN groupadd --system magazyn && \
 COPY --from=builder --chown=magazyn:magazyn $VIRTUAL_ENV $VIRTUAL_ENV
 COPY --from=builder --chown=magazyn:magazyn /app /app
 
-# Force rebuild - updated entrypoint.sh to use Flask dev server
 COPY --chown=magazyn:magazyn magazyn/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
