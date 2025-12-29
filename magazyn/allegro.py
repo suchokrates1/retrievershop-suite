@@ -11,6 +11,7 @@ from flask import (
     Blueprint,
     Response,
     current_app,
+    make_response,
     render_template,
     request,
     redirect,
@@ -387,12 +388,16 @@ def offers():
                 }
             )
         inventory = product_inventory + inventory
-    return render_template(
+    response = make_response(render_template(
         "allegro/offers.html",
         unlinked_offers=unlinked_offers,
         linked_offers=linked_offers,
         inventory=inventory,
-    )
+    ))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
