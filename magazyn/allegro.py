@@ -407,7 +407,7 @@ def offers():
     return response
 
 
-@bp.route("/allegro/offers-and-prices")
+@bp.route("/offers-and-prices")
 @login_required
 def offers_and_prices():
     with get_session() as db:
