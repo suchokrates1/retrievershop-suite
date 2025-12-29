@@ -436,7 +436,9 @@ def offers_and_prices():
                 .order_by(AllegroPriceHistory.recorded_at.desc())
                 .first()
             )
-
+            
+            current_app.logger.info(f"Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
+            
             competitors = []
             if latest_competitor:
                 competitors = [{
