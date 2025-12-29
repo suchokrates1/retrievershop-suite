@@ -402,6 +402,8 @@ def sync_offers():
     if trend_report:
         logger.info("Generated Allegro price trend report with %d entries", len(trend_report))
 
+    logger.info("Allegro sync completed: fetched %d offers, matched %d", fetched_count, matched_count)
+
     return {"fetched": fetched_count, "matched": matched_count, "trend_report": trend_report}
 
 
