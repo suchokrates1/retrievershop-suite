@@ -17,10 +17,11 @@ def migrate():
                 "price REAL NOT NULL, "
                 "product_id INTEGER NOT NULL REFERENCES products(id), "
                 "product_size_id INTEGER REFERENCES product_sizes(id), "
-                "synced_at TEXT)"
+                "synced_at TEXT, "
+                "publication_status TEXT DEFAULT 'ACTIVE')"
             )
             conn.commit()
-            print("Created allegro_offers table")
+            print("Created allegro_offers table with publication_status column")
         else:
             print("allegro_offers table already exists")
 

@@ -238,12 +238,49 @@ def allegro_oauth_debug():
     return redirect(url_for("settings_page"))
 
 
+def _get_ean_for_offer(offer_id: str) -> str:
+    """Get EAN for an offer from Allegro API."""
+    try:
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        if not access_token:
+            return ""
+        
+        headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.allegro.public.v1+json"}
+        
+        url1 = f"https://api.allegro.pl/sale/product-offers/{offer_id}"
+        response1 = requests.get(url1, headers=headers, timeout=10)
+        if response1.status_code != 200:
+            return ""
+        
+        data1 = response1.json()
+        product_set = data1.get("productSet", [])
+        if not product_set:
+            return ""
+        
+        product_id = product_set[0]["product"]["id"]
+        
+        url2 = f"https://api.allegro.pl/sale/products/{product_id}"
+        response2 = requests.get(url2, headers=headers, timeout=10)
+        if response2.status_code != 200:
+            return ""
+        
+        data2 = response2.json()
+        parameters = data2.get("parameters", [])
+        for param in parameters:
+            if param.get("name") == "EAN (GTIN)":
+                return param.get("values", [""])[0]
+        return ""
+    except Exception:
+        return ""
+
+
 @bp.route("/allegro/offers")
 @login_required
 def offers():
     with get_session() as db:
         rows = (
             db.query(AllegroOffer, ProductSize, Product)
+            .filter(AllegroOffer.publication_status == 'ACTIVE')
             .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
             .outerjoin(Product, AllegroOffer.product_id == Product.id)
             .order_by(
@@ -275,6 +312,7 @@ def offers():
                 "product_id": offer.product_id,
                 "selected_label": label,
                 "barcode": size.barcode if size else None,
+                "ean": _get_ean_for_offer(offer.offer_id),
             }
             if offer.product_size_id or offer.product_id:
                 linked_offers.append(offer_data)
