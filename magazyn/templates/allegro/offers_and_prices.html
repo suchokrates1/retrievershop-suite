@@ -28,6 +28,18 @@
     </ol>
 </div>
 
+<div id="scraper-queue-status" class="alert alert-secondary d-none">
+    <div class="d-flex justify-content-between align-items-center">
+        <span>Status kolejki:</span>
+        <div>
+            <span class="badge bg-warning">Oczekujące: <span id="queue-pending">0</span></span>
+            <span class="badge bg-primary">W trakcie: <span id="queue-processing">0</span></span>
+            <span class="badge bg-success">Gotowe: <span id="queue-done">0</span></span>
+            <span class="badge bg-danger">Błędy: <span id="queue-errors">0</span></span>
+        </div>
+    </div>
+</div>
+
 <div class="table-responsive">
     <table class="table table-striped align-middle">
         <thead class="table-dark">
@@ -163,6 +175,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-</script>
+
+// Poll scraper queue status every 5 seconds
+function updateQueueStatus() {
+    fetch('/api/scraper/status')
+        .then(res => res.json())
+        .then(data => {
+            const statusDiv = document.getElementById('scraper-queue-status');
+            if (!statusDiv) return;
+            
+            // Show status if there are any tasks
+            if (data.pending > 0 || data.processing > 0 || data.done > 0) {
+                statusDiv.classList.remove('d-none');
+                document.getElementById('queue-pending').textContent = data.pending || 0;
+                document.getElementById('queue-processing').textContent = data.processing || 0;
+                document.getElementById('queue-done').textContent = data.done || 0;
+                document.getElementById('queue-errors').textContent = data.errors || 0;
+            }
+        })
+        .catch(() => {
+            // Silently fail if API not available
+        });
+}
+
+// Update status every 5 seconds
+setInterval(updateQueueStatus, 5000);
+updateQueueStatus(); // Initial call
+
 
 {% endblock %}
