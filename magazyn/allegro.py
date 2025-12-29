@@ -439,7 +439,7 @@ def offers_and_prices():
             
             current_app.logger.info(f"Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
             
-            print(f"DEBUG: Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
+            current_app.logger.error(f"DEBUG: Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
             
             competitors = []
             if latest_competitor:
@@ -450,7 +450,7 @@ def offers_and_prices():
                     'delivery_days': latest_competitor.competitor_delivery_days
                 }]
             
-            print(f"DEBUG: Offer {offer.offer_id}: competitors = {competitors}")
+            current_app.logger.error(f"DEBUG: Offer {offer.offer_id}: competitors = {competitors}")
 
             # Calculate price statistics
             competitor_prices = [c['price'] for c in competitors if c.get('price')]
