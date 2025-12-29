@@ -76,6 +76,7 @@ def get_tasks(session):
         ) aph ON ao.offer_id = aph.offer_id
         WHERE ao.offer_id IS NOT NULL
             AND ao.price > 0
+            AND (ao.publication_status IS NULL OR ao.publication_status = 'ACTIVE')
             AND (aph.recorded_at IS NULL 
                  OR aph.recorded_at < datetime('now', '-1 hour'))
         ORDER BY COALESCE(aph.recorded_at, '1970-01-01') ASC
@@ -95,7 +96,7 @@ def get_tasks(session):
         for row in rows
     ]
     
-    # Get total count of pending offers
+    # Get total count of pending offers (only ACTIVE)
     total_result = session.execute(
         text("""
         SELECT COUNT(*)
@@ -107,6 +108,7 @@ def get_tasks(session):
         ) aph ON ao.offer_id = aph.offer_id
         WHERE ao.offer_id IS NOT NULL
             AND ao.price > 0
+            AND (ao.publication_status IS NULL OR ao.publication_status = 'ACTIVE')
             AND (aph.last_check IS NULL 
                  OR aph.last_check < datetime('now', '-1 hour'))
         """)
@@ -222,9 +224,11 @@ def status(session):
             "last_check": "2025-12-22 10:30:00"
         }
     """
-    # Count total offers
+    # Count total offers (only ACTIVE)
     total_result = session.execute(
-        text("SELECT COUNT(*) FROM allegro_offers WHERE offer_id IS NOT NULL")
+        text("""SELECT COUNT(*) FROM allegro_offers 
+             WHERE offer_id IS NOT NULL 
+             AND (publication_status IS NULL OR publication_status = 'ACTIVE')""")
     )
     total_offers = total_result.fetchone()[0]
     
@@ -249,6 +253,7 @@ def status(session):
             GROUP BY offer_id
         ) aph ON ao.offer_id = aph.offer_id
         WHERE ao.offer_id IS NOT NULL
+            AND (ao.publication_status IS NULL OR ao.publication_status = 'ACTIVE')
             AND (aph.last_check IS NULL 
                  OR aph.last_check < datetime('now', '-1 hour'))
         """)

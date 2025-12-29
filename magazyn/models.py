@@ -129,6 +129,7 @@ class AllegroOffer(Base):
         nullable=True,
     )
     synced_at = Column(String)
+    publication_status = Column(String, default="ACTIVE")
 
     product = relationship("Product")
     product_size = relationship("ProductSize", back_populates="allegro_offers")
