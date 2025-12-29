@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from collections.abc import Mapping
 from urllib.parse import urlparse, parse_qs
 
+import requests
 from requests.exceptions import HTTPError
 from sqlalchemy import or_
 
