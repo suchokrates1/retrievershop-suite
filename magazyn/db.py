@@ -41,7 +41,7 @@ MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 
 SQLITE_CONNECT_ARGS = {"check_same_thread": False, "timeout": 5}
 SQLITE_JOURNAL_MODE = "WAL"
-SQLITE_BUSY_TIMEOUT_MS = 5000
+SQLITE_BUSY_TIMEOUT_MS = 30000
 
 
 def _configure_sqlite_connection(dbapi_connection):
