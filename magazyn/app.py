@@ -14,7 +14,6 @@ from flask import (
 )
 from datetime import datetime, timezone
 import os
-import sys
 import uuid
 import hmac
 from werkzeug.security import check_password_hash
@@ -25,15 +24,8 @@ from requests.exceptions import HTTPError, RequestException
 
 from .models import User, Thread, Message, Product, ProductSize
 from .forms import LoginForm
-from sqlalchemy.orm import joinedload
 
-from .db import (
-    get_session,
-    init_db,
-    reset_db,
-    record_purchase,
-    consume_stock,
-)
+from .db import get_session
 from .sales import _sales_keys
 from .auth import login_required
 from . import print_agent, allegro_api

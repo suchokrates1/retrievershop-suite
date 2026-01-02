@@ -14,3 +14,19 @@ agent.lock.heartbeat
 # Chrome scraper profiles contain cached data
 magazyn/scripts/allegro_scraper_profile/
 magazyn/scripts/venv/
+
+# Test artifacts and screenshots
+allegro_cookies.json
+allegro_cookies_fresh.json
+allegro_offer.html
+allegro_offer_screenshot.png
+allegro_scraper_profile/
+final_shot.png
+ip_check.png
+latest_final.png
+latest_step*.png
+price_check_*.png
+price_check_*.html
+step*_proxy.png
+success_shot.png
+tokens.json
