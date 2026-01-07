@@ -10,17 +10,23 @@
     </div>
     <div id="deliveryRows">
         <div class="delivery-row row row-cols-1 row-cols-md-2 g-3 align-items-end">
-            <div class="col-md-6">
-                <label class="form-label">Produkt:</label>
+            <div class="col-md-4">
+                <label class="form-label">EAN (kod kreskowy):</label>
+                <input type="text" name="ean" class="form-control" placeholder="Zeskanuj lub wpisz EAN">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Lub wybierz produkt:</label>
                 <select name="product_id" class="form-select">
+                    <option value="">-- wybierz jeśli brak EAN --</option>
                     {% for p in products %}
                     <option value="{{ p['id'] }}">{{ p['name'] }} ({{ p['color'] }})</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-6">
-                <label class="form-label">Rozmiar:</label>
+            <div class="col-md-4">
+                <label class="form-label">Rozmiar (jeśli bez EAN):</label>
                 <select name="size" class="form-select">
+                    <option value="">-- wybierz --</option>
                     {% for s in ALL_SIZES %}
                     <option value="{{ s }}">{{ s }}</option>
                     {% endfor %}
@@ -56,6 +62,9 @@
     document.getElementById('addRow').addEventListener('click', () => {
         const container = document.getElementById('deliveryRows');
         const row = container.querySelector('.delivery-row').cloneNode(true);
+        row.querySelectorAll('input[name="ean"]').forEach(i => i.value = '');
+        row.querySelectorAll('select[name="product_id"]').forEach(s => s.selectedIndex = 0);
+        row.querySelectorAll('select[name="size"]').forEach(s => s.selectedIndex = 0);
         row.querySelectorAll('input[name="quantity"]').forEach(i => i.value = 1);
         row.querySelectorAll('input[name="price"]').forEach(i => i.value = 0);
         container.appendChild(row);

@@ -26,7 +26,11 @@
     <tbody>
         {% for product in products %}
         <tr>
-            <td>{{ product['name'] }}</td>
+            <td>
+                <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="text-white text-decoration-none">
+                    {{ product['name'] }}
+                </a>
+            </td>
             <td>{{ product['color'] }}</td>
             {% for size in ALL_SIZES %}
             <td>

@@ -511,18 +511,53 @@ def confirm_invoice():
 @login_required
 def add_delivery():
     if request.method == "POST":
+        eans = request.form.getlist("ean")
         ids = request.form.getlist("product_id")
         sizes = request.form.getlist("size")
         quantities = request.form.getlist("quantity")
         prices = request.form.getlist("price")
-        for pid, sz, qty, pr in zip(ids, sizes, quantities, prices):
+        
+        errors = []
+        success_count = 0
+        
+        for ean, pid, sz, qty, pr in zip(eans, ids, sizes, quantities, prices):
+            ean = ean.strip() if ean else ""
+            pid = pid.strip() if pid else ""
+            sz = sz.strip() if sz else ""
+            
             try:
-                record_delivery(
-                    int(pid), sz, _to_int(qty), _to_decimal(pr)
-                )
+                # First try to match by EAN
+                if ean:
+                    with get_session() as db:
+                        ps = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
+                        if ps:
+                            # Found by EAN - use this product size
+                            record_delivery(
+                                ps.product_id, ps.size, _to_int(qty), _to_decimal(pr)
+                            )
+                            success_count += 1
+                            continue
+                        else:
+                            errors.append(f"EAN {ean} nie znaleziony w magazynie")
+                            continue
+                
+                # Fall back to product_id + size selection
+                if pid and sz:
+                    record_delivery(
+                        int(pid), sz, _to_int(qty), _to_decimal(pr)
+                    )
+                    success_count += 1
+                else:
+                    errors.append("Brak EAN lub wyboru produktu/rozmiaru")
+                    
             except Exception as e:
-                flash(f"Błąd podczas dodawania dostawy: {e}")
-        flash("Dodano dostawę")
+                errors.append(f"Błąd: {e}")
+        
+        if success_count > 0:
+            flash(f"Dodano {success_count} pozycji dostawy", "success")
+        for err in errors:
+            flash(err, "error")
+            
         return redirect(url_for("products.items"))
     products = get_products_for_delivery()
     return render_template("add_delivery.html", products=products)
