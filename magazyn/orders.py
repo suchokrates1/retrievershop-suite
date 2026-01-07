@@ -1,9 +1,10 @@
 """Orders blueprint - view and manage BaseLinker orders."""
 import json
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from flask import Blueprint, render_template, abort, request, flash, redirect, url_for
+from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app
 from sqlalchemy import desc, or_
 
 from .auth import login_required
@@ -423,3 +424,121 @@ def add_order_status(db, order_id: str, status: str, **kwargs) -> OrderStatusLog
     )
     db.add(log)
     return log
+
+
+# Status IDs to sync from BaseLinker
+SYNC_STATUS_IDS = [
+    91619,  # Wysłane
+    91621,  # Zakończone
+]
+
+
+def _sync_orders_from_baselinker(status_ids: list[int], days: int = 7) -> int:
+    """
+    Sync orders from BaseLinker for given status IDs.
+    Returns number of orders synced.
+    """
+    from . import config as cfg
+    import requests
+    
+    synced = 0
+    week_ago = int(time.time()) - (days * 24 * 60 * 60)
+    
+    api_url = "https://api.baselinker.com/connector.php"
+    headers = {"X-BLToken": cfg.BL_TOKEN}
+    
+    for status_id in status_ids:
+        try:
+            params = {
+                "method": "getOrders",
+                "parameters": json.dumps({
+                    "status_id": status_id,
+                    "date_from": week_ago,
+                    "include_products": 1,
+                })
+            }
+            response = requests.post(api_url, headers=headers, data=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") != "SUCCESS":
+                current_app.logger.warning(
+                    "BaseLinker API error for status %s: %s",
+                    status_id, data.get("error_message", "Unknown error")
+                )
+                continue
+                
+            orders = data.get("orders", [])
+            
+            with get_session() as db:
+                for order in orders:
+                    order_data = {
+                        "order_id": order.get("order_id"),
+                        "external_order_id": order.get("external_order_id"),
+                        "shop_order_id": order.get("shop_order_id"),
+                        "customer": order.get("delivery_fullname"),
+                        "email": order.get("email"),
+                        "phone": order.get("phone"),
+                        "user_login": order.get("user_login"),
+                        "platform": order.get("order_source"),
+                        "order_source_id": order.get("order_source_id"),
+                        "order_status_id": order.get("order_status_id"),
+                        "confirmed": order.get("confirmed", False),
+                        "date_add": order.get("date_add"),
+                        "date_confirmed": order.get("date_confirmed"),
+                        "date_in_status": order.get("date_in_status"),
+                        "shipping": order.get("delivery_method"),
+                        "delivery_method_id": order.get("delivery_method_id"),
+                        "delivery_price": order.get("delivery_price"),
+                        "delivery_fullname": order.get("delivery_fullname"),
+                        "delivery_company": order.get("delivery_company"),
+                        "delivery_address": order.get("delivery_address"),
+                        "delivery_city": order.get("delivery_city"),
+                        "delivery_postcode": order.get("delivery_postcode"),
+                        "delivery_country": order.get("delivery_country"),
+                        "delivery_country_code": order.get("delivery_country_code"),
+                        "delivery_point_id": order.get("delivery_point_id"),
+                        "delivery_point_name": order.get("delivery_point_name"),
+                        "delivery_point_address": order.get("delivery_point_address"),
+                        "delivery_point_postcode": order.get("delivery_point_postcode"),
+                        "delivery_point_city": order.get("delivery_point_city"),
+                        "invoice_fullname": order.get("invoice_fullname"),
+                        "invoice_company": order.get("invoice_company"),
+                        "invoice_nip": order.get("invoice_nip"),
+                        "invoice_address": order.get("invoice_address"),
+                        "invoice_city": order.get("invoice_city"),
+                        "invoice_postcode": order.get("invoice_postcode"),
+                        "invoice_country": order.get("invoice_country"),
+                        "want_invoice": order.get("want_invoice"),
+                        "currency": order.get("currency", "PLN"),
+                        "payment_method": order.get("payment_method"),
+                        "payment_method_cod": order.get("payment_method_cod"),
+                        "payment_done": order.get("payment_done"),
+                        "user_comments": order.get("user_comments"),
+                        "admin_comments": order.get("admin_comments"),
+                        "delivery_package_module": order.get("delivery_package_module"),
+                        "delivery_package_nr": order.get("delivery_package_nr"),
+                        "products": order.get("products", []),
+                    }
+                    sync_order_from_data(db, order_data)
+                    synced += 1
+                db.commit()
+                
+        except Exception as exc:
+            current_app.logger.error(
+                "Error syncing orders from status %s: %s", status_id, exc
+            )
+    
+    return synced
+
+
+@bp.route("/sync", methods=["POST"])
+@login_required
+def sync_orders():
+    """Sync orders from BaseLinker (Wysłane + Zakończone statuses)."""
+    try:
+        synced = _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=7)
+        flash(f"Zsynchronizowano {synced} zamówień z BaseLinker", "success")
+    except Exception as exc:
+        flash(f"Błąd synchronizacji: {exc}", "error")
+    return redirect(url_for(".orders_list"))
