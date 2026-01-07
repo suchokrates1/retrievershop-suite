@@ -67,6 +67,7 @@
                                 <th>Rozmiar</th>
                                 <th>EAN / Kod kreskowy</th>
                                 <th class="text-end">Ilość</th>
+                                <th class="text-end">Cena zakupu</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -89,10 +90,17 @@
                                     <span class="badge bg-danger">{{ size.quantity }}</span>
                                     {% endif %}
                                 </td>
+                                <td class="text-end">
+                                    {% if size.purchase_price %}
+                                    {{ '%.2f'|format(size.purchase_price) }}
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="3" class="text-center text-muted">Brak rozmiarów</td>
+                                <td colspan="4" class="text-center text-muted">Brak rozmiarów</td>
                             </tr>
                         {% endfor %}
                         </tbody>
@@ -167,11 +175,7 @@
                             <tr class="clickable-row" onclick="window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'">
                                 <td>
                                     <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="text-decoration-none">
-                                        {% if order.external_order_id %}
-                                        {{ order.external_order_id }}
-                                        {% else %}
                                         #{{ order.order_id }}
-                                        {% endif %}
                                     </a>
                                 </td>
                                 <td>
@@ -186,7 +190,7 @@
                                 <td class="text-end">{{ order.quantity }}</td>
                                 <td class="text-end">
                                     {% if order.price %}
-                                    {{ '%.2f'|format(order.price) }} PLN
+                                    {{ '%.2f'|format(order.price) }}
                                     {% else %}
                                     -
                                     {% endif %}

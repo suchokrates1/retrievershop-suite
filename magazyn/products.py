@@ -115,9 +115,13 @@ def edit_item(product_id):
         barcodes = {
             size: request.form.get(f"barcode_{size}") or None for size in sizes
         }
+        purchase_prices = {
+            size: _to_decimal(request.form.get(f"purchase_price_{size}")) if request.form.get(f"purchase_price_{size}") else None
+            for size in sizes
+        }
         try:
             updated = update_product(
-                product_id, name, color, quantities, barcodes
+                product_id, name, color, quantities, barcodes, purchase_prices
             )
         except Exception as e:
             flash(f"B\u0142ąd podczas aktualizacji przedmiotu: {e}")
@@ -146,15 +150,28 @@ def product_detail(product_id):
         if not product:
             abort(404)
         
-        # Get product sizes with their barcodes (EANs)
+        # Get product sizes with their barcodes (EANs) and latest purchase price
         sizes_data = []
         all_eans = []
         for ps in product.sizes:
+            # Get latest purchase price for this size
+            latest_batch = (
+                db.query(PurchaseBatch)
+                .filter(
+                    PurchaseBatch.product_id == product_id,
+                    PurchaseBatch.size == ps.size
+                )
+                .order_by(desc(PurchaseBatch.purchase_date))
+                .first()
+            )
+            purchase_price = latest_batch.price if latest_batch else None
+            
             sizes_data.append({
                 "id": ps.id,
                 "size": ps.size,
                 "quantity": ps.quantity,
                 "barcode": ps.barcode,
+                "purchase_price": purchase_price,
             })
             if ps.barcode:
                 all_eans.append(ps.barcode)

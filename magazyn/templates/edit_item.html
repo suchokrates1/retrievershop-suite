@@ -23,11 +23,14 @@
             <div class="col-md-6">
                 <label class="form-label">Rozmiar: {{ size }}</label>
                 <div class="row g-2">
-                    <div class="col">
+                    <div class="col-4">
                         <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control" placeholder="Ilość">
                     </div>
-                    <div class="col">
+                    <div class="col-4">
                         <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
+                    </div>
+                    <div class="col-4">
+                        <input type="number" name="purchase_price_{{ size }}" value="{{ info['purchase_price'] }}" step="0.01" min="0" class="form-control" placeholder="Cena zakupu">
                     </div>
                 </div>
             </div>
