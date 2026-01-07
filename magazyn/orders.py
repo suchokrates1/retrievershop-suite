@@ -3,6 +3,7 @@ import json
 import time
 from datetime import datetime, timedelta
 from typing import Optional
+from decimal import Decimal
 
 from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app
 from sqlalchemy import desc, or_
@@ -76,6 +77,115 @@ def _get_status_display(status: str) -> tuple[str, str]:
         "anulowano": ("Anulowano", "bg-dark"),
     }
     return STATUS_MAP.get(status, (status, "bg-secondary"))
+
+
+def _calculate_allegro_smart_cost(order_value: Decimal, delivery_method: str) -> Optional[Decimal]:
+    """Calculate Allegro Smart shipping cost based on order value and delivery method.
+    
+    Uses Allegro Smart pricing tiers from:
+    https://help.allegro.com/pl/sell/a/allegro-smart-na-allegro-pl-informacje-dla-sprzedajacych-9g0rWRXKxHG
+    """
+    # Define pricing tiers based on order value
+    if order_value < 30:
+        return None  # Not eligible for Smart
+    elif 30 <= order_value < 45:
+        tier = "30-45"
+    elif 45 <= order_value < 65:
+        tier = "45-65"
+    elif 65 <= order_value < 100:
+        tier = "65-100"
+    elif 100 <= order_value < 150:
+        tier = "100-150"
+    else:  # >= 150
+        tier = "150+"
+    
+    # Normalize delivery method name
+    method_lower = delivery_method.lower() if delivery_method else ""
+    
+    # Define costs for each method and tier
+    # Format: {method_key: {tier: cost}}
+    COSTS = {
+        # Paczkomaty InPost (non-Delivery)
+        "paczkomaty inpost": {
+            "30-45": Decimal("1.59"),
+            "45-65": Decimal("3.09"),
+            "65-100": Decimal("4.99"),
+            "100-150": Decimal("7.59"),
+            "150+": Decimal("9.99"),
+        },
+        # Allegro Delivery methods (lower costs)
+        "allegro delivery": {
+            "30-45": Decimal("0.99"),
+            "45-65": Decimal("1.89"),
+            "65-100": Decimal("3.59"),
+            "100-150": Decimal("5.89"),
+            "150+": Decimal("7.79"),
+        },
+        # Kurier DPD (non-Delivery)
+        "kurier dpd": {
+            "30-45": Decimal("1.99"),
+            "45-65": Decimal("3.99"),
+            "65-100": Decimal("5.79"),
+            "100-150": Decimal("9.09"),
+            "150+": Decimal("11.49"),
+        },
+        # Kurier Allegro Delivery
+        "kurier delivery": {
+            "30-45": Decimal("1.79"),
+            "45-65": Decimal("3.69"),
+            "65-100": Decimal("5.39"),
+            "100-150": Decimal("8.59"),
+            "150+": Decimal("10.89"),
+        },
+        # Pocztex
+        "pocztex": {
+            "30-45": Decimal("1.29"),
+            "45-65": Decimal("2.49"),
+            "65-100": Decimal("4.29"),
+            "100-150": Decimal("6.69"),
+            "150+": Decimal("8.89"),
+        },
+        # Przesyłka polecona
+        "przesyłka polecona": {
+            "30-45": Decimal("0.79"),
+            "45-65": Decimal("1.49"),
+            "65-100": Decimal("2.29"),
+            "100-150": Decimal("3.49"),
+            "150+": Decimal("4.29"),
+        },
+        # MiniPrzesyłka
+        "miniprzesyłka": {
+            "30-45": Decimal("0.79"),
+            "45-65": Decimal("1.49"),
+            "65-100": Decimal("2.29"),
+            "100-150": Decimal("3.49"),
+            "150+": Decimal("4.29"),
+        },
+    }
+    
+    # Match delivery method to cost table
+    if "paczkomat" in method_lower or "inpost" in method_lower:
+        if "delivery" not in method_lower:
+            return COSTS["paczkomaty inpost"].get(tier)
+        else:
+            return COSTS["allegro delivery"].get(tier)
+    elif "kurier" in method_lower:
+        if "delivery" in method_lower or "dhl" in method_lower or "orlen" in method_lower or "one" in method_lower:
+            return COSTS["kurier delivery"].get(tier)
+        else:
+            return COSTS["kurier dpd"].get(tier)
+    elif "pocztex" in method_lower:
+        return COSTS["pocztex"].get(tier)
+    elif "polecona" in method_lower:
+        return COSTS["przesyłka polecona"].get(tier)
+    elif "mini" in method_lower:
+        return COSTS["miniprzesyłka"].get(tier)
+    elif "automat" in method_lower or "punkt" in method_lower or "box" in method_lower:
+        # All automats and pickup points use Allegro Delivery pricing
+        return COSTS["allegro delivery"].get(tier)
+    
+    # If method not recognized, return None
+    return None
 
 
 @bp.route("/orders")
@@ -202,6 +312,14 @@ def order_detail(order_id: str):
                 "warehouse_product": warehouse_product,
             })
         
+        # Calculate Allegro Smart shipping cost
+        shipping_cost = None
+        if order.payment_done and order.delivery_method:
+            shipping_cost = _calculate_allegro_smart_cost(
+                Decimal(str(order.payment_done)),
+                order.delivery_method
+            )
+        
         # Get status history
         status_logs = (
             db.query(OrderStatusLog)
@@ -238,6 +356,7 @@ def order_detail(order_id: str):
             current_status=current_status,
             date_add=_unix_to_datetime(order.date_add),
             date_confirmed=_unix_to_datetime(order.date_confirmed),
+            shipping_cost=shipping_cost,
         )
 
 
