@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 
 import pandas as pd
 
 from ..constants import ALL_SIZES
 from ..db import get_session
-from ..models import Product, ProductSize
+from ..models import Product, ProductSize, PurchaseBatch
 
 TWOPLACES = Decimal("0.01")
 
@@ -76,6 +77,7 @@ def update_product(
     color: str,
     quantities: Dict[str, int],
     barcodes: Dict[str, Optional[str]],
+    purchase_prices: Optional[Dict[str, Optional[float]]] = None,
 ):
     """Update product details and size information."""
     with get_session() as db:
@@ -104,6 +106,31 @@ def update_product(
                         barcode=barcode,
                     )
                 )
+            
+            # Update purchase price if provided
+            if purchase_prices and size in purchase_prices:
+                price = purchase_prices[size]
+                if price is not None and price > 0:
+                    # Check if there's already a batch for this size today
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    existing_batch = (
+                        db.query(PurchaseBatch)
+                        .filter_by(product_id=product_id, size=size, purchase_date=today)
+                        .first()
+                    )
+                    if existing_batch:
+                        existing_batch.price = _to_decimal(price)
+                    else:
+                        # Create new batch with 0 quantity (just to store price)
+                        db.add(
+                            PurchaseBatch(
+                                product_id=product_id,
+                                size=size,
+                                quantity=0,
+                                price=_to_decimal(price),
+                                purchase_date=today,
+                            )
+                        )
     return product
 
 
@@ -143,12 +170,22 @@ def get_product_details(
             product = {"id": row.id, "name": row.name, "color": row.color}
         sizes_rows = db.query(ProductSize).filter_by(product_id=product_id).all()
         product_sizes = {
-            size: {"quantity": 0, "barcode": ""} for size in ALL_SIZES
+            size: {"quantity": 0, "barcode": "", "purchase_price": ""} for size in ALL_SIZES
         }
         for s in sizes_rows:
+            # Get latest purchase price for this size
+            latest_batch = (
+                db.query(PurchaseBatch)
+                .filter_by(product_id=product_id, size=s.size)
+                .order_by(PurchaseBatch.purchase_date.desc())
+                .first()
+            )
+            purchase_price = float(latest_batch.price) if latest_batch else ""
+            
             product_sizes[s.size] = {
                 "quantity": s.quantity,
                 "barcode": s.barcode or "",
+                "purchase_price": purchase_price,
             }
     return product, product_sizes
 
