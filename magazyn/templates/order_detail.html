@@ -213,45 +213,37 @@
                     <p class="mb-2">
                         <strong>Metoda:</strong> {{ order.delivery_method or '-' }}
                     </p>
+                    {% if order.delivery_package_nr %}
                     <p class="mb-2">
-                        <strong>Koszt dla klienta:</strong> 
-                        {% if order.delivery_price %}
-                        {{ '%.2f'|format(order.delivery_price) }} {{ order.currency or 'PLN' }}
+                        <strong>Nr przesyłki:</strong> 
+                        {% if tracking_url %}
+                        <a href="{{ tracking_url }}" target="_blank" class="text-decoration-none">
+                            <code>{{ order.delivery_package_nr }}</code>
+                            <i class="bi bi-box-arrow-up-right ms-1"></i>
+                        </a>
                         {% else %}
-                        -
+                        <code>{{ order.delivery_package_nr }}</code>
                         {% endif %}
                     </p>
-                    {% if shipping_cost %}
-                    <p class="mb-2">
-                        <strong>Koszt Allegro Smart:</strong> 
-                        <span class="text-danger fw-bold">{{ '%.2f'|format(shipping_cost) }} {{ order.currency or 'PLN' }}</span>
-                    </p>
-                    <p class="mb-2">
-                        <strong>Marża wysyłki:</strong> 
-                        {% set margin = (order.delivery_price or 0) - shipping_cost %}
-                        <span class="{% if margin >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
-                            {{ '%.2f'|format(margin) }} {{ order.currency or 'PLN' }}
-                        </span>
-                    </p>
                     {% endif %}
-                    {% if order.delivery_package_module %}
                     <p class="mb-2">
-                        <strong>Kurier:</strong> {{ order.delivery_package_module }}
+                        <strong>Status wysyłki:</strong>
+                        <span class="badge {{ current_status.status_class }}">{{ current_status.status_text }}</span>
                     </p>
-                    {% endif %}
-                    {% if order.delivery_package_nr %}
-                    <p class="mb-0">
-                        <strong>Nr przesyłki:</strong> 
-                        <code>{{ order.delivery_package_nr }}</code>
-                    </p>
-                    {% endif %}
+                    <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary"
+                                onclick="return confirm('Wydrukować etykietę?');">
+                            <i class="bi bi-printer"></i> Drukuj etykietę
+                        </button>
+                    </form>
                 </div>
             </div>
 
             {# Payment info #}
             <div class="card mb-3">
                 <div class="card-header">
-                    <i class="bi bi-credit-card"></i> Płatność
+                    <i class="bi bi-credit-card"></i> Płatność i Zysk
                 </div>
                 <div class="card-body">
                     <p class="mb-2">
@@ -260,7 +252,7 @@
                         <span class="badge bg-warning text-dark">Pobranie</span>
                         {% endif %}
                     </p>
-                    <p class="mb-0">
+                    <p class="mb-2">
                         <strong>Zapłacono:</strong> 
                         {% if order.payment_done %}
                         <span class="text-success fw-bold">
@@ -269,6 +261,35 @@
                         {% else %}
                         <span class="text-danger">Nie opłacono</span>
                         {% endif %}
+                    </p>
+                    <hr>
+                    <h6 class="text-muted mb-2">Koszty:</h6>
+                    {% if shipping_cost %}
+                    <p class="mb-1 small">
+                        <strong>Koszt wysyłki:</strong> 
+                        <span class="text-danger">-{{ '%.2f'|format(shipping_cost) }} {{ order.currency or 'PLN' }}</span>
+                    </p>
+                    {% endif %}
+                    <p class="mb-1 small">
+                        <strong>Marża Allegro (12.5%):</strong> 
+                        <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
+                    </p>
+                    <p class="mb-1 small">
+                        <strong>Opłata za sprzedaż:</strong> 
+                        <span class="text-danger">-{{ '%.2f'|format(sale_fee) }} {{ order.currency or 'PLN' }}</span>
+                    </p>
+                    {% if purchase_cost > 0 %}
+                    <p class="mb-2 small">
+                        <strong>Koszt zakupu:</strong> 
+                        <span class="text-danger">-{{ '%.2f'|format(purchase_cost) }} {{ order.currency or 'PLN' }}</span>
+                    </p>
+                    {% endif %}
+                    <hr>
+                    <p class="mb-0">
+                        <strong>Realny zysk:</strong> 
+                        <span class="{% if real_profit >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold fs-5">
+                            {{ '%.2f'|format(real_profit) }} {{ order.currency or 'PLN' }}
+                        </span>
                     </p>
                 </div>
             </div>
@@ -303,26 +324,19 @@
             {% endif %}
 
             {# Quick actions #}
+            {% if order.external_order_id and order.platform == 'allegro' %}
             <div class="card">
                 <div class="card-header">
                     <i class="bi bi-lightning"></i> Szybkie akcje
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-2">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-outline-primary w-100"
-                                onclick="return confirm('Wydrukować etykietę?');">
-                            <i class="bi bi-printer"></i> Drukuj etykietę
-                        </button>
-                    </form>
-                    {% if order.external_order_id and order.platform == 'allegro' %}
                     <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
                        target="_blank" class="btn btn-outline-secondary w-100">
                         <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
                     </a>
-                    {% endif %}
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
