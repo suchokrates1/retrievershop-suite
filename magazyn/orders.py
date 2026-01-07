@@ -438,14 +438,14 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = 7) -> int:
     Sync orders from BaseLinker for given status IDs.
     Returns number of orders synced.
     """
-    from . import config as cfg
+    from .config import settings
     import requests
     
     synced = 0
     week_ago = int(time.time()) - (days * 24 * 60 * 60)
     
     api_url = "https://api.baselinker.com/connector.php"
-    headers = {"X-BLToken": cfg.BL_TOKEN}
+    headers = {"X-BLToken": settings.API_TOKEN}
     
     for status_id in status_ids:
         try:
