@@ -428,10 +428,16 @@ def label_barcode_scan():
     # Check if we can auto-pack: recently scanned product + it belongs to this order
     _check_and_auto_pack()
 
+    # Get delivery method for better TTS
+    delivery_method = order_data.get("shipping") or order_data.get("delivery_method") or ""
+    courier_code = order_data.get("courier_code") or order_data.get("delivery_package_module") or ""
+
     response = {
         "order_id": order_id or order_data.get("order_id") or "",
         "package_ids": order_data.get("package_ids") or [],
         "products": products,
+        "delivery_method": delivery_method,
+        "courier_code": courier_code,
     }
     return jsonify(response)
 
