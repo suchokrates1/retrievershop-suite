@@ -76,6 +76,19 @@ def format_dt(value, fmt="%d/%m/%Y %H:%M"):
     return value.strftime(fmt)
 
 
+@bp.app_template_filter("format_dt_short")
+def format_dt_short(value):
+    """Return datetime formatted as short day/month."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except Exception:
+            return value[:10]
+    return value.strftime("%d/%m %H:%M")
+
+
 @bp.app_template_filter("timestamp_to_date")
 def timestamp_to_date(value, fmt="%d/%m/%Y"):
     """Convert Unix timestamp to formatted date string."""
