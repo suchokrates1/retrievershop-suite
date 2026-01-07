@@ -79,18 +79,19 @@ def _get_status_display(status: str) -> tuple[str, str]:
     return STATUS_MAP.get(status, (status, "bg-secondary"))
 
 
-def _get_tracking_url(courier_code: Optional[str], tracking_number: Optional[str]) -> Optional[str]:
-    """Generate tracking URL based on courier code and tracking number."""
+def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Optional[str], tracking_number: Optional[str]) -> Optional[str]:
+    """Generate tracking URL based on courier info and tracking number."""
     if not tracking_number:
         return None
     
-    # Normalize courier code
-    courier = (courier_code or "").lower() if courier_code else ""
+    # Normalize courier identifiers - check both courier_code and delivery_package_module
+    courier_text = f"{courier_code or ''} {delivery_package_module or ''}".lower()
     
     # Courier tracking URL patterns
     TRACKING_URLS = {
-        "dpd": f"https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
         "inpost": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "paczkomat": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "dpd": f"https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
         "pocztex": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
         "poczta": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
         "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
@@ -102,7 +103,7 @@ def _get_tracking_url(courier_code: Optional[str], tracking_number: Optional[str
     
     # Try to match courier
     for key, url in TRACKING_URLS.items():
-        if key in courier:
+        if key in courier_text:
             return url
     
     # Default: return None if courier not recognized
@@ -376,7 +377,7 @@ def order_detail(order_id: str):
         real_profit = sale_price - allegro_commission - (shipping_cost or Decimal("0")) - sale_fee - purchase_cost
         
         # Generate tracking URL
-        tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_nr)
+        tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_module, order.delivery_package_nr)
         
         # Get status history
         status_logs = (
