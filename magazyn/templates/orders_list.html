@@ -9,25 +9,17 @@
 <div class="row mb-3">
     <div class="col-md-8">
         <form method="get" class="row g-2">
-            <div class="col-md-5">
+            <div class="col-md-6">
                 <input type="text" name="search" class="form-control" 
                        placeholder="Szukaj: nr zamówienia, klient, email, telefon..." 
                        value="{{ search }}">
-            </div>
-            <div class="col-md-3">
-                <select name="platform" class="form-select">
-                    <option value="">Wszystkie platformy</option>
-                    {% for p in platforms %}
-                    <option value="{{ p }}" {% if platform_filter == p %}selected{% endif %}>{{ p }}</option>
-                    {% endfor %}
-                </select>
             </div>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100">
                     <i class="bi bi-search"></i> Szukaj
                 </button>
             </div>
-            {% if search or platform_filter %}
+            {% if search %}
             <div class="col-md-2">
                 <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary w-100">
                     <i class="bi bi-x"></i> Wyczyść
@@ -37,54 +29,50 @@
         </form>
     </div>
     <div class="col-md-4 text-end">
-        <span class="text-muted">Znaleziono: {{ total }} zamówień</span>
+        <span class="text-muted">Zamówień: {{ total }}</span>
     </div>
 </div>
 
 {# Orders table #}
 <div class="table-responsive">
-<table class="table table-striped table-hover table-sm">
+<table class="table table-striped table-hover">
     <thead class="table-dark">
     <tr>
-        <th>Nr zamówienia</th>
-        <th>Data</th>
-        <th>Klient</th>
-        <th>Platforma</th>
+        <th style="width: 100px;">Nr</th>
+        <th style="width: 130px;">Data</th>
         <th>Produkty</th>
-        <th>Wysyłka</th>
-        <th>Kwota</th>
-        <th>Status</th>
-        <th>Tracking</th>
+        <th style="width: 120px;">Wysyłka</th>
+        <th style="width: 80px;" class="text-end">Kwota</th>
+        <th style="width: 100px;">Status</th>
+        <th style="width: 60px;" class="text-center">Akcje</th>
     </tr>
     </thead>
     <tbody>
     {% for order in orders %}
-    <tr class="clickable-row" onclick="window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'">
+    <tr class="clickable-row" data-href="{{ url_for('orders.order_detail', order_id=order.order_id) }}">
         <td>
             <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="fw-bold text-decoration-none">
-                {% if order.external_order_id %}
-                    {{ order.external_order_id }}
+                {% if order.shop_order_id %}
+                    {{ order.shop_order_id }}
+                {% elif order.external_order_id %}
+                    {{ order.external_order_id[:12] }}...
                 {% else %}
-                    #{{ order.order_id }}
+                    {{ order.order_id[:8] }}...
                 {% endif %}
             </a>
         </td>
-        <td>{{ order.date_add | format_dt if order.date_add else '-' }}</td>
-        <td>{{ order.customer_name or '-' }}</td>
         <td>
-            {% if order.platform %}
-            <span class="badge bg-secondary">{{ order.platform }}</span>
-            {% else %}
-            -
-            {% endif %}
+            <small>{{ order.date_add | format_dt if order.date_add else '-' }}</small>
         </td>
         <td>
-            <small class="text-muted">{{ order.product_summary or '-' }}</small>
+            {{ order.product_summary or '-' }}
         </td>
-        <td>{{ order.delivery_method or '-' }}</td>
         <td>
+            <small>{{ order.delivery_method or '-' }}</small>
+        </td>
+        <td class="text-end">
             {% if order.payment_done %}
-                {{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}
+                {{ '%.0f'|format(order.payment_done) }}
             {% else %}
                 -
             {% endif %}
@@ -92,20 +80,22 @@
         <td>
             <span class="badge {{ order.status_class }}">{{ order.status_text }}</span>
         </td>
-        <td>
-            {% if order.tracking_number %}
-                <small>{{ order.tracking_number }}</small>
-            {% else %}
-                -
-            {% endif %}
+        <td class="text-center" onclick="event.stopPropagation();">
+            <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-primary" title="Drukuj etykietę"
+                        onclick="return confirm('Wydrukować etykietę?');">
+                    <i class="bi bi-printer"></i>
+                </button>
+            </form>
         </td>
     </tr>
     {% else %}
     <tr>
-        <td colspan="9" class="text-center text-muted py-4">
+        <td colspan="7" class="text-center text-muted py-4">
             <i class="bi bi-inbox fs-1"></i>
             <p class="mt-2 mb-0">Brak zamówień do wyświetlenia</p>
-            {% if search or platform_filter %}
+            {% if search %}
             <p class="small">Spróbuj zmienić kryteria wyszukiwania</p>
             {% endif %}
         </td>
@@ -120,7 +110,7 @@
 <nav aria-label="Paginacja zamówień">
     <ul class="pagination justify-content-center">
         <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('orders.orders_list', page=page-1, search=search, platform=platform_filter) }}">
+            <a class="page-link" href="{{ url_for('orders.orders_list', page=page-1, search=search) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
@@ -128,7 +118,7 @@
         {% for p in range(1, total_pages + 1) %}
             {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
                 <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('orders.orders_list', page=p, search=search, platform=platform_filter) }}">{{ p }}</a>
+                    <a class="page-link" href="{{ url_for('orders.orders_list', page=p, search=search) }}">{{ p }}</a>
                 </li>
             {% elif p == page - 3 or p == page + 3 %}
                 <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -136,7 +126,7 @@
         {% endfor %}
         
         <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('orders.orders_list', page=page+1, search=search, platform=platform_filter) }}">
+            <a class="page-link" href="{{ url_for('orders.orders_list', page=page+1, search=search) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
@@ -149,7 +139,16 @@
     cursor: pointer;
 }
 .clickable-row:hover {
-    background-color: rgba(0, 0, 0, 0.075) !important;
+    background-color: rgba(0,0,0,0.075) !important;
 }
 </style>
+
+<script>
+document.querySelectorAll('.clickable-row').forEach(row => {
+    row.addEventListener('click', function(e) {
+        if (e.target.closest('form') || e.target.closest('button') || e.target.closest('a')) return;
+        window.location = this.dataset.href;
+    });
+});
+</script>
 {% endblock %}
