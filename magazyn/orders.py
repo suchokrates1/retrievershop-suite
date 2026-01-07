@@ -33,6 +33,18 @@ VALID_STATUSES = [
     "anulowano",  # Canceled
 ]
 
+# Status IDs to sync from BaseLinker
+SYNC_STATUS_IDS = [
+    91619,  # Wysłane
+    91621,  # Zakończone
+]
+
+# Map BaseLinker status_id to our internal status
+BASELINKER_STATUS_MAP = {
+    91619: "w_drodze",       # Wysłane -> w drodze
+    91621: "dostarczono",    # Zakończone -> dostarczono
+}
+
 
 def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
     """Convert Unix timestamp to datetime."""
@@ -406,9 +418,16 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         )
         db.add(order_product)
     
-    # Add "pobrano" status for new orders
+    # Add status for new orders based on BaseLinker status_id
     if is_new_order:
-        add_order_status(db, order_id, "pobrano", notes="Pobrano z BaseLinker")
+        bl_status_id = order_data.get("order_status_id")
+        # Map BaseLinker status to our internal status
+        internal_status = BASELINKER_STATUS_MAP.get(bl_status_id, "pobrano")
+        status_note = {
+            "w_drodze": "Zsynchronizowano ze statusu Wysłane",
+            "dostarczono": "Zsynchronizowano ze statusu Zakończone",
+        }.get(internal_status, "Pobrano z BaseLinker")
+        add_order_status(db, order_id, internal_status, notes=status_note)
     
     return order
 
@@ -424,13 +443,6 @@ def add_order_status(db, order_id: str, status: str, **kwargs) -> OrderStatusLog
     )
     db.add(log)
     return log
-
-
-# Status IDs to sync from BaseLinker
-SYNC_STATUS_IDS = [
-    91619,  # Wysłane
-    91621,  # Zakończone
-]
 
 
 def _sync_orders_from_baselinker(status_ids: list[int], days: int = 7) -> int:
