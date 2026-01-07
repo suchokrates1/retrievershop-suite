@@ -329,6 +329,17 @@ th {
     display: block;
 }
 
+/* Orders table column widths - override Bootstrap */
+#orders-table-v2 col:nth-child(1) { width: 70px !important; min-width: 70px !important; max-width: 70px !important; }
+#orders-table-v2 col:nth-child(2) { width: 85px !important; min-width: 85px !important; max-width: 85px !important; }
+#orders-table-v2 col:nth-child(3) { width: auto !important; }
+#orders-table-v2 col:nth-child(4) { width: 120px !important; min-width: 120px !important; max-width: 120px !important; }
+#orders-table-v2 col:nth-child(5) { width: 55px !important; min-width: 55px !important; max-width: 55px !important; }
+#orders-table-v2 col:nth-child(6) { width: 100px !important; min-width: 100px !important; max-width: 100px !important; }
+#orders-table-v2 col:nth-child(7) { width: 38px !important; min-width: 38px !important; max-width: 38px !important; }
+
+#orders-table-v2 { table-layout: fixed !important; width: 100% !important; }
+
 @media (max-width: 768px) {
     #mobileMenu .custom-btn {
         margin-left: auto;
