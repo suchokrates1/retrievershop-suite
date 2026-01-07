@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    {# Header with back button and order ID #}
+    <div class="row mb-4">
+        <div class="col">
+            <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary mb-2">
+                <i class="bi bi-arrow-left"></i> Powrót do listy
+            </a>
+            <h2>
+                Zamówienie 
+                {% if order.external_order_id %}
+                    {{ order.external_order_id }}
+                {% else %}
+                    #{{ order.order_id }}
+                {% endif %}
+                <span class="badge {{ current_status.status_class }} fs-6">{{ current_status.status_text }}</span>
+            </h2>
+            {% if order.platform %}
+            <span class="badge bg-secondary">{{ order.platform }}</span>
+            {% endif %}
+            {% if date_add %}
+            <span class="text-muted ms-2">{{ date_add | format_dt }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        {# Left column - Order info #}
+        <div class="col-lg-8">
+            {# Customer & Contact #}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-person"></i> Dane klienta
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Kontakt</h6>
+                            <p class="mb-1">
+                                <strong>{{ order.customer_name or order.delivery_fullname or '-' }}</strong>
+                            </p>
+                            {% if order.email %}
+                            <p class="mb-1">
+                                <i class="bi bi-envelope"></i> 
+                                <a href="mailto:{{ order.email }}">{{ order.email }}</a>
+                            </p>
+                            {% endif %}
+                            {% if order.phone %}
+                            <p class="mb-1">
+                                <i class="bi bi-telephone"></i> 
+                                <a href="tel:{{ order.phone }}">{{ order.phone }}</a>
+                            </p>
+                            {% endif %}
+                            {% if order.user_login %}
+                            <p class="mb-0">
+                                <i class="bi bi-person-badge"></i> 
+                                Login: {{ order.user_login }}
+                            </p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Adres dostawy</h6>
+                            {% if order.delivery_point_name %}
+                            {# Paczkomat/punkt odbioru #}
+                            <p class="mb-1">
+                                <span class="badge bg-info">Punkt odbioru</span>
+                            </p>
+                            <p class="mb-1">
+                                <strong>{{ order.delivery_point_name }}</strong>
+                            </p>
+                            <p class="mb-1">
+                                {{ order.delivery_point_address }}
+                            </p>
+                            <p class="mb-0">
+                                {{ order.delivery_point_postcode }} {{ order.delivery_point_city }}
+                            </p>
+                            {% else %}
+                            {# Adres domowy #}
+                            <p class="mb-1">{{ order.delivery_fullname or '-' }}</p>
+                            {% if order.delivery_company %}
+                            <p class="mb-1">{{ order.delivery_company }}</p>
+                            {% endif %}
+                            <p class="mb-1">{{ order.delivery_address or '-' }}</p>
+                            <p class="mb-0">
+                                {{ order.delivery_postcode or '' }} {{ order.delivery_city or '' }}
+                                {% if order.delivery_country and order.delivery_country != 'Polska' %}
+                                , {{ order.delivery_country }}
+                                {% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Invoice data (if requested) #}
+            {% if order.want_invoice %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-receipt"></i> Dane do faktury
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>{{ order.invoice_fullname or order.invoice_company or '-' }}</strong></p>
+                    {% if order.invoice_company %}
+                    <p class="mb-1">{{ order.invoice_company }}</p>
+                    {% endif %}
+                    {% if order.invoice_nip %}
+                    <p class="mb-1">NIP: {{ order.invoice_nip }}</p>
+                    {% endif %}
+                    <p class="mb-1">{{ order.invoice_address or '-' }}</p>
+                    <p class="mb-0">{{ order.invoice_postcode or '' }} {{ order.invoice_city or '' }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Products #}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-box"></i> Produkty</span>
+                    <span class="badge bg-primary">{{ products|length }} szt.</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Produkt</th>
+                                <th>EAN</th>
+                                <th>Ilość</th>
+                                <th>Cena</th>
+                                <th>Magazyn</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for product in products %}
+                            <tr>
+                                <td>
+                                    <strong>{{ product.name or '-' }}</strong>
+                                    {% if product.attributes %}
+                                    <br><small class="text-muted">{{ product.attributes }}</small>
+                                    {% endif %}
+                                    {% if product.sku %}
+                                    <br><small class="text-muted">SKU: {{ product.sku }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if product.ean %}
+                                    <code>{{ product.ean }}</code>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ product.quantity }}</td>
+                                <td>
+                                    {% if product.price_brutto %}
+                                    {{ '%.2f'|format(product.price_brutto) }} {{ order.currency or 'PLN' }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if product.warehouse_product %}
+                                    <a href="{{ url_for('products.product_detail', product_id=product.warehouse_product.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-box-seam"></i>
+                                        {{ product.warehouse_product.name or 'Produkt' }}
+                                        {{ product.warehouse_product.size }}
+                                        <span class="badge bg-success">{{ product.warehouse_product.quantity_in_stock }} szt.</span>
+                                    </a>
+                                    {% elif product.ean %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-exclamation-triangle"></i> Brak powiązania
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Brak produktów</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {# Comments #}
+            {% if order.user_comments or order.admin_comments %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-chat-text"></i> Komentarze
+                </div>
+                <div class="card-body">
+                    {% if order.user_comments %}
+                    <div class="mb-3">
+                        <h6 class="text-muted">Komentarz kupującego:</h6>
+                        <p class="mb-0">{{ order.user_comments }}</p>
+                    </div>
+                    {% endif %}
+                    {% if order.admin_comments %}
+                    <div>
+                        <h6 class="text-muted">Notatki sprzedawcy:</h6>
+                        <p class="mb-0">{{ order.admin_comments }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Right column - Status, shipping, payment #}
+        <div class="col-lg-4">
+            {# Current status & update form #}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-flag"></i> Status zamówienia
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('orders.update_order_status', order_id=order.order_id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label class="form-label">Zmień status:</label>
+                            <select name="status" class="form-select">
+                                <option value="niewydrukowano" {% if current_status.status == 'niewydrukowano' %}selected{% endif %}>
+                                    📋 Niewydrukowano
+                                </option>
+                                <option value="wydrukowano" {% if current_status.status == 'wydrukowano' %}selected{% endif %}>
+                                    🖨️ Wydrukowano
+                                </option>
+                                <option value="przekazano_kurierowi" {% if current_status.status == 'przekazano_kurierowi' %}selected{% endif %}>
+                                    📦 Przekazano kurierowi
+                                </option>
+                                <option value="w_drodze" {% if current_status.status == 'w_drodze' %}selected{% endif %}>
+                                    🚚 W drodze
+                                </option>
+                                <option value="awizo" {% if current_status.status == 'awizo' %}selected{% endif %}>
+                                    📬 Awizo
+                                </option>
+                                <option value="w_punkcie" {% if current_status.status == 'w_punkcie' %}selected{% endif %}>
+                                    📍 Czeka w punkcie
+                                </option>
+                                <option value="dostarczono" {% if current_status.status == 'dostarczono' %}selected{% endif %}>
+                                    ✅ Dostarczono
+                                </option>
+                                <option value="niedostarczono" {% if current_status.status == 'niedostarczono' %}selected{% endif %}>
+                                    ❌ Niedostarczono
+                                </option>
+                                <option value="zwrot" {% if current_status.status == 'zwrot' %}selected{% endif %}>
+                                    ↩️ Zwrot
+                                </option>
+                                <option value="zagubiono" {% if current_status.status == 'zagubiono' %}selected{% endif %}>
+                                    ❓ Zagubiono
+                                </option>
+                                <option value="anulowano" {% if current_status.status == 'anulowano' %}selected{% endif %}>
+                                    🚫 Anulowano
+                                </option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Nr przesyłki:</label>
+                            <input type="text" name="tracking_number" class="form-control" 
+                                   value="{{ order.delivery_package_nr or '' }}" 
+                                   placeholder="np. 12345678901234">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Kurier:</label>
+                            <input type="text" name="courier_code" class="form-control" 
+                                   value="{{ order.courier_code or order.delivery_package_module or '' }}" 
+                                   placeholder="np. inpost, dpd, dhl">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notatka:</label>
+                            <textarea name="notes" class="form-control" rows="2" placeholder="Opcjonalna notatka..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check"></i> Zapisz status
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {# Shipping info #}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-truck"></i> Wysyłka
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>Metoda:</strong> {{ order.delivery_method or '-' }}
+                    </p>
+                    <p class="mb-2">
+                        <strong>Koszt:</strong> 
+                        {% if order.delivery_price %}
+                        {{ '%.2f'|format(order.delivery_price) }} {{ order.currency or 'PLN' }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </p>
+                    {% if order.delivery_package_module %}
+                    <p class="mb-2">
+                        <strong>Kurier:</strong> {{ order.delivery_package_module }}
+                    </p>
+                    {% endif %}
+                    {% if order.delivery_package_nr %}
+                    <p class="mb-0">
+                        <strong>Nr przesyłki:</strong> 
+                        <code>{{ order.delivery_package_nr }}</code>
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Payment info #}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-credit-card"></i> Płatność
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>Metoda:</strong> {{ order.payment_method or '-' }}
+                        {% if order.payment_method_cod %}
+                        <span class="badge bg-warning text-dark">Pobranie</span>
+                        {% endif %}
+                    </p>
+                    <p class="mb-0">
+                        <strong>Zapłacono:</strong> 
+                        {% if order.payment_done %}
+                        <span class="text-success fw-bold">
+                            {{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}
+                        </span>
+                        {% else %}
+                        <span class="text-danger">Nie opłacono</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            {# Status history #}
+            {% if status_history %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-clock-history"></i> Historia statusów
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                    {% for log in status_history %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
+                                    {% if log.tracking_number %}
+                                    <br><small class="text-muted">Nr: {{ log.tracking_number }}</small>
+                                    {% endif %}
+                                    {% if log.notes %}
+                                    <br><small class="text-muted">{{ log.notes }}</small>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
+                            </div>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Quick actions #}
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lightning"></i> Szybkie akcje
+                </div>
+                <div class="card-body">
+                    <a href="{{ url_for('history.reprint_label', order_id=order.order_id) }}" 
+                       class="btn btn-outline-primary w-100 mb-2"
+                       onclick="return confirm('Ponownie wydrukować etykietę?');">
+                        <i class="bi bi-printer"></i> Drukuj etykietę
+                    </a>
+                    {% if order.external_order_id and order.platform == 'allegro' %}
+                    <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
+                       target="_blank" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
