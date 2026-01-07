@@ -11,12 +11,7 @@
                 <i class="bi bi-arrow-left"></i> Powrót do listy
             </a>
             <h2>
-                Zamówienie 
-                {% if order.external_order_id %}
-                    {{ order.external_order_id }}
-                {% else %}
-                    #{{ order.order_id }}
-                {% endif %}
+                Zamówienie #{{ order.order_id }}
                 <span class="badge {{ current_status.status_class }} fs-6">{{ current_status.status_text }}</span>
             </h2>
             {% if order.platform %}
@@ -207,47 +202,8 @@
             {% endif %}
         </div>
 
-        {# Right column - Status, shipping, payment #}
+        {# Right column - shipping, payment #}
         <div class="col-lg-4">
-            {# Current status & update form #}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-flag"></i> Status zamówienia
-                </div>
-                <div class="card-body">
-                    <form method="post" action="{{ url_for('orders.update_order_status', order_id=order.order_id) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="mb-3">
-                            <select name="status" class="form-select">
-                                <option value="pobrano" {% if current_status.status == 'pobrano' %}selected{% endif %}>📥 Pobrano</option>
-                                <option value="niewydrukowano" {% if current_status.status == 'niewydrukowano' %}selected{% endif %}>📋 Niewydrukowano</option>
-                                <option value="wydrukowano" {% if current_status.status == 'wydrukowano' %}selected{% endif %}>🖨️ Wydrukowano</option>
-                                <option value="zdjeto_ze_stanu" {% if current_status.status == 'zdjeto_ze_stanu' %}selected{% endif %}>📦 Zdjęto ze stanu</option>
-                                <option value="spakowano" {% if current_status.status == 'spakowano' %}selected{% endif %}>📦 Spakowano</option>
-                                <option value="przekazano_kurierowi" {% if current_status.status == 'przekazano_kurierowi' %}selected{% endif %}>🚚 Przekazano kurierowi</option>
-                                <option value="odebrano_przez_kuriera" {% if current_status.status == 'odebrano_przez_kuriera' %}selected{% endif %}>🚚 Odebrano przez kuriera</option>
-                                <option value="w_drodze" {% if current_status.status == 'w_drodze' %}selected{% endif %}>🛣️ W drodze</option>
-                                <option value="awizo" {% if current_status.status == 'awizo' %}selected{% endif %}>📬 Awizo</option>
-                                <option value="w_punkcie" {% if current_status.status == 'w_punkcie' %}selected{% endif %}>📍 Czeka w punkcie</option>
-                                <option value="dostarczono" {% if current_status.status == 'dostarczono' %}selected{% endif %}>✅ Dostarczono</option>
-                                <option value="niedostarczono" {% if current_status.status == 'niedostarczono' %}selected{% endif %}>❌ Niedostarczono</option>
-                                <option value="zwrot" {% if current_status.status == 'zwrot' %}selected{% endif %}>↩️ Zwrot</option>
-                                <option value="zagubiono" {% if current_status.status == 'zagubiono' %}selected{% endif %}>❓ Zagubiono</option>
-                                <option value="anulowano" {% if current_status.status == 'anulowano' %}selected{% endif %}>🚫 Anulowano</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <input type="text" name="notes" class="form-control" placeholder="Notatka (opcjonalna)">
-                        </div>
-                        <input type="hidden" name="tracking_number" value="{{ order.delivery_package_nr or '' }}">
-                        <input type="hidden" name="courier_code" value="{{ order.courier_code or '' }}">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-check"></i> Zapisz status
-                        </button>
-                    </form>
-                </div>
-            </div>
-
             {# Shipping info #}
             <div class="card mb-3">
                 <div class="card-header">
@@ -258,13 +214,26 @@
                         <strong>Metoda:</strong> {{ order.delivery_method or '-' }}
                     </p>
                     <p class="mb-2">
-                        <strong>Koszt:</strong> 
+                        <strong>Koszt dla klienta:</strong> 
                         {% if order.delivery_price %}
                         {{ '%.2f'|format(order.delivery_price) }} {{ order.currency or 'PLN' }}
                         {% else %}
                         -
                         {% endif %}
                     </p>
+                    {% if shipping_cost %}
+                    <p class="mb-2">
+                        <strong>Koszt Allegro Smart:</strong> 
+                        <span class="text-danger fw-bold">{{ '%.2f'|format(shipping_cost) }} {{ order.currency or 'PLN' }}</span>
+                    </p>
+                    <p class="mb-2">
+                        <strong>Marża wysyłki:</strong> 
+                        {% set margin = (order.delivery_price or 0) - shipping_cost %}
+                        <span class="{% if margin >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                            {{ '%.2f'|format(margin) }} {{ order.currency or 'PLN' }}
+                        </span>
+                    </p>
+                    {% endif %}
                     {% if order.delivery_package_module %}
                     <p class="mb-2">
                         <strong>Kurier:</strong> {{ order.delivery_package_module }}
