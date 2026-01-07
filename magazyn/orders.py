@@ -1,6 +1,6 @@
 """Orders blueprint - view and manage BaseLinker orders."""
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from flask import Blueprint, render_template, abort, request, flash, redirect, url_for
@@ -11,6 +11,26 @@ from .db import get_session
 from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product
 
 bp = Blueprint("orders", __name__)
+
+
+# All valid statuses for the system
+VALID_STATUSES = [
+    "pobrano",  # Downloaded from BaseLinker
+    "niewydrukowano",  # Not printed
+    "wydrukowano",  # Printed
+    "zdjeto_ze_stanu",  # Stock deducted
+    "spakowano",  # Packed
+    "przekazano_kurierowi",  # Given to courier
+    "odebrano_przez_kuriera",  # Picked up by courier
+    "w_drodze",  # In transit
+    "awizo",  # Aviso
+    "w_punkcie",  # Waiting at pickup point
+    "dostarczono",  # Delivered
+    "niedostarczono",  # Not delivered
+    "zwrot",  # Return
+    "zagubiono",  # Lost
+    "anulowano",  # Canceled
+]
 
 
 def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
@@ -26,16 +46,19 @@ def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
 def _get_status_display(status: str) -> tuple[str, str]:
     """Return (display text, badge class) for status."""
     STATUS_MAP = {
+        "pobrano": ("Pobrano", "bg-light text-dark"),
         "niewydrukowano": ("Niewydrukowano", "bg-secondary"),
         "wydrukowano": ("Wydrukowano", "bg-info"),
+        "zdjeto_ze_stanu": ("Zdjęto ze stanu", "bg-info"),
+        "spakowano": ("Spakowano", "bg-info"),
         "przekazano_kurierowi": ("Przekazano kurierowi", "bg-primary"),
+        "odebrano_przez_kuriera": ("Odebrano przez kuriera", "bg-primary"),
         "w_drodze": ("W drodze", "bg-warning text-dark"),
-        "dostarczono": ("Dostarczono", "bg-success"),
-        # Additional statuses from BaseLinker tracking
-        "niedostarczono": ("Niedostarczono", "bg-danger"),
-        "zwrot": ("Zwrot", "bg-danger"),
         "awizo": ("Awizo", "bg-warning text-dark"),
         "w_punkcie": ("Czeka w punkcie", "bg-info"),
+        "dostarczono": ("Dostarczono", "bg-success"),
+        "niedostarczono": ("Niedostarczono", "bg-danger"),
+        "zwrot": ("Zwrot", "bg-danger"),
         "zagubiono": ("Zagubiono", "bg-dark"),
         "anulowano": ("Anulowano", "bg-dark"),
     }
@@ -45,14 +68,16 @@ def _get_status_display(status: str) -> tuple[str, str]:
 @bp.route("/orders")
 @login_required
 def orders_list():
-    """Display list of all orders."""
+    """Display list of all orders from last 7 days."""
     page = request.args.get("page", 1, type=int)
     per_page = 50
     search = request.args.get("search", "").strip()
-    platform_filter = request.args.get("platform", "")
+    
+    # Get orders from last 7 days by default
+    week_ago = int((datetime.now() - timedelta(days=7)).timestamp())
     
     with get_session() as db:
-        query = db.query(Order).order_by(desc(Order.date_add))
+        query = db.query(Order).filter(Order.date_add >= week_ago).order_by(desc(Order.date_add))
         
         # Apply search filter
         if search:
@@ -67,17 +92,9 @@ def orders_list():
                 )
             )
         
-        # Apply platform filter
-        if platform_filter:
-            query = query.filter(Order.platform == platform_filter)
-        
         # Pagination
         total = query.count()
         orders = query.offset((page - 1) * per_page).limit(per_page).all()
-        
-        # Get unique platforms for filter dropdown
-        platforms = db.query(Order.platform).distinct().all()
-        platforms = [p[0] for p in platforms if p[0]]
         
         # Convert timestamps and add latest status
         orders_data = []
@@ -108,6 +125,7 @@ def orders_list():
             orders_data.append({
                 "order_id": order.order_id,
                 "external_order_id": order.external_order_id,
+                "shop_order_id": order.shop_order_id,
                 "customer_name": order.customer_name,
                 "platform": order.platform,
                 "date_add": _unix_to_datetime(order.date_add),
@@ -130,8 +148,6 @@ def orders_list():
             total_pages=total_pages,
             total=total,
             search=search,
-            platform_filter=platform_filter,
-            platforms=platforms,
         )
 
 
@@ -226,12 +242,7 @@ def update_order_status(order_id: str):
         courier_code = request.form.get("courier_code", "").strip() or None
         notes = request.form.get("notes", "").strip() or None
         
-        valid_statuses = [
-            "niewydrukowano", "wydrukowano", "przekazano_kurierowi",
-            "w_drodze", "dostarczono"
-        ]
-        
-        if new_status not in valid_statuses:
+        if new_status not in VALID_STATUSES:
             flash("Nieprawidłowy status", "error")
             return redirect(url_for(".order_detail", order_id=order_id))
         
@@ -257,6 +268,46 @@ def update_order_status(order_id: str):
         return redirect(url_for(".order_detail", order_id=order_id))
 
 
+@bp.route("/order/<order_id>/reprint", methods=["POST"])
+@login_required
+def reprint_label(order_id: str):
+    """Reprint shipping label for an order."""
+    from . import print_agent
+    
+    try:
+        # Try to get packages and print labels
+        packages = print_agent.get_order_packages(order_id)
+        printed_any = False
+        
+        for pkg in packages:
+            pid = pkg.get("package_id")
+            code = pkg.get("courier_code")
+            if not pid or not code:
+                continue
+            label_data, ext = print_agent.get_label(code, pid)
+            if label_data:
+                print_agent.print_label(label_data, ext, order_id)
+                printed_any = True
+        
+        if printed_any:
+            # Add status log entry
+            with get_session() as db:
+                add_order_status(db, order_id, "wydrukowano", notes="Reprint etykiety")
+                db.commit()
+            flash("Etykieta została wysłana do drukarki", "success")
+        else:
+            flash("Nie znaleziono etykiety do wydruku", "warning")
+            
+    except Exception as exc:
+        flash(f"Błąd drukowania: {exc}", "error")
+    
+    # Redirect back to wherever the user came from
+    referrer = request.referrer
+    if referrer and "order" in referrer:
+        return redirect(referrer)
+    return redirect(url_for(".orders_list"))
+
+
 def sync_order_from_data(db, order_data: dict) -> Order:
     """
     Create or update Order from BaseLinker data (last_order_data format).
@@ -266,10 +317,11 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     
     # Check if order exists
     order = db.query(Order).filter(Order.order_id == order_id).first()
-    
+    is_new_order = False
     if not order:
         order = Order(order_id=order_id)
         db.add(order)
+        is_new_order = True
     
     # Update all fields from order_data
     order.external_order_id = order_data.get("external_order_id")
@@ -352,6 +404,10 @@ def sync_order_from_data(db, order_data: dict) -> Order:
             product_size_id=product_size_id,
         )
         db.add(order_product)
+    
+    # Add "pobrano" status for new orders
+    if is_new_order:
+        add_order_status(db, order_id, "pobrano", notes="Pobrano z BaseLinker")
     
     return order
 
