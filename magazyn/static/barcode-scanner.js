@@ -127,9 +127,10 @@
 
     const buildLabelSpeechText = (data) => {
         const products = Array.isArray(data.products) ? data.products : [];
-        const courier = data.courier_code ? data.courier_code : 'paczka';
+        // Use delivery_method for better description (e.g., "Paczkomat InPost")
+        const deliveryMethod = data.delivery_method || data.courier_code || 'paczka';
         if (!products.length) {
-            return `Paczka ${courier}`;
+            return `Paczka ${deliveryMethod}`;
         }
 
         const productTexts = products.map((item) => {
@@ -141,7 +142,7 @@
             return `${qtyText}: ${details}`.trim();
         });
 
-        return `Paczka ${courier} zawiera: ${productTexts.join('; ')}`;
+        return `Paczka ${deliveryMethod} zawiera: ${productTexts.join('; ')}`;
     };
 
     const showSuccess = (data, beepElement, asLabel) => {
@@ -154,6 +155,18 @@
         playBeep(beepElement);
         const speechMessage = asLabel ? buildLabelSpeechText(data) : buildProductSpeechText(data);
         speak(speechMessage);
+        
+        // Read flash messages via TTS (e.g., auto-packing confirmation)
+        setTimeout(() => {
+            const flashMessages = document.querySelectorAll('.alert.alert-success:not([data-tts-read])');
+            flashMessages.forEach((alert) => {
+                const text = alert.textContent.trim();
+                if (text) {
+                    speak(text);
+                    alert.setAttribute('data-tts-read', 'true');
+                }
+            });
+        }, 1500); // Wait 1.5s after main message
     };
 
     const showError = (message) => {
