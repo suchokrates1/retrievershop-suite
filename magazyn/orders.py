@@ -10,7 +10,7 @@ from sqlalchemy import desc, or_
 
 from .auth import login_required
 from .db import get_session
-from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product
+from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch
 
 bp = Blueprint("orders", __name__)
 
@@ -77,6 +77,36 @@ def _get_status_display(status: str) -> tuple[str, str]:
         "anulowano": ("Anulowano", "bg-dark"),
     }
     return STATUS_MAP.get(status, (status, "bg-secondary"))
+
+
+def _get_tracking_url(courier_code: Optional[str], tracking_number: Optional[str]) -> Optional[str]:
+    """Generate tracking URL based on courier code and tracking number."""
+    if not tracking_number:
+        return None
+    
+    # Normalize courier code
+    courier = (courier_code or "").lower() if courier_code else ""
+    
+    # Courier tracking URL patterns
+    TRACKING_URLS = {
+        "dpd": f"https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
+        "inpost": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "pocztex": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
+        "poczta": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
+        "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
+        "ups": f"https://www.ups.com/track?tracknum={tracking_number}",
+        "fedex": f"https://www.fedex.com/fedextrack/?tracknumbers={tracking_number}",
+        "gls": f"https://gls-group.eu/PL/pl/sledzenie-paczek?match={tracking_number}",
+        "orlen": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
+    }
+    
+    # Try to match courier
+    for key, url in TRACKING_URLS.items():
+        if key in courier:
+            return url
+    
+    # Default: return None if courier not recognized
+    return None
 
 
 def _calculate_allegro_smart_cost(order_value: Decimal, delivery_method: str) -> Optional[Decimal]:
@@ -320,6 +350,34 @@ def order_detail(order_id: str):
                 order.delivery_method
             )
         
+        # Calculate financial metrics
+        sale_price = Decimal(str(order.payment_done)) if order.payment_done else Decimal("0")
+        allegro_commission = sale_price * Decimal("0.125")  # 12.5%
+        sale_fee = Decimal("1.00")  # Fixed 1 PLN
+        
+        # Calculate purchase cost from order products
+        purchase_cost = Decimal("0")
+        for op in order.products:
+            if op.product_size and op.product_size.product:
+                # Get latest purchase batch for this product
+                latest_batch = (
+                    db.query(PurchaseBatch)
+                    .filter(
+                        PurchaseBatch.product_id == op.product_size.product_id,
+                        PurchaseBatch.size == op.product_size.size
+                    )
+                    .order_by(desc(PurchaseBatch.purchase_date))
+                    .first()
+                )
+                if latest_batch:
+                    purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
+        
+        # Calculate real profit
+        real_profit = sale_price - allegro_commission - (shipping_cost or Decimal("0")) - sale_fee - purchase_cost
+        
+        # Generate tracking URL
+        tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_nr)
+        
         # Get status history
         status_logs = (
             db.query(OrderStatusLog)
@@ -357,6 +415,11 @@ def order_detail(order_id: str):
             date_add=_unix_to_datetime(order.date_add),
             date_confirmed=_unix_to_datetime(order.date_confirmed),
             shipping_cost=shipping_cost,
+            allegro_commission=allegro_commission,
+            sale_fee=sale_fee,
+            purchase_cost=purchase_cost,
+            real_profit=real_profit,
+            tracking_url=tracking_url,
         )
 
 
