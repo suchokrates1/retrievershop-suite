@@ -332,6 +332,9 @@ th {
 /* Orders table column widths - override Bootstrap */
 #orders-table-v2 { table-layout: fixed !important; width: 100% !important; }
 
+#orders-table-v2 th,
+#orders-table-v2 td { vertical-align: middle !important; }
+
 #orders-table-v2 th:nth-child(1),
 #orders-table-v2 td:nth-child(1) { width: 10% !important; }
 
