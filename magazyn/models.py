@@ -205,3 +205,160 @@ class Message(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     thread = relationship("Thread", back_populates="messages")
+
+
+# =============================================================================
+# Orders System - Full BaseLinker order data with status tracking
+# =============================================================================
+
+class Order(Base):
+    """Full order data from BaseLinker API."""
+    __tablename__ = "orders"
+    __table_args__ = (
+        Index("idx_orders_date_add", "date_add"),
+        Index("idx_orders_platform", "platform"),
+    )
+    
+    # Primary key - BaseLinker order_id
+    order_id = Column(String, primary_key=True)
+    external_order_id = Column(String, nullable=True)  # e.g. Allegro order number
+    shop_order_id = Column(Integer, nullable=True)
+    
+    # Customer info
+    customer_name = Column(String, nullable=True)  # delivery_fullname
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    user_login = Column(String, nullable=True)  # Allegro/eBay login
+    
+    # Order source and status
+    platform = Column(String, nullable=True)  # allegro, ebay, shop
+    order_source_id = Column(Integer, nullable=True)
+    order_status_id = Column(Integer, nullable=True)
+    confirmed = Column(Boolean, default=False)
+    
+    # Dates (stored as unix timestamps)
+    date_add = Column(Integer, nullable=True)
+    date_confirmed = Column(Integer, nullable=True)
+    date_in_status = Column(Integer, nullable=True)
+    
+    # Delivery address
+    delivery_method = Column(String, nullable=True)
+    delivery_method_id = Column(Integer, nullable=True)
+    delivery_price = Column(Numeric(10, 2), nullable=True)
+    delivery_fullname = Column(String, nullable=True)
+    delivery_company = Column(String, nullable=True)
+    delivery_address = Column(String, nullable=True)
+    delivery_city = Column(String, nullable=True)
+    delivery_postcode = Column(String, nullable=True)
+    delivery_country = Column(String, nullable=True)
+    delivery_country_code = Column(String(2), nullable=True)
+    
+    # Pickup point (paczkomat)
+    delivery_point_id = Column(String, nullable=True)
+    delivery_point_name = Column(String, nullable=True)
+    delivery_point_address = Column(String, nullable=True)
+    delivery_point_postcode = Column(String, nullable=True)
+    delivery_point_city = Column(String, nullable=True)
+    
+    # Invoice address
+    invoice_fullname = Column(String, nullable=True)
+    invoice_company = Column(String, nullable=True)
+    invoice_nip = Column(String, nullable=True)
+    invoice_address = Column(String, nullable=True)
+    invoice_city = Column(String, nullable=True)
+    invoice_postcode = Column(String, nullable=True)
+    invoice_country = Column(String, nullable=True)
+    want_invoice = Column(Boolean, default=False)
+    
+    # Payment
+    currency = Column(String(3), default="PLN")
+    payment_method = Column(String, nullable=True)
+    payment_method_cod = Column(Boolean, default=False)  # Cash on delivery
+    payment_done = Column(Numeric(10, 2), nullable=True)
+    
+    # Comments
+    user_comments = Column(Text, nullable=True)
+    admin_comments = Column(Text, nullable=True)
+    
+    # Courier/shipping
+    courier_code = Column(String, nullable=True)
+    delivery_package_module = Column(String, nullable=True)  # courier name
+    delivery_package_nr = Column(String, nullable=True)  # tracking number
+    
+    # Raw products JSON (for reference, parsed into OrderProduct)
+    products_json = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    products = relationship("OrderProduct", back_populates="order", cascade="all, delete-orphan")
+    status_logs = relationship("OrderStatusLog", back_populates="order", cascade="all, delete-orphan")
+
+
+class OrderProduct(Base):
+    """Products in an order - links to ProductSize via EAN."""
+    __tablename__ = "order_products"
+    __table_args__ = (
+        Index("idx_order_products_ean", "ean"),
+        Index("idx_order_products_order_id", "order_id"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
+    
+    # BaseLinker product data
+    order_product_id = Column(Integer, nullable=True)  # BaseLinker order item ID
+    product_id = Column(String, nullable=True)  # BaseLinker/shop product ID
+    variant_id = Column(String, nullable=True)
+    sku = Column(String, nullable=True)
+    ean = Column(String, nullable=True)  # Key for linking to ProductSize
+    name = Column(String, nullable=True)
+    quantity = Column(Integer, default=1)
+    price_brutto = Column(Numeric(10, 2), nullable=True)
+    
+    # Additional fields
+    auction_id = Column(String, nullable=True)  # Allegro listing ID
+    attributes = Column(Text, nullable=True)  # Size, color etc as text
+    location = Column(String, nullable=True)  # Warehouse location
+    
+    # Link to warehouse (via EAN)
+    product_size_id = Column(
+        Integer,
+        ForeignKey("product_sizes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    
+    # Relationships
+    order = relationship("Order", back_populates="products")
+    product_size = relationship("ProductSize")
+
+
+class OrderStatusLog(Base):
+    """Tracking order/label status changes."""
+    __tablename__ = "order_status_logs"
+    __table_args__ = (
+        Index("idx_order_status_logs_order_id", "order_id"),
+        Index("idx_order_status_logs_timestamp", "timestamp"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
+    
+    # Status: niewydrukowano, wydrukowano, przekazano_kurierowi, w_drodze, dostarczono
+    status = Column(String, nullable=False)
+    
+    # Optional tracking info
+    tracking_number = Column(String, nullable=True)
+    courier_code = Column(String, nullable=True)
+    
+    # When this status was recorded
+    timestamp = Column(DateTime, nullable=False, server_default=func.now())
+    
+    # Optional notes
+    notes = Column(Text, nullable=True)
+    
+    # Relationship
+    order = relationship("Order", back_populates="status_logs")
+

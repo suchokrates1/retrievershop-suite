@@ -42,8 +42,9 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import PrintedOrder, ProductSize
+from .models import PrintedOrder, ProductSize, Product, PurchaseBatch, OrderProduct, Order
 from .parsing import parse_product_info
+from sqlalchemy import desc
 
 bp = Blueprint("products", __name__)
 
@@ -134,6 +135,90 @@ def edit_item(product_id):
     return render_template(
         "edit_item.html", product=product, product_sizes=product_sizes
     )
+
+
+@bp.route("/product/<int:product_id>")
+@login_required
+def product_detail(product_id):
+    """Readonly product detail view with order and delivery history."""
+    with get_session() as db:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            abort(404)
+        
+        # Get product sizes with their barcodes (EANs)
+        sizes_data = []
+        all_eans = []
+        for ps in product.sizes:
+            sizes_data.append({
+                "id": ps.id,
+                "size": ps.size,
+                "quantity": ps.quantity,
+                "barcode": ps.barcode,
+            })
+            if ps.barcode:
+                all_eans.append(ps.barcode)
+        
+        # Get order history for all sizes (via EAN)
+        order_history = []
+        if all_eans:
+            order_products = (
+                db.query(OrderProduct)
+                .filter(OrderProduct.ean.in_(all_eans))
+                .order_by(desc(OrderProduct.id))
+                .limit(50)
+                .all()
+            )
+            
+            for op in order_products:
+                if op.order:
+                    order_history.append({
+                        "order_id": op.order_id,
+                        "external_order_id": op.order.external_order_id,
+                        "date": op.order.date_add,
+                        "customer": op.order.customer_name,
+                        "platform": op.order.platform,
+                        "quantity": op.quantity,
+                        "price": op.price_brutto,
+                        "ean": op.ean,
+                        "size": next((s["size"] for s in sizes_data if s["barcode"] == op.ean), None),
+                    })
+        
+        # Get delivery history (purchase batches)
+        delivery_history = (
+            db.query(PurchaseBatch)
+            .filter(PurchaseBatch.product_id == product_id)
+            .order_by(desc(PurchaseBatch.purchase_date))
+            .limit(50)
+            .all()
+        )
+        
+        deliveries = [
+            {
+                "id": pb.id,
+                "size": pb.size,
+                "quantity": pb.quantity,
+                "price": pb.price,
+                "date": pb.purchase_date,
+            }
+            for pb in delivery_history
+        ]
+        
+        # Calculate totals
+        total_in_stock = sum(s["quantity"] for s in sizes_data)
+        total_sold = sum(o["quantity"] for o in order_history)
+        total_delivered = sum(d["quantity"] for d in deliveries)
+        
+        return render_template(
+            "product_detail.html",
+            product=product,
+            sizes=sizes_data,
+            order_history=order_history,
+            delivery_history=deliveries,
+            total_in_stock=total_in_stock,
+            total_sold=total_sold,
+            total_delivered=total_delivered,
+        )
 
 
 @bp.route("/items")

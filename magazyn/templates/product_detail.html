@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    {# Header #}
+    <div class="row mb-4">
+        <div class="col">
+            <a href="{{ url_for('products.items') }}" class="btn btn-outline-secondary mb-2">
+                <i class="bi bi-arrow-left"></i> Powrót do listy
+            </a>
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h2>{{ product.name }}</h2>
+                    {% if product.color %}
+                    <span class="badge bg-secondary fs-6">{{ product.color }}</span>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('products.edit_item', product_id=product.id) }}" class="btn btn-primary">
+                    <i class="bi bi-pencil"></i> Edytuj
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {# Summary cards #}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-success">{{ total_in_stock }}</h3>
+                    <p class="text-muted mb-0">Na stanie</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-primary">{{ total_sold }}</h3>
+                    <p class="text-muted mb-0">Sprzedano</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-info">{{ total_delivered }}</h3>
+                    <p class="text-muted mb-0">Dostarczono</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        {# Left column - Product info and sizes #}
+        <div class="col-lg-6">
+            {# Sizes table #}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-rulers"></i> Rozmiary i stany
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Rozmiar</th>
+                                <th>EAN / Kod kreskowy</th>
+                                <th class="text-end">Ilość</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for size in sizes %}
+                            <tr>
+                                <td><strong>{{ size.size }}</strong></td>
+                                <td>
+                                    {% if size.barcode %}
+                                    <code>{{ size.barcode }}</code>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if size.quantity > 0 %}
+                                    <span class="badge bg-success">{{ size.quantity }}</span>
+                                    {% elif size.quantity == 0 %}
+                                    <span class="badge bg-warning text-dark">0</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">{{ size.quantity }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Brak rozmiarów</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {# Delivery history #}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-truck"></i> Historia dostaw</span>
+                    <span class="badge bg-info">{{ delivery_history|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Rozmiar</th>
+                                <th class="text-end">Ilość</th>
+                                <th class="text-end">Cena jedn.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for delivery in delivery_history %}
+                            <tr>
+                                <td>{{ delivery.date }}</td>
+                                <td>{{ delivery.size }}</td>
+                                <td class="text-end">{{ delivery.quantity }}</td>
+                                <td class="text-end">
+                                    {% if delivery.price %}
+                                    {{ '%.2f'|format(delivery.price) }} PLN
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-3">
+                                    Brak historii dostaw
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# Right column - Order history #}
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-bag-check"></i> Historia zamówień</span>
+                    <span class="badge bg-primary">{{ order_history|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Nr zamówienia</th>
+                                <th>Data</th>
+                                <th>Klient</th>
+                                <th>Rozmiar</th>
+                                <th class="text-end">Ilość</th>
+                                <th class="text-end">Cena</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for order in order_history %}
+                            <tr class="clickable-row" onclick="window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'">
+                                <td>
+                                    <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="text-decoration-none">
+                                        {% if order.external_order_id %}
+                                        {{ order.external_order_id }}
+                                        {% else %}
+                                        #{{ order.order_id }}
+                                        {% endif %}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if order.date %}
+                                    {{ order.date | timestamp_to_date }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>{{ order.customer or '-' }}</td>
+                                <td>{{ order.size or '-' }}</td>
+                                <td class="text-end">{{ order.quantity }}</td>
+                                <td class="text-end">
+                                    {% if order.price %}
+                                    {{ '%.2f'|format(order.price) }} PLN
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">
+                                    <i class="bi bi-inbox fs-3"></i>
+                                    <p class="mb-0 mt-2">Brak historii zamówień</p>
+                                    <small>Zamówienia pojawią się po powiązaniu produktów przez EAN</small>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if order_history|length >= 50 %}
+                <div class="card-footer text-muted text-center">
+                    <small>Wyświetlono ostatnie 50 zamówień</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.clickable-row {
+    cursor: pointer;
+}
+.clickable-row:hover {
+    background-color: rgba(0, 0, 0, 0.075) !important;
+}
+</style>
+{% endblock %}

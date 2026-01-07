@@ -13,6 +13,8 @@ from sqlalchemy import or_
 from .db import get_session, configure_engine
 from .settings_store import SettingsPersistenceError, settings_store
 from .config import settings
+from .allegro_api import fetch_offers
+from . import allegro_api
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,128 @@ def _clear_cached_tokens():
 
 def sync_offers():
     print("sync_offers called")
-    return {}
+    from .models import AllegroOffer, Product, ProductSize, AllegroPriceHistory
+    from .db import get_session
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        if not access_token:
+            logger.error("No Allegro access token available")
+            return {"error": "No access token"}
+        
+        logger.info("Starting Allegro offers sync")
+        
+        # Fetch offers from Allegro API
+        offset = 0
+        limit = 100
+        all_offers = []
+        
+        while True:
+            response = allegro_api.fetch_offers(access_token, offset=offset, limit=limit)
+            # Handle different response formats
+            if "offers" in response:
+                offers = response["offers"]
+            elif "items" in response and "offers" in response["items"]:
+                offers = response["items"]["offers"]
+            else:
+                offers = []
+            all_offers.extend(offers)
+            
+            # Check if there are more pages
+            if len(offers) < limit:
+                break
+            offset += limit
+        
+        logger.info(f"Fetched {len(all_offers)} offers from Allegro")
+        
+        with get_session() as db:
+            # Clear existing offers
+            db.query(AllegroOffer).delete()
+            
+            matched_count = 0
+            
+            for offer_data in all_offers:
+                offer_id = offer_data["id"]
+                title = offer_data["name"]
+                price = Decimal(offer_data["sellingMode"]["price"]["amount"])
+                
+                # Try to match with products
+                product_size_id = None
+                product_id = None
+                
+                # Parse title to extract product info
+                # Simple parsing - remove size and color from end
+                title_lower = title.lower()
+                potential_size = None
+                
+                # Check for size at the end
+                size_pattern = r'\s+(xs|s|m|l|xl|xxl)$'
+                import re
+                match = re.search(size_pattern, title_lower)
+                if match:
+                    potential_size = match.group(1).upper()
+                    title_without_size = title_lower[:match.start()].strip()
+                else:
+                    title_without_size = title_lower
+                
+                # Remove common color words
+                color_words = ['czerwony', 'niebieski', 'zielony', 'czarny', 'biały', 'żółty', 'fioletowy', 'pomarańczowy', 'szary', 'różowy']
+                potential_name_parts = title_without_size.split()
+                filtered_parts = [part for part in potential_name_parts if part not in color_words]
+                potential_name = " ".join(filtered_parts)
+                
+                # Try to find matching product
+                product_query = db.query(Product).filter(Product.name.ilike(f"%{potential_name}%")).first()
+                if product_query:
+                    product_id = product_query.id
+                    # Try to find matching size
+                    if potential_size:
+                        size_query = db.query(ProductSize).filter(
+                            ProductSize.product_id == product_id,
+                            ProductSize.size == potential_size
+                        ).first()
+                        if size_query:
+                            product_size_id = size_query.id
+                            matched_count += 1
+                
+                offer = AllegroOffer(
+                    offer_id=offer_id,
+                    title=title,
+                    price=price,
+                    product_size_id=product_size_id,
+                    product_id=product_id,
+                    publication_status=offer_data.get("publication", {}).get("status", "ACTIVE")
+                )
+                db.add(offer)
+                
+                # Create price history entry
+                from datetime import datetime, timezone
+                price_history = AllegroPriceHistory(
+                    offer_id=offer_id,
+                    product_size_id=product_size_id,
+                    price=price,
+                    recorded_at=datetime.now(timezone.utc),
+                    competitor_price=None,  # No competitor data yet
+                    competitor_seller=None,
+                    competitor_url=None,
+                    competitor_delivery_days=None
+                )
+                db.add(price_history)
+            
+            db.commit()
+        
+        return {
+            "fetched": len(all_offers),
+            "matched": matched_count,
+            "trend_report": [{"offer_id": offer_id, "title": title, "price": float(price)} for offer_id, title, price in [(o["id"], o["name"], o["sellingMode"]["price"]["amount"]) for o in all_offers]]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error syncing offers: {e}")
+        return {"error": str(e)}
 
 
 def _parse_int(value):
