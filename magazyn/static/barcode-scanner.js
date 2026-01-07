@@ -181,6 +181,17 @@
         });
     };
 
+    const detectBarcodeType = (barcode) => {
+        // EAN-13: 13 cyfr i zaczyna się od "69"
+        const isEan13 = /^\d{13}$/.test(barcode);
+        const startsWithSixtyNine = barcode.startsWith('69');
+        
+        if (isEan13 && startsWithSixtyNine) {
+            return 'product';
+        }
+        return 'label';
+    };
+
     const submitBarcode = (barcode, options) => {
         const { csrfToken, input, beepElement } = options || {};
         if (!barcode) {
@@ -191,14 +202,29 @@
             }
             return;
         }
-        const endpoints = isLabelMode
-            ? [{ url: LABEL_ENDPOINT, asLabel: true }]
-            : isAutoMode
-                ? [
-                    { url: LABEL_ENDPOINT, asLabel: true },
+        
+        let endpoints;
+        if (isLabelMode) {
+            endpoints = [{ url: LABEL_ENDPOINT, asLabel: true }];
+        } else if (isAutoMode) {
+            // Auto-detection: check if it's EAN (13 digits starting with "69")
+            const detectedType = detectBarcodeType(barcode);
+            if (detectedType === 'product') {
+                // Try product endpoint first, then label as fallback
+                endpoints = [
                     { url: BARCODE_ENDPOINT, asLabel: false },
-                ]
-                : [{ url: BARCODE_ENDPOINT, asLabel: false }];
+                    { url: LABEL_ENDPOINT, asLabel: true }
+                ];
+            } else {
+                // Try label endpoint first, then product as fallback
+                endpoints = [
+                    { url: LABEL_ENDPOINT, asLabel: true },
+                    { url: BARCODE_ENDPOINT, asLabel: false }
+                ];
+            }
+        } else {
+            endpoints = [{ url: BARCODE_ENDPOINT, asLabel: false }];
+        }
 
         const tryNext = (index) => {
             if (index >= endpoints.length) {

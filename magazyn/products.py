@@ -42,9 +42,10 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import PrintedOrder, ProductSize, Product, PurchaseBatch, OrderProduct, Order
+from .models import PrintedOrder, ProductSize, Product, PurchaseBatch, OrderProduct, Order, OrderStatusLog
 from .parsing import parse_product_info
 from sqlalchemy import desc
+import time
 
 bp = Blueprint("products", __name__)
 
@@ -254,6 +255,16 @@ def barcode_scan():
         return ("", 400)
     result = find_by_barcode(barcode)
     if result:
+        # Store last product scan in session for auto-packing
+        session['last_product_scan'] = {
+            'barcode': barcode,
+            'product_size_id': result.get('product_size_id'),
+            'timestamp': time.time()
+        }
+        
+        # Check if we can auto-pack: recently scanned label + this product belongs to that order
+        _check_and_auto_pack()
+        
         flash(f'Znaleziono produkt: {result["name"]}')
         return jsonify(result)
     flash("Nie znaleziono produktu o podanym kodzie kreskowym")
@@ -276,6 +287,71 @@ def _parse_last_order_data(raw):
         return json.loads(raw)
     except Exception:
         return {}
+
+
+def _check_and_auto_pack():
+    """Check if we can auto-pack: label + matching product scanned within 30 seconds."""
+    last_product = session.get('last_product_scan')
+    last_label = session.get('last_label_scan')
+    
+    if not last_product or not last_label:
+        return
+    
+    # Check if scans are within 30 seconds of each other
+    current_time = time.time()
+    product_age = current_time - last_product['timestamp']
+    label_age = current_time - last_label['timestamp']
+    
+    if product_age > 30 or label_age > 30:
+        return
+    
+    # Check if scanned product belongs to the scanned order
+    order_id = last_label['order_id']
+    product_size_id = last_product['product_size_id']
+    
+    if not order_id or not product_size_id:
+        return
+    
+    with get_session() as db:
+        # Get current order status
+        latest_status = (
+            db.query(OrderStatusLog)
+            .filter(OrderStatusLog.order_id == order_id)
+            .order_by(desc(OrderStatusLog.timestamp))
+            .first()
+        )
+        
+        # Only auto-pack if current status is "pobrano"
+        if not latest_status or latest_status.status != "pobrano":
+            return
+        
+        # Check if product belongs to this order
+        order_product = (
+            db.query(OrderProduct)
+            .filter(
+                OrderProduct.order_id == order_id,
+                OrderProduct.product_size_id == product_size_id
+            )
+            .first()
+        )
+        
+        if not order_product:
+            return
+        
+        # All conditions met - change status to "spakowano"
+        new_status = OrderStatusLog(
+            order_id=order_id,
+            status="spakowano",
+            notes="Automatycznie spakowano po zeskanowaniu etykiety i produktu"
+        )
+        db.add(new_status)
+        db.commit()
+        
+        # Clear session data to prevent duplicate packing
+        session.pop('last_product_scan', None)
+        session.pop('last_label_scan', None)
+        
+        flash(f'✓ Automatycznie zmieniono status zamówienia {order_id} na "Spakowano"', 'success')
 
 
 def _load_order_for_barcode(barcode: str):
@@ -342,6 +418,15 @@ def label_barcode_scan():
                 "quantity": item.get("quantity", 0),
             }
         )
+
+    # Store last label scan in session for auto-packing
+    session['last_label_scan'] = {
+        'order_id': order_id,
+        'timestamp': time.time()
+    }
+    
+    # Check if we can auto-pack: recently scanned product + it belongs to this order
+    _check_and_auto_pack()
 
     response = {
         "order_id": order_id or order_data.get("order_id") or "",
