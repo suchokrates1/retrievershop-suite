@@ -333,25 +333,25 @@ th {
 #orders-table-v2 { table-layout: fixed !important; width: 100% !important; }
 
 #orders-table-v2 th:nth-child(1),
-#orders-table-v2 td:nth-child(1) { width: 65px !important; max-width: 65px !important; }
+#orders-table-v2 td:nth-child(1) { width: 10% !important; }
 
 #orders-table-v2 th:nth-child(2),
-#orders-table-v2 td:nth-child(2) { width: 75px !important; max-width: 75px !important; }
+#orders-table-v2 td:nth-child(2) { width: 10% !important; }
 
 #orders-table-v2 th:nth-child(3),
-#orders-table-v2 td:nth-child(3) { width: auto !important; }
+#orders-table-v2 td:nth-child(3) { width: 50% !important; }
 
 #orders-table-v2 th:nth-child(4),
-#orders-table-v2 td:nth-child(4) { width: 110px !important; max-width: 110px !important; }
+#orders-table-v2 td:nth-child(4) { width: 10% !important; }
 
 #orders-table-v2 th:nth-child(5),
-#orders-table-v2 td:nth-child(5) { width: 50px !important; max-width: 50px !important; }
+#orders-table-v2 td:nth-child(5) { width: 5% !important; }
 
 #orders-table-v2 th:nth-child(6),
-#orders-table-v2 td:nth-child(6) { width: 85px !important; max-width: 85px !important; }
+#orders-table-v2 td:nth-child(6) { width: 10% !important; }
 
 #orders-table-v2 th:nth-child(7),
-#orders-table-v2 td:nth-child(7) { width: 35px !important; max-width: 35px !important; }
+#orders-table-v2 td:nth-child(7) { width: 5% !important; }
 
 #orders-table-v2 td:nth-child(3) { 
     white-space: nowrap !important; 
