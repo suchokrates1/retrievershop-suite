@@ -497,6 +497,22 @@ class LabelAgent:
             raise
         finally:
             conn.close()
+        
+        # Also update order status in orders table
+        try:
+            from .orders import add_order_status
+            from .db import get_session
+            with get_session() as db:
+                add_order_status(
+                    db, order_id, "wydrukowano",
+                    courier_code=last_order_data.get("courier_code") if last_order_data else None,
+                    tracking_number=last_order_data.get("delivery_package_nr") if last_order_data else None,
+                )
+                db.commit()
+        except Exception as status_exc:
+            self.logger.warning(
+                "Could not update order status for %s: %s", order_id, status_exc
+            )
 
     def _load_state_value(self, key: str) -> Optional[str]:
         self.ensure_db()
@@ -975,6 +991,128 @@ class LabelAgent:
             self.logger.error("Błąd wysyłania wiadomości: %s", exc)
 
     # ------------------------------------------------------------------
+    # Tracking status updates
+    # ------------------------------------------------------------------
+    # BaseLinker tracking_status codes mapping to our status names
+    TRACKING_STATUS_MAP = {
+        0: None,  # Unknown - don't update
+        1: "wydrukowano",  # Courier label created
+        2: "przekazano_kurierowi",  # Shipped
+        3: "niedostarczono",  # Not delivered
+        4: "w_drodze",  # Out for delivery
+        5: "dostarczono",  # Delivered
+        6: "zwrot",  # Return
+        7: "awizo",  # Aviso
+        8: "w_punkcie",  # Waiting at point
+        9: "zagubiono",  # Lost
+        10: "anulowano",  # Canceled
+        11: "w_drodze",  # On the way
+    }
+
+    def _check_tracking_statuses(self) -> None:
+        """Check and update tracking statuses for recent orders."""
+        try:
+            from .orders import add_order_status
+            from .db import get_session
+            from .models import Order, OrderStatusLog
+            from sqlalchemy import desc
+            
+            with get_session() as db:
+                # Get orders that are not yet delivered (check last 7 days)
+                from datetime import datetime, timedelta
+                week_ago = int((datetime.now() - timedelta(days=7)).timestamp())
+                
+                orders_to_check = (
+                    db.query(Order)
+                    .filter(Order.date_add >= week_ago)
+                    .all()
+                )
+                
+                if not orders_to_check:
+                    return
+                
+                self.logger.debug("Sprawdzam statusy dla %d zamówień", len(orders_to_check))
+                
+                for order in orders_to_check:
+                    try:
+                        # Get latest status for this order
+                        latest_status = (
+                            db.query(OrderStatusLog)
+                            .filter(OrderStatusLog.order_id == order.order_id)
+                            .order_by(desc(OrderStatusLog.timestamp))
+                            .first()
+                        )
+                        
+                        current_status = latest_status.status if latest_status else "niewydrukowano"
+                        
+                        # Skip if already delivered or final status
+                        if current_status in ("dostarczono", "zwrot", "zagubiono", "anulowano"):
+                            continue
+                        
+                        # Get packages from BaseLinker
+                        packages = self.get_order_packages(order.order_id)
+                        
+                        if not packages:
+                            continue
+                        
+                        # Use the most advanced status from all packages
+                        best_tracking_status = 0
+                        best_tracking_number = None
+                        best_courier_code = None
+                        best_tracking_url = None
+                        
+                        for pkg in packages:
+                            tracking_status = pkg.get("tracking_status", 0)
+                            if tracking_status > best_tracking_status:
+                                best_tracking_status = tracking_status
+                                best_tracking_number = pkg.get("courier_package_nr")
+                                best_courier_code = pkg.get("courier_code")
+                                best_tracking_url = pkg.get("tracking_url")
+                        
+                        # Map to our status
+                        new_status = self.TRACKING_STATUS_MAP.get(best_tracking_status)
+                        
+                        if not new_status:
+                            continue
+                        
+                        # Check if status changed
+                        if new_status != current_status:
+                            self.logger.info(
+                                "📦 Zmiana statusu zamówienia %s: %s -> %s",
+                                order.order_id, current_status, new_status
+                            )
+                            
+                            # Add status log
+                            add_order_status(
+                                db, order.order_id, new_status,
+                                tracking_number=best_tracking_number,
+                                courier_code=best_courier_code,
+                                notes=f"Auto-update z BaseLinker (tracking_url: {best_tracking_url})" if best_tracking_url else "Auto-update z BaseLinker"
+                            )
+                            
+                            # Update order tracking info
+                            if best_tracking_number:
+                                order.delivery_package_nr = best_tracking_number
+                            if best_courier_code:
+                                order.courier_code = best_courier_code
+                            
+                            db.commit()
+                            
+                    except ApiError as exc:
+                        self.logger.debug(
+                            "Nie można pobrać paczek dla zamówienia %s: %s",
+                            order.order_id, exc
+                        )
+                    except Exception as exc:
+                        self.logger.warning(
+                            "Błąd sprawdzania statusu zamówienia %s: %s",
+                            order.order_id, exc
+                        )
+                        
+        except Exception as exc:
+            self.logger.warning("Błąd sprawdzania statusów przesyłek: %s", exc)
+
+    # ------------------------------------------------------------------
     # Agent loop
     # ------------------------------------------------------------------
     def is_quiet_time(self) -> bool:
@@ -1312,12 +1450,19 @@ class LabelAgent:
 
     def _agent_loop(self) -> None:
         allegro_check_interval = timedelta(minutes=5)
+        tracking_check_interval = timedelta(minutes=15)
         last_allegro_check = datetime.now() - allegro_check_interval
+        last_tracking_check = datetime.now() - tracking_check_interval
 
         while not self._stop_event.is_set():
             loop_start = datetime.now()
             self._write_heartbeat()
             self._send_periodic_reports()
+
+            # Check tracking statuses every 15 minutes
+            if datetime.now() - last_tracking_check >= tracking_check_interval:
+                self._check_tracking_statuses()
+                last_tracking_check = datetime.now()
 
             if datetime.now() - last_allegro_check >= allegro_check_interval:
                 token_valid = hasattr(self.settings, 'ALLEGRO_ACCESS_TOKEN') and self.settings.ALLEGRO_ACCESS_TOKEN
@@ -1358,18 +1503,83 @@ class LabelAgent:
                         (order.get("products") or [{}])[0]
                     )
                     self.last_order_data = {
+                        # Basic order info
                         "order_id": order_id,
+                        "external_order_id": order.get("external_order_id", ""),
+                        "shop_order_id": order.get("shop_order_id"),
                         "name": prod_name,
                         "size": size,
                         "color": color,
+                        # Customer info
                         "customer": order.get("delivery_fullname", "Nieznany klient"),
+                        "email": order.get("email", ""),
+                        "phone": order.get("phone", ""),
+                        "user_login": order.get("user_login", ""),
+                        # Order source and status
                         "platform": order.get("order_source", "brak"),
+                        "order_source_id": order.get("order_source_id"),
+                        "order_status_id": order.get("order_status_id"),
+                        "confirmed": order.get("confirmed", False),
+                        # Dates (unix timestamps)
+                        "date_add": order.get("date_add"),
+                        "date_confirmed": order.get("date_confirmed"),
+                        "date_in_status": order.get("date_in_status"),
+                        # Delivery address
                         "shipping": order.get("delivery_method", "brak"),
+                        "delivery_method_id": order.get("delivery_method_id"),
+                        "delivery_price": order.get("delivery_price", 0),
+                        "delivery_fullname": order.get("delivery_fullname", ""),
+                        "delivery_company": order.get("delivery_company", ""),
+                        "delivery_address": order.get("delivery_address", ""),
+                        "delivery_city": order.get("delivery_city", ""),
+                        "delivery_postcode": order.get("delivery_postcode", ""),
+                        "delivery_country": order.get("delivery_country", ""),
+                        "delivery_country_code": order.get("delivery_country_code", ""),
+                        # Pickup point (paczkomat)
+                        "delivery_point_id": order.get("delivery_point_id", ""),
+                        "delivery_point_name": order.get("delivery_point_name", ""),
+                        "delivery_point_address": order.get("delivery_point_address", ""),
+                        "delivery_point_postcode": order.get("delivery_point_postcode", ""),
+                        "delivery_point_city": order.get("delivery_point_city", ""),
+                        # Invoice address
+                        "invoice_fullname": order.get("invoice_fullname", ""),
+                        "invoice_company": order.get("invoice_company", ""),
+                        "invoice_nip": order.get("invoice_nip", ""),
+                        "invoice_address": order.get("invoice_address", ""),
+                        "invoice_city": order.get("invoice_city", ""),
+                        "invoice_postcode": order.get("invoice_postcode", ""),
+                        "invoice_country": order.get("invoice_country", ""),
+                        "want_invoice": order.get("want_invoice", "0"),
+                        # Payment
+                        "currency": order.get("currency", "PLN"),
+                        "payment_method": order.get("payment_method", ""),
+                        "payment_method_cod": order.get("payment_method_cod", "0"),
+                        "payment_done": order.get("payment_done", 0),
+                        # Comments
+                        "user_comments": order.get("user_comments", ""),
+                        "admin_comments": order.get("admin_comments", ""),
+                        # Products with EAN
                         "products": order.get("products", []),
+                        # Courier/shipping tracking (filled later)
                         "courier_code": "",
+                        "delivery_package_module": order.get("delivery_package_module", ""),
+                        "delivery_package_nr": order.get("delivery_package_nr", ""),
                         "package_ids": [],
                         "tracking_numbers": [],
                     }
+
+                    # Sync order to database for orders view
+                    try:
+                        from .orders import sync_order_from_data
+                        from .db import get_session
+                        with get_session() as db:
+                            sync_order_from_data(db, self.last_order_data)
+                            db.commit()
+                    except Exception as sync_exc:
+                        self.logger.warning(
+                            "Could not sync order %s to database: %s",
+                            order_id, sync_exc
+                        )
 
                     if order_id in printed:
                         continue

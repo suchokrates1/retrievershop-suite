@@ -75,6 +75,20 @@ def format_dt(value, fmt="%d/%m/%Y %H:%M"):
             return value[:16]
     return value.strftime(fmt)
 
+
+@bp.app_template_filter("timestamp_to_date")
+def timestamp_to_date(value, fmt="%d/%m/%Y"):
+    """Convert Unix timestamp to formatted date string."""
+    if value is None:
+        return ""
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value).strftime(fmt)
+        return str(value)
+    except (ValueError, OSError, TypeError):
+        return str(value)
+
+
 _print_agent_started = False
 
 

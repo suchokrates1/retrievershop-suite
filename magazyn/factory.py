@@ -15,6 +15,7 @@ from .sales import bp as sales_bp
 from .shipping import bp as shipping_bp
 from .allegro import bp as allegro_bp
 from .api_scraper import api_scraper_bp
+from .orders import bp as orders_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .diagnostics import bp as diagnostics_bp
@@ -56,6 +57,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(allegro_bp)
     app.register_blueprint(api_scraper_bp)
     app.register_blueprint(diagnostics_bp)
+    app.register_blueprint(orders_bp)
 
     for rule in list(app.url_map.iter_rules()):
         if rule.endpoint.startswith("main."):
