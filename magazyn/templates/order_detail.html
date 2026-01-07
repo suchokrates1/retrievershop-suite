@@ -129,16 +129,27 @@
                             <tr>
                                 <th>Produkt</th>
                                 <th>EAN</th>
-                                <th>Ilość</th>
-                                <th>Cena</th>
-                                <th>Magazyn</th>
+                                <th class="text-center">Ilość</th>
+                                <th class="text-end">Cena</th>
                             </tr>
                         </thead>
                         <tbody>
                         {% for product in products %}
                             <tr>
                                 <td>
+                                    {% if product.warehouse_product %}
+                                    <a href="{{ url_for('products.product_detail', product_id=product.warehouse_product.id) }}" class="text-decoration-none">
+                                        <strong>{{ product.name or '-' }}</strong>
+                                        <span class="badge bg-success ms-1">{{ product.warehouse_product.quantity_in_stock }} szt.</span>
+                                    </a>
+                                    {% else %}
                                     <strong>{{ product.name or '-' }}</strong>
+                                    {% if product.ean %}
+                                    <span class="badge bg-warning text-dark ms-1" title="Brak powiązania z magazynem">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                    </span>
+                                    {% endif %}
+                                    {% endif %}
                                     {% if product.attributes %}
                                     <br><small class="text-muted">{{ product.attributes }}</small>
                                     {% endif %}
@@ -153,35 +164,18 @@
                                     <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ product.quantity }}</td>
-                                <td>
+                                <td class="text-center">{{ product.quantity }}</td>
+                                <td class="text-end">
                                     {% if product.price_brutto %}
-                                    {{ '%.2f'|format(product.price_brutto) }} {{ order.currency or 'PLN' }}
+                                    {{ '%.2f'|format(product.price_brutto) }}
                                     {% else %}
                                     -
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if product.warehouse_product %}
-                                    <a href="{{ url_for('products.product_detail', product_id=product.warehouse_product.id) }}" 
-                                       class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-box-seam"></i>
-                                        {{ product.warehouse_product.name or 'Produkt' }}
-                                        {{ product.warehouse_product.size }}
-                                        <span class="badge bg-success">{{ product.warehouse_product.quantity_in_stock }} szt.</span>
-                                    </a>
-                                    {% elif product.ean %}
-                                    <span class="badge bg-warning text-dark">
-                                        <i class="bi bi-exclamation-triangle"></i> Brak powiązania
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="5" class="text-center text-muted">Brak produktów</td>
+                                <td colspan="4" class="text-center text-muted">Brak produktów</td>
                             </tr>
                         {% endfor %}
                         </tbody>
@@ -224,59 +218,29 @@
                     <form method="post" action="{{ url_for('orders.update_order_status', order_id=order.order_id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
-                            <label class="form-label">Zmień status:</label>
                             <select name="status" class="form-select">
-                                <option value="niewydrukowano" {% if current_status.status == 'niewydrukowano' %}selected{% endif %}>
-                                    📋 Niewydrukowano
-                                </option>
-                                <option value="wydrukowano" {% if current_status.status == 'wydrukowano' %}selected{% endif %}>
-                                    🖨️ Wydrukowano
-                                </option>
-                                <option value="przekazano_kurierowi" {% if current_status.status == 'przekazano_kurierowi' %}selected{% endif %}>
-                                    📦 Przekazano kurierowi
-                                </option>
-                                <option value="w_drodze" {% if current_status.status == 'w_drodze' %}selected{% endif %}>
-                                    🚚 W drodze
-                                </option>
-                                <option value="awizo" {% if current_status.status == 'awizo' %}selected{% endif %}>
-                                    📬 Awizo
-                                </option>
-                                <option value="w_punkcie" {% if current_status.status == 'w_punkcie' %}selected{% endif %}>
-                                    📍 Czeka w punkcie
-                                </option>
-                                <option value="dostarczono" {% if current_status.status == 'dostarczono' %}selected{% endif %}>
-                                    ✅ Dostarczono
-                                </option>
-                                <option value="niedostarczono" {% if current_status.status == 'niedostarczono' %}selected{% endif %}>
-                                    ❌ Niedostarczono
-                                </option>
-                                <option value="zwrot" {% if current_status.status == 'zwrot' %}selected{% endif %}>
-                                    ↩️ Zwrot
-                                </option>
-                                <option value="zagubiono" {% if current_status.status == 'zagubiono' %}selected{% endif %}>
-                                    ❓ Zagubiono
-                                </option>
-                                <option value="anulowano" {% if current_status.status == 'anulowano' %}selected{% endif %}>
-                                    🚫 Anulowano
-                                </option>
+                                <option value="pobrano" {% if current_status.status == 'pobrano' %}selected{% endif %}>📥 Pobrano</option>
+                                <option value="niewydrukowano" {% if current_status.status == 'niewydrukowano' %}selected{% endif %}>📋 Niewydrukowano</option>
+                                <option value="wydrukowano" {% if current_status.status == 'wydrukowano' %}selected{% endif %}>🖨️ Wydrukowano</option>
+                                <option value="zdjeto_ze_stanu" {% if current_status.status == 'zdjeto_ze_stanu' %}selected{% endif %}>📦 Zdjęto ze stanu</option>
+                                <option value="spakowano" {% if current_status.status == 'spakowano' %}selected{% endif %}>📦 Spakowano</option>
+                                <option value="przekazano_kurierowi" {% if current_status.status == 'przekazano_kurierowi' %}selected{% endif %}>🚚 Przekazano kurierowi</option>
+                                <option value="odebrano_przez_kuriera" {% if current_status.status == 'odebrano_przez_kuriera' %}selected{% endif %}>🚚 Odebrano przez kuriera</option>
+                                <option value="w_drodze" {% if current_status.status == 'w_drodze' %}selected{% endif %}>🛣️ W drodze</option>
+                                <option value="awizo" {% if current_status.status == 'awizo' %}selected{% endif %}>📬 Awizo</option>
+                                <option value="w_punkcie" {% if current_status.status == 'w_punkcie' %}selected{% endif %}>📍 Czeka w punkcie</option>
+                                <option value="dostarczono" {% if current_status.status == 'dostarczono' %}selected{% endif %}>✅ Dostarczono</option>
+                                <option value="niedostarczono" {% if current_status.status == 'niedostarczono' %}selected{% endif %}>❌ Niedostarczono</option>
+                                <option value="zwrot" {% if current_status.status == 'zwrot' %}selected{% endif %}>↩️ Zwrot</option>
+                                <option value="zagubiono" {% if current_status.status == 'zagubiono' %}selected{% endif %}>❓ Zagubiono</option>
+                                <option value="anulowano" {% if current_status.status == 'anulowano' %}selected{% endif %}>🚫 Anulowano</option>
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Nr przesyłki:</label>
-                            <input type="text" name="tracking_number" class="form-control" 
-                                   value="{{ order.delivery_package_nr or '' }}" 
-                                   placeholder="np. 12345678901234">
+                            <input type="text" name="notes" class="form-control" placeholder="Notatka (opcjonalna)">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Kurier:</label>
-                            <input type="text" name="courier_code" class="form-control" 
-                                   value="{{ order.courier_code or order.delivery_package_module or '' }}" 
-                                   placeholder="np. inpost, dpd, dhl">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notatka:</label>
-                            <textarea name="notes" class="form-control" rows="2" placeholder="Opcjonalna notatka..."></textarea>
-                        </div>
+                        <input type="hidden" name="tracking_number" value="{{ order.delivery_package_nr or '' }}">
+                        <input type="hidden" name="courier_code" value="{{ order.courier_code or '' }}">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="bi bi-check"></i> Zapisz status
                         </button>
@@ -375,11 +339,13 @@
                     <i class="bi bi-lightning"></i> Szybkie akcje
                 </div>
                 <div class="card-body">
-                    <a href="{{ url_for('history.reprint_label', order_id=order.order_id) }}" 
-                       class="btn btn-outline-primary w-100 mb-2"
-                       onclick="return confirm('Ponownie wydrukować etykietę?');">
-                        <i class="bi bi-printer"></i> Drukuj etykietę
-                    </a>
+                    <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-primary w-100"
+                                onclick="return confirm('Wydrukować etykietę?');">
+                            <i class="bi bi-printer"></i> Drukuj etykietę
+                        </button>
+                    </form>
                     {% if order.external_order_id and order.platform == 'allegro' %}
                     <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
                        target="_blank" class="btn btn-outline-secondary w-100">
