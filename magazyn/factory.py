@@ -22,6 +22,7 @@ from .diagnostics import bp as diagnostics_bp
 from .socketio_extension import socketio
 from .csrf_extension import csrf
 from .db import configure_engine, create_default_user_if_needed, Base, engine
+from . import order_sync_scheduler
 
 _shutdown_registered = False
 
@@ -31,6 +32,7 @@ def _register_shutdown_hook() -> None:
     if _shutdown_registered:
         return
     atexit.register(print_agent.stop_agent_thread)
+    atexit.register(order_sync_scheduler.stop_sync_scheduler)
     _shutdown_registered = True
 
 
@@ -75,6 +77,9 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
         create_default_user_if_needed(app)
 
     start_print_agent(app)
+    
+    # Start automatic order sync scheduler (every 1 hour)
+    order_sync_scheduler.start_sync_scheduler(app)
 
     _register_shutdown_hook()
 
