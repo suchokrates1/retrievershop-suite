@@ -142,9 +142,13 @@ def delete_product(product_id: int):
 
 
 def list_products() -> List[dict]:
-    """Return products with their sizes for listing."""
+    """Return products with their sizes for listing, sorted by name A-Z, color A-Z."""
     with get_session() as db:
-        products = db.query(Product).all()
+        # Sort by name (case-insensitive) and color (case-insensitive)
+        products = db.query(Product).order_by(
+            Product.name.asc(),
+            Product.color.asc()
+        ).all()
         result = []
         for p in products:
             sizes = {s.size: s.quantity for s in p.sizes}
