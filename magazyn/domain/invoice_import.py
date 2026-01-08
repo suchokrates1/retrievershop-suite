@@ -144,14 +144,25 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         # Name ... quantity szt. unit_price vat% ... Wariant: SIZE
         # Pattern: (Name) (qty,decimal) szt. (price,decimal) ... Wariant: (size)
         
-        # Extract variant/size first
+        # Extract variant/size and SKU first
+        # Format: Wariant: XL (TL-SZ-frolin-prem-XL-CZA) or Wariant: M, czarny (TL-SZ-active-M-CZA)
         size = ""
         color = ""
-        variant_match = re.search(r'Wariant:\s*([A-Za-z0-9]+)(?:,\s*([A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ]+))?', entry, re.IGNORECASE)
+        sku = ""
+        variant_match = re.search(r'Wariant:\s*([A-Za-z0-9]+)(?:,\s*([A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ]+))?\s*\(([^)]+)\)', entry, re.IGNORECASE)
         if variant_match:
             size = variant_match.group(1).strip()
             if variant_match.group(2):
                 color = variant_match.group(2).strip()
+            if variant_match.group(3):
+                sku = variant_match.group(3).strip()
+        else:
+            # Fallback - variant without SKU
+            variant_match_simple = re.search(r'Wariant:\s*([A-Za-z0-9]+)(?:,\s*([A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ]+))?', entry, re.IGNORECASE)
+            if variant_match_simple:
+                size = variant_match_simple.group(1).strip()
+                if variant_match_simple.group(2):
+                    color = variant_match_simple.group(2).strip()
         
         # Extract barcode
         barcode = ""
@@ -226,6 +237,7 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                 "Ilość": quantity,
                 "Cena": price,
                 "Barcode": barcode,
+                "SKU": sku,  # SKU from TipTop invoice (e.g. TL-SZ-frolin-prem-XL-CZA)
             }
         )
 

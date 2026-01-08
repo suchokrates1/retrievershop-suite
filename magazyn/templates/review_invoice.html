@@ -92,7 +92,7 @@
         </thead>
         <tbody>
             {% for row in rows %}
-            <tr class="{{ 'table-success' if row.match_type == 'ean' else ('table-warning' if row.match_type == 'fuzzy' else '') }}">
+            <tr class="{{ 'table-success' if row.match_type in ['ean', 'sku'] else ('table-warning' if row.match_type == 'fuzzy' else '') }}">
                 <td class="text-center">{{ loop.index }}</td>
                 <td class="text-center"><input type="checkbox" name="accept_{{ loop.index0 }}" checked></td>
                 <td>
@@ -152,6 +152,8 @@
                     <small class="d-block" style="font-size: 0.7rem;">
                         {% if row.match_type == 'ean' %}
                             <span class="match-ean" title="Dopasowano po kodzie EAN - pewne">✓ EAN</span>
+                        {% elif row.match_type == 'sku' %}
+                            <span class="match-ean" title="Dopasowano po SKU TipTop - pewne">✓ SKU</span>
                         {% elif row.match_type == 'fuzzy' %}
                             <span class="match-fuzzy" title="Dopasowano po nazwie - sprawdź!">⚠ Nazwa</span>
                         {% endif %}
@@ -166,7 +168,7 @@
     <div class="form-actions text-center mt-3">
         <div class="mb-2">
             <small>
-                <span class="match-ean">✓ EAN</span> = pewne dopasowanie po kodzie |
+                <span class="match-ean">✓ EAN</span> / <span class="match-ean">✓ SKU</span> = pewne dopasowanie |
                 <span class="match-fuzzy">⚠ Nazwa</span> = dopasowanie po nazwie (sprawdź!)
             </small>
         </div>
