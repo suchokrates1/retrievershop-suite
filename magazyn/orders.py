@@ -377,69 +377,6 @@ def sync_full_archive():
     return redirect(url_for("orders.orders_list"))
 
 
-@bp.route("/orders/check_status/<order_id>")
-@login_required
-def check_order_status(order_id: str):
-    """Check order status in database vs BaseLinker."""
-    from .config import settings
-    import requests
-    
-    with get_session() as db:
-        order = db.query(Order).filter(Order.order_id == order_id).first()
-        if not order:
-            flash(f"Zamówienie {order_id} nie znalezione w bazie", "danger")
-            return redirect(url_for("orders.orders_list"))
-        
-        # Get latest status from log
-        status_log = db.query(OrderStatusLog).filter(
-            OrderStatusLog.order_id == order.order_id
-        ).order_by(desc(OrderStatusLog.timestamp)).first()
-        
-        db_status = status_log.status if status_log else "brak"
-        db_timestamp = status_log.timestamp if status_log else None
-        
-        # Query BaseLinker
-        try:
-            api_url = "https://api.baselinker.com/connector.php"
-            headers = {"X-BLToken": settings.API_TOKEN}
-            
-            params = {
-                "method": "getOrders",
-                "parameters": json.dumps({"order_id": int(order.order_id)})
-            }
-            
-            response = requests.post(api_url, headers=headers, data=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get("status") != "SUCCESS":
-                flash(f"BaseLinker API error: {data.get('error_message', 'Unknown')}", "danger")
-                return redirect(url_for("orders.order_detail", order_id=order_id))
-            
-            orders = data.get("orders", [])
-            if not orders:
-                flash(f"Zamówienie nie znalezione w BaseLinker", "warning")
-                return redirect(url_for("orders.order_detail", order_id=order_id))
-            
-            bl_order = orders[0]
-            bl_status_id = bl_order.get('order_status_id')
-            bl_status_name = bl_order.get('order_status', 'Nieznany')
-            
-            # Map BaseLinker status
-            mapped_status = BASELINKER_STATUS_MAP.get(bl_status_id, "nieznany")
-            
-            # Compare
-            if mapped_status == db_status:
-                flash(f"✅ Statusy się zgadzają: '{db_status}' (BL status_id: {bl_status_id} '{bl_status_name}')", "success")
-            else:
-                flash(f"⚠️ NIEZGODNOŚĆ! Nasza baza: '{db_status}' ({db_timestamp}), BaseLinker: '{mapped_status}' (status_id: {bl_status_id} '{bl_status_name}')", "warning")
-            
-        except Exception as e:
-            flash(f"Błąd podczas sprawdzania BaseLinker: {str(e)}", "danger")
-    
-    return redirect(url_for("orders.order_detail", order_id=order_id))
-
-
 @bp.route("/order/<order_id>")
 @login_required
 def order_detail(order_id: str):

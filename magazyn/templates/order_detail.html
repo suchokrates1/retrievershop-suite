@@ -10,9 +10,6 @@
             <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary mb-2">
                 <i class="bi bi-arrow-left"></i> Powrót do listy
             </a>
-            <a href="{{ url_for('orders.check_order_status', order_id=order.order_id) }}" class="btn btn-outline-info mb-2 ms-2">
-                <i class="bi bi-arrow-repeat"></i> Sprawdź status w BaseLinker
-            </a>
             <h2>
                 Zamówienie #{{ order.order_id }}
                 <span class="badge {{ current_status.status_class }} fs-6">{{ current_status.status_text }}</span>
