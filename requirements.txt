@@ -55,3 +55,7 @@ WTForms==3.2.1
 zope.event==6.0
 zope.interface==8.0.1
 alembic
+# OCR dependencies (optional)
+Pillow>=10.0.0
+pytesseract>=0.3.10
+pdf2image>=1.16.0
