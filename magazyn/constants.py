@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-ALL_SIZES = ["XS", "S", "M", "L", "XL", "Uniwersalny"]
+ALL_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "Uniwersalny"]
 
 # Common color names that may appear in product titles.  They are stored in
 # lowercase form to simplify comparisons when parsing strings.
