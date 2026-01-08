@@ -198,16 +198,19 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         name = ' '.join(name_words).strip()
         
         # Extract price - find numbers after "szt." 
-        # Format: qty szt. unit_price discount% net_value vat% vat_amount discount gross
-        # We want the first price after szt. which is unit price
+        # Format: qty szt. Cena_brutto Rabat% Cena_po_rabacie St.VAT Wart_netto Wart_VAT Wart_brutto
+        # We want the THIRD decimal number = Cena brutto po rabacie (index 2)
         after_qty = entry[qty_match.end():].strip()
         
         # Find all decimal numbers in format XXX,XX or XXX.XX
         prices = re.findall(r'(\d{1,6})[,.](\d{2})\b', after_qty)
         
         price = 0.0
-        if prices:
-            # First price is typically unit price (netto)
+        if len(prices) >= 3:
+            # Third price is "Cena brutto po rabacie" (after discount)
+            price = float(f"{prices[2][0]}.{prices[2][1]}")
+        elif len(prices) >= 1:
+            # Fallback to first price if less than 3 found
             price = float(f"{prices[0][0]}.{prices[0][1]}")
         
         if not name or quantity <= 0:
