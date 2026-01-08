@@ -96,10 +96,32 @@ def get_product_sizes():
                 Product.name,
                 Product.color,
                 ProductSize.size,
+                ProductSize.barcode,
             )
             .join(Product, ProductSize.product_id == Product.id)
             .all()
         )
+
+
+def get_product_size_by_barcode(barcode: str):
+    """Find ProductSize by EAN/barcode."""
+    if not barcode:
+        return None
+    with get_session() as db:
+        ps = (
+            db.query(
+                ProductSize.id.label("ps_id"),
+                Product.id.label("product_id"),
+                Product.name,
+                Product.color,
+                ProductSize.size,
+                ProductSize.barcode,
+            )
+            .join(Product, ProductSize.product_id == Product.id)
+            .filter(ProductSize.barcode == barcode)
+            .first()
+        )
+        return ps
 
 
 def import_from_dataframe(df: pd.DataFrame):

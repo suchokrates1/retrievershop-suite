@@ -105,8 +105,8 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.socket.io https://static.cloudflareinsights.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.jsdelivr.net data:; "
-            "connect-src 'self' https://cloudflareinsights.com wss: ws:; "
-            "object-src 'none'; "
+            "connect-src 'self' https://cloudflareinsights.com https://cdn.jsdelivr.net https://cdn.socket.io wss: ws:; "
+            "object-src 'self'; "
             "base-uri 'self'; "
             "frame-ancestors 'self'"
         )
