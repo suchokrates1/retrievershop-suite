@@ -1062,7 +1062,12 @@ class LabelAgent:
                         best_tracking_url = None
                         
                         for pkg in packages:
-                            tracking_status = pkg.get("tracking_status", 0)
+                            # Ensure tracking_status is an integer (API may return string)
+                            raw_status = pkg.get("tracking_status", 0)
+                            try:
+                                tracking_status = int(raw_status) if raw_status else 0
+                            except (ValueError, TypeError):
+                                tracking_status = 0
                             if tracking_status > best_tracking_status:
                                 best_tracking_status = tracking_status
                                 best_tracking_number = pkg.get("courier_package_nr")

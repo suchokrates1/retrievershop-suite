@@ -18,6 +18,7 @@ from .api_scraper import api_scraper_bp
 from .orders import bp as orders_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
+from .discussions import bp as discussions_bp
 from .diagnostics import bp as diagnostics_bp
 from .socketio_extension import socketio
 from .csrf_extension import csrf
@@ -60,6 +61,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(api_scraper_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(orders_bp)
+    app.register_blueprint(discussions_bp)
 
     for rule in list(app.url_map.iter_rules()):
         if rule.endpoint.startswith("main."):
