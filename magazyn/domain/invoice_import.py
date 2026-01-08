@@ -124,54 +124,95 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         return _to_decimal(val)
 
     rows = []
-    i = 0
-    while i < len(lines):
-        m = re.match(r"(\d{1,2})([A-Za-z].*)", lines[i])
-        if not m:
-            i += 1
+    
+    # Join all lines to handle multiline entries
+    full_text = "\n".join(lines)
+    
+    # Pattern for parsing invoice lines like:
+    # "Szelki dla psa Truelove Tropical turkusowe 2,000 szt. 149,25 12 131,34 23% 213,56 49,12 262,68 Wariant: M"
+    # or with barcode: "Kod kreskowy: 5903751102223"
+    
+    # Split by line numbers (1, 2, 3...) at start of lines
+    entries = re.split(r'\n(?=\d{1,3}[A-Za-zŻżŹźĆćŁłÓóĄąĘęŚśŃń])', full_text)
+    
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
             continue
-        name = m.group(2).strip()
-        if i + 1 >= len(lines):
-            break
-        info = lines[i + 1]
-        num_match = re.search(r"\d", info)
-        if not num_match:
-            i += 1
-            continue
-        prefix = info[: num_match.start()].strip()
-        rest = info[num_match.start() :]
-        tokens = (
-            rest.replace("szt.", "")
-            .replace("szt", "")
-            .replace("%", "")
-            .split()
-        )
-        if len(tokens) < 4:
-            i += 1
-            continue
-        quantity = int(round(_num(tokens[0])))
-        price = _num(tokens[3])
-        color_parts = prefix.split()
-        color = color_parts[-1] if color_parts else ""
-        if len(color_parts) > 1:
-            name = f"{name} {' '.join(color_parts[:-1])}".strip()
-
+            
+        # Try parsing the combined format:
+        # Name ... quantity szt. unit_price vat% ... Wariant: SIZE
+        # Pattern: (Name) (qty,decimal) szt. (price,decimal) ... Wariant: (size)
+        
+        # Extract variant/size first
         size = ""
+        color = ""
+        variant_match = re.search(r'Wariant:\s*([A-Za-z0-9]+)(?:,\s*([A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ]+))?', entry, re.IGNORECASE)
+        if variant_match:
+            size = variant_match.group(1).strip()
+            if variant_match.group(2):
+                color = variant_match.group(2).strip()
+        
+        # Extract barcode
         barcode = ""
-        if i + 2 < len(lines):
-            line3 = lines[i + 2]
-            m_size = re.search(r"Wariant:\s*([A-Za-z0-9]+)", line3)
-            if m_size:
-                size = m_size.group(1)
-            m_bc = re.search(r"Kod kreskowy:\s*([0-9]+)", line3)
-            if m_bc:
-                barcode = m_bc.group(1)
-        if i + 3 < len(lines):
-            # skip repeated quantity line
-            i += 4
+        barcode_match = re.search(r'Kod kreskowy:\s*(\d{8,13})', entry)
+        if barcode_match:
+            barcode = barcode_match.group(1)
+        
+        # Parse the main line: find quantity pattern (X,XXX szt.)
+        qty_match = re.search(r'(\d{1,3})[,.](\d{3})\s*szt\.?', entry)
+        if not qty_match:
+            # Try simple number before szt.
+            qty_match = re.search(r'(\d+)\s*szt\.?', entry)
+        
+        if not qty_match:
+            continue
+        
+        # Quantity is the integer part (2,000 = 2)
+        if ',' in entry[qty_match.start():qty_match.end()] or '.' in entry[qty_match.start():qty_match.end()]:
+            quantity = int(qty_match.group(1))
         else:
-            i += 3
-
+            quantity = int(qty_match.group(1))
+        
+        # Name is everything before the quantity
+        name_end = qty_match.start()
+        name_part = entry[:name_end].strip()
+        
+        # Remove leading line number (e.g., "1", "2", "12")
+        name_part = re.sub(r'^\d{1,3}(?=[A-Za-zŻżŹźĆćŁłÓóĄąĘęŚśŃń])', '', name_part).strip()
+        
+        # Extract color from name if present (last word that's a color)
+        color_words = ['czarne', 'czarny', 'białe', 'biały', 'czerwone', 'czerwony', 
+                       'niebieskie', 'niebieski', 'zielone', 'zielony', 'żółte', 'żółty',
+                       'turkusowe', 'turkusowy', 'różowe', 'różowy', 'szare', 'szary',
+                       'pomarańczowe', 'pomarańczowy', 'fioletowe', 'fioletowy', 'brązowe', 'brązowy']
+        
+        name_words = name_part.split()
+        for word in reversed(name_words):
+            if word.lower() in color_words:
+                if not color:  # Only if not already set from Wariant
+                    color = word
+                name_words.remove(word)
+                break
+        
+        name = ' '.join(name_words).strip()
+        
+        # Extract price - find numbers after "szt." 
+        # Format: qty szt. unit_price discount% net_value vat% vat_amount discount gross
+        # We want the first price after szt. which is unit price
+        after_qty = entry[qty_match.end():].strip()
+        
+        # Find all decimal numbers in format XXX,XX or XXX.XX
+        prices = re.findall(r'(\d{1,6})[,.](\d{2})\b', after_qty)
+        
+        price = 0.0
+        if prices:
+            # First price is typically unit price (netto)
+            price = float(f"{prices[0][0]}.{prices[0][1]}")
+        
+        if not name or quantity <= 0:
+            continue
+        
         rows.append(
             {
                 "Nazwa": name,
