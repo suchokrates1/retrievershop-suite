@@ -23,6 +23,7 @@ from .db import get_session, record_purchase, sqlite_connect
 from .domain.inventory import (
     export_rows,
     get_product_sizes,
+    get_product_size_by_barcode,
     get_products_for_delivery,
     import_from_dataframe,
     record_delivery,
@@ -579,12 +580,26 @@ def import_invoice():
                     raise ValueError("Nieobsługiwany format pliku")
 
                 rows = df.to_dict(orient="records")
+                
+                # Match products by EAN/barcode
+                ps_list = get_product_sizes()
+                barcode_map = {ps.barcode: ps for ps in ps_list if ps.barcode}
+                
+                for row in rows:
+                    barcode = row.get("Barcode") or row.get("EAN") or ""
+                    barcode = str(barcode).strip() if barcode else ""
+                    row["matched_ps_id"] = None
+                    row["matched_name"] = None
+                    if barcode and barcode in barcode_map:
+                        ps = barcode_map[barcode]
+                        row["matched_ps_id"] = ps.ps_id
+                        row["matched_name"] = f"{ps.name} ({ps.color}) {ps.size}"
+                
                 session["invoice_rows"] = rows
                 if pdf_path:
                     session["invoice_pdf"] = pdf_path
                 else:
                     session.pop("invoice_pdf", None)
-                ps_list = get_product_sizes()
                 return render_template(
                     "review_invoice.html",
                     rows=rows,

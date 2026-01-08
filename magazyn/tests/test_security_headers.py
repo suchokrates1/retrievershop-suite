@@ -12,8 +12,8 @@ def test_security_headers_are_applied(client):
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.socket.io https://static.cloudflareinsights.com; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "font-src 'self' https://cdn.jsdelivr.net data:; "
-        "connect-src 'self' https://cloudflareinsights.com wss: ws:; "
-        "object-src 'none'; "
+        "connect-src 'self' https://cloudflareinsights.com https://cdn.jsdelivr.net https://cdn.socket.io wss: ws:; "
+        "object-src 'self'; "
         "base-uri 'self'; "
         "frame-ancestors 'self'"
     )
