@@ -1,5 +1,53 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+    .product-selector {
+        position: relative;
+    }
+    .product-selector .dropdown-trigger {
+        width: 100%;
+        text-align: left;
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .product-selector .dropdown-menu {
+        min-width: 450px;
+        max-height: 350px;
+        overflow-y: auto;
+        padding: 0;
+    }
+    .product-selector .dropdown-search {
+        position: sticky;
+        top: 0;
+        background: #212529;
+        padding: 8px;
+        border-bottom: 1px solid #444;
+        z-index: 10;
+    }
+    .product-selector .dropdown-search input {
+        font-size: 0.85rem;
+    }
+    .product-selector .dropdown-item {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+        white-space: normal;
+        word-break: break-word;
+    }
+    .product-selector .dropdown-item:hover {
+        background-color: #0d6efd;
+        color: white;
+    }
+    .product-selector .dropdown-item.active {
+        background-color: #198754;
+    }
+    .product-selector .product-barcode {
+        font-size: 0.7rem;
+        color: #6c757d;
+    }
+</style>
+
 <h2 class="mb-3 text-center">Potwierdź pozycje faktury</h2>
 {% if pdf_url %}
 <div class="mb-3">
@@ -67,16 +115,35 @@
                     {% endif %}
                 </td>
                 <td>
-                    <select name="ps_id_{{ loop.index0 }}" class="form-select form-select-sm" style="font-size: 0.75rem;">
-                        <option value="">--</option>
-                        {% for ps in product_sizes %}
-                        <option value="{{ ps['ps_id'] }}" {% if row.matched_ps_id == ps['ps_id'] %}selected{% endif %}>
-                            {{ ps['name'][:20] }}{% if ps['name']|length > 20 %}...{% endif %} ({{ ps['color'][:8] }}) {{ ps['size'] }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <input type="hidden" name="ps_id_{{ loop.index0 }}" id="ps_id_{{ loop.index0 }}" value="{{ row.matched_ps_id or '' }}">
+                    <div class="product-selector dropdown">
+                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-trigger dropdown-toggle" 
+                                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                                id="btn_ps_{{ loop.index0 }}">
+                            {% if row.matched_ps_id %}
+                                {{ row.matched_name }}
+                            {% else %}
+                                -- Wybierz --
+                            {% endif %}
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-dark">
+                            <div class="dropdown-search">
+                                <input type="text" class="form-control form-control-sm search-input" 
+                                       placeholder="Szukaj produktu..." data-target="{{ loop.index0 }}">
+                            </div>
+                            <a class="dropdown-item" href="#" data-ps-id="" data-row="{{ loop.index0 }}">-- Brak --</a>
+                            {% for ps in product_sizes %}
+                            <a class="dropdown-item {% if row.matched_ps_id == ps['ps_id'] %}active{% endif %}" 
+                               href="#" data-ps-id="{{ ps['ps_id'] }}" data-row="{{ loop.index0 }}"
+                               data-search="{{ ps['name']|lower }} {{ ps['color']|lower }} {{ ps['size']|lower }} {{ ps['barcode'] or '' }}">
+                                <strong>{{ ps['name'] }}</strong> ({{ ps['color'] }}) <span class="badge bg-secondary">{{ ps['size'] }}</span>
+                                {% if ps['barcode'] %}<br><span class="product-barcode">EAN: {{ ps['barcode'] }}</span>{% endif %}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
                     {% if row.matched_name %}
-                    <small class="text-success d-block" style="font-size: 0.7rem;">{{ row.matched_name[:30] }}{% if row.matched_name|length > 30 %}...{% endif %}</small>
+                    <small class="text-success d-block" style="font-size: 0.7rem;">✓ Dopasowano</small>
                     {% endif %}
                 </td>
             </tr>
@@ -89,4 +156,64 @@
         <a href="{{ url_for('products.items') }}" class="btn btn-secondary">Anuluj</a>
     </div>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle product selection
+    document.querySelectorAll('.product-selector .dropdown-item').forEach(function(item) {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const psId = this.dataset.psId;
+            const rowIdx = this.dataset.row;
+            const btn = document.getElementById('btn_ps_' + rowIdx);
+            const hiddenInput = document.getElementById('ps_id_' + rowIdx);
+            
+            // Update hidden input
+            hiddenInput.value = psId;
+            
+            // Update button text
+            if (psId) {
+                btn.innerHTML = this.querySelector('strong').textContent + ' (' + 
+                    this.textContent.match(/\(([^)]+)\)/)[1] + ') ' + 
+                    this.querySelector('.badge').textContent;
+            } else {
+                btn.innerHTML = '-- Wybierz --';
+            }
+            
+            // Update active state
+            this.closest('.dropdown-menu').querySelectorAll('.dropdown-item').forEach(function(i) {
+                i.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // Close dropdown
+            bootstrap.Dropdown.getInstance(btn).hide();
+        });
+    });
+    
+    // Handle search filtering
+    document.querySelectorAll('.search-input').forEach(function(input) {
+        input.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const dropdown = this.closest('.dropdown-menu');
+            
+            dropdown.querySelectorAll('.dropdown-item').forEach(function(item) {
+                const searchData = item.dataset.search || '';
+                if (searchTerm === '' || searchData.includes(searchTerm) || item.dataset.psId === '') {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+        
+        // Focus search on dropdown open
+        input.closest('.dropdown').querySelector('.dropdown-trigger').addEventListener('shown.bs.dropdown', function() {
+            input.focus();
+            input.value = '';
+            input.dispatchEvent(new Event('input'));
+        });
+    });
+});
+</script>
 {% endblock %}
