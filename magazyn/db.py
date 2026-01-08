@@ -183,8 +183,24 @@ def record_purchase(
     quantity,
     price,
     purchase_date=None,
+    barcode=None,
+    invoice_number=None,
+    supplier=None,
+    notes=None,
 ):
-    """Insert a purchase batch and increase stock quantity."""
+    """Insert a purchase batch and increase stock quantity.
+    
+    Args:
+        product_id: Product ID
+        size: Product size
+        quantity: Number of units purchased
+        price: Purchase price per unit
+        purchase_date: Date of purchase (defaults to now)
+        barcode: EAN code from invoice
+        invoice_number: Invoice/receipt number
+        supplier: Supplier name
+        notes: Additional notes
+    """
     purchase_date = purchase_date or datetime.datetime.now().isoformat()
     with get_session() as session:
         price = to_decimal(price)
@@ -193,8 +209,13 @@ def record_purchase(
                 product_id=product_id,
                 size=size,
                 quantity=quantity,
+                remaining_quantity=quantity,  # FIFO: initially all available
                 price=price,
                 purchase_date=purchase_date,
+                barcode=barcode,
+                invoice_number=invoice_number,
+                supplier=supplier,
+                notes=notes,
             )
         )
         ps = (
@@ -245,7 +266,11 @@ def consume_stock(
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
 ):
-    """Remove quantity from stock using cheapest purchase batches first."""
+    """Remove quantity from stock using FIFO (oldest purchase batches first).
+    
+    Uses remaining_quantity field to track how much is left from each batch.
+    Records sale with actual purchase cost for profit calculation.
+    """
     with get_session() as session:
         sale_price = to_decimal(sale_price)
         shipping_cost = to_decimal(shipping_cost)
@@ -264,12 +289,17 @@ def consume_stock(
         available = ps.quantity if ps else 0
         to_consume = min(available, quantity)
 
+        # FIFO: Get batches ordered by purchase date (oldest first)
+        # Use remaining_quantity if available, otherwise fall back to quantity
         batches = (
             session.query(PurchaseBatch)
-            .filter_by(product_id=product_id, size=size)
+            .filter(
+                PurchaseBatch.product_id == product_id,
+                PurchaseBatch.size == size,
+            )
             .order_by(
-                PurchaseBatch.price.asc(),
                 PurchaseBatch.purchase_date.asc(),
+                PurchaseBatch.id.asc(),  # Secondary sort for same date
             )
             .all()
         )
@@ -279,12 +309,28 @@ def consume_stock(
         for batch in batches:
             if remaining <= 0:
                 break
-            use = remaining if batch.quantity >= remaining else batch.quantity
-            batch.quantity -= use
+            
+            # Use remaining_quantity if set, otherwise use quantity (for old records)
+            batch_available = batch.remaining_quantity if batch.remaining_quantity is not None else batch.quantity
+            
+            if batch_available <= 0:
+                continue
+                
+            use = min(remaining, batch_available)
+            
+            # Update remaining_quantity for FIFO
+            if batch.remaining_quantity is not None:
+                batch.remaining_quantity -= use
+            else:
+                batch.remaining_quantity = batch.quantity - use
+            
+            # Also update quantity for backward compatibility
+            batch.quantity = max(0, batch.quantity - use)
+            
             purchase_cost += use * batch.price
             remaining -= use
-            if batch.quantity == 0:
-                session.delete(batch)
+            
+            # Don't delete batch - keep for history, remaining_quantity=0 marks it as depleted
 
         consumed = to_consume - remaining
         if consumed == 0 and to_consume > 0 and ps and not batches:

@@ -26,7 +26,7 @@
 
     {# Summary cards #}
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h3 class="text-success">{{ total_in_stock }}</h3>
@@ -34,7 +34,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h3 class="text-primary">{{ total_sold }}</h3>
@@ -42,11 +42,23 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <h3 class="text-info">{{ total_delivered }}</h3>
                     <p class="text-muted mb-0">Dostarczono</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    {% if avg_purchase_price %}
+                    <h3 class="text-warning">{{ '%.2f'|format(avg_purchase_price) }} zł</h3>
+                    {% else %}
+                    <h3 class="text-muted">-</h3>
+                    {% endif %}
+                    <p class="text-muted mb-0">Śr. cena zakupu</p>
                 </div>
             </div>
         </div>
@@ -67,7 +79,8 @@
                                 <th>Rozmiar</th>
                                 <th>EAN / Kod kreskowy</th>
                                 <th class="text-end">Ilość</th>
-                                <th class="text-end">Cena zakupu</th>
+                                <th class="text-end">Ostatnia cena</th>
+                                <th class="text-end">Śr. cena</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -92,7 +105,14 @@
                                 </td>
                                 <td class="text-end">
                                     {% if size.purchase_price %}
-                                    {{ '%.2f'|format(size.purchase_price) }}
+                                    {{ '%.2f'|format(size.purchase_price) }} zł
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if size.avg_purchase_price %}
+                                    {{ '%.2f'|format(size.avg_purchase_price) }} zł
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -100,7 +120,7 @@
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="4" class="text-center text-muted">Brak rozmiarów</td>
+                                <td colspan="5" class="text-center text-muted">Brak rozmiarów</td>
                             </tr>
                         {% endfor %}
                         </tbody>
@@ -111,7 +131,7 @@
             {# Delivery history #}
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-truck"></i> Historia dostaw</span>
+                    <span><i class="bi bi-truck"></i> Historia dostaw (FIFO)</span>
                     <span class="badge bg-info">{{ delivery_history|length }}</span>
                 </div>
                 <div class="card-body p-0">
@@ -120,27 +140,46 @@
                             <tr>
                                 <th>Data</th>
                                 <th>Rozmiar</th>
-                                <th class="text-end">Ilość</th>
+                                <th class="text-end">Kupiono</th>
+                                <th class="text-end">Zostało</th>
                                 <th class="text-end">Cena jedn.</th>
+                                <th>Faktura / Dostawca</th>
                             </tr>
                         </thead>
                         <tbody>
                         {% for delivery in delivery_history %}
-                            <tr>
-                                <td>{{ delivery.date }}</td>
+                            <tr{% if delivery.remaining == 0 %} class="text-muted"{% endif %}>
+                                <td>{{ delivery.date[:10] if delivery.date else '-' }}</td>
                                 <td>{{ delivery.size }}</td>
                                 <td class="text-end">{{ delivery.quantity }}</td>
                                 <td class="text-end">
+                                    {% if delivery.remaining > 0 %}
+                                    <span class="badge bg-success">{{ delivery.remaining }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
                                     {% if delivery.price %}
-                                    {{ '%.2f'|format(delivery.price) }} PLN
+                                    {{ '%.2f'|format(delivery.price) }} zł
                                     {% else %}
                                     -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if delivery.invoice_number or delivery.supplier %}
+                                    <small>
+                                        {% if delivery.invoice_number %}{{ delivery.invoice_number }}{% endif %}
+                                        {% if delivery.supplier %}<br><span class="text-muted">{{ delivery.supplier }}</span>{% endif %}
+                                    </small>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="4" class="text-center text-muted py-3">
+                                <td colspan="6" class="text-center text-muted py-3">
                                     Brak historii dostaw
                                 </td>
                             </tr>
@@ -148,6 +187,11 @@
                         </tbody>
                     </table>
                 </div>
+                {% if delivery_history|length >= 100 %}
+                <div class="card-footer text-muted text-center">
+                    <small>Wyświetlono ostatnie 100 dostaw</small>
+                </div>
+                {% endif %}
             </div>
         </div>
 

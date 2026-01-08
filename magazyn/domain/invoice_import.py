@@ -199,8 +199,18 @@ def _parse_pdf(file) -> pd.DataFrame:
     return _parse_simple_pdf(file_obj)
 
 
-def _import_invoice_df(df: pd.DataFrame):
-    """Record purchases using rows from a DataFrame."""
+def _import_invoice_df(
+    df: pd.DataFrame,
+    invoice_number: str = None,
+    supplier: str = None,
+):
+    """Record purchases using rows from a DataFrame.
+    
+    Args:
+        df: DataFrame with columns: Nazwa, Kolor, Rozmiar, Ilość, Cena, Barcode
+        invoice_number: Invoice/receipt number for tracking
+        supplier: Supplier name
+    """
     for _, row in df.iterrows():
         name = normalize_product_title_fragment(row.get("Nazwa", ""))
         name = resolve_product_alias(name)
@@ -255,21 +265,41 @@ def _import_invoice_df(df: pd.DataFrame):
                     product_id=product.id,
                     size=size,
                     quantity=quantity,
+                    remaining_quantity=quantity,  # FIFO support
                     price=price,
                     purchase_date=datetime.now().isoformat(),
+                    barcode=barcode,
+                    invoice_number=invoice_number,
+                    supplier=supplier,
                 )
             )
             ps.quantity += quantity
 
 
-def import_invoice_rows(rows: List[Dict]):
-    """Record purchases from a list of row dictionaries."""
+def import_invoice_rows(
+    rows: List[Dict],
+    invoice_number: str = None,
+    supplier: str = None,
+):
+    """Record purchases from a list of row dictionaries.
+    
+    Args:
+        rows: List of dicts with keys: Nazwa, Kolor, Rozmiar, Ilość, Cena, Barcode
+        invoice_number: Invoice/receipt number for tracking
+        supplier: Supplier name
+    """
     df = pd.DataFrame(rows)
-    _import_invoice_df(df)
+    _import_invoice_df(df, invoice_number=invoice_number, supplier=supplier)
 
 
-def import_invoice_file(file):
-    """Parse uploaded invoice (Excel or PDF) and record purchases."""
+def import_invoice_file(file, invoice_number: str = None, supplier: str = None):
+    """Parse uploaded invoice (Excel or PDF) and record purchases.
+    
+    Args:
+        file: File object with filename attribute
+        invoice_number: Optional override for invoice number
+        supplier: Optional override for supplier name
+    """
     filename = file.filename or ""
     ext = filename.rsplit(".", 1)[-1].lower()
     if ext in {"xlsx", "xls"}:
@@ -279,7 +309,7 @@ def import_invoice_file(file):
     else:
         raise ValueError("Nieobsługiwany format pliku")
 
-    _import_invoice_df(df)
+    _import_invoice_df(df, invoice_number=invoice_number, supplier=supplier)
 
 
 __all__ = [
