@@ -74,7 +74,21 @@ class LabelQueue(Base):
 
 
 class PurchaseBatch(Base):
+    """Represents a batch of products from a single purchase/delivery.
+    
+    Each batch tracks:
+    - Original quantity purchased
+    - Remaining quantity for FIFO consumption
+    - Purchase price per unit
+    - EAN code for matching
+    - Invoice details for accounting
+    """
     __tablename__ = "purchase_batches"
+    __table_args__ = (
+        Index("idx_purchase_batches_product_size", "product_id", "size"),
+        Index("idx_purchase_batches_barcode", "barcode"),
+        Index("idx_purchase_batches_date", "purchase_date"),
+    )
     id = Column(Integer, primary_key=True)
     product_id = Column(
         Integer,
@@ -82,9 +96,21 @@ class PurchaseBatch(Base):
         nullable=False,
     )
     size = Column(String, nullable=False)
-    quantity = Column(Integer, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Integer, nullable=False)  # Original quantity purchased
+    remaining_quantity = Column(Integer, nullable=False, default=0)  # Remaining for FIFO
+    price = Column(Numeric(10, 2), nullable=False)  # Unit purchase price
     purchase_date = Column(String, nullable=False)
+    
+    # EAN matching
+    barcode = Column(String, nullable=True, index=True)  # EAN code from invoice
+    
+    # Invoice details
+    invoice_number = Column(String, nullable=True)  # Invoice/receipt number
+    supplier = Column(String, nullable=True)  # Supplier name
+    notes = Column(Text, nullable=True)  # Additional notes
+    
+    # Relationship
+    product = relationship("Product")
 
 
 class Sale(Base):

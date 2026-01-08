@@ -146,12 +146,15 @@ def edit_item(product_id):
 @login_required
 def product_detail(product_id):
     """Readonly product detail view with order and delivery history."""
+    from decimal import Decimal
+    from sqlalchemy import func
+    
     with get_session() as db:
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
             abort(404)
         
-        # Get product sizes with their barcodes (EANs) and latest purchase price
+        # Get product sizes with their barcodes (EANs), purchase prices and stock info
         sizes_data = []
         all_eans = []
         for ps in product.sizes:
@@ -165,14 +168,42 @@ def product_detail(product_id):
                 .order_by(desc(PurchaseBatch.purchase_date))
                 .first()
             )
-            purchase_price = latest_batch.price if latest_batch else None
+            latest_price = latest_batch.price if latest_batch else None
+            
+            # Calculate weighted average purchase price for this size
+            batches_for_size = (
+                db.query(PurchaseBatch)
+                .filter(
+                    PurchaseBatch.product_id == product_id,
+                    PurchaseBatch.size == ps.size,
+                )
+                .all()
+            )
+            total_qty = sum(b.quantity for b in batches_for_size)
+            total_value = sum(b.quantity * b.price for b in batches_for_size)
+            avg_price = (total_value / total_qty) if total_qty > 0 else None
+            
+            # Get remaining stock from FIFO batches
+            remaining_batches = (
+                db.query(PurchaseBatch)
+                .filter(
+                    PurchaseBatch.product_id == product_id,
+                    PurchaseBatch.size == ps.size,
+                    PurchaseBatch.remaining_quantity > 0,
+                )
+                .order_by(PurchaseBatch.purchase_date.asc())
+                .all()
+            )
+            fifo_remaining = sum(b.remaining_quantity or 0 for b in remaining_batches)
             
             sizes_data.append({
                 "id": ps.id,
                 "size": ps.size,
                 "quantity": ps.quantity,
+                "fifo_remaining": fifo_remaining,
                 "barcode": ps.barcode,
-                "purchase_price": purchase_price,
+                "purchase_price": latest_price,  # Latest price
+                "avg_purchase_price": avg_price,  # Weighted average
             })
             if ps.barcode:
                 all_eans.append(ps.barcode)
@@ -202,12 +233,12 @@ def product_detail(product_id):
                         "size": next((s["size"] for s in sizes_data if s["barcode"] == op.ean), None),
                     })
         
-        # Get delivery history (purchase batches)
+        # Get delivery history (purchase batches) with full details
         delivery_history = (
             db.query(PurchaseBatch)
             .filter(PurchaseBatch.product_id == product_id)
             .order_by(desc(PurchaseBatch.purchase_date))
-            .limit(50)
+            .limit(100)
             .all()
         )
         
@@ -216,8 +247,13 @@ def product_detail(product_id):
                 "id": pb.id,
                 "size": pb.size,
                 "quantity": pb.quantity,
+                "remaining": pb.remaining_quantity if pb.remaining_quantity is not None else pb.quantity,
                 "price": pb.price,
+                "total_value": pb.quantity * pb.price,
                 "date": pb.purchase_date,
+                "barcode": pb.barcode,
+                "invoice_number": pb.invoice_number,
+                "supplier": pb.supplier,
             }
             for pb in delivery_history
         ]
@@ -226,6 +262,19 @@ def product_detail(product_id):
         total_in_stock = sum(s["quantity"] for s in sizes_data)
         total_sold = sum(o["quantity"] for o in order_history)
         total_delivered = sum(d["quantity"] for d in deliveries)
+        
+        # Calculate overall average purchase price
+        all_batches = (
+            db.query(PurchaseBatch)
+            .filter(PurchaseBatch.product_id == product_id)
+            .all()
+        )
+        total_purchased_qty = sum(b.quantity for b in all_batches)
+        total_purchased_value = sum(b.quantity * b.price for b in all_batches)
+        avg_purchase_price = (
+            (total_purchased_value / total_purchased_qty) 
+            if total_purchased_qty > 0 else None
+        )
         
         return render_template(
             "product_detail.html",
@@ -236,6 +285,7 @@ def product_detail(product_id):
             total_in_stock=total_in_stock,
             total_sold=total_sold,
             total_delivered=total_delivered,
+            avg_purchase_price=avg_purchase_price,
         )
 
 
