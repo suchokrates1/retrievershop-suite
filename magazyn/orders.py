@@ -248,10 +248,10 @@ def _calculate_allegro_smart_cost(order_value: Decimal, delivery_method: str) ->
 @login_required
 def orders_list():
     """Display paginated list of orders with filtering and sorting."""
-    # Auto-sync ONLY active orders on page load (non-blocking)
+    # Auto-sync ALL orders from last 30 days to catch status changes (non-blocking)
     try:
         from threading import Thread
-        sync_thread = Thread(target=lambda: _sync_orders_from_baselinker(ACTIVE_STATUS_IDS, days=7))
+        sync_thread = Thread(target=lambda: _sync_orders_from_baselinker(ALL_STATUS_IDS, days=30))
         sync_thread.daemon = True
         sync_thread.start()
     except Exception:
