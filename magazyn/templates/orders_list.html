@@ -5,10 +5,13 @@
 {% block content %}
 <h2 class="text-center mb-3">Zamówienia</h2>
 
-{# Filters #}
+{# Filters and Controls #}
 <div class="row mb-3">
     <div class="col-md-8">
-        <form method="get" class="row g-2">
+        <form method="get" class="row g-2" id="filter-form">
+            <input type="hidden" name="sort" value="{{ sort_by }}">
+            <input type="hidden" name="dir" value="{{ sort_dir }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
             <div class="col-md-6">
                 <input type="text" name="search" class="form-control" 
                        placeholder="Szukaj: nr zamówienia, klient, email, telefon..." 
@@ -21,7 +24,7 @@
             </div>
             {% if search %}
             <div class="col-md-2">
-                <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary w-100">
+                <a href="{{ url_for('orders.orders_list', per_page=per_page) }}" class="btn btn-outline-secondary w-100">
                     <i class="bi bi-x"></i> Wyczyść
                 </a>
             </div>
@@ -29,19 +32,16 @@
         </form>
     </div>
     <div class="col-md-4 text-end">
-        <form action="{{ url_for('orders.sync_orders') }}" method="post" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-success btn-sm me-1" title="Pobierz zamówienia z ostatnich 7 dni">
-                <i class="bi bi-cloud-download"></i> Sync 7d
-            </button>
-        </form>
-        <form action="{{ url_for('orders.sync_orders_archive') }}" method="post" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-primary btn-sm me-2" title="Pobierz pełne archiwum (30 dni)">
-                <i class="bi bi-archive"></i> Archiwum 30d
-            </button>
-        </form>
-        <span class="text-muted">Zamówień: {{ total }}</span>
+        <div class="d-flex align-items-center justify-content-end gap-2">
+            <label class="mb-0 text-nowrap">Na stronie:</label>
+            <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
+                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+            <span class="text-muted text-nowrap">| Razem: {{ total }}</span>
+        </div>
     </div>
 </div>
 
@@ -59,11 +59,26 @@
     </colgroup>
     <thead class="table-dark">
     <tr>
-        <th>ID</th>
-        <th>Data</th>
+        <th>
+            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort='order_id', dir='asc' if sort_by=='order_id' and sort_dir=='desc' else 'desc') }}" 
+               class="text-white text-decoration-none">
+                ID {% if sort_by == 'order_id' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+            </a>
+        </th>
+        <th>
+            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort='date', dir='asc' if sort_by=='date' and sort_dir=='desc' else 'desc') }}" 
+               class="text-white text-decoration-none">
+                Data {% if sort_by == 'date' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+            </a>
+        </th>
         <th>Produkty</th>
         <th>Wysyłka</th>
-        <th class="text-end">Kwota</th>
+        <th class="text-end">
+            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort='amount', dir='asc' if sort_by=='amount' and sort_dir=='desc' else 'desc') }}" 
+               class="text-white text-decoration-none">
+                Kwota {% if sort_by == 'amount' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+            </a>
+        </th>
         <th>Status</th>
         <th></th>
     </tr>
@@ -107,10 +122,10 @@
 
 {# Pagination #}
 {% if total_pages > 1 %}
-<nav aria-label="Paginacja zamówień">
-    <ul class="pagination justify-content-center">
-        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('orders.orders_list', page=page-1, search=search) }}">
+<nav aria-label="Paginacja zamówień" class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('orders.orders_list', page=page-1, search=search, per_page=per_page, sort=sort_by, dir=sort_dir) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
@@ -118,19 +133,22 @@
         {% for p in range(1, total_pages + 1) %}
             {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
                 <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('orders.orders_list', page=p, search=search) }}">{{ p }}</a>
+                    <a class="page-link" href="{{ url_for('orders.orders_list', page=p, search=search, per_page=per_page, sort=sort_by, dir=sort_dir) }}">{{ p }}</a>
                 </li>
             {% elif p == page - 3 or p == page + 3 %}
                 <li class="page-item disabled"><span class="page-link">...</span></li>
             {% endif %}
         {% endfor %}
         
-        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('orders.orders_list', page=page+1, search=search) }}">
+        <li class="page-item {% if not has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('orders.orders_list', page=page+1, search=search, per_page=per_page, sort=sort_by, dir=sort_dir) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
     </ul>
+    <div class="text-center text-muted small">
+        Strona {{ page }} z {{ total_pages }} (wyświetlono {{ orders|length }} z {{ total }})
+    </div>
 </nav>
 {% endif %}
 
@@ -144,6 +162,13 @@
 </style>
 
 <script>
+function changePerPage(value) {
+    const url = new URL(window.location);
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1'); // Reset to first page
+    window.location = url.toString();
+}
+
 document.querySelectorAll('.clickable-row').forEach(row => {
     row.addEventListener('click', function(e) {
         if (e.target.closest('form') || e.target.closest('button') || e.target.closest('a')) return;
