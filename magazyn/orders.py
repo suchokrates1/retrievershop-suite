@@ -236,16 +236,28 @@ def _calculate_allegro_smart_cost(order_value: Decimal, delivery_method: str) ->
 @bp.route("/orders")
 @login_required
 def orders_list():
-    """Display list of all orders from last 7 days."""
-    page = request.args.get("page", 1, type=int)
-    per_page = 50
-    search = request.args.get("search", "").strip()
+    """Display paginated list of orders with filtering and sorting."""
+    # Auto-sync orders on page load (non-blocking)
+    try:
+        from threading import Thread
+        sync_thread = Thread(target=lambda: _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=None))
+        sync_thread.daemon = True
+        sync_thread.start()
+    except Exception:
+        pass  # Silent fail if sync fails
     
-    # Get orders from last 7 days by default
-    week_ago = int((datetime.now() - timedelta(days=7)).timestamp())
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+    search = request.args.get("search", "").strip()
+    sort_by = request.args.get("sort", "date")  # date, order_id, status, amount
+    sort_dir = request.args.get("dir", "desc")  # asc, desc
+    
+    # Limit per_page to reasonable values
+    if per_page not in [10, 25, 50, 100]:
+        per_page = 10
     
     with get_session() as db:
-        query = db.query(Order).filter(Order.date_add >= week_ago).order_by(desc(Order.date_add))
+        query = db.query(Order)
         
         # Apply search filter
         if search:
@@ -259,6 +271,19 @@ def orders_list():
                     Order.phone.ilike(search_pattern),
                 )
             )
+        
+        # Apply sorting
+        if sort_by == "order_id":
+            sort_col = Order.order_id
+        elif sort_by == "amount":
+            sort_col = Order.payment_done
+        else:  # default: date
+            sort_col = Order.date_add
+        
+        if sort_dir == "asc":
+            query = query.order_by(sort_col.asc())
+        else:
+            query = query.order_by(sort_col.desc())
         
         # Pagination
         total = query.count()
@@ -308,14 +333,21 @@ def orders_list():
         
         # Calculate pagination
         total_pages = (total + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
         
         return render_template(
             "orders_list.html",
             orders=orders_data,
             page=page,
+            per_page=per_page,
             total_pages=total_pages,
+            has_prev=has_prev,
+            has_next=has_next,
             total=total,
             search=search,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
         )
 
 
@@ -642,29 +674,36 @@ def add_order_status(db, order_id: str, status: str, **kwargs) -> OrderStatusLog
     return log
 
 
-def _sync_orders_from_baselinker(status_ids: list[int], days: int = 7) -> int:
+def _sync_orders_from_baselinker(status_ids: list[int], days: int = None) -> int:
     """
     Sync orders from BaseLinker for given status IDs.
+    If days is None, fetches ALL orders from archives (no date limit).
     Returns number of orders synced.
     """
     from .config import settings
     import requests
     
     synced = 0
-    week_ago = int(time.time()) - (days * 24 * 60 * 60)
     
     api_url = "https://api.baselinker.com/connector.php"
     headers = {"X-BLToken": settings.API_TOKEN}
     
     for status_id in status_ids:
         try:
+            # Build parameters - omit date_from for full archive sync
+            params_dict = {
+                "status_id": status_id,
+                "include_products": 1,
+            }
+            
+            # Only add date_from if days is specified
+            if days is not None:
+                date_from = int(time.time()) - (days * 24 * 60 * 60)
+                params_dict["date_from"] = date_from
+            
             params = {
                 "method": "getOrders",
-                "parameters": json.dumps({
-                    "status_id": status_id,
-                    "date_from": week_ago,
-                    "include_products": 1,
-                })
+                "parameters": json.dumps(params_dict)
             }
             response = requests.post(api_url, headers=headers, data=params, timeout=30)
             response.raise_for_status()
@@ -741,25 +780,4 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = 7) -> int:
     return synced
 
 
-@bp.route("/sync", methods=["POST"])
-@login_required
-def sync_orders():
-    """Sync orders from BaseLinker (ALL statuses for complete archive)."""
-    try:
-        synced = _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=7)
-        flash(f"Zsynchronizowano {synced} zamówień z ostatnich 7 dni", "success")
-    except Exception as exc:
-        flash(f"Błąd synchronizacji: {exc}", "error")
-    return redirect(url_for(".orders_list"))
-
-
-@bp.route("/sync_archive", methods=["POST"])
-@login_required
-def sync_orders_archive():
-    """Sync full order archive from BaseLinker (30 days)."""
-    try:
-        synced = _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=30)
-        flash(f"Zsynchronizowano {synced} zamówień z ostatnich 30 dni (archiwum)", "success")
-    except Exception as exc:
-        flash(f"Błąd synchronizacji archiwum: {exc}", "error")
-    return redirect(url_for(".orders_list"))
+# Sync is now automatic on page load - no manual sync needed
