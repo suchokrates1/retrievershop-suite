@@ -743,15 +743,23 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         )
         db.add(order_product)
     
-    # Add status for new orders based on BaseLinker status_id
-    if is_new_order:
-        bl_status_id = order_data.get("order_status_id")
-        # Map BaseLinker status to our internal status
-        internal_status = BASELINKER_STATUS_MAP.get(bl_status_id, "pobrano")
+    # Check and update status based on BaseLinker status_id
+    bl_status_id = order_data.get("order_status_id")
+    internal_status = BASELINKER_STATUS_MAP.get(bl_status_id, "pobrano")
+    
+    # Get current status from log
+    current_status_log = db.query(OrderStatusLog).filter(
+        OrderStatusLog.order_id == order_id
+    ).order_by(desc(OrderStatusLog.timestamp)).first()
+    
+    current_status = current_status_log.status if current_status_log else None
+    
+    # Add or update status if changed or new order
+    if is_new_order or current_status != internal_status:
         status_note = {
-            "w_drodze": "Zsynchronizowano ze statusu Wysłane",
+            "w_drodze": "Zsynchronizowano ze statusu Wysłane/W transporcie",
             "dostarczono": "Zsynchronizowano ze statusu Zakończone",
-        }.get(internal_status, "Pobrano z BaseLinker")
+        }.get(internal_status, f"Zaktualizowano z BaseLinker (status_id: {bl_status_id})")
         add_order_status(db, order_id, internal_status, notes=status_note)
     
     return order
