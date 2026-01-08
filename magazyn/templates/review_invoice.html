@@ -34,6 +34,7 @@
         padding: 6px 12px;
         white-space: normal;
         word-break: break-word;
+        cursor: pointer;
     }
     .product-selector .dropdown-item:hover {
         background-color: #0d6efd;
@@ -45,6 +46,13 @@
     .product-selector .product-barcode {
         font-size: 0.7rem;
         color: #6c757d;
+    }
+    .match-ean {
+        color: #198754;
+        font-weight: bold;
+    }
+    .match-fuzzy {
+        color: #ffc107;
     }
 </style>
 
@@ -61,13 +69,13 @@
         <colgroup>
             <col style="width: 3%;">  <!-- Lp. -->
             <col style="width: 4%;">  <!-- Akceptuj -->
-            <col style="width: 35%;"> <!-- Nazwa -->
+            <col style="width: 33%;"> <!-- Nazwa -->
             <col style="width: 10%;"> <!-- Kolor -->
             <col style="width: 5%;">  <!-- Rozmiar -->
             <col style="width: 5%;">  <!-- Ilość -->
             <col style="width: 6%;">  <!-- Cena -->
             <col style="width: 12%;"> <!-- EAN -->
-            <col style="width: 20%;"> <!-- Produkt z bazy -->
+            <col style="width: 22%;"> <!-- Produkt z bazy -->
         </colgroup>
         <thead>
             <tr>
@@ -84,7 +92,7 @@
         </thead>
         <tbody>
             {% for row in rows %}
-            <tr class="{{ 'table-success' if row.matched_ps_id else '' }}">
+            <tr class="{{ 'table-success' if row.match_type == 'ean' else ('table-warning' if row.match_type == 'fuzzy' else '') }}">
                 <td class="text-center">{{ loop.index }}</td>
                 <td class="text-center"><input type="checkbox" name="accept_{{ loop.index0 }}" checked></td>
                 <td>
@@ -110,15 +118,12 @@
                 <td>
                     <input type="text" name="barcode_{{ loop.index0 }}" value="{{ row['Barcode'] or row.get('EAN') or '' }}" 
                            class="form-control form-control-sm" style="font-size: 0.75rem;">
-                    {% if row.matched_ps_id %}
-                    <small class="text-success">✓</small>
-                    {% endif %}
                 </td>
                 <td>
                     <input type="hidden" name="ps_id_{{ loop.index0 }}" id="ps_id_{{ loop.index0 }}" value="{{ row.matched_ps_id or '' }}">
                     <div class="product-selector dropdown">
                         <button type="button" class="btn btn-sm btn-outline-secondary dropdown-trigger dropdown-toggle" 
-                                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                                data-bs-toggle="dropdown" aria-expanded="false"
                                 id="btn_ps_{{ loop.index0 }}">
                             {% if row.matched_ps_id %}
                                 {{ row.matched_name }}
@@ -131,19 +136,26 @@
                                 <input type="text" class="form-control form-control-sm search-input" 
                                        placeholder="Szukaj produktu..." data-target="{{ loop.index0 }}">
                             </div>
-                            <a class="dropdown-item" href="#" data-ps-id="" data-row="{{ loop.index0 }}">-- Brak --</a>
+                            <div class="dropdown-item" data-ps-id="" data-row="{{ loop.index0 }}">-- Brak --</div>
                             {% for ps in product_sizes %}
-                            <a class="dropdown-item {% if row.matched_ps_id == ps['ps_id'] %}active{% endif %}" 
-                               href="#" data-ps-id="{{ ps['ps_id'] }}" data-row="{{ loop.index0 }}"
+                            <div class="dropdown-item {% if row.matched_ps_id == ps['ps_id'] %}active{% endif %}" 
+                               data-ps-id="{{ ps['ps_id'] }}" data-row="{{ loop.index0 }}"
+                               data-name="{{ ps['name'] }}" data-color="{{ ps['color'] }}" data-size="{{ ps['size'] }}"
                                data-search="{{ ps['name']|lower }} {{ ps['color']|lower }} {{ ps['size']|lower }} {{ ps['barcode'] or '' }}">
                                 <strong>{{ ps['name'] }}</strong> ({{ ps['color'] }}) <span class="badge bg-secondary">{{ ps['size'] }}</span>
                                 {% if ps['barcode'] %}<br><span class="product-barcode">EAN: {{ ps['barcode'] }}</span>{% endif %}
-                            </a>
+                            </div>
                             {% endfor %}
                         </div>
                     </div>
-                    {% if row.matched_name %}
-                    <small class="text-success d-block" style="font-size: 0.7rem;">✓ Dopasowano</small>
+                    {% if row.matched_ps_id %}
+                    <small class="d-block" style="font-size: 0.7rem;">
+                        {% if row.match_type == 'ean' %}
+                            <span class="match-ean" title="Dopasowano po kodzie EAN - pewne">✓ EAN</span>
+                        {% elif row.match_type == 'fuzzy' %}
+                            <span class="match-fuzzy" title="Dopasowano po nazwie - sprawdź!">⚠ Nazwa</span>
+                        {% endif %}
+                    </small>
                     {% endif %}
                 </td>
             </tr>
@@ -152,6 +164,12 @@
     </table>
     </div>
     <div class="form-actions text-center mt-3">
+        <div class="mb-2">
+            <small>
+                <span class="match-ean">✓ EAN</span> = pewne dopasowanie po kodzie |
+                <span class="match-fuzzy">⚠ Nazwa</span> = dopasowanie po nazwie (sprawdź!)
+            </small>
+        </div>
         <button type="submit" class="btn btn-primary">Potwierdź import ({{ rows|length }} pozycji)</button>
         <a href="{{ url_for('products.items') }}" class="btn btn-secondary">Anuluj</a>
     </div>
@@ -163,31 +181,41 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.product-selector .dropdown-item').forEach(function(item) {
         item.addEventListener('click', function(e) {
             e.preventDefault();
+            e.stopPropagation();
+            
             const psId = this.dataset.psId;
             const rowIdx = this.dataset.row;
             const btn = document.getElementById('btn_ps_' + rowIdx);
             const hiddenInput = document.getElementById('ps_id_' + rowIdx);
             
             // Update hidden input
-            hiddenInput.value = psId;
+            hiddenInput.value = psId || '';
             
             // Update button text
-            if (psId) {
-                btn.innerHTML = this.querySelector('strong').textContent + ' (' + 
-                    this.textContent.match(/\(([^)]+)\)/)[1] + ') ' + 
-                    this.querySelector('.badge').textContent;
+            if (psId && this.dataset.name) {
+                btn.textContent = this.dataset.name + ' (' + this.dataset.color + ') ' + this.dataset.size;
+            } else if (psId) {
+                const strong = this.querySelector('strong');
+                const badge = this.querySelector('.badge');
+                if (strong && badge) {
+                    const colorMatch = this.textContent.match(/\(([^)]+)\)/);
+                    btn.textContent = strong.textContent + (colorMatch ? ' (' + colorMatch[1] + ') ' : ' ') + badge.textContent;
+                }
             } else {
-                btn.innerHTML = '-- Wybierz --';
+                btn.textContent = '-- Wybierz --';
             }
             
             // Update active state
             this.closest('.dropdown-menu').querySelectorAll('.dropdown-item').forEach(function(i) {
                 i.classList.remove('active');
             });
-            this.classList.add('active');
+            if (psId) {
+                this.classList.add('active');
+            }
             
-            // Close dropdown
-            bootstrap.Dropdown.getInstance(btn).hide();
+            // Close dropdown manually
+            const dropdown = bootstrap.Dropdown.getOrCreateInstance(btn);
+            dropdown.hide();
         });
     });
     
@@ -199,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             dropdown.querySelectorAll('.dropdown-item').forEach(function(item) {
                 const searchData = item.dataset.search || '';
-                if (searchTerm === '' || searchData.includes(searchTerm) || item.dataset.psId === '') {
+                if (searchTerm === '' || searchData.includes(searchTerm) || !item.dataset.psId) {
                     item.style.display = '';
                 } else {
                     item.style.display = 'none';
@@ -207,11 +235,21 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Focus search on dropdown open
-        input.closest('.dropdown').querySelector('.dropdown-trigger').addEventListener('shown.bs.dropdown', function() {
-            input.focus();
-            input.value = '';
-            input.dispatchEvent(new Event('input'));
+        // Prevent dropdown close when clicking on search input
+        input.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
+    
+    // Focus search on dropdown open
+    document.querySelectorAll('.dropdown-trigger').forEach(function(btn) {
+        btn.addEventListener('shown.bs.dropdown', function() {
+            const searchInput = this.nextElementSibling.querySelector('.search-input');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+                setTimeout(function() { searchInput.focus(); }, 100);
+            }
         });
     });
 });
