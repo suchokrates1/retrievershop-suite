@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import re
 
 from flask import (
     Blueprint,
@@ -47,6 +48,100 @@ from .models import PrintedOrder, ProductSize, Product, PurchaseBatch, OrderProd
 from .parsing import parse_product_info
 from sqlalchemy import desc
 import time
+
+
+def _normalize_name(name: str) -> set:
+    """Extract key words from product name for fuzzy matching."""
+    if not name:
+        return set()
+    # Convert to lowercase
+    name = name.lower()
+    # Remove common filler words that don't identify the product
+    filler_words = {
+        'dla', 'psa', 'psy', 'kota', 'kotów', 'szelki', 'smycz', 'obroża',
+        'profesjonalne', 'profesjonalny', 'guard', 'premium', 'pro', 'plus',
+        'z', 'od', 'do', 'na', 'w', 'i', 'a', 'o', 'ze', 'bez',
+        'odpinanym', 'odpinany', 'przodem', 'przód', 'tyłem', 'tył',
+        'nowy', 'nowa', 'nowe', 'nowych', 'model', 'wersja', 'typ',
+        'mały', 'mała', 'małe', 'duży', 'duża', 'duże', 'średni', 'średnia',
+    }
+    # Extract words
+    words = re.findall(r'[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+', name)
+    # Filter out filler words and short words
+    key_words = {w for w in words if w not in filler_words and len(w) > 2}
+    return key_words
+
+
+def _fuzzy_match_product(row_name: str, row_color: str, row_size: str, ps_list) -> tuple:
+    """
+    Try to fuzzy match a product based on name similarity.
+    Returns (ps_id, display_name, match_type) or (None, None, None)
+    match_type: 'ean' for exact EAN match, 'fuzzy' for name-based match
+    """
+    if not row_name:
+        return None, None, None
+    
+    row_color_lower = (row_color or "").lower().strip()
+    row_size_upper = (row_size or "").upper().strip()
+    row_key_words = _normalize_name(row_name)
+    
+    if not row_key_words:
+        return None, None, None
+    
+    best_match = None
+    best_score = 0
+    
+    for ps in ps_list:
+        ps_color_lower = (ps.color or "").lower().strip()
+        ps_size_upper = (ps.size or "").upper().strip()
+        
+        # Size must match exactly if provided
+        if row_size_upper and ps_size_upper and row_size_upper != ps_size_upper:
+            continue
+        
+        # Color should match (fuzzy - check if one contains the other)
+        color_match = False
+        if not row_color_lower or not ps_color_lower:
+            color_match = True  # No color to compare
+        elif row_color_lower in ps_color_lower or ps_color_lower in row_color_lower:
+            color_match = True
+        elif row_color_lower[:4] == ps_color_lower[:4]:  # First 4 chars match (turkus/turkusowe)
+            color_match = True
+        
+        if not color_match:
+            continue
+        
+        # Compare key words
+        ps_key_words = _normalize_name(ps.name)
+        if not ps_key_words:
+            continue
+        
+        # Calculate similarity score - how many key words match
+        common_words = row_key_words & ps_key_words
+        if not common_words:
+            continue
+        
+        # Score based on: matched words / total unique words
+        total_words = len(row_key_words | ps_key_words)
+        score = len(common_words) / total_words if total_words > 0 else 0
+        
+        # Bonus for matching important words (brand names, model names)
+        important_words = {'truelove', 'active', 'outdoor', 'tropical', 'front', 'line', 'classic'}
+        important_matches = common_words & important_words
+        score += len(important_matches) * 0.2
+        
+        # Extra bonus if size matches exactly
+        if row_size_upper and row_size_upper == ps_size_upper:
+            score += 0.3
+        
+        if score > best_score and score >= 0.4:  # Minimum 40% similarity
+            best_score = score
+            best_match = ps
+    
+    if best_match:
+        return best_match.ps_id, f"{best_match.name} ({best_match.color}) {best_match.size}", 'fuzzy'
+    
+    return None, None, None
 
 bp = Blueprint("products", __name__)
 
@@ -581,7 +676,7 @@ def import_invoice():
 
                 rows = df.to_dict(orient="records")
                 
-                # Match products by EAN/barcode
+                # Match products by EAN/barcode first, then fallback to fuzzy matching
                 ps_list = get_product_sizes()
                 barcode_map = {ps.barcode: ps for ps in ps_list if ps.barcode}
                 
@@ -590,10 +685,26 @@ def import_invoice():
                     barcode = str(barcode).strip() if barcode else ""
                     row["matched_ps_id"] = None
                     row["matched_name"] = None
+                    row["match_type"] = None  # 'ean' or 'fuzzy'
+                    
+                    # Try EAN match first (most reliable)
                     if barcode and barcode in barcode_map:
                         ps = barcode_map[barcode]
                         row["matched_ps_id"] = ps.ps_id
                         row["matched_name"] = f"{ps.name} ({ps.color}) {ps.size}"
+                        row["match_type"] = "ean"
+                    else:
+                        # Fallback to fuzzy name matching
+                        ps_id, match_name, match_type = _fuzzy_match_product(
+                            row.get("Nazwa", ""),
+                            row.get("Kolor", ""),
+                            row.get("Rozmiar", ""),
+                            ps_list
+                        )
+                        if ps_id:
+                            row["matched_ps_id"] = ps_id
+                            row["matched_name"] = match_name
+                            row["match_type"] = match_type
                 
                 session["invoice_rows"] = rows
                 if pdf_path:
