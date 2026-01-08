@@ -75,6 +75,110 @@ def _extract_model_series(name: str) -> str:
     return ""
 
 
+def _parse_tiptop_sku(sku: str) -> dict:
+    """
+    Parse TipTop SKU to extract series, size, and color.
+    Format: TL-SZ-{series}-{size}-{color}
+    Examples:
+        TL-SZ-frolin-prem-XL-CZA -> {series: 'front line premium', size: 'XL', color: 'czarny'}
+        TL-SZ-frolin-XL-CZA -> {series: 'front line', size: 'XL', color: 'czarny'}
+        TL-SZ-tropic-M-TUR -> {series: 'tropical', size: 'M', color: 'turkusowy'}
+    """
+    if not sku or not sku.startswith('TL-'):
+        return {}
+    
+    parts = sku.split('-')
+    if len(parts) < 5:  # Minimum: TL-SZ-series-size-color
+        return {}
+    
+    # Map TipTop series codes to full names
+    series_map = {
+        'frolin-prem': 'front line premium',
+        'frolin': 'front line',
+        'tropic': 'tropical',
+        'active': 'active',
+        'outdoo': 'outdoor',
+        'classic': 'classic',
+        'comfort': 'comfort',
+        'sport': 'sport',
+    }
+    
+    # Map TipTop color codes to Polish colors
+    color_map = {
+        'CZA': 'czarny',
+        'CZE': 'czerwony',
+        'BRA': 'brązowy',
+        'ROZ': 'różowy',
+        'POM': 'pomarańczowy',
+        'TUR': 'turkusowy',
+        'BIA': 'biały',
+        'NIE': 'niebieski',
+        'ZIE': 'zielony',
+        'SZA': 'szary',
+        'FIO': 'fioletowy',
+        'ZOL': 'żółty',
+    }
+    
+    # Extract components: TL-SZ-{series...}-{size}-{color}
+    # Series can be multi-part (frolin-prem) so we parse from the end
+    color_code = parts[-1]
+    size = parts[-2]
+    series_parts = parts[2:-2]  # Everything between TL-SZ- and size-color
+    series_code = '-'.join(series_parts)
+    
+    # Resolve series name
+    series_name = series_map.get(series_code, '')
+    
+    # Resolve color
+    color_name = color_map.get(color_code.upper(), '')
+    
+    return {
+        'series': series_name,
+        'size': size.upper(),
+        'color': color_name,
+        'color_code': color_code.upper(),
+    }
+
+
+def _match_by_tiptop_sku(sku: str, ps_list) -> tuple:
+    """
+    Match product by parsing TipTop SKU and finding exact match.
+    Returns (ps_id, display_name, match_type) or (None, None, None)
+    """
+    parsed = _parse_tiptop_sku(sku)
+    if not parsed or not parsed.get('series'):
+        return None, None, None
+    
+    target_series = parsed['series']
+    target_size = parsed.get('size', '').upper()
+    target_color = parsed.get('color', '').lower()
+    
+    for ps in ps_list:
+        ps_series = _extract_model_series(ps.name)
+        ps_size = (ps.size or '').upper()
+        ps_color = (ps.color or '').lower()
+        
+        # Series must match exactly
+        if ps_series != target_series:
+            continue
+        
+        # Size must match exactly
+        if ps_size != target_size:
+            continue
+        
+        # Color must match (fuzzy - contains or starts with)
+        if target_color and ps_color:
+            if target_color not in ps_color and ps_color not in target_color:
+                # Try first 4 chars (czarn/czarny, brazow/brązowy)
+                if target_color[:4] != ps_color[:4]:
+                    continue
+        
+        # Found exact match!
+        return ps.ps_id, f"{ps.name} ({ps.color}) {ps.size}", 'sku'
+    
+    return None, None, None
+
+
 def _normalize_name(name: str) -> set:
     """Extract key words from product name for fuzzy matching."""
     if not name:
@@ -712,25 +816,35 @@ def import_invoice():
 
                 rows = df.to_dict(orient="records")
                 
-                # Match products by EAN/barcode first, then fallback to fuzzy matching
+                # Match products by EAN/barcode first, then TipTop SKU parsing, then fuzzy matching
                 ps_list = get_product_sizes()
                 barcode_map = {ps.barcode: ps for ps in ps_list if ps.barcode}
                 
                 for row in rows:
                     barcode = row.get("Barcode") or row.get("EAN") or ""
                     barcode = str(barcode).strip() if barcode else ""
+                    sku = row.get("SKU") or ""
+                    sku = str(sku).strip() if sku else ""
                     row["matched_ps_id"] = None
                     row["matched_name"] = None
-                    row["match_type"] = None  # 'ean' or 'fuzzy'
+                    row["match_type"] = None  # 'ean', 'sku', or 'fuzzy'
                     
-                    # Try EAN match first (most reliable)
+                    # Priority 1: EAN match (most reliable)
                     if barcode and barcode in barcode_map:
                         ps = barcode_map[barcode]
                         row["matched_ps_id"] = ps.ps_id
                         row["matched_name"] = f"{ps.name} ({ps.color}) {ps.size}"
                         row["match_type"] = "ean"
-                    else:
-                        # Fallback to fuzzy name matching
+                    # Priority 2: Parse TipTop SKU and match by series+size+color
+                    elif sku:
+                        ps_id, match_name, match_type = _match_by_tiptop_sku(sku, ps_list)
+                        if ps_id:
+                            row["matched_ps_id"] = ps_id
+                            row["matched_name"] = match_name
+                            row["match_type"] = match_type
+                    
+                    # Priority 3: Fuzzy name matching (if not already matched)
+                    if not row["matched_ps_id"]:
                         ps_id, match_name, match_type = _fuzzy_match_product(
                             row.get("Nazwa", ""),
                             row.get("Kolor", ""),
