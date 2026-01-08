@@ -34,16 +34,30 @@ VALID_STATUSES = [
     "anulowano",  # Canceled
 ]
 
-# Status IDs to sync from BaseLinker
+# Status IDs to sync from BaseLinker - ALL statuses for complete archive
 SYNC_STATUS_IDS = [
+    91615,  # Nowe zamówienie
+    91616,  # Oczekujące
+    91617,  # W realizacji
+    91618,  # Gotowe do wysyłki
     91619,  # Wysłane
+    91620,  # W transporcie
     91621,  # Zakończone
+    91622,  # Anulowane
+    91623,  # Zwrot
 ]
 
 # Map BaseLinker status_id to our internal status
 BASELINKER_STATUS_MAP = {
-    91619: "w_drodze",       # Wysłane -> w drodze
-    91621: "dostarczono",    # Zakończone -> dostarczono
+    91615: "pobrano",           # Nowe zamówienie
+    91616: "niewydrukowano",    # Oczekujące
+    91617: "wydrukowano",       # W realizacji
+    91618: "spakowano",         # Gotowe do wysyłki
+    91619: "w_drodze",          # Wysłane
+    91620: "w_drodze",          # W transporcie
+    91621: "dostarczono",       # Zakończone
+    91622: "anulowano",         # Anulowane
+    91623: "zwrot",             # Zwrot
 }
 
 
@@ -730,10 +744,22 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = 7) -> int:
 @bp.route("/sync", methods=["POST"])
 @login_required
 def sync_orders():
-    """Sync orders from BaseLinker (Wysłane + Zakończone statuses)."""
+    """Sync orders from BaseLinker (ALL statuses for complete archive)."""
     try:
         synced = _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=7)
-        flash(f"Zsynchronizowano {synced} zamówień z BaseLinker", "success")
+        flash(f"Zsynchronizowano {synced} zamówień z ostatnich 7 dni", "success")
     except Exception as exc:
         flash(f"Błąd synchronizacji: {exc}", "error")
+    return redirect(url_for(".orders_list"))
+
+
+@bp.route("/sync_archive", methods=["POST"])
+@login_required
+def sync_orders_archive():
+    """Sync full order archive from BaseLinker (30 days)."""
+    try:
+        synced = _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=30)
+        flash(f"Zsynchronizowano {synced} zamówień z ostatnich 30 dni (archiwum)", "success")
+    except Exception as exc:
+        flash(f"Błąd synchronizacji archiwum: {exc}", "error")
     return redirect(url_for(".orders_list"))
