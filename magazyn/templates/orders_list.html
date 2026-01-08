@@ -31,8 +31,14 @@
     <div class="col-md-4 text-end">
         <form action="{{ url_for('orders.sync_orders') }}" method="post" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-success btn-sm me-2" title="Pobierz zamówienia z BaseLinker">
-                <i class="bi bi-cloud-download"></i> Synchronizuj
+            <button type="submit" class="btn btn-outline-success btn-sm me-1" title="Pobierz zamówienia z ostatnich 7 dni">
+                <i class="bi bi-cloud-download"></i> Sync 7d
+            </button>
+        </form>
+        <form action="{{ url_for('orders.sync_orders_archive') }}" method="post" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm me-2" title="Pobierz pełne archiwum (30 dni)">
+                <i class="bi bi-archive"></i> Archiwum 30d
             </button>
         </form>
         <span class="text-muted">Zamówień: {{ total }}</span>
