@@ -34,8 +34,8 @@ VALID_STATUSES = [
     "anulowano",  # Canceled
 ]
 
-# Status IDs to sync from BaseLinker - ALL statuses for complete archive
-SYNC_STATUS_IDS = [
+# Status IDs - ALL statuses for complete archive
+ALL_STATUS_IDS = [
     91615,  # Nowe zamówienie
     91616,  # Oczekujące
     91617,  # W realizacji
@@ -45,6 +45,17 @@ SYNC_STATUS_IDS = [
     91621,  # Zakończone
     91622,  # Anulowane
     91623,  # Zwrot
+]
+
+# Active status IDs - only non-completed orders for regular sync
+ACTIVE_STATUS_IDS = [
+    91615,  # Nowe zamówienie
+    91616,  # Oczekujące
+    91617,  # W realizacji
+    91618,  # Gotowe do wysyłki
+    91619,  # Wysłane
+    91620,  # W transporcie
+    # Excluded: 91621 (Zakończone), 91622 (Anulowane), 91623 (Zwrot)
 ]
 
 # Map BaseLinker status_id to our internal status
@@ -237,10 +248,10 @@ def _calculate_allegro_smart_cost(order_value: Decimal, delivery_method: str) ->
 @login_required
 def orders_list():
     """Display paginated list of orders with filtering and sorting."""
-    # Auto-sync orders on page load (non-blocking)
+    # Auto-sync ONLY active orders on page load (non-blocking)
     try:
         from threading import Thread
-        sync_thread = Thread(target=lambda: _sync_orders_from_baselinker(SYNC_STATUS_IDS, days=None))
+        sync_thread = Thread(target=lambda: _sync_orders_from_baselinker(ACTIVE_STATUS_IDS, days=7))
         sync_thread.daemon = True
         sync_thread.start()
     except Exception:
@@ -349,6 +360,28 @@ def orders_list():
             sort_by=sort_by,
             sort_dir=sort_dir,
         )
+
+
+@bp.route("/orders/sync-full-archive", methods=["POST"])
+@login_required
+def sync_full_archive():
+    """One-time full archive sync - pull ALL orders from ALL statuses."""
+    try:
+        from threading import Thread
+        
+        def full_sync():
+            """Sync all orders from all statuses without date limit."""
+            _sync_orders_from_baselinker(ALL_STATUS_IDS, days=None)
+        
+        sync_thread = Thread(target=full_sync)
+        sync_thread.daemon = True
+        sync_thread.start()
+        
+        flash("Rozpoczęto pobieranie pełnego archiwum zamówień. To może zająć kilka minut.", "success")
+    except Exception as e:
+        flash(f"Błąd podczas uruchamiania synchronizacji: {str(e)}", "danger")
+    
+    return redirect(url_for("orders.orders_list"))
 
 
 @bp.route("/order/<order_id>")
