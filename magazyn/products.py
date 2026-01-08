@@ -50,6 +50,31 @@ from sqlalchemy import desc
 import time
 
 
+def _extract_model_series(name: str) -> str:
+    """Extract model series name from product name (e.g. 'Front Line Premium', 'Tropical', 'Active')."""
+    if not name:
+        return ""
+    name_lower = name.lower()
+    
+    # Known model series - order matters (longer/more specific first)
+    model_series = [
+        'front line premium',
+        'front line',
+        'tropical',
+        'active',
+        'outdoor',
+        'classic',
+        'comfort',
+        'sport',
+        'easy walk',
+    ]
+    
+    for series in model_series:
+        if series in name_lower:
+            return series
+    return ""
+
+
 def _normalize_name(name: str) -> set:
     """Extract key words from product name for fuzzy matching."""
     if not name:
@@ -59,11 +84,12 @@ def _normalize_name(name: str) -> set:
     # Remove common filler words that don't identify the product
     filler_words = {
         'dla', 'psa', 'psy', 'kota', 'kotów', 'szelki', 'smycz', 'obroża',
-        'profesjonalne', 'profesjonalny', 'guard', 'premium', 'pro', 'plus',
+        'profesjonalne', 'profesjonalny', 'guard', 'pro', 'plus',
         'z', 'od', 'do', 'na', 'w', 'i', 'a', 'o', 'ze', 'bez',
         'odpinanym', 'odpinany', 'przodem', 'przód', 'tyłem', 'tył',
         'nowy', 'nowa', 'nowe', 'nowych', 'model', 'wersja', 'typ',
         'mały', 'mała', 'małe', 'duży', 'duża', 'duże', 'średni', 'średnia',
+        'easy', 'walk',  # handled separately in series
     }
     # Extract words
     words = re.findall(r'[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+', name)
@@ -84,6 +110,7 @@ def _fuzzy_match_product(row_name: str, row_color: str, row_size: str, ps_list) 
     row_color_lower = (row_color or "").lower().strip()
     row_size_upper = (row_size or "").upper().strip()
     row_key_words = _normalize_name(row_name)
+    row_series = _extract_model_series(row_name)
     
     if not row_key_words:
         return None, None, None
@@ -94,9 +121,15 @@ def _fuzzy_match_product(row_name: str, row_color: str, row_size: str, ps_list) 
     for ps in ps_list:
         ps_color_lower = (ps.color or "").lower().strip()
         ps_size_upper = (ps.size or "").upper().strip()
+        ps_series = _extract_model_series(ps.name)
         
         # Size must match exactly if provided
         if row_size_upper and ps_size_upper and row_size_upper != ps_size_upper:
+            continue
+        
+        # Model series MUST match exactly if both have a series
+        # "Front Line" != "Front Line Premium"
+        if row_series and ps_series and row_series != ps_series:
             continue
         
         # Color should match (fuzzy - check if one contains the other)
@@ -125,16 +158,19 @@ def _fuzzy_match_product(row_name: str, row_color: str, row_size: str, ps_list) 
         total_words = len(row_key_words | ps_key_words)
         score = len(common_words) / total_words if total_words > 0 else 0
         
-        # Bonus for matching important words (brand names, model names)
-        important_words = {'truelove', 'active', 'outdoor', 'tropical', 'front', 'line', 'classic'}
-        important_matches = common_words & important_words
-        score += len(important_matches) * 0.2
+        # Big bonus for matching model series exactly
+        if row_series and ps_series and row_series == ps_series:
+            score += 0.5
+        
+        # Bonus for matching brand name
+        if 'truelove' in row_key_words and 'truelove' in ps_key_words:
+            score += 0.2
         
         # Extra bonus if size matches exactly
         if row_size_upper and row_size_upper == ps_size_upper:
             score += 0.3
         
-        if score > best_score and score >= 0.4:  # Minimum 40% similarity
+        if score > best_score and score >= 0.5:  # Minimum 50% similarity (raised from 40%)
             best_score = score
             best_match = ps
     
