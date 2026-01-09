@@ -355,28 +355,6 @@ def orders_list():
         )
 
 
-@bp.route("/orders/sync-full-archive", methods=["POST"])
-@login_required
-def sync_full_archive():
-    """One-time full archive sync - pull ALL orders from ALL statuses."""
-    try:
-        from threading import Thread
-        
-        def full_sync():
-            """Sync all orders from all statuses without date limit."""
-            _sync_orders_from_baselinker(ALL_STATUS_IDS, days=None)
-        
-        sync_thread = Thread(target=full_sync)
-        sync_thread.daemon = True
-        sync_thread.start()
-        
-        flash("Rozpoczęto pobieranie pełnego archiwum zamówień. To może zająć kilka minut.", "success")
-    except Exception as e:
-        flash(f"Błąd podczas uruchamiania synchronizacji: {str(e)}", "danger")
-    
-    return redirect(url_for("orders.orders_list"))
-
-
 @bp.route("/order/<order_id>")
 @login_required
 def order_detail(order_id: str):
