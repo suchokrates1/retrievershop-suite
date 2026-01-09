@@ -46,9 +46,7 @@
                 {% if show_menu %}
                 <ul class="navbar-nav flex-row flex-nowrap gap-3 d-none d-md-flex align-items-center mt-2">
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers_and_prices') }}">Oferty i ceny Allegro</a></li>
                     <li class="nav-item">
@@ -95,9 +93,7 @@
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
         <ul class="nav flex-column h-100">
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.add_delivery') }}">Dostawy</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers_and_prices') }}">Oferty i ceny Allegro</a></li>
             <li class="nav-item">
