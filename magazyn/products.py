@@ -624,9 +624,9 @@ def _check_and_auto_pack():
         current_status = latest_status.status if latest_status else 'nieznany'
         current_app.logger.info(f"Auto-pack: order_id={order_id}, current_status={current_status}")
         
-        # Only auto-pack if current status is "pobrano"
-        if not latest_status or latest_status.status != "pobrano":
-            current_app.logger.info(f"Auto-pack: Status nie jest 'pobrano' - pomijam")
+        # Only auto-pack if current status is "wydrukowano" (after label printed)
+        if not latest_status or latest_status.status != "wydrukowano":
+            current_app.logger.info(f"Auto-pack: Status nie jest 'wydrukowano' - pomijam")
             return
         
         # Check if product belongs to this order
