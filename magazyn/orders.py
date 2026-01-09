@@ -143,10 +143,18 @@ def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Opti
     # Debug logging
     current_app.logger.debug(f"_get_tracking_url: courier_text='{courier_text}' tracking_number={tracking_number}")
     
-    # Courier tracking URL patterns
-    # Covers all Allegro Smart carriers and major couriers
+    # STRATEGIA: Jeśli jest "allegro" w nazwie kuriera, używamy uniwersalnego InPost tracking
+    # który obsługuje wszystkie przesyłki Allegro (One Box, Orlen Paczka, itp.)
+    # InPost jest operatorem logistycznym dla Allegro Smart
+    
+    if "allegro" in courier_text:
+        # Wszystkie przesyłki Allegro (One Box, Orlen, itp.) śledzone przez InPost
+        current_app.logger.debug(f"_get_tracking_url: Matched 'allegro' -> InPost tracking")
+        return f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}"
+    
+    # Courier tracking URL patterns dla przesyłek NIE-Allegro
     TRACKING_URLS = {
-        # InPost
+        # InPost (bezpośrednie, nie przez Allegro)
         "inpost": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
         "paczkomat": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
         
@@ -160,17 +168,8 @@ def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Opti
         # DHL
         "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
         
-        # Orlen Paczka - różne warianty nazwy
-        "orlen": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
-        "orlen paczka": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
-        "orlenpaczka": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
-        
-        # Allegro One (One Box, One Kurier, One Punkt) - różne warianty
-        "one box": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-        "one kurier": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-        "one punkt": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-        "onebox": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-        "allegro one": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        # Orlen Paczka (bezpośrednie, nie przez Allegro)
+        "orlen": f"https://www.orlenpaczka.pl",
         
         # Other carriers
         "ups": f"https://www.ups.com/track?tracknum={tracking_number}",
@@ -181,9 +180,11 @@ def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Opti
     # Try to match courier - check if any key appears in courier_text
     for key, url in TRACKING_URLS.items():
         if key in courier_text:
+            current_app.logger.debug(f"_get_tracking_url: Matched '{key}' -> {url}")
             return url
     
     # Default: return None if courier not recognized
+    current_app.logger.debug(f"_get_tracking_url: No match found for courier_text='{courier_text}'")
     return None
 
 
