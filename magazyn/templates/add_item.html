@@ -11,13 +11,33 @@
 
         <div class="col-md-6">
             <label for="color" class="form-label">Kolor:</label>
-            <select id="color" name="color" required class="form-select">
+            <select id="color" name="color" required class="form-select" onchange="toggleCustomColor()">
                 <option value="Czerwony">Czerwony</option>
                 <option value="Niebieski">Niebieski</option>
                 <option value="Zielony">Zielony</option>
                 <option value="Czarny">Czarny</option>
                 <option value="Biały">Biały</option>
+                <option value="Brązowy">Brązowy</option>
+                <option value="Różowy">Różowy</option>
+                <option value="Fioletowy">Fioletowy</option>
+                <option value="Srebrny">Srebrny</option>
+                <option value="Pomarańczowy">Pomarańczowy</option>
+                <option value="Turkusowy">Turkusowy</option>
+                <option value="Żółty">Żółty</option>
+                <option value="Szary">Szary</option>
+                <option value="Złoty">Złoty</option>
+                <option value="Beżowy">Beżowy</option>
+                <option value="Khaki">Khaki</option>
+                <option value="Bordowy">Bordowy</option>
+                <option value="Granatowy">Granatowy</option>
+                <option value="Kremowy">Kremowy</option>
+                <option value="Inny">Inny (wpisz poniżej)</option>
             </select>
+        </div>
+
+        <div class="col-md-6" id="custom-color-container" style="display: none;">
+            <label for="custom_color" class="form-label">Niestandardowy kolor:</label>
+            <input type="text" id="custom_color" name="custom_color" class="form-control" placeholder="Wpisz kolor">
         </div>
 
 
@@ -39,6 +59,28 @@
             <button type="submit" class="btn btn-primary">Dodaj przedmiot</button>
         </div>
     </form>
+
+<script>
+function toggleCustomColor() {
+    const colorSelect = document.getElementById('color');
+    const customColorContainer = document.getElementById('custom-color-container');
+    const customColorInput = document.getElementById('custom_color');
+    
+    if (colorSelect.value === 'Inny') {
+        customColorContainer.style.display = 'block';
+        customColorInput.required = true;
+    } else {
+        customColorContainer.style.display = 'none';
+        customColorInput.required = false;
+        customColorInput.value = '';
+    }
+}
+
+// Call on page load in case form is re-rendered with "Inny" selected
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCustomColor();
+});
+</script>
 
 
 {% endblock %}
