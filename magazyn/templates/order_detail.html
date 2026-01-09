@@ -253,12 +253,14 @@
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-outline-primary"
                                     onclick="return confirm('Wydrukować etykietę?');">
-                                <i class="bi bi-printer"></i> Drukuj etykietę
+                                <i class="bi bi-printer"></i> Drukuj
                             </button>
                         </form>
-                        <a href="{{ url_for('orders.download_label', order_id=order.order_id) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-download"></i> Pobierz etykietę
-                        </a>
+                        <form action="{{ url_for('orders.download_label', order_id=order.order_id) }}" method="get" class="mb-0">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> Pobierz
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
