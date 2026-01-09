@@ -318,33 +318,71 @@ def home():
         # Total stock (sum of all quantities)
         total_stock = db.query(func.sum(ProductSize.quantity)).scalar() or 0
         
-        # Low stock products (quantity <= 2 but > 0)
-        low_stock_items = db.query(ProductSize, Product)\
+        # Low stock products (quantity <= 2 but > 0) - convert to dicts
+        low_stock_query = db.query(ProductSize, Product)\
             .join(Product)\
             .filter(ProductSize.quantity > 0, ProductSize.quantity <= 2)\
             .order_by(ProductSize.quantity.asc())\
             .limit(10)\
             .all()
         
+        low_stock_items = []
+        for size, product in low_stock_query:
+            low_stock_items.append({
+                'size': size.size,
+                'quantity': size.quantity,
+                'product_id': product.id,
+                'product_name': product.name,
+                'product_color': product.color,
+            })
+        
         # Out of stock count
         out_of_stock = db.query(ProductSize).filter(ProductSize.quantity == 0).count()
         
         # =====================================================================
-        # Latest orders (last 10)
+        # Latest orders (last 10) - convert to dicts for template use
         # =====================================================================
-        latest_orders = db.query(Order)\
+        latest_orders_query = db.query(Order)\
             .order_by(desc(Order.date_add))\
             .limit(10)\
             .all()
         
+        latest_orders = []
+        for order in latest_orders_query:
+            # Eagerly load products count
+            products_count = len(order.products) if order.products else 0
+            product_names = [p.name for p in order.products[:2]] if order.products else []
+            latest_orders.append({
+                'order_id': order.order_id,
+                'customer_name': order.customer_name,
+                'date_add': order.date_add,
+                'delivery_package_nr': order.delivery_package_nr,
+                'products_count': products_count,
+                'product_names': product_names,
+            })
+        
         # =====================================================================
-        # Latest deliveries/purchases (last 5)
+        # Latest deliveries/purchases (last 5) - convert to dicts
         # =====================================================================
-        latest_deliveries = db.query(PurchaseBatch, Product)\
+        latest_deliveries_query = db.query(PurchaseBatch, Product)\
             .join(Product)\
             .order_by(desc(PurchaseBatch.purchase_date))\
             .limit(5)\
             .all()
+        
+        latest_deliveries = []
+        for batch, product in latest_deliveries_query:
+            latest_deliveries.append({
+                'purchase_date': batch.purchase_date,
+                'quantity': batch.quantity,
+                'size': batch.size,
+                'price': batch.price,
+                'invoice_number': batch.invoice_number,
+                'supplier': batch.supplier,
+                'product_id': product.id,
+                'product_name': product.name,
+                'product_color': product.color,
+            })
         
         # =====================================================================
         # Allegro offers - unlinked
@@ -367,38 +405,37 @@ def home():
         # Build activity from orders and deliveries
         activities = []
         
-        # Add recent orders to activity
+        # Add recent orders to activity (latest_orders is now list of dicts)
         for order in latest_orders[:5]:
-            if order.date_add:
-                order_date = datetime.fromtimestamp(order.date_add)
-                product_names = [p.name for p in order.products[:2]] if order.products else []
-                products_str = ", ".join(product_names)
-                if len(order.products) > 2:
-                    products_str += f" +{len(order.products) - 2}"
+            if order['date_add']:
+                order_date = datetime.fromtimestamp(order['date_add'])
+                products_str = ", ".join(order['product_names'])
+                if order['products_count'] > 2:
+                    products_str += f" +{order['products_count'] - 2}"
                 activities.append({
                     'type': 'order',
                     'icon': 'bi-cart-check',
                     'color': 'success',
-                    'title': f'Nowe zamówienie #{order.order_id[-6:]}',
-                    'description': f'{order.customer_name or "Klient"}: {products_str}',
+                    'title': f'Nowe zamówienie #{order["order_id"][-6:]}',
+                    'description': f'{order["customer_name"] or "Klient"}: {products_str}',
                     'timestamp': order_date,
-                    'link': url_for('orders.order_detail', order_id=order.order_id)
+                    'link': url_for('orders.order_detail', order_id=order['order_id'])
                 })
         
-        # Add recent deliveries to activity
-        for batch, product in latest_deliveries[:3]:
+        # Add recent deliveries to activity (latest_deliveries is now list of dicts)
+        for delivery in latest_deliveries[:3]:
             try:
-                batch_date = datetime.strptime(batch.purchase_date, '%Y-%m-%d')
+                batch_date = datetime.strptime(delivery['purchase_date'], '%Y-%m-%d')
             except:
                 batch_date = now
             activities.append({
                 'type': 'delivery',
                 'icon': 'bi-box-seam',
                 'color': 'info',
-                'title': f'Dostawa: {product.name}',
-                'description': f'{batch.quantity} szt. × {batch.size} @ {batch.price} zł',
+                'title': f'Dostawa: {delivery["product_name"]}',
+                'description': f'{delivery["quantity"]} szt. × {delivery["size"]} @ {delivery["price"]} zł',
                 'timestamp': batch_date,
-                'link': url_for('products.product_detail', product_id=product.id)
+                'link': url_for('products.product_detail', product_id=delivery['product_id'])
             })
         
         # Sort activities by timestamp
