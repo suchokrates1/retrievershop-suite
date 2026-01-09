@@ -141,20 +141,38 @@ def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Opti
     courier_text = f"{courier_code or ''} {delivery_package_module or ''}".lower()
     
     # Courier tracking URL patterns
+    # Covers all Allegro Smart carriers and major couriers
     TRACKING_URLS = {
+        # InPost
         "inpost": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
         "paczkomat": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        
+        # DPD
         "dpd": f"https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
+        
+        # Poczta Polska / Pocztex
         "pocztex": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
         "poczta": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
+        
+        # DHL
         "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
+        
+        # Orlen Paczka
+        "orlen": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
+        
+        # Allegro One (One Box, One Kurier, One Punkt)
+        "one box": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
+        "one kurier": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
+        "one punkt": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
+        "onebox": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
+        
+        # Other carriers
         "ups": f"https://www.ups.com/track?tracknum={tracking_number}",
         "fedex": f"https://www.fedex.com/fedextrack/?tracknumbers={tracking_number}",
         "gls": f"https://gls-group.eu/PL/pl/sledzenie-paczek?match={tracking_number}",
-        "orlen": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
     }
     
-    # Try to match courier
+    # Try to match courier - check if any key appears in courier_text
     for key, url in TRACKING_URLS.items():
         if key in courier_text:
             return url
@@ -465,8 +483,15 @@ def order_detail(order_id: str):
             .all()
         )
         
+        # Build status history with deduplication (keep only newest occurrence of each status)
         status_history = []
+        seen_statuses = set()
         for log in status_logs:
+            # Skip if we already have this status (keeps first/newest occurrence)
+            if log.status in seen_statuses:
+                continue
+            seen_statuses.add(log.status)
+            
             status_text, status_class = _get_status_display(log.status)
             status_history.append({
                 "status": log.status,
