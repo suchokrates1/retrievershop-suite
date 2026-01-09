@@ -156,7 +156,7 @@
         const speechMessage = asLabel ? buildLabelSpeechText(data) : buildProductSpeechText(data);
         speak(speechMessage);
         
-        // Read flash messages via TTS (e.g., auto-packing confirmation)
+        // Read flash messages via TTS (e.g., auto-packing confirmation) - immediate
         setTimeout(() => {
             const flashMessages = document.querySelectorAll('.alert.alert-success:not([data-tts-read])');
             flashMessages.forEach((alert) => {
@@ -166,7 +166,7 @@
                     alert.setAttribute('data-tts-read', 'true');
                 }
             });
-        }, 1500); // Wait 1.5s after main message
+        }, 100); // Minimal delay for DOM update
     };
 
     const showError = (message) => {

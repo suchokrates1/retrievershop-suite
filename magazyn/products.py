@@ -586,19 +586,23 @@ def _parse_last_order_data(raw):
 
 
 def _check_and_auto_pack():
-    """Check if we can auto-pack: label + matching product scanned within 30 seconds."""
+    """Check if we can auto-pack: label + matching product scanned within 60 seconds."""
     last_product = session.get('last_product_scan')
     last_label = session.get('last_label_scan')
     
     if not last_product or not last_label:
+        current_app.logger.info(f"Auto-pack check: product={bool(last_product)}, label={bool(last_label)}")
         return
     
-    # Check if scans are within 30 seconds of each other
+    # Check if scans are within 60 seconds of each other
     current_time = time.time()
     product_age = current_time - last_product['timestamp']
     label_age = current_time - last_label['timestamp']
     
-    if product_age > 30 or label_age > 30:
+    current_app.logger.info(f"Auto-pack check: product_age={product_age:.1f}s, label_age={label_age:.1f}s")
+    
+    if product_age > 60 or label_age > 60:
+        current_app.logger.info("Auto-pack: Timeout - scans too old")
         return
     
     # Check if scanned product belongs to the scanned order
@@ -617,8 +621,12 @@ def _check_and_auto_pack():
             .first()
         )
         
+        current_status = latest_status.status if latest_status else 'nieznany'
+        current_app.logger.info(f"Auto-pack: order_id={order_id}, current_status={current_status}")
+        
         # Only auto-pack if current status is "pobrano"
         if not latest_status or latest_status.status != "pobrano":
+            current_app.logger.info(f"Auto-pack: Status nie jest 'pobrano' - pomijam")
             return
         
         # Check if product belongs to this order
@@ -632,7 +640,10 @@ def _check_and_auto_pack():
         )
         
         if not order_product:
+            current_app.logger.warning(f"Auto-pack: Produkt {product_size_id} NIE należy do zamówienia {order_id}")
             return
+        
+        current_app.logger.info(f"Auto-pack: ✓ Produkt {product_size_id} należy do zamówienia {order_id}")
         
         # All conditions met - change status to "spakowano"
         new_status = OrderStatusLog(
@@ -643,11 +654,13 @@ def _check_and_auto_pack():
         db.add(new_status)
         db.commit()
         
+        current_app.logger.info(f"✅ AUTO-PACK SUCCESS: Zamówienie {order_id} -> spakowano")
+        
         # Clear session data to prevent duplicate packing
         session.pop('last_product_scan', None)
         session.pop('last_label_scan', None)
         
-        flash(f'✓ Automatycznie zmieniono status zamówienia {order_id} na "Spakowano"', 'success')
+        flash(f'Spakowano', 'success')
 
 
 def _load_order_for_barcode(barcode: str):
