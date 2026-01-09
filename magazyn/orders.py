@@ -133,32 +133,30 @@ def _get_status_display(status: str) -> tuple[str, str]:
 
 
 def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Optional[str], tracking_number: Optional[str], delivery_method: Optional[str] = None) -> Optional[str]:
-    """Generate tracking URL based on courier info and tracking number."""
+    """
+    Generate tracking URL based on courier info and tracking number.
+    
+    UWAGA: Allegro Smart (One Box, Orlen Paczka) używa różnych przewoźników.
+    Nie ma uniwersalnego URL - każda przesyłka wymaga sprawdzenia przez API Allegro
+    lub ma dedykowany URL przewoźnika.
+    """
     if not tracking_number:
         return None
     
-    # Normalize courier identifiers - check courier_code, delivery_package_module AND delivery_method
+    # Normalize courier identifiers
     courier_text = f"{courier_code or ''} {delivery_package_module or ''} {delivery_method or ''}".lower()
     
     # Debug logging
     current_app.logger.debug(f"_get_tracking_url: courier_text='{courier_text}' tracking_number={tracking_number}")
     
-    # STRATEGIA: Jeśli jest "allegro" w nazwie kuriera, używamy uniwersalnego InPost tracking
-    # który obsługuje wszystkie przesyłki Allegro (One Box, Orlen Paczka, itp.)
-    # InPost jest operatorem logistycznym dla Allegro Smart
-    
-    if "allegro" in courier_text:
-        # Wszystkie przesyłki Allegro (One Box, Orlen, itp.) śledzone przez InPost
-        current_app.logger.debug(f"_get_tracking_url: Matched 'allegro' -> InPost tracking")
-        return f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}"
-    
-    # Courier tracking URL patterns dla przesyłek NIE-Allegro
+    # Courier tracking URL patterns
+    # Zwraca None dla kurierów bez publicznego śledzenia (np. Allegro Smart, Orlen Paczka)
     TRACKING_URLS = {
-        # InPost (bezpośrednie, nie przez Allegro)
+        # InPost Paczkomaty
         "inpost": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
         "paczkomat": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
         
-        # DPD
+        # DPD  
         "dpd": f"https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
         
         # Poczta Polska / Pocztex
@@ -168,20 +166,29 @@ def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Opti
         # DHL
         "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
         
-        # Orlen Paczka (bezpośrednie, nie przez Allegro)
-        "orlen": f"https://www.orlenpaczka.pl",
-        
-        # Other carriers
+        # UPS
         "ups": f"https://www.ups.com/track?tracknum={tracking_number}",
+        
+        # FedEx
         "fedex": f"https://www.fedex.com/fedextrack/?tracknumbers={tracking_number}",
-        "gls": f"https://gls-group.eu/PL/pl/sledzenie-paczek?match={tracking_number}",
+        
+        # GLS
+        "gls": f"https://gls-group.com/PL/pl/sledzenie-paczek?match={tracking_number}",
+        
+        # Orlen Paczka - BRAK publicznego URL śledzenia
+        # Wymaga aplikacji mobilnej lub panelu Allegro - zwracamy None
+        "orlen": None,
+        
+        # Allegro Smart (One Box, One Kurier, One Punkt) - BRAK publicznego URL
+        # Śledzenie tylko przez panel Allegro - zwracamy None
+        "allegro": None,
     }
     
-    # Try to match courier - check if any key appears in courier_text
+    # Try to match courier - zwróć None jeśli brak publicznego URL
     for key, url in TRACKING_URLS.items():
         if key in courier_text:
-            current_app.logger.debug(f"_get_tracking_url: Matched '{key}' -> {url}")
-            return url
+            current_app.logger.debug(f"_get_tracking_url: Matched '{key}' -> {url or 'NO_PUBLIC_URL'}")
+            return url  # Może być None dla kurierów bez publicznego śledzenia
     
     # Default: return None if courier not recognized
     current_app.logger.debug(f"_get_tracking_url: No match found for courier_text='{courier_text}'")
