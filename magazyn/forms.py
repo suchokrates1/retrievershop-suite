@@ -20,9 +20,25 @@ class AddItemForm(FlaskForm):
             ("Zielony", "Zielony"),
             ("Czarny", "Czarny"),
             ("Biały", "Biały"),
+            ("Brązowy", "Brązowy"),
+            ("Różowy", "Różowy"),
+            ("Fioletowy", "Fioletowy"),
+            ("Srebrny", "Srebrny"),
+            ("Pomarańczowy", "Pomarańczowy"),
+            ("Turkusowy", "Turkusowy"),
+            ("Żółty", "Żółty"),
+            ("Szary", "Szary"),
+            ("Złoty", "Złoty"),
+            ("Beżowy", "Beżowy"),
+            ("Khaki", "Khaki"),
+            ("Bordowy", "Bordowy"),
+            ("Granatowy", "Granatowy"),
+            ("Kremowy", "Kremowy"),
+            ("Inny", "Inny (wpisz poniżej)"),
         ],
         validators=[DataRequired()],
     )
+    custom_color = StringField("custom_color")
 
 
 # Dynamically add quantity and barcode fields for each size
