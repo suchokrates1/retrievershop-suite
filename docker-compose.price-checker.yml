@@ -1,0 +1,88 @@
+# Docker Compose for Price Checker Service on minipc
+# This runs alongside the main retrievershop-suite
+# 
+# Deploy: scp to minipc, then docker compose up -d
+
+services:
+  price-checker:
+    build:
+      context: .
+      dockerfile: Dockerfile.price-checker
+    container_name: price-checker
+    restart: unless-stopped
+    environment:
+      # Check interval (days)
+      - PRICE_CHECK_INTERVAL_DAYS=2
+      
+      # Notification hours (only send during these hours)
+      - NOTIFY_HOURS_START=10
+      - NOTIFY_HOURS_END=22
+      
+      # Timezone
+      - TIMEZONE=Europe/Warsaw
+      
+      # Database - mount from main app
+      - DB_PATH=/app/database.db
+      
+      # Allegro credentials (copy from .env)
+      - ALLEGRO_CLIENT_ID=${ALLEGRO_CLIENT_ID}
+      - ALLEGRO_CLIENT_SECRET=${ALLEGRO_CLIENT_SECRET}
+      - ALLEGRO_ACCESS_TOKEN=${ALLEGRO_ACCESS_TOKEN}
+      - ALLEGRO_REFRESH_TOKEN=${ALLEGRO_REFRESH_TOKEN}
+      - ALLEGRO_SELLER_ID=${ALLEGRO_SELLER_ID}
+      - ALLEGRO_SELLER_NAME=${ALLEGRO_SELLER_NAME}
+      
+      # Excluded sellers (comma-separated, Chinese sellers etc.)
+      - ALLEGRO_EXCLUDED_SELLERS=${ALLEGRO_EXCLUDED_SELLERS:-temu,shein,aliexpress}
+      
+      # Messenger notifications
+      - PAGE_ACCESS_TOKEN=${PAGE_ACCESS_TOKEN}
+      - RECIPIENT_ID=${RECIPIENT_ID}
+      
+      # Optional: Proxy (uncomment when DataImpulse works)
+      # - ALLEGRO_PROXY_URL=6ecf209875bef9f82333:813d6f731f863da4@gw.dataimpulse.com:823
+      
+      # Logging
+      - LOG_LEVEL=INFO
+    
+    volumes:
+      # Share database with main app
+      - ${DB_VOLUME:-./data}:/app/data
+      
+      # Persistent logs
+      - ./logs:/app/logs
+      
+      # Chrome profile for cookies (optional)
+      - ./chrome-profile:/app/chrome-profile
+    
+    # For Selenium/Chrome to work
+    shm_size: 2g
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "price_checker"]
+      interval: 1h
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    
+    # Logging config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Optional: Network to share with main app
+networks:
+  default:
+    name: retrievershop-network
+    external: true
