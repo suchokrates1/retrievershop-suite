@@ -8,38 +8,12 @@
 {# Filters and Controls #}
 <div class="row mb-3">
     <div class="col-md-8">
-        <form method="get" class="row g-2" id="filter-form">
-            <input type="hidden" name="sort" value="{{ sort_by }}">
-            <input type="hidden" name="dir" value="{{ sort_dir }}">
-            <input type="hidden" name="per_page" value="{{ per_page }}">
-            <div class="col-md-6">
-                <input type="text" name="search" class="form-control" 
-                       placeholder="Szukaj: nr zamówienia, klient, email, telefon..." 
-                       value="{{ search }}">
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-search"></i> Szukaj
-                </button>
-            </div>
-            {% if search %}
-            <div class="col-md-2">
-                <a href="{{ url_for('orders.orders_list', per_page=per_page) }}" class="btn btn-outline-secondary w-100">
-                    <i class="bi bi-x"></i> Wyczyść
-                </a>
-            </div>
-            {% endif %}
-        </form>
+        <input type="text" id="searchInput" class="form-control" 
+               placeholder="🔍 Wyszukaj zamówienie (ID, klient, email, telefon, produkty)..." 
+               onkeyup="filterOrders()">
     </div>
     <div class="col-md-4 text-end">
         <div class="d-flex align-items-center justify-content-end gap-2">
-            <form method="post" action="{{ url_for('orders.sync_full_archive') }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-warning" 
-                        onclick="return confirm('Pobierze WSZYSTKIE zamówienia z BaseLinker. To może potrwać kilka minut. Kontynuować?');">
-                    <i class="bi bi-cloud-download"></i> Pełne Archiwum
-                </button>
-            </form>
             <label class="mb-0 text-nowrap">Na stronie:</label>
             <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
                 <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
@@ -47,7 +21,7 @@
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
             </select>
-            <span class="text-muted text-nowrap">| Razem: {{ total }}</span>
+            <span class="text-muted text-nowrap" id="visibleCount">| Widoczne: <span id="visibleOrders">{{ orders|length }}</span> / {{ total }}</span>
         </div>
     </div>
 </div>
@@ -174,6 +148,36 @@ function changePerPage(value) {
     url.searchParams.set('per_page', value);
     url.searchParams.set('page', '1'); // Reset to first page
     window.location = url.toString();
+}
+
+function filterOrders() {
+    const searchInput = document.getElementById('searchInput');
+    const filter = searchInput.value.toLowerCase();
+    const table = document.querySelector('#orders-table-v2 tbody');
+    const rows = table.getElementsByTagName('tr');
+    let visibleCount = 0;
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const cells = row.getElementsByTagName('td');
+        let rowText = '';
+        
+        // Concatenate all cell text
+        for (let j = 0; j < cells.length; j++) {
+            rowText += (cells[j].textContent || cells[j].innerText) + ' ';
+        }
+        rowText = rowText.toLowerCase();
+        
+        if (rowText.indexOf(filter) > -1) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    }
+    
+    // Update visible count
+    document.getElementById('visibleOrders').textContent = visibleCount;
 }
 
 document.querySelectorAll('.clickable-row').forEach(row => {
