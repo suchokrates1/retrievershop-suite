@@ -12,19 +12,29 @@ _stop_event = threading.Event()
 
 
 def _sync_worker(app):
-    """Background worker that syncs orders every hour."""
+    """Background worker that syncs orders and parcel statuses every hour."""
     from .orders import _sync_orders_from_baselinker, ALL_STATUS_IDS
+    from .parcel_tracking import sync_parcel_statuses
     
     logger.info("Order sync scheduler started - will sync every 1 hour")
     
     while not _stop_event.is_set():
         try:
             with app.app_context():
+                # 1. Sync orders from BaseLinker
                 logger.info("Starting automatic order sync (last 30 days, all statuses)")
                 synced = _sync_orders_from_baselinker(ALL_STATUS_IDS, days=30)
-                logger.info(f"Automatic sync completed: {synced} orders synced")
+                logger.info(f"Automatic order sync completed: {synced} orders synced")
+                
+                # 2. Sync parcel tracking statuses from Allegro
+                logger.info("Starting automatic parcel tracking sync")
+                stats = sync_parcel_statuses()
+                logger.info(
+                    f"Parcel tracking sync completed: checked={stats['checked']}, "
+                    f"updated={stats['updated']}, errors={stats['errors']}"
+                )
         except Exception as e:
-            logger.error(f"Error in automatic order sync: {e}", exc_info=True)
+            logger.error(f"Error in automatic sync: {e}", exc_info=True)
         
         # Wait 1 hour (3600 seconds) or until stop event
         _stop_event.wait(3600)
