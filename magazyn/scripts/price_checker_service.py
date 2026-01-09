@@ -24,8 +24,11 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from magazyn.config import settings
-from magazyn.db import get_session
+from magazyn.db import get_session, configure_engine
 from magazyn.models import AllegroOffer, ProductSize, AllegroPriceHistory
+
+# Initialize database connection
+configure_engine(settings.DB_PATH)
 from magazyn.notifications import send_messenger
 from magazyn.allegro_scraper import (
     AllegroScrapeError,
