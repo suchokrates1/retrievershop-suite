@@ -23,8 +23,8 @@ services:
       # Timezone
       - TIMEZONE=Europe/Warsaw
       
-      # Database - mount from main app
-      - DB_PATH=/app/database.db
+      # Database - mounted in /app/data
+      - DB_PATH=/app/data/database.db
       
       # Allegro credentials (copy from .env)
       - ALLEGRO_CLIENT_ID=${ALLEGRO_CLIENT_ID}
