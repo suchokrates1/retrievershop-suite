@@ -6,16 +6,392 @@
 {% endblock %}
 
 {% block content %}
-<div class="container text-center mt-5">
-    <h3>Zalogowany jako {{ username }}</h3>
-    <div class="d-grid gap-2 col-md-6 mx-auto mt-4">
-        <a href="{{ url_for('products.add_item') }}" class="btn btn-primary">Dodaj nowy przedmiot</a>
-        <a href="{{ url_for('products.items') }}" class="btn btn-primary">Wyświetl przedmioty</a>
-        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-outline-primary">Skanuj kod kreskowy (tryb ręczny)</a>
-        <a href="{{ url_for('products.label_scan_page', next=url_for('home')) }}" class="btn btn-outline-primary">Skanuj etykietę paczki (tryb ręczny)</a>
-        <a href="{{ url_for('products.export_products') }}" class="btn btn-primary">Eksportuj produkty do Excel</a>
-        <a href="{{ url_for('products.import_products') }}" class="btn btn-primary">Importuj produkty z Excel</a>
-        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-primary">Importuj fakturę</a>
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Centrum Dowodzenia</h2>
+            <p class="text-muted mb-0">Witaj, {{ username }}! Oto przegląd Twojego sklepu.</p>
+        </div>
+        <div class="text-muted">
+            <i class="bi bi-clock me-1"></i>{{ now().strftime('%d.%m.%Y %H:%M') }}
+        </div>
     </div>
+
+    <!-- Quick Stats Cards Row -->
+    <div class="row g-3 mb-4">
+        <!-- Orders Today -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Zamówienia dziś</h6>
+                            <h2 class="card-title mb-0">{{ dashboard.orders.today }}</h2>
+                        </div>
+                        <i class="bi bi-cart-check fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <small><i class="bi bi-calendar-week me-1"></i>Tydzień: {{ dashboard.orders.week }}</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue Today -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-primary text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Przychód dziś</h6>
+                            <h2 class="card-title mb-0">{{ "%.0f"|format(dashboard.revenue.today) }} zł</h2>
+                        </div>
+                        <i class="bi bi-cash-stack fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <small><i class="bi bi-calendar-week me-1"></i>Tydzień: {{ "%.0f"|format(dashboard.revenue.week) }} zł</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Orders -->
+        <div class="col-6 col-md-3">
+            <div class="card {% if dashboard.orders.pending > 0 %}bg-warning text-dark{% else %}bg-secondary text-white{% endif %} h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Do wysłania</h6>
+                            <h2 class="card-title mb-0">{{ dashboard.orders.pending }}</h2>
+                        </div>
+                        <i class="bi bi-box-seam fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <a href="{{ url_for('orders.orders_list') }}" class="{% if dashboard.orders.pending > 0 %}text-dark{% else %}text-white{% endif %} text-decoration-none">
+                        <small><i class="bi bi-arrow-right me-1"></i>Zobacz zamówienia</small>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory Status -->
+        <div class="col-6 col-md-3">
+            <div class="card bg-info text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Stan magazynu</h6>
+                            <h2 class="card-title mb-0">{{ dashboard.inventory.total_stock }}</h2>
+                        </div>
+                        <i class="bi bi-archive fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <small>
+                        <i class="bi bi-exclamation-triangle me-1"></i>Brak: {{ dashboard.inventory.out_of_stock }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Row: Monthly Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-graph-up me-2"></i>Statystyki miesięczne (30 dni)
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="border-end">
+                                <h3 class="text-success mb-1">{{ dashboard.orders.month }}</h3>
+                                <small class="text-muted">Zamówień</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="border-end">
+                                <h3 class="text-primary mb-1">{{ "%.0f"|format(dashboard.revenue.month) }} zł</h3>
+                                <small class="text-muted">Przychód</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div>
+                                <h3 class="text-info mb-1">{{ "%.0f"|format(dashboard.revenue.month / (dashboard.orders.month or 1)) }} zł</h3>
+                                <small class="text-muted">Śr. zamówienie</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-shop me-2"></i>Allegro
+                </div>
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Aktywne oferty:</span>
+                        <span class="badge bg-success fs-6">{{ dashboard.allegro.total_offers }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Niepowiązane:</span>
+                        <span class="badge {% if dashboard.allegro.unlinked_offers > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %} fs-6">
+                            {{ dashboard.allegro.unlinked_offers }}
+                        </span>
+                    </div>
+                    {% if dashboard.allegro.unlinked_offers > 0 %}
+                    <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-outline-warning btn-sm mt-3">
+                        <i class="bi bi-link me-1"></i>Powiąż oferty
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Row -->
+    <div class="row g-3">
+        <!-- Left Column: Activity Feed -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-activity me-2"></i>Ostatnia aktywność</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for activity in dashboard.activities %}
+                        <a href="{{ activity.link }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3">
+                                    <span class="badge bg-{{ activity.color }} rounded-circle p-2">
+                                        <i class="bi {{ activity.icon }}"></i>
+                                    </span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between">
+                                        <strong class="small">{{ activity.title }}</strong>
+                                        <small class="text-muted">{{ activity.timestamp.strftime('%H:%M') }}</small>
+                                    </div>
+                                    <small class="text-muted">{{ activity.description|truncate(50) }}</small>
+                                </div>
+                            </div>
+                        </a>
+                        {% else %}
+                        <div class="list-group-item text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            Brak ostatniej aktywności
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Column: Latest Orders -->
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-receipt me-2"></i>Ostatnie zamówienia</span>
+                    <a href="{{ url_for('orders.orders_list') }}" class="btn btn-sm btn-outline-light">
+                        Zobacz wszystkie
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Klient</th>
+                                    <th>Produkty</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in dashboard.latest_orders[:7] %}
+                                <tr onclick="window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'" style="cursor: pointer;">
+                                    <td class="small">
+                                        <code>{{ order.order_id[-6:] }}</code>
+                                    </td>
+                                    <td class="small">{{ (order.customer_name or 'Brak')|truncate(20) }}</td>
+                                    <td class="small">
+                                        {% if order.products %}
+                                            {{ order.products|length }} szt.
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if order.delivery_package_nr %}
+                                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i></span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        Brak zamówień
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Low Stock Alert + Quick Actions -->
+        <div class="col-lg-3">
+            <!-- Low Stock Alert -->
+            <div class="card mb-3">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Niski stan magazynu
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+                        {% for size, product in dashboard.inventory.low_stock_items %}
+                        <a href="{{ url_for('products.product_detail', product_id=product.id) }}" 
+                           class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
+                            <div class="small">
+                                <div class="fw-semibold">{{ product.name|truncate(25) }}</div>
+                                <small class="text-muted">{{ product.color or '' }} / {{ size.size }}</small>
+                            </div>
+                            <span class="badge bg-danger rounded-pill">{{ size.quantity }}</span>
+                        </a>
+                        {% else %}
+                        <div class="list-group-item text-center text-muted py-3">
+                            <i class="bi bi-check-circle text-success fs-4 d-block mb-1"></i>
+                            <small>Wszystko w porządku!</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-lightning me-2"></i>Szybkie akcje
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('products.items') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-box me-1"></i>Produkty
+                        </a>
+                        <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-receipt me-1"></i>Zamówienia
+                        </a>
+                        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-outline-info btn-sm">
+                            <i class="bi bi-file-earmark-plus me-1"></i>Import faktury
+                        </a>
+                        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-upc-scan me-1"></i>Skanuj kod
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Latest Deliveries Row -->
+    {% if dashboard.latest_deliveries %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-truck me-2"></i>Ostatnie dostawy
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Produkt</th>
+                                    <th>Rozmiar</th>
+                                    <th>Ilość</th>
+                                    <th>Cena jedn.</th>
+                                    <th>Faktura</th>
+                                    <th>Dostawca</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for batch, product in dashboard.latest_deliveries %}
+                                <tr>
+                                    <td class="small">{{ batch.purchase_date }}</td>
+                                    <td>
+                                        <a href="{{ url_for('products.product_detail', product_id=product.id) }}">
+                                            {{ product.name }} <span class="text-muted">{{ product.color or '' }}</span>
+                                        </a>
+                                    </td>
+                                    <td>{{ batch.size }}</td>
+                                    <td><span class="badge bg-info">{{ batch.quantity }}</span></td>
+                                    <td class="text-success fw-semibold">{{ batch.price }} zł</td>
+                                    <td class="small text-muted">{{ batch.invoice_number or '-' }}</td>
+                                    <td class="small text-muted">{{ batch.supplier or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<style>
+/* Dashboard specific styles */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+.list-group-item {
+    border-left: none;
+    border-right: none;
+}
+
+.list-group-item:first-child {
+    border-top: none;
+}
+
+/* Make stat cards more prominent */
+.card.bg-success, .card.bg-primary, .card.bg-warning, .card.bg-info {
+    border-radius: 0.5rem;
+}
+
+/* Activity feed timeline effect */
+.list-group-item .badge.rounded-circle {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Hover effects */
+.card:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+/* Table row hover in cards */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+</style>
 {% endblock %}

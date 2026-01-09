@@ -28,7 +28,7 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
-from .models import User, Thread, Product, ProductSize
+from .models import User, Thread, Product, ProductSize, Order, OrderProduct, PurchaseBatch, AllegroOffer, Sale
 from .forms import LoginForm
 
 from .db import get_session
@@ -138,7 +138,11 @@ def _api_token_ok(value: Optional[str]) -> bool:
 def inject_current_year():
     with get_session() as db:
         unread_count = db.query(Thread).filter_by(read=False).count()
-    return {"current_year": datetime.now().year, "unread_count": unread_count}
+    return {
+        "current_year": datetime.now().year, 
+        "unread_count": unread_count,
+        "now": datetime.now,  # Function to get current time in templates
+    }
 
 
 # =============================================================================
@@ -258,8 +262,180 @@ def api_eans():
 @bp.route("/")
 @login_required
 def home():
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, desc
+    from decimal import Decimal
+    
     username = session["username"]
-    return render_template("home.html", username=username)
+    
+    with get_session() as db:
+        # =====================================================================
+        # Time periods
+        # =====================================================================
+        now = datetime.now()
+        today_start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        week_ago = int((now - timedelta(days=7)).timestamp())
+        month_ago = int((now - timedelta(days=30)).timestamp())
+        
+        # =====================================================================
+        # Orders statistics
+        # =====================================================================
+        # Today's orders
+        orders_today = db.query(Order).filter(Order.date_add >= today_start).count()
+        
+        # This week orders
+        orders_week = db.query(Order).filter(Order.date_add >= week_ago).count()
+        
+        # This month orders
+        orders_month = db.query(Order).filter(Order.date_add >= month_ago).count()
+        
+        # Pending orders (not shipped yet - no tracking number)
+        pending_orders = db.query(Order).filter(
+            Order.delivery_package_nr.is_(None),
+            Order.date_add >= month_ago
+        ).count()
+        
+        # =====================================================================
+        # Revenue statistics (from OrderProduct prices)
+        # =====================================================================
+        def calc_revenue(from_timestamp):
+            result = db.query(func.sum(OrderProduct.price_brutto * OrderProduct.quantity))\
+                .join(Order)\
+                .filter(Order.date_add >= from_timestamp)\
+                .scalar()
+            return float(result or 0)
+        
+        revenue_today = calc_revenue(today_start)
+        revenue_week = calc_revenue(week_ago)
+        revenue_month = calc_revenue(month_ago)
+        
+        # =====================================================================
+        # Inventory statistics
+        # =====================================================================
+        # Total products count
+        total_products = db.query(Product).count()
+        
+        # Total stock (sum of all quantities)
+        total_stock = db.query(func.sum(ProductSize.quantity)).scalar() or 0
+        
+        # Low stock products (quantity <= 2 but > 0)
+        low_stock_items = db.query(ProductSize, Product)\
+            .join(Product)\
+            .filter(ProductSize.quantity > 0, ProductSize.quantity <= 2)\
+            .order_by(ProductSize.quantity.asc())\
+            .limit(10)\
+            .all()
+        
+        # Out of stock count
+        out_of_stock = db.query(ProductSize).filter(ProductSize.quantity == 0).count()
+        
+        # =====================================================================
+        # Latest orders (last 10)
+        # =====================================================================
+        latest_orders = db.query(Order)\
+            .order_by(desc(Order.date_add))\
+            .limit(10)\
+            .all()
+        
+        # =====================================================================
+        # Latest deliveries/purchases (last 5)
+        # =====================================================================
+        latest_deliveries = db.query(PurchaseBatch, Product)\
+            .join(Product)\
+            .order_by(desc(PurchaseBatch.purchase_date))\
+            .limit(5)\
+            .all()
+        
+        # =====================================================================
+        # Allegro offers - unlinked
+        # =====================================================================
+        unlinked_offers = db.query(AllegroOffer)\
+            .filter(
+                AllegroOffer.publication_status == 'ACTIVE',
+                AllegroOffer.product_size_id.is_(None),
+                AllegroOffer.product_id.is_(None)
+            )\
+            .count()
+        
+        total_offers = db.query(AllegroOffer)\
+            .filter(AllegroOffer.publication_status == 'ACTIVE')\
+            .count()
+        
+        # =====================================================================
+        # Recent activity log
+        # =====================================================================
+        # Build activity from orders and deliveries
+        activities = []
+        
+        # Add recent orders to activity
+        for order in latest_orders[:5]:
+            if order.date_add:
+                order_date = datetime.fromtimestamp(order.date_add)
+                product_names = [p.name for p in order.products[:2]] if order.products else []
+                products_str = ", ".join(product_names)
+                if len(order.products) > 2:
+                    products_str += f" +{len(order.products) - 2}"
+                activities.append({
+                    'type': 'order',
+                    'icon': 'bi-cart-check',
+                    'color': 'success',
+                    'title': f'Nowe zamówienie #{order.order_id[-6:]}',
+                    'description': f'{order.customer_name or "Klient"}: {products_str}',
+                    'timestamp': order_date,
+                    'link': url_for('orders.order_detail', order_id=order.order_id)
+                })
+        
+        # Add recent deliveries to activity
+        for batch, product in latest_deliveries[:3]:
+            try:
+                batch_date = datetime.strptime(batch.purchase_date, '%Y-%m-%d')
+            except:
+                batch_date = now
+            activities.append({
+                'type': 'delivery',
+                'icon': 'bi-box-seam',
+                'color': 'info',
+                'title': f'Dostawa: {product.name}',
+                'description': f'{batch.quantity} szt. × {batch.size} @ {batch.price} zł',
+                'timestamp': batch_date,
+                'link': url_for('products.product_detail', product_id=product.id)
+            })
+        
+        # Sort activities by timestamp
+        activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        activities = activities[:8]  # Keep top 8
+        
+        # =====================================================================
+        # Build dashboard data
+        # =====================================================================
+        dashboard = {
+            'orders': {
+                'today': orders_today,
+                'week': orders_week,
+                'month': orders_month,
+                'pending': pending_orders,
+            },
+            'revenue': {
+                'today': revenue_today,
+                'week': revenue_week,
+                'month': revenue_month,
+            },
+            'inventory': {
+                'total_products': total_products,
+                'total_stock': total_stock,
+                'out_of_stock': out_of_stock,
+                'low_stock_items': low_stock_items,
+            },
+            'allegro': {
+                'total_offers': total_offers,
+                'unlinked_offers': unlinked_offers,
+            },
+            'latest_orders': latest_orders,
+            'latest_deliveries': latest_deliveries,
+            'activities': activities,
+        }
+    
+    return render_template("home.html", username=username, dashboard=dashboard)
 
 
 @bp.route("/login", methods=["GET", "POST"])
