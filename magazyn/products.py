@@ -293,6 +293,16 @@ def add_item():
     if form.validate_on_submit():
         name = form.name.data
         color = form.color.data
+        
+        # If user selected "Inny" (Other), use custom color field
+        if color == "Inny":
+            custom_color = form.custom_color.data
+            if custom_color and custom_color.strip():
+                color = custom_color.strip()
+            else:
+                flash("Proszę wpisać niestandardowy kolor")
+                return render_template("add_item.html", form=form)
+        
         sizes = ALL_SIZES
         quantities = {
             size: _to_int(getattr(form, f"quantity_{size}").data or 0)
