@@ -51,6 +51,29 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     csrf.init_app(app)
     csrf.exempt(api_scraper_bp)  # Exempt scraper API from CSRF protection
     app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
+    
+    # Register custom template filters
+    @app.template_filter('parse_datetime')
+    def parse_datetime_filter(s):
+        """Parse ISO 8601 datetime string to Python datetime."""
+        from datetime import datetime
+        if not s:
+            return None
+        try:
+            # Handle ISO 8601 with timezone (e.g., "2024-01-15T10:30:00Z")
+            return datetime.fromisoformat(s.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return None
+    
+    @app.template_filter('format_datetime')
+    def format_datetime_filter(dt, format='%Y-%m-%d %H:%M'):
+        """Format datetime object to string."""
+        if not dt:
+            return ''
+        try:
+            return dt.strftime(format)
+        except (AttributeError, ValueError):
+            return str(dt)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(products_bp)
