@@ -150,7 +150,11 @@ def _mk_driver(headless: bool = True, logs: Optional[List[str]] = None) -> "webd
     width = random.randint(1280, 1680)
     height = random.randint(800, 1050)
     opts = Options()
-    if os.path.exists("/usr/bin/chromium"):
+    
+    # Check for remote Selenium (Docker setup)
+    remote_url = os.environ.get("SELENIUM_REMOTE_URL")
+    
+    if not remote_url and os.path.exists("/usr/bin/chromium"):
         opts.binary_location = "/usr/bin/chromium"
     if headless:
         opts.add_argument("--headless=new")
@@ -188,14 +192,22 @@ def _mk_driver(headless: bool = True, logs: Optional[List[str]] = None) -> "webd
         _log_step(logs, f"Ustawiono proxy dla Selenium: {proxy_url}")
     _log_step(logs, f"User agent Selenium: {user_agent}")
     _log_step(logs, f"Rozmiar okna Selenium: {width}x{height}")
-    driver_kwargs = {"options": opts}
-
-    driver_path = _find_chromedriver()
-    if driver_path and Service is not None:
-        logger.debug("Using ChromeDriver binary at %s", driver_path)
-        _log_step(logs, f"Używany chromedriver: {driver_path}")
-        driver_kwargs["service"] = Service(executable_path=driver_path)
-    driver = webdriver.Chrome(**driver_kwargs)
+    
+    # Use remote Selenium if configured
+    if remote_url:
+        _log_step(logs, f"Łączenie z remote Selenium: {remote_url}")
+        driver = webdriver.Remote(
+            command_executor=remote_url,
+            options=opts,
+        )
+    else:
+        driver_kwargs = {"options": opts}
+        driver_path = _find_chromedriver()
+        if driver_path and Service is not None:
+            logger.debug("Using ChromeDriver binary at %s", driver_path)
+            _log_step(logs, f"Używany chromedriver: {driver_path}")
+            driver_kwargs["service"] = Service(executable_path=driver_path)
+        driver = webdriver.Chrome(**driver_kwargs)
     try:
         driver.execute_cdp_cmd(
             "Network.setUserAgentOverride",

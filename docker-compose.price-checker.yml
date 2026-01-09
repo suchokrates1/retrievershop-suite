@@ -4,12 +4,38 @@
 # Deploy: scp to minipc, then docker compose up -d
 
 services:
+  # Selenium Chrome browser - standalone container
+  selenium:
+    image: selenium/standalone-chromium:latest
+    container_name: selenium-chrome
+    restart: unless-stopped
+    shm_size: 2g
+    ports:
+      - "4444:4444"
+      - "7900:7900"  # noVNC for debugging (http://minipc:7900, password: secret)
+    environment:
+      - SE_VNC_NO_PASSWORD=false
+      - SE_VNC_PASSWORD=secret
+      - SE_SCREEN_WIDTH=1920
+      - SE_SCREEN_HEIGHT=1080
+      - SE_NODE_MAX_SESSIONS=2
+      - SE_SESSION_REQUEST_TIMEOUT=300
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/wd/hub/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   price-checker:
     build:
       context: .
       dockerfile: Dockerfile.price-checker
     container_name: price-checker
     restart: unless-stopped
+    depends_on:
+      selenium:
+        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -46,6 +72,9 @@ services:
       
       # Logging
       - LOG_LEVEL=INFO
+      
+      # Remote Selenium (use standalone container)
+      - SELENIUM_REMOTE_URL=http://selenium:4444/wd/hub
     
     volumes:
       # Share database with main app
