@@ -132,8 +132,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const input = dropdown.querySelector('[data-search-input]');
         const options = dropdown.querySelectorAll('[data-option]');
         const selectedLabel = dropdown.querySelector('[data-selected-label]');
-        const productInput = dropdown.querySelector('[data-product-input]');
-        const sizeInput = dropdown.querySelector('[data-size-input]');
+        const form = dropdown.closest('form');
+        const productInput = form.querySelector('[data-product-input]');
+        const sizeInput = form.querySelector('[data-size-input]');
         const offerId = dropdown.dataset.offerId;
 
         function filterOptions() {
