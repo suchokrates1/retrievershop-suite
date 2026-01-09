@@ -80,9 +80,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-# Optional: Network to share with main app
-networks:
-  default:
-    name: retrievershop-network
-    external: true
