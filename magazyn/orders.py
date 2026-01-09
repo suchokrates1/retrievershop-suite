@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from decimal import Decimal
 
-from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app
+from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file
 from sqlalchemy import desc, or_
 
 from .auth import login_required
@@ -574,6 +574,53 @@ def reprint_label(order_id: str):
     if referrer and "order" in referrer:
         return redirect(referrer)
     return redirect(url_for(".orders_list"))
+
+
+@bp.route("/order/<order_id>/download_label", methods=["GET"])
+@login_required
+def download_label(order_id: str):
+    """Download shipping label PDF for an order."""
+    from . import print_agent
+    import tempfile
+    import os
+    
+    try:
+        # Try to get packages and download first label
+        packages = print_agent.get_order_packages(order_id)
+        
+        for pkg in packages:
+            pid = pkg.get("package_id")
+            code = pkg.get("courier_code")
+            if not pid or not code:
+                continue
+            label_data, ext = print_agent.get_label(code, pid)
+            if label_data:
+                # Save to temporary file and send
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+                tmp.write(label_data)
+                tmp.close()
+                
+                @after_this_request
+                def remove_file(response):
+                    try:
+                        os.remove(tmp.name)
+                    except Exception:
+                        pass
+                    return response
+                
+                return send_file(
+                    tmp.name,
+                    as_attachment=True,
+                    download_name=f"etykieta_{order_id}.{ext}",
+                    mimetype="application/pdf" if ext == "pdf" else "application/octet-stream"
+                )
+        
+        flash("Nie znaleziono etykiety do pobrania", "warning")
+            
+    except Exception as exc:
+        flash(f"Błąd pobierania etykiety: {exc}", "error")
+    
+    return redirect(url_for(".order_detail", order_id=order_id))
 
 
 def sync_order_from_data(db, order_data: dict) -> Order:
