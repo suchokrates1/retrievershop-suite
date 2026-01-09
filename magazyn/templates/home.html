@@ -8,7 +8,7 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Centrum Dowodzenia</h2>
             <p class="text-muted mb-0">Witaj, {{ username }}! Oto przegląd Twojego sklepu.</p>
@@ -16,6 +16,25 @@
         <div class="text-muted">
             <i class="bi bi-clock me-1"></i>{{ now().strftime('%d.%m.%Y %H:%M') }}
         </div>
+    </div>
+
+    <!-- Quick Actions Bar -->
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a href="{{ url_for('products.items') }}" class="btn btn-primary">
+            <i class="bi bi-box me-1"></i>Produkty
+        </a>
+        <a href="{{ url_for('orders.orders_list') }}" class="btn btn-success">
+            <i class="bi bi-receipt me-1"></i>Zamówienia
+        </a>
+        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info">
+            <i class="bi bi-file-earmark-plus me-1"></i>Import faktury
+        </a>
+        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-secondary">
+            <i class="bi bi-upc-scan me-1"></i>Skanuj kod
+        </a>
+        <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-warning">
+            <i class="bi bi-shop me-1"></i>Allegro
+        </a>
     </div>
 
     <!-- Quick Stats Cards Row -->
@@ -272,29 +291,6 @@
                             <small>Wszystko w porządku!</small>
                         </div>
                         {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <i class="bi bi-lightning me-2"></i>Szybkie akcje
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <a href="{{ url_for('products.items') }}" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-box me-1"></i>Produkty
-                        </a>
-                        <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-success btn-sm">
-                            <i class="bi bi-receipt me-1"></i>Zamówienia
-                        </a>
-                        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-outline-info btn-sm">
-                            <i class="bi bi-file-earmark-plus me-1"></i>Import faktury
-                        </a>
-                        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-upc-scan me-1"></i>Skanuj kod
-                        </a>
                     </div>
                 </div>
             </div>
