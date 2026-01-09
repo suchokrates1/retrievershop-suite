@@ -132,13 +132,16 @@ def _get_status_display(status: str) -> tuple[str, str]:
     return STATUS_MAP.get(status, (status, "bg-secondary"))
 
 
-def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Optional[str], tracking_number: Optional[str]) -> Optional[str]:
+def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Optional[str], tracking_number: Optional[str], delivery_method: Optional[str] = None) -> Optional[str]:
     """Generate tracking URL based on courier info and tracking number."""
     if not tracking_number:
         return None
     
-    # Normalize courier identifiers - check both courier_code and delivery_package_module
-    courier_text = f"{courier_code or ''} {delivery_package_module or ''}".lower()
+    # Normalize courier identifiers - check courier_code, delivery_package_module AND delivery_method
+    courier_text = f"{courier_code or ''} {delivery_package_module or ''} {delivery_method or ''}".lower()
+    
+    # Debug logging
+    current_app.logger.debug(f"_get_tracking_url: courier_text='{courier_text}' tracking_number={tracking_number}")
     
     # Courier tracking URL patterns
     # Covers all Allegro Smart carriers and major couriers
@@ -157,14 +160,17 @@ def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Opti
         # DHL
         "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
         
-        # Orlen Paczka
+        # Orlen Paczka - różne warianty nazwy
         "orlen": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
+        "orlen paczka": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
+        "orlenpaczka": f"https://orlenpaczka.pl/sledzenie-przesylki/{tracking_number}",
         
-        # Allegro One (One Box, One Kurier, One Punkt)
-        "one box": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
-        "one kurier": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
-        "one punkt": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
-        "onebox": f"https://allegro.pl/sledzenie-przesylek?number={tracking_number}",
+        # Allegro One (One Box, One Kurier, One Punkt) - różne warianty
+        "one box": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "one kurier": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "one punkt": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "onebox": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+        "allegro one": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
         
         # Other carriers
         "ups": f"https://www.ups.com/track?tracknum={tracking_number}",
@@ -473,7 +479,7 @@ def order_detail(order_id: str):
         real_profit = sale_price - allegro_commission - (shipping_cost or Decimal("0")) - sale_fee - purchase_cost
         
         # Generate tracking URL
-        tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_module, order.delivery_package_nr)
+        tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_module, order.delivery_package_nr, order.delivery_method)
         
         # Get status history
         status_logs = (
