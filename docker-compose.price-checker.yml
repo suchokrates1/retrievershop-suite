@@ -75,10 +75,16 @@ services:
       
       # Remote Selenium (use standalone container)
       - SELENIUM_REMOTE_URL=http://selenium:4444/wd/hub
+      
+      # Allegro cookies file path
+      - ALLEGRO_COOKIES_FILE=/app/allegro_cookies.json
     
     volumes:
       # Share database with main app
       - ${DB_VOLUME:-./data}:/app/data
+      
+      # Allegro cookies
+      - ./allegro_cookies.json:/app/allegro_cookies.json:ro
       
       # Persistent logs
       - ./logs:/app/logs
