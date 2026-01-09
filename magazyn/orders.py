@@ -16,22 +16,29 @@ bp = Blueprint("orders", __name__)
 
 
 # All valid statuses for the system
+# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → gotowe_do_odbioru → dostarczono → zakończono
 VALID_STATUSES = [
-    "pobrano",  # Downloaded from BaseLinker
-    "niewydrukowano",  # Not printed
-    "wydrukowano",  # Printed
-    "zdjeto_ze_stanu",  # Stock deducted
-    "spakowano",  # Packed
-    "przekazano_kurierowi",  # Given to courier
-    "odebrano_przez_kuriera",  # Picked up by courier
-    "w_drodze",  # In transit
-    "awizo",  # Aviso
-    "w_punkcie",  # Waiting at pickup point
-    "dostarczono",  # Delivered
-    "niedostarczono",  # Not delivered
-    "zwrot",  # Return
-    "zagubiono",  # Lost
-    "anulowano",  # Canceled
+    # Etap wewnętrzny (magazyn)
+    "pobrano",              # Pobrano z BaseLinker
+    "niewydrukowano",       # Niewydrukowano (legacy)
+    "wydrukowano",          # Wydrukowano etykietę
+    "spakowano",            # Spakowano
+    
+    # Etap przekazania
+    "przekazano_kurierowi", # Przekazano kurierowi/paczkomatowi
+    
+    # Etap transportu (z Allegro API)
+    "w_drodze",             # W tranzycie
+    "gotowe_do_odbioru",    # Gotowe do odbioru (paczkomat/punkt)
+    
+    # Finał
+    "dostarczono",          # Doręczono klientowi
+    "zakończono",           # Zakończono (archiwum)
+    
+    # Problemy
+    "niedostarczono",       # Nieudane doręczenie
+    "zwrot",                # Zwrot
+    "anulowano",            # Anulowano
 ]
 
 # Status IDs - ALL statuses for complete archive
@@ -58,6 +65,17 @@ ACTIVE_STATUS_IDS = [
     # Excluded: 91621 (Zakończone), 91622 (Anulowane), 91623 (Zwrot)
 ]
 
+# Etapy wysyłki dla timeline - kolejność ma znaczenie!
+# Format: (status_key, ikona, etykieta)
+SHIPPING_STAGES = [
+    ("pobrano", "bi-inbox", "Pobrano"),
+    ("wydrukowano", "bi-printer", "Wydrukowano"),
+    ("spakowano", "bi-box-seam", "Spakowano"),
+    ("przekazano_kurierowi", "bi-person-badge", "Przekazano"),
+    ("w_drodze", "bi-truck", "W drodze"),
+    ("gotowe_do_odbioru", "bi-geo-alt", "Do odbioru"),
+    ("dostarczono", "bi-check-circle", "Dostarczono"),
+]
 # Map BaseLinker status_id to our internal status
 BASELINKER_STATUS_MAP = {
     91615: "pobrano",           # Nowe zamówienie
@@ -83,22 +101,32 @@ def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
 
 
 def _get_status_display(status: str) -> tuple[str, str]:
-    """Return (display text, badge class) for status."""
+    """Return (display text, badge class) for status.
+    
+    Flow statusów wysyłki:
+    pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → gotowe_do_odbioru → dostarczono → zakończono
+    """
     STATUS_MAP = {
+        # Etap wewnętrzny (magazyn)
         "pobrano": ("Pobrano", "bg-light text-dark"),
         "niewydrukowano": ("Niewydrukowano", "bg-secondary"),
         "wydrukowano": ("Wydrukowano", "bg-info"),
-        "zdjeto_ze_stanu": ("Zdjęto ze stanu", "bg-info"),
         "spakowano": ("Spakowano", "bg-info"),
+        
+        # Etap przekazania
         "przekazano_kurierowi": ("Przekazano kurierowi", "bg-primary"),
-        "odebrano_przez_kuriera": ("Odebrano przez kuriera", "bg-primary"),
+        
+        # Etap transportu (z Allegro API)
         "w_drodze": ("W drodze", "bg-warning text-dark"),
-        "awizo": ("Awizo", "bg-warning text-dark"),
-        "w_punkcie": ("Czeka w punkcie", "bg-info"),
+        "gotowe_do_odbioru": ("Gotowe do odbioru", "bg-info"),
+        
+        # Finał
         "dostarczono": ("Dostarczono", "bg-success"),
+        "zakończono": ("Zakończono", "bg-success"),
+        
+        # Problemy
         "niedostarczono": ("Niedostarczono", "bg-danger"),
         "zwrot": ("Zwrot", "bg-danger"),
-        "zagubiono": ("Zagubiono", "bg-dark"),
         "anulowano": ("Anulowano", "bg-dark"),
     }
     return STATUS_MAP.get(status, (status, "bg-secondary"))
@@ -457,6 +485,15 @@ def order_detail(order_id: str):
             "status_class": "bg-secondary",
         }
         
+        # Przygotuj dane do timeline
+        # Określ aktualny etap na podstawie najnowszego statusu
+        current_stage_key = current_status.get("status", "pobrano")
+        # Znajdź indeks aktualnego etapu
+        stage_keys = [s[0] for s in SHIPPING_STAGES]
+        current_stage_index = -1
+        if current_stage_key in stage_keys:
+            current_stage_index = stage_keys.index(current_stage_key)
+        
         return render_template(
             "order_detail.html",
             order=order,
@@ -471,6 +508,8 @@ def order_detail(order_id: str):
             purchase_cost=purchase_cost,
             real_profit=real_profit,
             tracking_url=tracking_url,
+            shipping_stages=SHIPPING_STAGES,
+            current_stage_index=current_stage_index,
         )
 
 
@@ -720,8 +759,29 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     return order
 
 
-def add_order_status(db, order_id: str, status: str, **kwargs) -> OrderStatusLog:
-    """Add a status log entry for an order."""
+def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, **kwargs) -> Optional[OrderStatusLog]:
+    """
+    Add a status log entry for an order.
+    
+    Args:
+        db: Database session
+        order_id: ID zamówienia
+        status: Nowy status
+        skip_if_same: Jeśli True, nie dodaje statusu jeśli ostatni status jest taki sam (domyślnie True)
+        **kwargs: tracking_number, courier_code, notes
+    
+    Returns:
+        OrderStatusLog lub None jeśli pominięto (skip_if_same=True i status się nie zmienił)
+    """
+    # Sprawdź czy ostatni status jest taki sam
+    if skip_if_same:
+        last_status = db.query(OrderStatusLog).filter(
+            OrderStatusLog.order_id == order_id
+        ).order_by(desc(OrderStatusLog.timestamp)).first()
+        
+        if last_status and last_status.status == status:
+            return None  # Status się nie zmienił, pomijamy
+    
     log = OrderStatusLog(
         order_id=order_id,
         status=status,
@@ -839,4 +899,6 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = None) -> int
     return synced
 
 
-# Sync is now automatic on page load - no manual sync needed
+# Synchronizacja statusów przesyłek jest automatyczna (co godzinę w schedulerze)
+# Nie potrzebujemy ręcznej synchronizacji ani osobnego widoku śledzenia
+# Historia wysyłki jest zintegrowana w order_detail.html
