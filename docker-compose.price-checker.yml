@@ -10,6 +10,8 @@ services:
       dockerfile: Dockerfile.price-checker
     container_name: price-checker
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       # Check interval (days)
       - PRICE_CHECK_INTERVAL_DAYS=2
