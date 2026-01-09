@@ -5,9 +5,14 @@
 {% block content %}
 
 <div class="container text-center mt-5">
-    <div class="mb-3 text-center">
-        <a href="{{ url_for('products.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
-        <a href="{{ url_for('products.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj etykietę paczki</a>
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+        <div class="flex-grow-1 me-3">
+            <input type="text" id="searchInput" class="form-control" placeholder="🔍 Wyszukaj produkt (nazwa, kolor)..." onkeyup="filterProducts()">
+        </div>
+        <div>
+            <a href="{{ url_for('products.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
+            <a href="{{ url_for('products.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj etykietę paczki</a>
+        </div>
     </div>
 <div class="table-responsive">
     {# wrapper adds overflow-x:auto so columns never get cut off #}
@@ -56,4 +61,32 @@
 
 </div>
 </div>
+
+<script>
+function filterProducts() {
+    const searchInput = document.getElementById('searchInput');
+    const filter = searchInput.value.toLowerCase();
+    const table = document.querySelector('.table tbody');
+    const rows = table.getElementsByTagName('tr');
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const nameCell = row.cells[0]; // Nazwa produktu
+        const colorCell = row.cells[1]; // Kolor
+        
+        if (nameCell && colorCell) {
+            const nameText = nameCell.textContent || nameCell.innerText;
+            const colorText = colorCell.textContent || colorCell.innerText;
+            const combinedText = (nameText + ' ' + colorText).toLowerCase();
+            
+            if (combinedText.indexOf(filter) > -1) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    }
+}
+</script>
+
 {% endblock %}

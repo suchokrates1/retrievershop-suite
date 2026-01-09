@@ -230,13 +230,18 @@
                         <strong>Status wysyłki:</strong>
                         <span class="badge {{ current_status.status_class }}">{{ current_status.status_text }}</span>
                     </p>
-                    <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-primary"
-                                onclick="return confirm('Wydrukować etykietę?');">
-                            <i class="bi bi-printer"></i> Drukuj etykietę
-                        </button>
-                    </form>
+                    <div class="d-flex gap-2">
+                        <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                    onclick="return confirm('Wydrukować etykietę?');">
+                                <i class="bi bi-printer"></i> Drukuj etykietę
+                            </button>
+                        </form>
+                        <a href="{{ url_for('orders.download_label', order_id=order.order_id) }}" class="btn btn-sm btn-success">
+                            <i class="bi bi-download"></i> Pobierz etykietę
+                        </a>
+                    </div>
                 </div>
             </div>
 
