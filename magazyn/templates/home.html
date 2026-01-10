@@ -391,3 +391,21 @@
 }
 </style>
 {% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize global barcode detector for label scanning on home page
+    if (typeof GlobalBarcodeDetector !== 'undefined') {
+        const detector = new GlobalBarcodeDetector({
+            endpoint: '{{ label_barcode_endpoint }}',
+            onSuccess: function(data) {
+                // Reload page after successful scan to refresh stats
+                window.location.reload();
+            }
+        });
+        console.log('Global barcode detector initialized for home page');
+    }
+});
+</script>
+{% endblock %}
