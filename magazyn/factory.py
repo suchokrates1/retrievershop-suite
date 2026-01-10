@@ -106,8 +106,10 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     start_print_agent(app)
     
-    # Start automatic order sync scheduler (every 1 hour)
-    order_sync_scheduler.start_sync_scheduler(app)
+    # DISABLED: Order sync scheduler moved to separate container/process
+    # Starting scheduler in gunicorn workers causes 6 instances to run simultaneously
+    # TODO: Run order_sync_scheduler in separate container or use gunicorn's post_fork hook
+    # order_sync_scheduler.start_sync_scheduler(app)
 
     _register_shutdown_hook()
 
