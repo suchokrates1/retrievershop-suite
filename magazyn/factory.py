@@ -26,6 +26,7 @@ from .db import configure_engine, create_default_user_if_needed, Base, engine
 from . import order_sync_scheduler
 
 _shutdown_registered = False
+_app_instance: Optional[Flask] = None
 
 
 def _register_shutdown_hook() -> None:
@@ -35,6 +36,13 @@ def _register_shutdown_hook() -> None:
     atexit.register(print_agent.stop_agent_thread)
     atexit.register(order_sync_scheduler.stop_sync_scheduler)
     _shutdown_registered = True
+
+
+def _start_order_sync_scheduler() -> None:
+    """Start order sync scheduler - called from gunicorn post_worker_init hook."""
+    global _app_instance
+    if _app_instance is not None:
+        order_sync_scheduler.start_sync_scheduler(_app_instance)
 
 
 def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
@@ -106,10 +114,12 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     start_print_agent(app)
     
-    # DISABLED: Order sync scheduler moved to separate container/process
-    # Starting scheduler in gunicorn workers causes 6 instances to run simultaneously
-    # TODO: Run order_sync_scheduler in separate container or use gunicorn's post_fork hook
-    # order_sync_scheduler.start_sync_scheduler(app)
+    # Store app instance for scheduler initialization from gunicorn hook
+    global _app_instance
+    _app_instance = app
+    
+    # Note: Order sync scheduler is started by gunicorn's post_worker_init hook
+    # See gunicorn.conf.py - this ensures only ONE scheduler runs across all workers
 
     _register_shutdown_hook()
 
