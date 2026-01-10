@@ -321,12 +321,12 @@ def offers():
                     parts.append(product_for_label.color)
                 label = " ".join(parts)
             
-            # Use cached EAN from database, fetch from API only if missing
+            # Fetch EAN only for unlinked offers (where it's actually needed for linking)
+            # Linked offers don't need EAN since they're already connected to products
             ean = offer.ean or ""
-            if not ean:
+            if not ean and not (offer.product_size_id or offer.product_id):
                 try:
                     ean = _get_ean_for_offer(offer.offer_id)
-                    # Cache it in database for future use
                     if ean:
                         offer.ean = ean
                         db.commit()
@@ -510,12 +510,12 @@ def offers_and_prices():
                 "is_linked": bool(offer.product_size_id or offer.product_id),
             }
             
-            # Use cached EAN from database, fetch from API only if missing
+            # Fetch EAN only for unlinked offers (where it's actually needed)
+            # This speeds up page load significantly (only ~50 unlinked vs 214 total offers)
             ean_value = offer.ean or ""
-            if not ean_value:
+            if not ean_value and not (offer.product_size_id or offer.product_id):
                 try:
                     ean_value = _get_ean_for_offer(offer.offer_id)
-                    # Cache it in database for future use
                     if ean_value:
                         offer.ean = ean_value
                         db.commit()
