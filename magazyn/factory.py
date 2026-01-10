@@ -98,7 +98,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
         ensure_db_initialized(app)
         # Note: Alembic migrations are now run via entrypoint.sh before gunicorn starts
         # This prevents multiple workers from trying to run migrations simultaneously
-        Base.metadata.create_all(engine)
+        # Base.metadata.create_all(engine)  # Removed: use Alembic migrations only
         create_default_user_if_needed(app)
 
     start_print_agent(app)
