@@ -1003,7 +1003,7 @@ class LabelAgent:
         5: "dostarczono",  # Delivered
         6: "zwrot",  # Return
         7: "awizo",  # Aviso
-        8: "w_punkcie",  # Waiting at point
+        8: "gotowe_do_odbioru",  # Waiting at point / ready to pickup
         9: "zagubiono",  # Lost
         10: "anulowano",  # Canceled
         11: "w_drodze",  # On the way
