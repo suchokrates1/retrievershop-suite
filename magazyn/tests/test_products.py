@@ -53,19 +53,20 @@ def test_barcode_scan(app_mod, client, login):
         prod = Product(name="Prod2", color="Zielony")
         db.add(prod)
         db.flush()
-        db.add(
-            ProductSize(
-                product_id=prod.id, size="M", quantity=1, barcode="111"
-            )
+        ps = ProductSize(
+            product_id=prod.id, size="M", quantity=1, barcode="111"
         )
+        db.add(ps)
+        db.flush()
+        ps_id = ps.id
 
     resp = client.post("/barcode_scan", json={"barcode": "111"})
     assert resp.status_code == 200
-    assert resp.get_json() == {
-        "name": "Prod2",
-        "color": "Zielony",
-        "size": "M",
-    }
+    data = resp.get_json()
+    assert data["name"] == "Prod2"
+    assert data["color"] == "Zielony"
+    assert data["size"] == "M"
+    assert data["product_size_id"] == ps_id
 
 
 def test_barcode_scan_invalid(app_mod, client, login):
