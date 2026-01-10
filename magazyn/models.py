@@ -73,6 +73,25 @@ class LabelQueue(Base):
     retry_count = Column(Integer, default=0)
 
 
+class ScanLog(Base):
+    """Log of barcode/label scans for debugging and audit trail."""
+    __tablename__ = "scan_logs"
+    __table_args__ = (
+        Index("idx_scan_logs_created_at", "created_at"),
+        Index("idx_scan_logs_scan_type", "scan_type"),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_type = Column(String, nullable=False)  # 'product' or 'label'
+    barcode = Column(String, nullable=False)
+    success = Column(Boolean, nullable=False)
+    result_data = Column(Text)  # JSON with result details
+    error_message = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    
+    user = relationship("User")
+
+
 class PurchaseBatch(Base):
     """Represents a batch of products from a single purchase/delivery.
     

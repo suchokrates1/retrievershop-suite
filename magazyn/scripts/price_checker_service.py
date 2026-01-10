@@ -30,11 +30,27 @@ from magazyn.models import AllegroOffer, ProductSize, AllegroPriceHistory
 # Initialize database connection
 configure_engine(settings.DB_PATH)
 from magazyn.notifications import send_messenger
-from magazyn.allegro_scraper import (
-    AllegroScrapeError,
-    fetch_competitors_for_offer,
-    parse_price_amount,
-)
+
+# Use Camoufox scraper (better anti-detection than Selenium)
+# Falls back to Selenium if Camoufox not available
+try:
+    from magazyn.camoufox_scraper import (
+        fetch_competitors_for_offer_camoufox as fetch_competitors_for_offer,
+        parse_price_amount,
+    )
+    SCRAPER_ENGINE = "camoufox"
+except ImportError:
+    from magazyn.allegro_scraper import (
+        fetch_competitors_for_offer,
+        parse_price_amount,
+    )
+    SCRAPER_ENGINE = "selenium"
+
+class AllegroScrapeError(RuntimeError):
+    """Scraping error with logs."""
+    def __init__(self, message: str, logs: list = None):
+        super().__init__(message)
+        self.logs = logs or []
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +62,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+logger.info("Price checker using scraper engine: %s", SCRAPER_ENGINE)
+
 
 # =============================================================================
 # Configuration
@@ -53,6 +71,9 @@ logger = logging.getLogger(__name__)
 
 # Check interval in days (default: 2)
 CHECK_INTERVAL_DAYS = int(os.environ.get("PRICE_CHECK_INTERVAL_DAYS", "2"))
+
+# Block images to save bandwidth (Camoufox only)
+BLOCK_IMAGES = os.environ.get("SCRAPER_BLOCK_IMAGES", "1").lower() in ("1", "true", "yes")
 
 # Business hours for notifications (QUIET_HOURS are when we DON'T send)
 # Based on .env: QUIET_HOURS_START=10:00, QUIET_HOURS_END=22:00
@@ -207,12 +228,17 @@ def check_all_prices() -> dict:
             
             try:
                 # Fetch competitor offers
-                competitor_offers, logs = fetch_competitors_for_offer(
-                    offer_id,
-                    stop_seller=settings.ALLEGRO_SELLER_NAME,
-                    limit=20,
-                    headless=True,
-                )
+                # Camoufox version supports block_images, Selenium version ignores it
+                scraper_kwargs = {
+                    "offer_id": offer_id,
+                    "stop_seller": settings.ALLEGRO_SELLER_NAME,
+                    "limit": 20,
+                    "headless": True,
+                }
+                if SCRAPER_ENGINE == "camoufox":
+                    scraper_kwargs["block_images"] = BLOCK_IMAGES
+                
+                competitor_offers, logs = fetch_competitors_for_offer(**scraper_kwargs)
                 
                 # Log scraper output
                 for log_entry in logs:

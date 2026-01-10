@@ -198,14 +198,19 @@ def find_by_barcode(barcode: str) -> Optional[dict]:
     """Return product information for the given barcode."""
     with get_session() as db:
         row = (
-            db.query(Product.name, Product.color, ProductSize.size)
+            db.query(Product.name, Product.color, ProductSize.size, ProductSize.id)
             .join(ProductSize)
             .filter(ProductSize.barcode == barcode)
             .first()
         )
         if row:
-            name, color, size = row
-            return {"name": name, "color": color, "size": size}
+            name, color, size, product_size_id = row
+            return {
+                "name": name,
+                "color": color,
+                "size": size,
+                "product_size_id": product_size_id,
+            }
     return None
 
 
