@@ -400,6 +400,7 @@ def product_detail(product_id):
     """Readonly product detail view with order and delivery history."""
     from decimal import Decimal
     from sqlalchemy import func
+    from .models import AllegroOffer
     
     with get_session() as db:
         product = db.query(Product).filter(Product.id == product_id).first()
@@ -532,6 +533,36 @@ def product_detail(product_id):
             if total_purchased_qty > 0 else None
         )
         
+        # Get Allegro offers linked to this product or its sizes
+        size_ids = [s["id"] for s in sizes_data]
+        allegro_offers = (
+            db.query(AllegroOffer)
+            .filter(
+                (AllegroOffer.product_id == product_id) |
+                (AllegroOffer.product_size_id.in_(size_ids))
+            )
+            .order_by(AllegroOffer.title)
+            .all()
+        )
+        
+        allegro_data = []
+        for offer in allegro_offers:
+            # Find matching size
+            matched_size = None
+            if offer.product_size_id:
+                matched_size = next(
+                    (s["size"] for s in sizes_data if s["id"] == offer.product_size_id),
+                    None
+                )
+            allegro_data.append({
+                "offer_id": offer.offer_id,
+                "title": offer.title,
+                "price": offer.price,
+                "ean": offer.ean,
+                "matched_size": matched_size,
+                "publication_status": offer.publication_status,
+            })
+        
         return render_template(
             "product_detail.html",
             product=product,
@@ -542,6 +573,7 @@ def product_detail(product_id):
             total_sold=total_sold,
             total_delivered=total_delivered,
             avg_purchase_price=avg_purchase_price,
+            allegro_offers=allegro_data,
         )
 
 
