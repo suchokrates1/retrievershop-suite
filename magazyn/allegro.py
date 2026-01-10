@@ -333,6 +333,23 @@ def offers():
                 except Exception as e:
                     ean = ""
             
+            # Try to link by EAN if we have EAN but no product_size_id
+            if ean and not offer.product_size_id:
+                ps = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
+                if ps:
+                    offer.product_size_id = ps.id
+                    offer.product_id = ps.product_id
+                    db.commit()
+                    current_app.logger.info(f"Linked offer {offer.offer_id} to product_size {ps.id} by EAN {ean}")
+                    # Update local vars for response
+                    size = ps
+                    product_for_label = ps.product
+                    if product_for_label:
+                        parts = [product_for_label.name]
+                        if product_for_label.color:
+                            parts.append(product_for_label.color)
+                        label = " – ".join([" ".join(parts), ps.size])
+            
             offer_data = {
                 "offer_id": offer.offer_id,
                 "title": offer.title,
