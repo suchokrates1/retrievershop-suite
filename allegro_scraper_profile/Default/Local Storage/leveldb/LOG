@@ -1,2 +1,3 @@
-2025/12/22-01:52:33.732 61b8 Creating DB C:\Users\sucho\retrievershop-suite\allegro_scraper_profile\Default\Local Storage\leveldb since it was missing.
-2025/12/22-01:52:33.744 61b8 Reusing MANIFEST C:\Users\sucho\retrievershop-suite\allegro_scraper_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/01/09-18:47:10.906 662c Reusing MANIFEST C:\Users\sucho\retrievershop-suite\allegro_scraper_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/01/09-18:47:10.910 662c Recovering log #3
+2026/01/09-18:47:10.912 662c Reusing old log C:\Users\sucho\retrievershop-suite\allegro_scraper_profile\Default\Local Storage\leveldb/000003.log 
