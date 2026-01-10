@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
@@ -10,6 +11,7 @@ from ..constants import ALL_SIZES
 from ..db import get_session
 from ..models import Product, ProductSize, PurchaseBatch
 
+logger = logging.getLogger(__name__)
 TWOPLACES = Decimal("0.01")
 
 
@@ -85,7 +87,10 @@ def update_product(
     with get_session() as db:
         product = db.query(Product).filter_by(id=product_id).first()
         if not product:
+            logger.warning(f"Product with ID {product_id} not found during update")
             return None
+        
+        logger.info(f"Updating product {product_id}: {name} ({color})")
         product.name = name
         product.color = color
         for size in ALL_SIZES:
