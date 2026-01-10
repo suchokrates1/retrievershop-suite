@@ -227,6 +227,7 @@ class AllegroOffer(Base):
     offer_id = Column(String, unique=True)
     title = Column(String, nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
+    ean = Column(String, nullable=True)  # Cached EAN from Allegro API
     product_id = Column(
         Integer,
         ForeignKey("products.id", ondelete="SET NULL"),
