@@ -24,7 +24,8 @@
  <table class="table table-striped table-sm table-dark align-middle">
     <thead>
         <tr>
-            <th>Nazwa produktu</th>
+            <th>Seria</th>
+            <th>Kategoria</th>
             <th>Kolor</th>
             {% for size in ALL_SIZES %}
             <th>{{ size }}</th>
@@ -37,9 +38,10 @@
         <tr>
             <td>
                 <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="text-white text-decoration-none">
-                    {{ product['name'] }}
+                    {{ product['series'] or product['brand'] or '-' }}
                 </a>
             </td>
+            <td>{{ product['category'] }}</td>
             <td>{{ product['color'] }}</td>
             {% for size in ALL_SIZES %}
             <td>

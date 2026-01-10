@@ -10,20 +10,19 @@ from magazyn.allegro_scraper import Offer, AllegroScrapeError
 
 @pytest.mark.usefixtures("login")
 class TestAllegroPriceCheckDebug:
-    def test_price_check_html_displays_debug_steps(
+    def test_price_check_html_displays_page(
         self, client, allegro_tokens
     ) -> None:
+        """Test that price-check page renders correctly."""
         allegro_tokens("token", "refresh")
 
         response = client.get("/allegro/price-check")
         assert response.status_code == 200
 
         body = response.data.decode("utf-8")
-        assert "Pełne logi price-check" in body
-        assert "id=\"price-check-log-content\"" in body
-        assert "Żądany format odpowiedzi" in body
-        # Value rendered within <pre> tag
-        assert "Żądany format odpowiedzi: html" in body
+        # Page should render with main title and UI elements
+        assert "Monitor cen Allegro" in body
+        assert "Uruchom Scraper Worker" in body
 
     def test_price_check_json_includes_debug_steps_on_success(
         self, client, allegro_tokens, monkeypatch

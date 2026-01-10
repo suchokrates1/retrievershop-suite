@@ -17,14 +17,15 @@ def test_nav_container_class(app_mod, client, login):
     assert 'class="container"' in nav_html
 
 
-def test_nav_contains_sales_link(app_mod, client, login):
+def test_nav_contains_orders_link(app_mod, client, login):
+    """Test that the main nav contains orders link."""
     from flask import url_for
 
     with app_mod.app.test_request_context():
-        sales_url = url_for("sales.list_sales")
+        orders_url = url_for("orders.orders_list")
     resp = client.get("/")
     html = resp.get_data(as_text=True)
-    assert f'href="{sales_url}"' in html
+    assert f'href="{orders_url}"' in html
 
 
 def test_nav_contains_sales_settings_link(app_mod, client, login):
@@ -47,11 +48,12 @@ def test_nav_contains_shipping_link(app_mod, client, login):
     assert f'href="{shipping_url}"' in html
 
 
-def test_nav_contains_allegro_offers_link(app_mod, client, login):
+def test_nav_contains_allegro_offers_and_prices_link(app_mod, client, login):
+    """Test that the main nav contains the offers_and_prices link."""
     from flask import url_for
 
     with app_mod.app.test_request_context():
-        offers_url = url_for("allegro.offers")
+        offers_url = url_for("allegro.offers_and_prices")
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     assert f'href="{offers_url}"' in html

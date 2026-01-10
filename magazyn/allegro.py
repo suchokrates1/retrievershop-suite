@@ -28,6 +28,7 @@ from .db import get_session, SessionLocal
 from .models import AllegroOffer, Product, ProductSize, AllegroPriceHistory
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
+from .config import settings
 from .env_tokens import update_allegro_tokens
 from .print_agent import agent
 from .auth import login_required
@@ -36,6 +37,8 @@ from .allegro_scraper import (
     fetch_competitors_for_offer,
     parse_price_amount,
 )
+from . import allegro_api
+from requests.exceptions import HTTPError
 
 ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 
@@ -356,10 +359,10 @@ def offers():
         inventory_rows = (
             db.query(ProductSize, Product)
             .join(Product, ProductSize.product_id == Product.id)
-            .order_by(Product.name, ProductSize.size)
+            .order_by(Product.series, Product.category, Product.color, ProductSize.size)
             .all()
         )
-        product_rows = db.query(Product).order_by(Product.name).all()
+        product_rows = db.query(Product).order_by(Product.series, Product.category, Product.color).all()
         inventory: list[dict] = []
         product_inventory: list[dict] = []
         for product in product_rows:
@@ -535,10 +538,10 @@ def offers_and_prices():
         inventory_rows = (
             db.query(ProductSize, Product)
             .join(Product, ProductSize.product_id == Product.id)
-            .order_by(Product.name, ProductSize.size)
+            .order_by(Product.series, Product.category, Product.color, ProductSize.size)
             .all()
         )
-        product_rows = db.query(Product).order_by(Product.name).all()
+        product_rows = db.query(Product).order_by(Product.series, Product.category, Product.color).all()
         inventory: list[dict] = []
         product_inventory: list[dict] = []
         for product in product_rows:
@@ -824,8 +827,7 @@ def build_price_checks(
     all_eans = list(offers_by_barcode.keys())
     
     if all_eans:
-        session = SessionLocal()
-        try:
+        with get_session() as session:
             record_debug("Tworzenie zadań scrapowania", {"count": len(all_eans), "eans": all_eans})
             
             for ean in all_eans:
@@ -838,52 +840,50 @@ def build_price_checks(
                 )
                 session.commit()
                 
-                # Check for existing results from scraper
-                placeholders = ",".join([f":ean{i}" for i in range(len(all_eans))])
-                params = {f"ean{i}": ean for i, ean in enumerate(all_eans)}
+            # Check for existing results from scraper
+            placeholders = ",".join([f":ean{i}" for i in range(len(all_eans))])
+            params = {f"ean{i}": ean for i, ean in enumerate(all_eans)}
+            
+            result_query = session.execute(
+                text(f"""
+                SELECT ean, price, url, error
+                FROM scraper_tasks
+                WHERE ean IN ({placeholders})
+                  AND status = 'done'
+                  AND completed_at > datetime('now', '-1 hour')
+                ORDER BY completed_at DESC
+                """),
+                params
+            )
+            rows = result_query.fetchall()
+            
+            # Use latest results
+            ean_results = {}
+            for row in rows:
+                ean = row[0]
+                if ean not in ean_results:  # Take first (latest) result
+                    ean_results[ean] = {
+                        "price": row[1],
+                        "url": row[2],
+                        "error": row[3]
+                    }
+            
+            # Map results to offers
+            for barcode, grouped_offers in offers_by_barcode.items():
+                result = ean_results.get(barcode)
                 
-                result_query = session.execute(
-                    text(f"""
-                    SELECT ean, price, url, error
-                    FROM scraper_tasks
-                    WHERE ean IN ({placeholders})
-                      AND status = 'done'
-                      AND completed_at > datetime('now', '-1 hour')
-                    ORDER BY completed_at DESC
-                    """),
-                    params
-                )
-                rows = result_query.fetchall()
-                
-                # Use latest results
-                ean_results = {}
-                for row in rows:
-                    ean = row[0]
-                    if ean not in ean_results:  # Take first (latest) result
-                        ean_results[ean] = {
-                            "price": row[1],
-                            "url": row[2],
-                            "error": row[3]
+                if result and result["price"]:
+                    # Found price
+                    for offer in grouped_offers:
+                        results_by_offer[offer["offer_id"]] = {
+                            "competitor_price": result["price"],
+                            "competitor_url": result["url"],
+                            "error": None,
                         }
-                
-                # Map results to offers
-                for barcode, grouped_offers in offers_by_barcode.items():
-                    result = ean_results.get(barcode)
-                    
-                    if result and result["price"]:
-                        # Found price
-                        for offer in grouped_offers:
-                            results_by_offer[offer["offer_id"]] = {
-                                "competitor_price": result["price"],
-                                "competitor_url": result["url"],
-                                "error": None,
-                            }
-                        record_debug(
-                            "Najniższa cena dla EAN (z cache)",
-                            {"ean": barcode, "price": _format_decimal(result["price"])}
-                        )
-        finally:
-            session.close()
+                    record_debug(
+                        "Najniższa cena dla EAN (z cache)",
+                        {"ean": barcode, "price": _format_decimal(result["price"])}
+                    )
 
     def process_competitor_lookup(
         *,

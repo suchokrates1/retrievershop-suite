@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Backward compatibility layer for legacy service imports."""
 
+from typing import Dict, Optional
 from pypdf import PdfReader
 
 from .db import consume_stock, get_session, record_purchase, record_sale
@@ -27,14 +28,65 @@ from .domain.products import (
     _clean_barcode,
     _to_decimal,
     _to_int,
-    create_product,
+    create_product as _create_product_new,
     delete_product,
     find_by_barcode,
     get_product_details,
     list_products,
-    update_product,
+    update_product as _update_product_new,
 )
 from .domain.reports import get_sales_summary
+
+
+def create_product(
+    name_or_category: str,
+    color: str,
+    quantities: Dict[str, int],
+    barcodes: Dict[str, Optional[str]],
+    brand: str = "Truelove",
+    series: Optional[str] = None,
+) -> Product:
+    """Create a product with sizes - backward compatible wrapper.
+    
+    Supports both old API (name, color, ...) and new API (category, color, ..., brand, series).
+    For backward compatibility, if 'name' is passed it becomes 'category'.
+    """
+    # For legacy calls where name was passed, use it as category
+    return _create_product_new(
+        category=name_or_category,
+        brand=brand,
+        series=series,
+        color=color,
+        quantities=quantities,
+        barcodes=barcodes,
+    )
+
+
+def update_product(
+    product_id: int,
+    name_or_category: str,
+    color: str,
+    quantities: Dict[str, int],
+    barcodes: Dict[str, Optional[str]],
+    purchase_prices: Optional[Dict[str, Optional[float]]] = None,
+    brand: str = "Truelove",
+    series: Optional[str] = None,
+) -> Optional[Product]:
+    """Update product details - backward compatible wrapper.
+    
+    Supports both old API (id, name, color, ...) and new API with brand, series.
+    For backward compatibility, if 'name' is passed it becomes 'category'.
+    """
+    return _update_product_new(
+        product_id=product_id,
+        category=name_or_category,
+        brand=brand,
+        series=series,
+        color=color,
+        quantities=quantities,
+        barcodes=barcodes,
+        purchase_prices=purchase_prices,
+    )
 
 __all__ = [
     "consume_order_stock",

@@ -12,7 +12,15 @@
             </a>
             <div class="d-flex justify-content-between align-items-start">
                 <div>
-                    <h2>{{ product.name }}</h2>
+                    <h2>
+                        {% if product.series %}{{ product.series }}{% endif %}
+                        {{ product.category }}
+                    </h2>
+                    <p class="text-muted mb-1">
+                        <strong>Marka:</strong> {{ product.brand or 'Truelove' }} |
+                        <strong>Kategoria:</strong> {{ product.category }}
+                        {% if product.series %} | <strong>Seria:</strong> {{ product.series }}{% endif %}
+                    </p>
                     {% if product.color %}
                     <span class="badge bg-secondary fs-6">{{ product.color }}</span>
                     {% endif %}

@@ -293,7 +293,9 @@ bp = Blueprint("products", __name__)
 def add_item():
     form = AddItemForm()
     if form.validate_on_submit():
-        name = form.name.data
+        category = form.category.data
+        brand = form.brand.data or "Truelove"
+        series = form.series.data or None
         color = form.color.data
         
         # If user selected "Inny" (Other), use custom color field
@@ -316,9 +318,9 @@ def add_item():
         }
 
         try:
-            create_product(name, color, quantities, barcodes)
+            create_product(category, brand, series, color, quantities, barcodes)
         except Exception as e:
-            flash(f"B\u0142\u0105d podczas dodawania przedmiotu: {e}")
+            flash(f"Błąd podczas dodawania przedmiotu: {e}")
         return redirect(url_for("products.items"))
 
     return render_template("add_item.html", form=form)
@@ -354,7 +356,9 @@ def delete_item(item_id):
 @login_required
 def edit_item(product_id):
     if request.method == "POST":
-        name = request.form["name"]
+        category = request.form["category"]
+        brand = request.form.get("brand") or "Truelove"
+        series = request.form.get("series") or None
         color = request.form["color"]
         sizes = ALL_SIZES
         quantities = {
@@ -370,10 +374,10 @@ def edit_item(product_id):
         }
         try:
             updated = update_product(
-                product_id, name, color, quantities, barcodes, purchase_prices
+                product_id, category, brand, series, color, quantities, barcodes, purchase_prices
             )
         except Exception as e:
-            flash(f"B\u0142ąd podczas aktualizacji przedmiotu: {e}")
+            flash(f"Błąd podczas aktualizacji przedmiotu: {e}")
             return redirect(url_for("products.items"))
         if not updated:
             flash("Nie znaleziono produktu o podanym identyfikatorze")

@@ -2,7 +2,28 @@ import pytest
 from magazyn.factory import create_app
 from magazyn.db import reset_db
 from magazyn.settings_store import settings_store
+from magazyn.models import Product
 from collections import OrderedDict
+
+
+def make_product(category="Szelki", brand="Truelove", series=None, color="Czarny"):
+    """Helper to create Product instances with new field structure.
+    
+    Args:
+        category: Product category (default: "Szelki")
+        brand: Product brand (default: "Truelove")  
+        series: Product series (optional)
+        color: Product color (default: "Czarny")
+    
+    Returns:
+        Product instance
+    """
+    return Product(
+        category=category,
+        brand=brand,
+        series=series,
+        color=color
+    )
 
 @pytest.fixture
 def app(tmp_path, monkeypatch):
@@ -123,6 +144,15 @@ def login(client, app):
 def app_mod(app):
     """Import magazyn.app module with the test app configured."""
     import magazyn.app as app_mod
+    from magazyn.db import get_session, record_purchase, consume_stock
+    from magazyn.settings_io import load_settings
+    from magazyn.allegro import ALLEGRO_AUTHORIZATION_URL
     # Store the test app in the module for tests that need it
     app_mod.app = app
+    # Add commonly used functions for backward compatibility in tests
+    app_mod.get_session = get_session
+    app_mod.record_purchase = record_purchase
+    app_mod.consume_stock = consume_stock
+    app_mod.load_settings = load_settings
+    app_mod.ALLEGRO_AUTHORIZATION_URL = ALLEGRO_AUTHORIZATION_URL
     return app_mod

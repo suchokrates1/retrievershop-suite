@@ -42,8 +42,9 @@ def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
     assert resp.status_code == 302
 
     with app_mod.get_session() as db:
+        # Use _name column for SQL query since name is a hybrid_property
         prod = (
-            db.query(Product).filter_by(name="ProdInv", color="Blue").first()
+            db.query(Product).filter(Product._name == "ProdInv", Product.color == "Blue").first()
         )
         assert prod is not None
         ps = (
@@ -101,7 +102,7 @@ def test_import_invoice_with_spaces(app_mod, client, login, tmp_path):
     with app_mod.get_session() as db:
         prod = (
             db.query(Product)
-            .filter_by(name="ProdSpace", color="Green")
+            .filter(Product._name == "ProdSpace", Product.color == "Green")
             .first()
         )
         assert prod is not None
@@ -142,7 +143,7 @@ def test_import_invoice_pdf(app_mod, client, login):
     assert resp.status_code == 302
 
     with app_mod.get_session() as db:
-        prod = db.query(Product).filter_by(name="Rain Coat").first()
+        prod = db.query(Product).filter(Product._name == "Rain Coat").first()
         assert prod is not None
         ps = (
             db.query(ProductSize)
@@ -166,8 +167,8 @@ def test_import_invoice_pdf_skips_invalid_size(app_mod, client, login):
     assert resp.status_code == 302
 
     with app_mod.get_session() as db:
-        assert db.query(Product).filter_by(name="Test Product").first() is None
-        prod = db.query(Product).filter_by(name="Another").first()
+        assert db.query(Product).filter(Product._name == "Test Product").first() is None
+        prod = db.query(Product).filter(Product._name == "Another").first()
         assert prod is not None
         ps = (
             db.query(ProductSize)
@@ -223,7 +224,7 @@ def test_confirm_invoice_updates_existing(app_mod, client, login, tmp_path):
     assert resp.status_code == 302
 
     with app_mod.get_session() as db:
-        assert db.query(Product).filter_by(name="Other").first() is None
+        assert db.query(Product).filter(Product._name == "Other").first() is None
         ps = db.query(ProductSize).filter_by(id=ps_id).first()
         assert ps.quantity == 3
         batch = db.execute(
@@ -237,7 +238,8 @@ def test_confirm_invoice_updates_existing(app_mod, client, login, tmp_path):
 
 def test_import_invoice_alias_matches_existing(app_mod, client, login, tmp_path):
     with app_mod.get_session() as db:
-        prod = Product(name="Szelki dla psa Truelove Tropical", color="turkusowe")
+        # Create product with new structure (category, brand, series)
+        prod = Product(category="Szelki", brand="Truelove", series="Tropical", color="turkusowe")
         db.add(prod)
         db.flush()
         ps = ProductSize(product_id=prod.id, size="L", quantity=1)
@@ -279,15 +281,17 @@ def test_import_invoice_alias_matches_existing(app_mod, client, login, tmp_path)
     assert resp.status_code == 302
 
     with app_mod.get_session() as db:
+        # Search by structured fields (category, series, color)
         prod = (
             db.query(Product)
-            .filter_by(name="Szelki dla psa Truelove Tropical", color="turkusowe")
+            .filter_by(category="Szelki", series="Tropical", color="turkusowe")
             .first()
         )
         assert prod is not None
+        # Verify there's no product with "Front Line Premium Tropical" series
         assert (
             db.query(Product)
-            .filter_by(name="Szelki dla psa Truelove Front Line Premium Tropical")
+            .filter_by(series="Front Line Premium Tropical")
             .first()
             is None
         )
@@ -355,7 +359,7 @@ def test_import_invoice_rows_creates_new_product(app_mod):
     with app_mod.get_session() as db:
         product = (
             db.query(Product)
-            .filter_by(name="NewProd", color="Blue")
+            .filter(Product._name == "NewProd", Product.color == "Blue")
             .one()
         )
         ps = (

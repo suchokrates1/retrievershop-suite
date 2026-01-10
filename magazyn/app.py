@@ -136,12 +136,16 @@ def _api_token_ok(value: Optional[str]) -> bool:
 
 @bp.app_context_processor
 def inject_current_year():
+    from .constants import PRODUCT_CATEGORIES, PRODUCT_BRANDS, PRODUCT_SERIES
     with get_session() as db:
         unread_count = db.query(Thread).filter_by(read=False).count()
     return {
         "current_year": datetime.now().year, 
         "unread_count": unread_count,
         "now": datetime.now,  # Function to get current time in templates
+        "PRODUCT_CATEGORIES": PRODUCT_CATEGORIES,
+        "PRODUCT_BRANDS": PRODUCT_BRANDS,
+        "PRODUCT_SERIES": PRODUCT_SERIES,
     }
 
 

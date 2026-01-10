@@ -32,7 +32,9 @@ def test_sales_summary(app_mod, monkeypatch):
     summary = services.get_sales_summary(7)
     summary_map = {(row["name"], row["size"]): row for row in summary}
 
-    assert summary_map[("Prod", "M")]["sold"] == 2
-    assert summary_map[("Prod", "M")]["remaining"] == 3
-    assert summary_map[("Prod", "L")]["sold"] == 1
-    assert summary_map[("Prod", "L")]["remaining"] == 3
+    # Product name is now category + " dla psa" + brand (default: Truelove)
+    expected_name = "Prod dla psa Truelove"
+    assert summary_map[(expected_name, "M")]["sold"] == 2
+    assert summary_map[(expected_name, "M")]["remaining"] == 3
+    assert summary_map[(expected_name, "L")]["sold"] == 1
+    assert summary_map[(expected_name, "L")]["remaining"] == 3

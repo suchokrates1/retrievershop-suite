@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from ..constants import ALL_SIZES
+from ..constants import ALL_SIZES, PRODUCT_CATEGORIES, PRODUCT_BRANDS, PRODUCT_SERIES
 from ..db import get_session
 from ..models import Product, ProductSize, PurchaseBatch
 
@@ -52,14 +52,21 @@ def _clean_barcode(value) -> Optional[str]:
 
 
 def create_product(
-    name: str,
+    category: str,
+    brand: str,
+    series: Optional[str],
     color: str,
     quantities: Dict[str, int],
     barcodes: Dict[str, Optional[str]],
 ):
     """Create a product with sizes and return the Product instance."""
     with get_session() as db:
-        product = Product(name=name, color=color)
+        product = Product(
+            category=category,
+            brand=brand,
+            series=series or None,
+            color=color
+        )
         db.add(product)
         db.flush()
         for size in ALL_SIZES:
@@ -77,7 +84,9 @@ def create_product(
 
 def update_product(
     product_id: int,
-    name: str,
+    category: str,
+    brand: str,
+    series: Optional[str],
     color: str,
     quantities: Dict[str, int],
     barcodes: Dict[str, Optional[str]],
@@ -90,8 +99,10 @@ def update_product(
             logger.warning(f"Product with ID {product_id} not found during update")
             return None
         
-        logger.info(f"Updating product {product_id}: {name} ({color})")
-        product.name = name
+        logger.info(f"Updating product {product_id}: {category} {brand} {series} ({color})")
+        product.category = category
+        product.brand = brand
+        product.series = series or None
         product.color = color
         for size in ALL_SIZES:
             qty = _to_int(quantities.get(size, 0))
@@ -149,11 +160,12 @@ def delete_product(product_id: int):
 
 
 def list_products() -> List[dict]:
-    """Return products with their sizes for listing, sorted by name A-Z, color A-Z."""
+    """Return products with their sizes for listing, sorted by series, category, color."""
     with get_session() as db:
-        # Sort by name (case-insensitive) and color (case-insensitive)
+        # Sort by series, category, color
         products = db.query(Product).order_by(
-            Product.name.asc(),
+            Product.series.asc(),
+            Product.category.asc(),
             Product.color.asc()
         ).all()
         result = []
@@ -162,7 +174,11 @@ def list_products() -> List[dict]:
             result.append(
                 {
                     "id": p.id,
-                    "name": p.name,
+                    "name": p.name,  # Full name via property
+                    "display_name": p.display_name,  # Short display name
+                    "category": p.category,
+                    "brand": p.brand,
+                    "series": p.series,
                     "color": p.color,
                     "sizes": sizes,
                 }
@@ -178,7 +194,15 @@ def get_product_details(
         row = db.query(Product).filter_by(id=product_id).first()
         product = None
         if row:
-            product = {"id": row.id, "name": row.name, "color": row.color}
+            product = {
+                "id": row.id,
+                "name": row.name,
+                "display_name": row.display_name,
+                "category": row.category,
+                "brand": row.brand,
+                "series": row.series,
+                "color": row.color
+            }
         sizes_rows = db.query(ProductSize).filter_by(product_id=product_id).all()
         product_sizes = {
             size: {"quantity": 0, "barcode": "", "purchase_price": ""} for size in ALL_SIZES
@@ -205,15 +229,33 @@ def find_by_barcode(barcode: str) -> Optional[dict]:
     """Return product information for the given barcode."""
     with get_session() as db:
         row = (
-            db.query(Product.name, Product.color, ProductSize.size, ProductSize.id)
+            db.query(
+                Product.category,
+                Product.brand,
+                Product.series,
+                Product.color,
+                ProductSize.size,
+                ProductSize.id
+            )
             .join(ProductSize)
             .filter(ProductSize.barcode == barcode)
             .first()
         )
         if row:
-            name, color, size, product_size_id = row
+            category, brand, series, color, size, product_size_id = row
+            # Build name from new fields
+            parts = [category or "Szelki", "dla psa"]
+            if brand:
+                parts.append(brand)
+            if series:
+                parts.append(series)
+            name = " ".join(parts)
+            
             return {
                 "name": name,
+                "category": category,
+                "brand": brand,
+                "series": series,
                 "color": color,
                 "size": size,
                 "product_size_id": product_size_id,
