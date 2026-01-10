@@ -643,6 +643,10 @@ def _check_and_auto_pack():
     
     if product_age > 60 or label_age > 60:
         current_app.logger.info("Auto-pack: Timeout - scans too old")
+        # Clear old scans
+        session.pop('last_product_scan', None)
+        session.pop('last_label_scan', None)
+        session.pop('scanned_products_for_order', None)
         return
     
     # Check if scanned product belongs to the scanned order
@@ -681,9 +685,42 @@ def _check_and_auto_pack():
         
         if not order_product:
             current_app.logger.warning(f"Auto-pack: Produkt {product_size_id} NIE należy do zamówienia {order_id}")
+            flash('Zeskanowany produkt nie należy do tej paczki!', 'warning')
             return
         
         current_app.logger.info(f"Auto-pack: ✓ Produkt {product_size_id} należy do zamówienia {order_id}")
+        
+        # CRITICAL: Track scanned products for this order in session
+        # Initialize tracking dict if not exists
+        scanned_tracking = session.get('scanned_products_for_order', {})
+        order_id_str = str(order_id)
+        
+        if order_id_str not in scanned_tracking:
+            scanned_tracking[order_id_str] = []
+        
+        # Add current product to scanned list (avoid duplicates)
+        if product_size_id not in scanned_tracking[order_id_str]:
+            scanned_tracking[order_id_str].append(product_size_id)
+        
+        session['scanned_products_for_order'] = scanned_tracking
+        
+        # Get all products that should be in this order
+        all_order_products = (
+            db.query(OrderProduct)
+            .filter(OrderProduct.order_id == order_id)
+            .all()
+        )
+        
+        required_product_ids = {op.product_size_id for op in all_order_products}
+        scanned_product_ids = set(scanned_tracking[order_id_str])
+        missing_products = required_product_ids - scanned_product_ids
+        
+        if missing_products:
+            current_app.logger.info(f"Auto-pack: Brakuje produktów: {missing_products}")
+            flash(f'Zeskanowano {len(scanned_product_ids)}/{len(required_product_ids)} produktów', 'info')
+            return
+        
+        current_app.logger.info(f"Auto-pack: ✓ Wszystkie produkty zeskanowane ({len(required_product_ids)} szt.)")
         
         # All conditions met - change status to "spakowano"
         new_status = OrderStatusLog(
@@ -700,7 +737,12 @@ def _check_and_auto_pack():
         session.pop('last_product_scan', None)
         session.pop('last_label_scan', None)
         
-        flash(f'Spakowano', 'success')
+        # Clear scanned products for this order
+        if 'scanned_products_for_order' in session and order_id_str in session['scanned_products_for_order']:
+            session['scanned_products_for_order'].pop(order_id_str, None)
+            session.modified = True
+        
+        flash(f'✅ Spakowano zamówienie {order_id}!', 'success')
 
 
 def _load_order_for_barcode(barcode: str):
