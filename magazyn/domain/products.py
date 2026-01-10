@@ -18,6 +18,8 @@ def _to_int(value) -> int:
         return 0
     if isinstance(value, str):
         value = value.replace(" ", "").replace(",", "")
+        if value == "":
+            return 0
     return int(value)
 
 

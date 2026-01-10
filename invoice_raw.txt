@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\Users\sucho\retrievershop-suite\read_invoice.py", line 1, in <module>
+    import PyPDF2
+ModuleNotFoundError: No module named 'PyPDF2'
