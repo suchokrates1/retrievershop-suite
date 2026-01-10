@@ -782,7 +782,11 @@ def sync_order_from_data(db, order_data: dict) -> Order:
                 )
                 if ps:
                     product_size_id = ps.id
-                    current_app.logger.info(f"Matched product by name/color/size: {name} {color} {size} -> {ps.id}")
+                    current_app.logger.info(f"✅ Matched: {prod.get('name')} -> {name}/{color}/{size} -> product_size_id={ps.id}")
+                else:
+                    current_app.logger.warning(f"❌ NOT MATCHED: {prod.get('name')} -> parsed: {name}/{color}/{size}")
+            else:
+                current_app.logger.warning(f"❌ NOT MATCHED (parse failed): {prod.get('name')} -> name={name}, size={size}, color={color}")
         
         order_product = OrderProduct(
             order_id=order_id,
