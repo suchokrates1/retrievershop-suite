@@ -431,6 +431,11 @@ def offers():
 @bp.route("/offers-and-prices")
 @login_required
 def offers_and_prices():
+    import time
+    start_time = time.time()
+    request_id = f"{int(start_time * 1000)}"
+    current_app.logger.info(f"📊 REQUEST START [{request_id}] /offers-and-prices")
+    
     with get_session() as db:
         # Get all active offers with their linked products
         rows = (
@@ -594,6 +599,9 @@ def offers_and_prices():
             )
         inventory = product_inventory + inventory
 
+    elapsed = time.time() - start_time
+    current_app.logger.info(f"✅ REQUEST END [{request_id}] /offers-and-prices - took {elapsed:.2f}s, {len(offers_data)} offers")
+    
     response = make_response(render_template(
         "allegro/offers_and_prices.html",
         offers=offers_data,
