@@ -582,6 +582,9 @@ def barcode_scan():
         return ("", 400)
     result = find_by_barcode(barcode)
     if result:
+        # DEBUG: Log what we're sending to frontend
+        current_app.logger.info(f"[BARCODE_SCAN] EAN: {barcode} → Result: {json.dumps(result, ensure_ascii=False)}")
+        
         # Log successful scan
         _log_scan('product', barcode, True, result)
         
