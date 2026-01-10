@@ -1,6 +1,7 @@
 import base64
 from decimal import Decimal
 import json
+import requests
 import secrets
 from typing import Callable, Optional
 from queue import Queue
