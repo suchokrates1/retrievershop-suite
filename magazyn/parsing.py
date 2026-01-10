@@ -26,6 +26,8 @@ COLOR_ALIASES = {
     "pomarańczowe": "pomarańczowy",
     "pomarańczowa": "pomarańczowy",
     "turkusowe": "turkusowy",
+    "granatowe": "granatowy",
+    "szare": "szary",
 }
 
 # Mapping of normalized product keywords to canonical product names.  The
