@@ -118,7 +118,8 @@ def _get_status_display(status: str) -> tuple[str, str]:
         
         # Etap transportu (z Allegro API)
         "w_drodze": ("W drodze", "bg-warning text-dark"),
-        "gotowe_do_odbioru": ("Gotowe do odbioru", "bg-info"),
+        "gotowe_do_odbioru": ("Do odbioru", "bg-info"),
+        "awizo": ("Awizo", "bg-warning text-dark"),
         
         # Finał
         "dostarczono": ("Dostarczono", "bg-success"),
@@ -127,6 +128,7 @@ def _get_status_display(status: str) -> tuple[str, str]:
         # Problemy
         "niedostarczono": ("Niedostarczono", "bg-danger"),
         "zwrot": ("Zwrot", "bg-danger"),
+        "zagubiono": ("Zagubiono", "bg-danger"),
         "anulowano": ("Anulowano", "bg-dark"),
     }
     return STATUS_MAP.get(status, (status, "bg-secondary"))
