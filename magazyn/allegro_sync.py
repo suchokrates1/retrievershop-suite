@@ -319,16 +319,15 @@ def sync_offers():
 
                 if product_size:
                     matched_count += 1
-            next_page = data.get("nextPage") or data.get("links", {}).get("next")
-            if isinstance(next_page, list):
-                next_page = next_page[0] if next_page else None
-            if not next_page:
+            
+            # Pagination based on totalCount (API doesn't return nextPage)
+            total_count = data.get("totalCount", 0)
+            if fetched_count >= total_count:
+                # All offers fetched
                 break
-            next_offset, next_limit = _extract_pagination(next_page, limit)
-            if next_offset is None or next_offset == offset:
-                break
-            offset = next_offset
-            limit = next_limit
+            
+            # Move to next page
+            offset += limit
 
         session.flush()
         trend_report = allegro_prices.generate_trend_report(session)
