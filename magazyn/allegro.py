@@ -321,9 +321,17 @@ def offers():
                     parts.append(product_for_label.color)
                 label = " ".join(parts)
             
-            # DISABLED: EAN fetching blocks all workers (1s per offer × hundreds of offers)
-            # Will be re-enabled with proper caching or async fetching
-            ean = ""
+            # Use cached EAN from database, fetch from API only if missing
+            ean = offer.ean or ""
+            if not ean:
+                try:
+                    ean = _get_ean_for_offer(offer.offer_id)
+                    # Cache it in database for future use
+                    if ean:
+                        offer.ean = ean
+                        db.commit()
+                except Exception as e:
+                    ean = ""
             
             offer_data = {
                 "offer_id": offer.offer_id,
@@ -502,10 +510,18 @@ def offers_and_prices():
                 "is_linked": bool(offer.product_size_id or offer.product_id),
             }
             
-            # DISABLED: EAN fetching from Allegro API blocks all workers (1s per offer × hundreds of offers)
-            # EAN is only needed for linking offers, can be fetched on-demand when needed
-            # TODO: Add separate endpoint to fetch EAN for specific offer, or cache in database
-            offer_data["ean"] = ""
+            # Use cached EAN from database, fetch from API only if missing
+            ean_value = offer.ean or ""
+            if not ean_value:
+                try:
+                    ean_value = _get_ean_for_offer(offer.offer_id)
+                    # Cache it in database for future use
+                    if ean_value:
+                        offer.ean = ean_value
+                        db.commit()
+                except Exception as e:
+                    pass
+            offer_data["ean"] = ean_value
             offers_data.append(offer_data)
 
         # Build inventory for dropdown
