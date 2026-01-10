@@ -81,7 +81,7 @@ BASELINKER_STATUS_MAP = {
     91615: "pobrano",           # Nowe zamówienie
     91616: "niewydrukowano",    # Oczekujące
     91617: "wydrukowano",       # W realizacji
-    91618: "spakowano",         # Gotowe do wysyłki
+    91618: "wydrukowano",       # Gotowe do wysyłki - NIE ustawiamy "spakowano" automatycznie, tylko przez skanowanie
     91619: "w_drodze",          # Wysłane
     91620: "w_drodze",          # W transporcie
     91621: "dostarczono",       # Zakończone
