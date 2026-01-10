@@ -219,49 +219,63 @@ def sync_offers():
                     price = Decimal("0.00")
 
                 title = offer.get("name") or offer.get("title", "")
-                name, color, size = parse_offer_title(title)
-                color = normalize_color(color)
-                normalized_offer_color_key = _normalize_color_key(color)
+                
+                # Try to match by EAN first (most reliable)
+                product_size = None
+                offer_ean = offer.get("ean", "").strip() or None
+                if offer_ean:
+                    product_size = (
+                        session.query(ProductSize)
+                        .filter(ProductSize.barcode == offer_ean)
+                        .first()
+                    )
+                    if product_size:
+                        logger.debug(f"Matched offer {offer.get('id')} by EAN {offer_ean}")
+                
+                # If no EAN match, try by name/color/size
+                if not product_size:
+                    name, color, size = parse_offer_title(title)
+                    color = normalize_color(color)
+                    normalized_offer_color_key = _normalize_color_key(color)
 
-                base_query = (
-                    session.query(ProductSize)
-                    .join(Product)
-                    .filter(Product.name == name, ProductSize.size == size)
-                )
-
-                if color:
-                    product_sizes = base_query.all()
-                else:
-                    product_sizes = (
-                        base_query.filter(
-                            or_(Product.color == "", Product.color.is_(None))
-                        ).all()
+                    base_query = (
+                        session.query(ProductSize)
+                        .join(Product)
+                        .filter(Product.name == name, ProductSize.size == size)
                     )
 
-                product_size = None
-                if color:
-                    for candidate in product_sizes:
-                        product_color_value = candidate.product.color or ""
-                        if not product_color_value.strip():
-                            continue
-                        normalized_product_color = normalize_color(product_color_value)
-                        if (
-                            _normalize_color_key(normalized_product_color)
-                            == normalized_offer_color_key
-                        ):
-                            product_size = candidate
-                            break
-                    if not product_size and normalized_offer_color_key:
+                    if color:
+                        product_sizes = base_query.all()
+                    else:
+                        product_sizes = (
+                            base_query.filter(
+                                or_(Product.color == "", Product.color.is_(None))
+                            ).all()
+                        )
+
+                    if color:
                         for candidate in product_sizes:
                             product_color_value = candidate.product.color or ""
-                            component_keys = _normalized_product_color_components(
-                                product_color_value
-                            )
-                            if normalized_offer_color_key in component_keys:
+                            if not product_color_value.strip():
+                                continue
+                            normalized_product_color = normalize_color(product_color_value)
+                            if (
+                                _normalize_color_key(normalized_product_color)
+                                == normalized_offer_color_key
+                            ):
                                 product_size = candidate
                                 break
-                else:
-                    product_size = product_sizes[0] if product_sizes else None
+                        if not product_size and normalized_offer_color_key:
+                            for candidate in product_sizes:
+                                product_color_value = candidate.product.color or ""
+                                component_keys = _normalized_product_color_components(
+                                    product_color_value
+                                )
+                                if normalized_offer_color_key in component_keys:
+                                    product_size = candidate
+                                    break
+                    else:
+                        product_size = product_sizes[0] if product_sizes else None
 
                 product_id = product_size.product_id if product_size else None
                 product_size_id = product_size.id if product_size else None
@@ -277,6 +291,7 @@ def sync_offers():
                 if existing:
                     existing.title = title
                     existing.price = price
+                    existing.ean = offer_ean
                     if product_size is not None or existing.product_size_id is None:
                         existing.product_id = product_id
                         existing.product_size_id = product_size_id
@@ -287,6 +302,7 @@ def sync_offers():
                             offer_id=offer.get("id"),
                             title=title,
                             price=price,
+                            ean=offer_ean,
                             product_id=product_id,
                             product_size_id=product_size_id,
                             synced_at=timestamp,
