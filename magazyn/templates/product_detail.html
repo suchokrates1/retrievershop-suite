@@ -13,8 +13,9 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h2>
-                        {% if product.series %}{{ product.series }}{% endif %}
                         {{ product.category }}
+                        {% if product.brand %}{{ product.brand }}{% endif %}
+                        {% if product.series %}{{ product.series }}{% endif %}
                     </h2>
                     <p class="text-muted mb-1">
                         <strong>Marka:</strong> {{ product.brand or 'Truelove' }} |
@@ -93,6 +94,7 @@
                         </thead>
                         <tbody>
                         {% for size in sizes %}
+                            {% if size.barcode or size.quantity != 0 %}
                             <tr>
                                 <td><strong>{{ size.size }}</strong></td>
                                 <td>

@@ -98,16 +98,21 @@
 
     const buildProductSpeechText = (data) => {
         const speechParts = [];
-        if (data.name) {
-            speechParts.push(`Produkt ${data.name}`);
+        // Series or name
+        if (data.series) {
+            speechParts.push(data.series);
+        } else if (data.name) {
+            speechParts.push(data.name);
         }
+        // Size
         if (data.size) {
-            speechParts.push(`${data.size}`);
+            speechParts.push(data.size);
         }
+        // Color
         if (data.color) {
-            speechParts.push(`${data.color}`);
+            speechParts.push(data.color);
         }
-        return speechParts.join('. ');
+        return speechParts.join(' ');
     };
 
     const buildLabelInfoText = (data) => {
@@ -130,19 +135,29 @@
         // Use delivery_method for better description (e.g., "Paczkomat InPost")
         const deliveryMethod = data.delivery_method || data.courier_code || 'paczka';
         if (!products.length) {
-            return `Paczka ${deliveryMethod}`;
+            return deliveryMethod;
         }
 
         const productTexts = products.map((item) => {
-            const qtyText = item.quantity ? `${item.quantity} sztuki` : '1 sztuka';
-            const name = item.name || 'produkt';
-            const size = item.size ? `rozmiar ${item.size}` : '';
-            const color = item.color ? `kolor ${item.color}` : '';
-            const details = [name, size, color].filter(Boolean).join(', ');
-            return `${qtyText}: ${details}`.trim();
+            const parts = [];
+            // Series or name
+            if (item.series) {
+                parts.push(item.series);
+            } else if (item.name) {
+                parts.push(item.name);
+            }
+            // Size
+            if (item.size) {
+                parts.push(item.size);
+            }
+            // Color
+            if (item.color) {
+                parts.push(item.color);
+            }
+            return parts.join(' ');
         });
 
-        return `Paczka ${deliveryMethod} zawiera: ${productTexts.join('; ')}`;
+        return `${deliveryMethod} zawiera: ${productTexts.join(', ')}`;
     };
 
     const showSuccess = (data, beepElement, asLabel) => {

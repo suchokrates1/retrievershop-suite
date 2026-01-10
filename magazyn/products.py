@@ -407,9 +407,13 @@ def product_detail(product_id):
             abort(404)
         
         # Get product sizes with their barcodes (EANs), purchase prices and stock info
+        # Sort sizes: S, M, L, XL, 2XL
+        size_order = {"S": 1, "M": 2, "L": 3, "XL": 4, "2XL": 5}
+        sorted_sizes = sorted(product.sizes, key=lambda ps: size_order.get(ps.size, 99))
+        
         sizes_data = []
         all_eans = []
-        for ps in product.sizes:
+        for ps in sorted_sizes:
             # Get latest purchase price for this size
             latest_batch = (
                 db.query(PurchaseBatch)
