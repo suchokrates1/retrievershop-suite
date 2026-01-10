@@ -23,9 +23,9 @@ services:
     command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "lpstat -h /var/run/cups/cups.sock -t >/dev/null 2>&1 && curl -f http://localhost:8000/healthz"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthz || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
       start_period: 10s
     networks:
