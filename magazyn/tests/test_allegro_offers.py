@@ -199,8 +199,9 @@ def test_offers_without_inventory_are_listed_first(client, login):
     unlinked_titles = []
     for row in unlinked_rows:
         columns = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
-        if len(columns) >= 2:
-            unlinked_titles.append(re.sub(r"\s+", " ", columns[1]).strip())
+        # Table columns: 0=ID, 1=EAN, 2=Title, 3=Price, 4=Link
+        if len(columns) >= 3:
+            unlinked_titles.append(re.sub(r"\s+", " ", columns[2]).strip())
 
     assert unlinked_titles == ["ZZZ Oferta bez przypisania"]
 
@@ -208,8 +209,9 @@ def test_offers_without_inventory_are_listed_first(client, login):
     linked_titles = []
     for row in linked_rows:
         columns = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
-        if len(columns) >= 2:
-            linked_titles.append(re.sub(r"\s+", " ", columns[1]).strip())
+        # Table columns: 0=ID, 1=EAN, 2=Title, 3=Price, 4=Link
+        if len(columns) >= 3:
+            linked_titles.append(re.sub(r"\s+", " ", columns[2]).strip())
 
     assert linked_titles == sorted(linked_titles)
 

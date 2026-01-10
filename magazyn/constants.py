@@ -5,6 +5,36 @@ import unicodedata
 
 ALL_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "Uniwersalny"]
 
+# Product categories
+PRODUCT_CATEGORIES = [
+    "Szelki",
+    "Smycz",
+    "Pas bezpieczeństwa",
+    "Obroża",
+]
+
+# Known brands
+PRODUCT_BRANDS = [
+    "Truelove",
+    "Julius-K9",
+    "Ruffwear",
+    "Hurtta",
+]
+
+# Product series (mainly Truelove)
+PRODUCT_SERIES = [
+    "Front Line Premium",
+    "Front Line",
+    "Active",
+    "Blossom",
+    "Tropical",
+    "Lumen",
+    "Amor",
+    "Classic",
+    "Neon",
+    "Reflective",
+]
+
 # Common color names that may appear in product titles.  They are stored in
 # lowercase form to simplify comparisons when parsing strings.
 KNOWN_COLORS = [

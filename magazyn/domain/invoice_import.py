@@ -4,13 +4,16 @@ import io
 import logging
 import re
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pandas as pd
 from pypdf import PdfReader
 
 from ..constants import (
     ALL_SIZES,
+    PRODUCT_CATEGORIES,
+    PRODUCT_BRANDS,
+    PRODUCT_SERIES,
     normalize_product_title_fragment,
     resolve_product_alias,
 )
@@ -19,6 +22,77 @@ from ..models import Product, ProductSize, PurchaseBatch
 from .products import _clean_barcode, _to_decimal, _to_int
 
 logger = logging.getLogger(__name__)
+
+
+def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
+    """Parse product name string into (category, brand, series).
+    
+    Examples:
+    - "Szelki dla psa Truelove Front Line Premium" -> ("Szelki", "Truelove", "Front Line Premium")
+    - "Smycz dla psa Truelove Active" -> ("Smycz", "Truelove", "Active")
+    - "Szelki Front Line Premium" -> ("Szelki", "Truelove", "Front Line Premium")
+    
+    Returns:
+    - (category, brand, series) - category can be None if not recognized
+    """
+    name_lower = (name or "").lower()
+    
+    # Detect category - None if not recognized
+    category = None
+    if "smycz" in name_lower:
+        category = "Smycz"
+    elif "pas" in name_lower and ("bezpiecz" in name_lower or "samochodow" in name_lower):
+        category = "Pas bezpieczeństwa"
+    elif "obroża" in name_lower or "obroza" in name_lower:
+        category = "Obroża"
+    elif "szelki" in name_lower:
+        category = "Szelki"
+    
+    # Detect brand (default Truelove)
+    brand = "Truelove"
+    known_brands_map = {
+        "truelove": "Truelove",
+        "julius-k9": "Julius-K9",
+        "julius k9": "Julius-K9",
+        "ruffwear": "Ruffwear",
+        "hurtta": "Hurtta",
+    }
+    for pattern, brand_name in known_brands_map.items():
+        if pattern in name_lower:
+            brand = brand_name
+            break
+    
+    # Detect series (order matters - more specific first)
+    series = None
+    series_patterns = [
+        ("front line premium", "Front Line Premium"),
+        ("front-line premium", "Front Line Premium"),
+        ("frontline premium", "Front Line Premium"),
+        ("fron line premium", "Front Line Premium"),
+        ("frolin-prem", "Front Line Premium"),
+        ("frolin prem", "Front Line Premium"),
+        ("front line", "Front Line"),
+        ("front-line", "Front Line"),
+        ("frontline", "Front Line"),
+        ("fron line", "Front Line"),
+        ("frolin", "Front Line"),
+        ("active", "Active"),
+        ("blossom", "Blossom"),
+        ("tropical", "Tropical"),
+        ("tropic", "Tropical"),
+        ("lumen", "Lumen"),
+        ("amor", "Amor"),
+        ("classic", "Classic"),
+        ("neon", "Neon"),
+        ("reflective", "Reflective"),
+    ]
+    
+    for pattern, series_name in series_patterns:
+        if pattern in name_lower:
+            series = series_name
+            break
+    
+    return category, brand, series
 
 
 def _parse_simple_pdf(fh) -> pd.DataFrame:
@@ -277,6 +351,9 @@ def _import_invoice_df(
         quantity = _to_int(row.get("Ilość", 0))
         price = _to_decimal(row.get("Cena", 0))
         barcode = _clean_barcode(row.get("Barcode"))
+        
+        # Parse name into structured fields
+        category, brand, series = parse_product_name_to_fields(name)
 
         with get_session() as db:
             ps = None
@@ -292,13 +369,35 @@ def _import_invoice_df(
                     size = ps.size
 
             if not product:
+                # Try to find by new structured fields first
                 product = (
                     db.query(Product)
-                    .filter_by(name=name, color=color)
+                    .filter_by(category=category, brand=brand, series=series, color=color)
                     .first()
                 )
+                # Fallback: try by old name field for backward compatibility
                 if not product:
-                    product = Product(name=name, color=color)
+                    product = (
+                        db.query(Product)
+                        .filter(Product._name == name, Product.color == color)
+                        .first()
+                    )
+                if not product:
+                    # If category was not detected, store original name in _name for backward compat
+                    if category:
+                        product = Product(
+                            category=category,
+                            brand=brand,
+                            series=series,
+                            color=color
+                        )
+                    else:
+                        # Unknown product type - store original name
+                        product = Product(
+                            _name=name,
+                            brand=brand,
+                            color=color
+                        )
                     db.add(product)
                     db.flush()
 

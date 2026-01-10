@@ -440,7 +440,8 @@ def test_sync_offers_matches_keyword_models(monkeypatch, app_mod):
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
 
     with get_session() as session:
-        product = Product(name="Szelki dla psa Truelove Lumen", color="Czerwony")
+        # Use structured fields for proper series matching
+        product = Product(category="Szelki", brand="Truelove", series="Lumen", color="Czerwony")
         size = ProductSize(product=product, size="M")
         session.add_all([product, size])
         session.flush()
@@ -613,14 +614,15 @@ def test_sync_offers_matches_alias_variants(monkeypatch, app_mod):
 
     with get_session() as session:
         expectations = {}
+        # Use structured fields for proper series matching
         product_specs = [
-            ("Szelki dla psa Truelove Front Line Premium", "Czarny", "M"),
-            ("Szelki dla psa Truelove Tropical", "Turkusowy", "L"),
-            ("Szelki dla psa Truelove Lumen", "Czerwony", "S"),
-            ("Szelki dla psa Truelove Blossom", "Różowy", "XS"),
+            ({"category": "Szelki", "brand": "Truelove", "series": "Front Line Premium"}, "Czarny", "M"),
+            ({"category": "Szelki", "brand": "Truelove", "series": "Tropical"}, "Turkusowy", "L"),
+            ({"category": "Szelki", "brand": "Truelove", "series": "Lumen"}, "Czerwony", "S"),
+            ({"category": "Szelki", "brand": "Truelove", "series": "Blossom"}, "Różowy", "XS"),
         ]
-        for idx, (name, color, size) in enumerate(product_specs, start=1):
-            product = Product(name=name, color=color)
+        for idx, (fields, color, size) in enumerate(product_specs, start=1):
+            product = Product(**fields, color=color)
             size_obj = ProductSize(product=product, size=size)
             session.add_all([product, size_obj])
             session.flush()
@@ -672,11 +674,10 @@ def test_sync_offers_distinguishes_front_line_variants(monkeypatch, app_mod):
     monkeypatch.setattr(sync_mod.allegro_api, "fetch_offers", fake_fetch_offers)
 
     with get_session() as session:
-        front_line = Product(name="Szelki dla psa Truelove Front Line", color="Czerwony")
+        # Use new structure: category, brand, series
+        front_line = Product(category="Szelki", brand="Truelove", series="Front Line", color="Czerwony")
         front_line_size = ProductSize(product=front_line, size="M")
-        premium = Product(
-            name="Szelki dla psa Truelove Front Line Premium", color="Czerwony"
-        )
+        premium = Product(category="Szelki", brand="Truelove", series="Front Line Premium", color="Czerwony")
         premium_size = ProductSize(product=premium, size="M")
         session.add_all([front_line, front_line_size, premium, premium_size])
         session.flush()

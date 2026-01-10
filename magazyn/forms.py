@@ -1,8 +1,8 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SelectField, IntegerField
-from wtforms.validators import DataRequired, NumberRange
+from wtforms.validators import DataRequired, NumberRange, Optional
 
-from .constants import ALL_SIZES
+from .constants import ALL_SIZES, PRODUCT_CATEGORIES, PRODUCT_BRANDS, PRODUCT_SERIES
 
 
 class LoginForm(FlaskForm):
@@ -11,7 +11,21 @@ class LoginForm(FlaskForm):
 
 
 class AddItemForm(FlaskForm):
-    name = StringField("name", validators=[DataRequired()])
+    category = SelectField(
+        "category",
+        choices=[(c, c) for c in PRODUCT_CATEGORIES],
+        validators=[DataRequired()],
+    )
+    brand = SelectField(
+        "brand",
+        choices=[(b, b) for b in PRODUCT_BRANDS] + [("Inna", "Inna marka")],
+        default="Truelove",
+    )
+    series = SelectField(
+        "series",
+        choices=[("", "-- Brak serii --")] + [(s, s) for s in PRODUCT_SERIES],
+        validators=[Optional()],
+    )
     color = SelectField(
         "color",
         choices=[

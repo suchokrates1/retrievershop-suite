@@ -4,9 +4,34 @@
 <h2 class="mb-3 text-center">Dodaj nowy przedmiot</h2>
     <form action="{{ url_for('products.add_item') }}" method="post" class="row row-cols-1 row-cols-md-2 g-3 w-100">
         {{ form.csrf_token }}
-        <div class="col-md-6">
-            <label for="name" class="form-label">Nazwa produktu:</label>
-            <input type="text" id="name" name="name" required class="form-control">
+        
+        <div class="col-md-4">
+            <label for="category" class="form-label">Kategoria:</label>
+            <select id="category" name="category" required class="form-select">
+                {% for cat in PRODUCT_CATEGORIES %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label for="brand" class="form-label">Marka:</label>
+            <select id="brand" name="brand" class="form-select">
+                {% for brand in PRODUCT_BRANDS %}
+                <option value="{{ brand }}" {% if brand == "Truelove" %}selected{% endif %}>{{ brand }}</option>
+                {% endfor %}
+                <option value="Inna">Inna marka</option>
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label for="series" class="form-label">Seria:</label>
+            <select id="series" name="series" class="form-select">
+                <option value="">-- Brak serii --</option>
+                {% for ser in PRODUCT_SERIES %}
+                <option value="{{ ser }}">{{ ser }}</option>
+                {% endfor %}
+            </select>
         </div>
 
         <div class="col-md-6">

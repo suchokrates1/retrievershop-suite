@@ -10,8 +10,10 @@ from sqlalchemy import (
     DateTime,
     func,
     Boolean,
+    case,
 )
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 
 Base = declarative_base()
 
@@ -26,11 +28,73 @@ class User(Base):
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
+    # Keep old 'name' column for backward compatibility during migration
+    _name = Column("name", String, nullable=True)
+    # New structured fields
+    category = Column(String, nullable=True)  # e.g. "Szelki", "Smycz", "Pas bezpieczeństwa"
+    brand = Column(String, nullable=True, default="Truelove")  # e.g. "Truelove"
+    series = Column(String, nullable=True)  # e.g. "Front Line Premium", "Active", "Blossom"
     color = Column(String)
     sizes = relationship(
         "ProductSize", back_populates="product", cascade="all, delete-orphan"
     )
+    
+    def __init__(self, **kwargs):
+        """Initialize Product with support for legacy 'name' parameter."""
+        # Handle legacy 'name' parameter for backward compatibility
+        if 'name' in kwargs and 'category' not in kwargs:
+            kwargs['_name'] = kwargs.pop('name')
+        super().__init__(**kwargs)
+    
+    @hybrid_property
+    def name(self) -> str:
+        """Return full product name for backward compatibility."""
+        # If new fields are populated, build name from them
+        if self.category:
+            parts = [self.category, "dla psa"]
+            if self.brand:
+                parts.append(self.brand)
+            if self.series:
+                parts.append(self.series)
+            return " ".join(parts)
+        # Fallback to old name column
+        return self._name or ""
+    
+    @name.inplace.setter
+    def _name_setter(self, value: str):
+        """Set name for backward compatibility (stores in _name column)."""
+        self._name = value
+    
+    @name.inplace.expression
+    @classmethod
+    def _name_expression(cls):
+        """SQL expression for name - builds full name from category/brand/series or uses _name."""
+        from sqlalchemy import case, func
+        # Build name from category + "dla psa" + brand + series when category exists
+        # Otherwise fallback to _name
+        return case(
+            (cls.category.isnot(None) & (cls.category != ""),
+             func.coalesce(cls.category, "") + " dla psa" +
+             case((cls.brand.isnot(None) & (cls.brand != ""), " " + cls.brand), else_="") +
+             case((cls.series.isnot(None) & (cls.series != ""), " " + cls.series), else_="")),
+            else_=func.coalesce(cls._name, "")
+        )
+    
+    @property
+    def display_name(self) -> str:
+        """Return display name (shorter version for UI)."""
+        if self.series:
+            return f"{self.series} {self.category or ''}"
+        elif self.brand and self.category:
+            return f"{self.brand} {self.category}"
+        elif self.category:
+            return self.category
+        return self._name or ""
+    
+    @property
+    def short_name(self) -> str:
+        """Return very short name (series only or category)."""
+        return self.series or self.category or self._name or ""
 
 
 class ProductSize(Base):

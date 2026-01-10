@@ -11,7 +11,8 @@ def test_create_and_list(app_mod):
     services = load_services()
     services.create_product("Prod", "Red", {"M": 2}, {"M": "111"})
     items = services.list_products()
-    assert items[0]["name"] == "Prod"
+    # Category is stored, name property builds full name
+    assert items[0]["category"] == "Prod"
     assert items[0]["sizes"]["M"] == 2
 
 
@@ -20,7 +21,8 @@ def test_update_and_get_details(app_mod):
     prod = services.create_product("Prod", "Red", {"M": 1}, {"M": "111"})
     services.update_product(prod.id, "Prod2", "Blue", {"M": 5}, {"M": "222"})
     info, sizes = services.get_product_details(prod.id)
-    assert info["name"] == "Prod2"
+    # Category is stored, name property builds full name
+    assert info["category"] == "Prod2"
     assert sizes["M"]["quantity"] == 5
     assert sizes["M"]["barcode"] == "222"
 
@@ -68,7 +70,8 @@ def test_find_by_barcode(app_mod):
     services = load_services()
     prod = services.create_product("Prod", "Green", {"M": 1}, {"M": "999"})
     result = services.find_by_barcode("999")
-    assert result["name"] == "Prod"
+    # Category is stored, name property builds full name
+    assert result["category"] == "Prod"
     assert result["color"] == "Green"
     assert result["size"] == "M"
     assert "product_size_id" in result

@@ -141,10 +141,32 @@ def get_session():
 get_db_connection = get_session
 
 
+def _create_scraper_tasks_table():
+    """Create scraper_tasks table if it doesn't exist."""
+    with sqlite_connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scraper_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ean TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                result TEXT,
+                error TEXT,
+                url TEXT,
+                price TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scraper_tasks_status ON scraper_tasks(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scraper_tasks_ean ON scraper_tasks(ean)")
+        conn.commit()
+
+
 def init_db():
     """Initialize the SQLite database and create required tables."""
     Base.metadata.create_all(engine)
-
+    _create_scraper_tasks_table()
 
 def reset_db():
     """Drop all tables and recreate them.
@@ -154,8 +176,10 @@ def reset_db():
     Base.metadata.drop_all(engine)
     with sqlite_connect() as conn:
         conn.execute("DROP TABLE IF EXISTS alembic_version")
+        conn.execute("DROP TABLE IF EXISTS scraper_tasks")
         conn.commit()
     Base.metadata.create_all(engine)
+    _create_scraper_tasks_table()
 
 
 def create_default_user_if_needed(app):
