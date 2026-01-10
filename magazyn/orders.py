@@ -756,14 +756,16 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         
         # Try to link to warehouse product
         product_size_id = None
+        ean_matched = False
         
         # 1. Try by EAN first (most reliable)
         if ean:
             ps = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
             if ps:
                 product_size_id = ps.id
+                ean_matched = True
         
-        # 2. If no EAN match, try intelligent matching by name/color/size
+        # 2. If no EAN or EAN didn't match, try intelligent matching by name/color/size
         if not product_size_id:
             from .parsing import parse_product_info
             name, size, color = parse_product_info(prod)
