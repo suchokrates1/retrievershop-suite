@@ -68,4 +68,7 @@ def test_find_by_barcode(app_mod):
     services = load_services()
     prod = services.create_product("Prod", "Green", {"M": 1}, {"M": "999"})
     result = services.find_by_barcode("999")
-    assert result == {"name": "Prod", "color": "Green", "size": "M"}
+    assert result["name"] == "Prod"
+    assert result["color"] == "Green"
+    assert result["size"] == "M"
+    assert "product_size_id" in result

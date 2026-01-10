@@ -14,6 +14,8 @@ from flask import (
     after_this_request,
     abort,
     session,
+    current_app,
+    g,
 )
 import pandas as pd
 import tempfile
@@ -44,7 +46,7 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import PrintedOrder, ProductSize, Product, PurchaseBatch, OrderProduct, Order, OrderStatusLog
+from .models import PrintedOrder, ProductSize, Product, PurchaseBatch, OrderProduct, Order, OrderStatusLog, ScanLog
 from .parsing import parse_product_info
 from sqlalchemy import desc
 import time
@@ -542,6 +544,27 @@ def items():
     return render_template("items.html", products=result)
 
 
+def _log_scan(scan_type: str, barcode: str, success: bool, result_data=None, error_message=None):
+    """Log a scan event to the database for debugging and audit."""
+    try:
+        user_id = getattr(g, 'user', {}).get('id') if hasattr(g, 'user') else None
+        if user_id is None and 'user_id' in session:
+            user_id = session.get('user_id')
+        
+        with get_session() as db:
+            log = ScanLog(
+                scan_type=scan_type,
+                barcode=barcode,
+                success=success,
+                result_data=json.dumps(result_data) if result_data else None,
+                error_message=error_message,
+                user_id=user_id,
+            )
+            db.add(log)
+    except Exception as e:
+        current_app.logger.warning(f"Failed to log scan: {e}")
+
+
 @bp.route("/barcode_scan", methods=["POST"])
 @login_required
 def barcode_scan():
@@ -551,6 +574,9 @@ def barcode_scan():
         return ("", 400)
     result = find_by_barcode(barcode)
     if result:
+        # Log successful scan
+        _log_scan('product', barcode, True, result)
+        
         # Store last product scan in session for auto-packing
         session['last_product_scan'] = {
             'barcode': barcode,
@@ -563,6 +589,9 @@ def barcode_scan():
         
         flash(f'Znaleziono produkt: {result["name"]}')
         return jsonify(result)
+    
+    # Log failed scan
+    _log_scan('product', barcode, False, error_message="Nie znaleziono produktu")
     flash("Nie znaleziono produktu o podanym kodzie kreskowym")
     return ("", 400)
 
@@ -714,6 +743,8 @@ def label_barcode_scan():
 
     order_id, order_data = _load_order_for_barcode(barcode)
     if not order_data:
+        # Log failed scan
+        _log_scan('label', barcode, False, error_message="Nie znaleziono paczki")
         return jsonify({"error": "Nie znaleziono paczki dla zeskanowanej etykiety."}), 404
 
     products = []
@@ -748,6 +779,10 @@ def label_barcode_scan():
         "delivery_method": delivery_method,
         "courier_code": courier_code,
     }
+    
+    # Log successful scan
+    _log_scan('label', barcode, True, response)
+    
     return jsonify(response)
 
 
@@ -762,6 +797,38 @@ def label_scan_page():
         barcode_endpoint=url_for("products.label_barcode_scan"),
         barcode_error_message="Nie znaleziono paczki dla zeskanowanej etykiety.",
     )
+
+
+@bp.route("/scan_logs")
+@login_required
+def scan_logs():
+    """Display recent scan logs for debugging."""
+    limit = request.args.get("limit", 20, type=int)
+    scan_type = request.args.get("type")  # 'product', 'label', or None for all
+    
+    with get_session() as db:
+        query = db.query(ScanLog).order_by(desc(ScanLog.created_at))
+        if scan_type:
+            query = query.filter(ScanLog.scan_type == scan_type)
+        logs = query.limit(limit).all()
+        
+        result = []
+        for log in logs:
+            result.append({
+                "id": log.id,
+                "scan_type": log.scan_type,
+                "barcode": log.barcode,
+                "success": log.success,
+                "result_data": json.loads(log.result_data) if log.result_data else None,
+                "error_message": log.error_message,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            })
+    
+    # If JSON requested
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify(result)
+    
+    return render_template("scan_logs.html", logs=result)
 
 
 @bp.route("/export_products")

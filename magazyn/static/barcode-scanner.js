@@ -266,12 +266,112 @@
         tryNext(0);
     };
 
+    // Global barcode scanner detector - detects fast keyboard input from BT scanners
+    // without stealing focus from other inputs
+    class GlobalBarcodeDetector {
+        constructor(options) {
+            this.buffer = '';
+            this.lastKeyTime = 0;
+            this.maxTimeBetweenKeys = options.maxTimeBetweenKeys || 50; // ms - scanners type very fast
+            this.minBarcodeLength = options.minBarcodeLength || 4;
+            this.onScan = options.onScan || (() => {});
+            this.enabled = true;
+            this.clearBufferTimeout = null;
+        }
+
+        isInputElement(element) {
+            if (!element) return false;
+            const tagName = element.tagName ? element.tagName.toLowerCase() : '';
+            return ['input', 'textarea', 'select'].includes(tagName) || element.isContentEditable;
+        }
+
+        handleKeyDown(event) {
+            if (!this.enabled) return;
+
+            const now = Date.now();
+            const timeSinceLastKey = now - this.lastKeyTime;
+
+            // Clear buffer if too much time passed (user typing normally)
+            if (timeSinceLastKey > this.maxTimeBetweenKeys && this.buffer.length > 0) {
+                this.buffer = '';
+            }
+
+            // Only intercept if NOT in an input field OR if typing is scanner-fast
+            const inInputField = this.isInputElement(document.activeElement);
+            const isScannerSpeed = timeSinceLastKey < this.maxTimeBetweenKeys;
+
+            if (event.key === 'Enter' && this.buffer.length >= this.minBarcodeLength) {
+                // We have a complete barcode!
+                const barcode = this.buffer;
+                this.buffer = '';
+                this.lastKeyTime = 0;
+                
+                // If we're in an input field and it was scanner speed, prevent normal submit
+                if (inInputField && isScannerSpeed) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    // Clear the input field that received scanner input
+                    if (document.activeElement.value) {
+                        document.activeElement.value = document.activeElement.value.slice(0, -barcode.length);
+                    }
+                }
+                
+                this.onScan(barcode);
+                return;
+            }
+
+            // Only capture printable characters
+            if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                // For input fields - only track if scanner-speed or starting fresh
+                if (inInputField) {
+                    if (this.buffer.length === 0 || isScannerSpeed) {
+                        this.buffer += event.key;
+                        this.lastKeyTime = now;
+                    } else {
+                        // User is typing normally - reset
+                        this.buffer = '';
+                    }
+                } else {
+                    // Not in input - capture everything
+                    this.buffer += event.key;
+                    this.lastKeyTime = now;
+                }
+
+                // Auto-clear buffer after timeout
+                clearTimeout(this.clearBufferTimeout);
+                this.clearBufferTimeout = setTimeout(() => {
+                    this.buffer = '';
+                }, 200);
+            }
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const hiddenInput = document.getElementById('barcode-scanner-input');
         const beepElement = document.getElementById('barcode-beep-sound');
         const csrfElement = document.getElementById('barcode-csrf-token');
         const csrfToken = csrfElement ? csrfElement.value : '';
 
+        // Initialize global barcode detector
+        const globalDetector = new GlobalBarcodeDetector({
+            maxTimeBetweenKeys: 50,
+            minBarcodeLength: 4,
+            onScan: (barcode) => {
+                console.log('[Scanner] Detected barcode:', barcode);
+                submitBarcode(barcode, {
+                    csrfToken,
+                    input: hiddenInput,
+                    beepElement
+                });
+            }
+        });
+
+        // Listen globally for keyboard events
+        document.addEventListener('keydown', (event) => {
+            globalDetector.handleKeyDown(event);
+        }, true); // Use capture phase to intercept before other handlers
+
+        // Keep hidden input for backward compatibility and explicit scanning
         focusScannerInput(hiddenInput);
         if (hiddenInput) {
             hiddenInput.addEventListener('keydown', (event) => {
@@ -284,8 +384,13 @@
                     });
                 }
             });
+            // Reduced aggressiveness - only refocus after longer delay and if nothing else focused
             hiddenInput.addEventListener('blur', () => {
-                setTimeout(() => focusScannerInput(hiddenInput), 50);
+                setTimeout(() => {
+                    if (!globalDetector.isInputElement(document.activeElement)) {
+                        focusScannerInput(hiddenInput);
+                    }
+                }, 500);
             });
         }
 
@@ -312,9 +417,7 @@
                     }
                 });
             }
-            input.addEventListener('blur', () => {
-                setTimeout(() => focusScannerInput(hiddenInput), 100);
-            });
+            // Don't auto-refocus from manual inputs - let user control focus
         });
 
         document.addEventListener('barcode:scan', (event) => {
