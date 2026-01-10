@@ -53,16 +53,25 @@ def _strip_diacritics(value: str) -> str:
 def normalize_color(color: str) -> str:
     if not color:
         return ""
-    normalized_color = _strip_diacritics(color)
+    normalized_color = _strip_diacritics(color).lower()
+    
+    # Try exact match first
+    for alias, canonical in COLOR_ALIASES.items():
+        normalized_alias = _strip_diacritics(alias).lower()
+        if normalized_color == normalized_alias:
+            return canonical.capitalize()
+    
+    # Try prefix match for compound colors
     base_match = ""
     base_color = color.lower()
     for alias, canonical in COLOR_ALIASES.items():
-        normalized_alias = _strip_diacritics(alias)
+        normalized_alias = _strip_diacritics(alias).lower()
         if normalized_color.startswith(normalized_alias):
             if len(normalized_alias) > len(base_match):
                 base_match = normalized_alias
                 base_color = canonical
     return base_color.capitalize()
+
 
 
 def _normalize_keyword_text(value: str) -> str:
