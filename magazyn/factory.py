@@ -42,6 +42,9 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     app = Flask(__name__)
     app.secret_key = settings.SECRET_KEY
+    
+    # Configure CSRF protection
+    app.config['WTF_CSRF_TIME_LIMIT'] = None  # Disable CSRF token expiration
 
     if config:
         app.config.update(config)
