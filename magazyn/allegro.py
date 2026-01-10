@@ -253,12 +253,9 @@ def allegro_oauth_debug():
 
 def _get_ean_for_offer(offer_id: str) -> str:
     """Get EAN for an offer from Allegro API."""
-    print(f"DEBUG: Starting EAN lookup for offer {offer_id}, has_app_context: {has_app_context()}")
-    current_app.logger.error(f"DEBUG: Starting EAN lookup for offer {offer_id}, has_app_context: {has_app_context()}")
     try:
         access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
         if not access_token:
-            current_app.logger.error(f"DEBUG: No Allegro access token for EAN lookup of offer {offer_id}")
             return ""
         
         headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.allegro.public.v1+json"}
@@ -266,13 +263,11 @@ def _get_ean_for_offer(offer_id: str) -> str:
         url1 = f"https://api.allegro.pl/sale/product-offers/{offer_id}"
         response1 = requests.get(url1, headers=headers, timeout=10)
         if response1.status_code != 200:
-            current_app.logger.error(f"DEBUG: Allegro API error for offer {offer_id}: {response1.status_code}")
             return ""
         
         data1 = response1.json()
         product_set = data1.get("productSet", [])
         if not product_set:
-            current_app.logger.error(f"DEBUG: No product set for offer {offer_id}")
             return ""
         
         product_id = product_set[0]["product"]["id"]
@@ -280,28 +275,18 @@ def _get_ean_for_offer(offer_id: str) -> str:
         url2 = f"https://api.allegro.pl/sale/products/{product_id}"
         response2 = requests.get(url2, headers=headers, timeout=10)
         if response2.status_code != 200:
-            current_app.logger.error(f"DEBUG: Allegro product API error for {product_id}: {response2.status_code}")
             return ""
         
         data2 = response2.json()
         parameters = data2.get("parameters", [])
-        current_app.logger.error(f"DEBUG: Found {len(parameters)} parameters for product {product_id}")
         for param in parameters:
-            current_app.logger.error(f"DEBUG: Param name: '{param.get('name')}'")
             if param.get("name") == "EAN (GTIN)":
                 values = param.get("values", [])
-                current_app.logger.error(f"DEBUG: EAN values: {values}")
                 if values:
-                    current_app.logger.error(f"DEBUG: Returning EAN {values[0]} for offer {offer_id}")
                     return values[0]
-                else:
-                    current_app.logger.error(f"DEBUG: Empty EAN values for offer {offer_id}")
-        current_app.logger.error(f"DEBUG: No EAN parameter found for offer {offer_id}")
         return ""
     except Exception as e:
-        current_app.logger.error(f"DEBUG: Error getting EAN for offer {offer_id}: {e}")
-        import traceback
-        traceback.print_exc()
+        current_app.logger.warning(f"Error getting EAN for offer {offer_id}: {e}")
         return ""
 
 
@@ -335,12 +320,9 @@ def offers():
                 if product_for_label.color:
                     parts.append(product_for_label.color)
                 label = " ".join(parts)
-            current_app.logger.error(f"DEBUG: Processing offer {offer.offer_id}")
             try:
                 ean = _get_ean_for_offer(offer.offer_id)
-                current_app.logger.error(f"DEBUG: EAN for offer {offer.offer_id}: '{ean}'")
             except Exception as e:
-                current_app.logger.error(f"DEBUG: Error getting EAN for offer {offer.offer_id}: {e}")
                 ean = ""
             offer_data = {
                 "offer_id": offer.offer_id,
@@ -440,8 +422,6 @@ def offers():
 @bp.route("/offers-and-prices")
 @login_required
 def offers_and_prices():
-    print("DEBUG PRINT: offers_and_prices called - START")
-    current_app.logger.error("DEBUG: offers_and_prices called - START")
     with get_session() as db:
         # Get all active offers with their linked products
         rows = (
@@ -471,8 +451,6 @@ def offers_and_prices():
             
             current_app.logger.info(f"Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
             
-            current_app.logger.error(f"DEBUG: Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
-            
             competitors = []
             if latest_competitor:
                 competitors = [{
@@ -482,8 +460,6 @@ def offers_and_prices():
                     'delivery_days': latest_competitor.competitor_delivery_days
                 }]
             
-            current_app.logger.error(f"DEBUG: Offer {offer.offer_id}: competitors = {competitors}")
-
             # Calculate price statistics
             competitor_prices = [c['price'] for c in competitors if c.get('price')]
             avg_price = None
@@ -529,9 +505,7 @@ def offers_and_prices():
             try:
                 ean_value = _get_ean_for_offer(offer.offer_id)
                 offer_data["ean"] = ean_value
-                current_app.logger.error(f"DEBUG: Got EAN for offer {offer.offer_id}: '{ean_value}'")
             except Exception as e:
-                current_app.logger.error(f"DEBUG: Error getting EAN for offer {offer.offer_id}: {e}")
                 offer_data["ean"] = ""
             offers_data.append(offer_data)
 
