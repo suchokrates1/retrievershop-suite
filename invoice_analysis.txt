@@ -1,0 +1,209 @@
+========================================================================================================================
+ANALIZA FAKTURY vs BAZA DANYCH
+Faktura: FS 2026/01/000328
+Data: 2026-01-08
+========================================================================================================================
+
+Produkty z faktury (z EANami):
+========================================================================================================================
+ 1. Pas samochodowy dla psa Truelove Premium czarny
+    EAN: 6976128181232
+    Iloœæ: 6, Cena: 52.14 z³
+
+ 2. Szelki z odpinanym przodem dla psa Truelove Front Line Premium czarne (XL)
+    EAN: 6971818794709
+    Iloœæ: 4, Cena: 131.34 z³
+
+ 3. Szelki z odpinanym przodem dla psa Truelove Front Line Premium czarne (S)
+    EAN: 6971818794679
+    Iloœæ: 2, Cena: 131.34 z³
+
+ 4. Szelki dla psa Truelove Front Line Premium br¹zowe (XL)
+    EAN: 6971818795102
+    Iloœæ: 4, Cena: 131.34 z³
+
+ 5. Szelki dla psa Truelove Front Line Premium ró¿owe (S)
+    EAN: 6971818794822
+    Iloœæ: 2, Cena: 131.34 z³
+
+ 6. Profesjonalne szelki dla psa Truelove Front Line Premium czerwone (M)
+    EAN: 6971818795133
+    Iloœæ: 3, Cena: 131.34 z³
+
+ 7. Profesjonalne szelki dla psa Truelove Front Line Premium czerwone (S)
+    EAN: 6971818795126
+    Iloœæ: 2, Cena: 131.34 z³
+
+ 8. Szelki guard dla psa Truelove Front Line Premium pomarañczowe (L)
+    EAN: 6971818794747
+    Iloœæ: 5, Cena: 131.34 z³
+
+ 9. Szelki guard dla psa Truelove Front Line Premium pomarañczowe (S)
+    EAN: 6971818794723
+    Iloœæ: 2, Cena: 131.34 z³
+
+10. Szelki dla psa Truelove Tropical turkusowe (M)
+    EAN: 6971818795188
+    Iloœæ: 2, Cena: 131.34 z³
+
+11. Szelki guard dla psa Truelove Front Line czarne (XL)
+    EAN: 6970117170207
+    Iloœæ: 3, Cena: 118.14 z³
+
+12. Szelki guard dla psa Truelove Front Line czarne (M)
+    EAN: 6970117170184
+    Iloœæ: 2, Cena: 118.14 z³
+
+13. Szelki dla psa Active (XL, czarny)
+    EAN: 6970117170641
+    Iloœæ: 1, Cena: 58.08 z³
+
+14. Szelki dla psa Active (L, czarny)
+    EAN: 6970117170634
+    Iloœæ: 1, Cena: 58.08 z³
+
+15. Szelki dla psa Active (M, czarny)
+    EAN: 6970117170627
+    Iloœæ: 1, Cena: 58.08 z³
+
+16. Szelki dla psa Outdoor (2XL, czerwony)
+    EAN: 6971273110694
+    Iloœæ: 1, Cena: 104.94 z³
+
+17. Szelki easy walk dla psa Truelove Front Line br¹zowe (XL)
+    EAN: 6970117178500
+    Iloœæ: 2, Cena: 118.14 z³
+
+18. Szelki easy walk dla psa Truelove Front Line br¹zowe (L)
+    EAN: 6970117178494
+    Iloœæ: 2, Cena: 118.14 z³
+
+19. Szelki easy walk dla psa Truelove Front Line br¹zowe (M)
+    EAN: 6970117178487
+    Iloœæ: 2, Cena: 118.14 z³
+
+
+========================================================================================================================
+INSTRUKCJE DO SPRAWDZENIA W BAZIE DANYCH:
+========================================================================================================================
+
+1. SprawdŸ ka¿dy EAN z faktury czy istnieje w tabeli product_sizes
+2. SprawdŸ czy rozmiar siê zgadza
+3. SprawdŸ czy nazwa produktu siê zgadza
+
+Komendy SQL do wykonania na RPI:
+
+-- Produkt 1: Pas samochodowy dla psa Truelove Premium czarny
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6976128181232';
+
+-- Produkt 2: Szelki z odpinanym przodem dla psa Truelove Front Line Premium czarne
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818794709';
+
+-- Produkt 3: Szelki z odpinanym przodem dla psa Truelove Front Line Premium czarne
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818794679';
+
+-- Produkt 4: Szelki dla psa Truelove Front Line Premium br¹zowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818795102';
+
+-- Produkt 5: Szelki dla psa Truelove Front Line Premium ró¿owe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818794822';
+
+-- Produkt 6: Profesjonalne szelki dla psa Truelove Front Line Premium czerwone
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818795133';
+
+-- Produkt 7: Profesjonalne szelki dla psa Truelove Front Line Premium czerwone
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818795126';
+
+-- Produkt 8: Szelki guard dla psa Truelove Front Line Premium pomarañczowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818794747';
+
+-- Produkt 9: Szelki guard dla psa Truelove Front Line Premium pomarañczowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818794723';
+
+-- Produkt 10: Szelki dla psa Truelove Tropical turkusowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971818795188';
+
+-- Produkt 11: Szelki guard dla psa Truelove Front Line czarne
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117170207';
+
+-- Produkt 12: Szelki guard dla psa Truelove Front Line czarne
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117170184';
+
+-- Produkt 13: Szelki dla psa Active
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117170641';
+
+-- Produkt 14: Szelki dla psa Active
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117170634';
+
+-- Produkt 15: Szelki dla psa Active
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117170627';
+
+-- Produkt 16: Szelki dla psa Outdoor
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6971273110694';
+
+-- Produkt 17: Szelki easy walk dla psa Truelove Front Line br¹zowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117178500';
+
+-- Produkt 18: Szelki easy walk dla psa Truelove Front Line br¹zowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117178494';
+
+-- Produkt 19: Szelki easy walk dla psa Truelove Front Line br¹zowe
+SELECT p.name, ps.size, ps.barcode, ps.stock
+FROM product_sizes ps
+JOIN products p ON p.id = ps.product_id
+WHERE ps.barcode = '6970117178487';
+
