@@ -346,7 +346,9 @@ def home():
         # =====================================================================
         # Latest orders (last 10) - convert to dicts for template use
         # =====================================================================
+        from sqlalchemy.orm import joinedload
         latest_orders_query = db.query(Order)\
+            .options(joinedload(Order.products))\
             .order_by(desc(Order.date_add))\
             .limit(10)\
             .all()
@@ -366,26 +368,55 @@ def home():
             })
         
         # =====================================================================
-        # Latest deliveries/purchases (last 5) - convert to dicts
+        # Latest deliveries/purchases (last 5 deliveries) - grouped by date/invoice
         # =====================================================================
-        latest_deliveries_query = db.query(PurchaseBatch, Product)\
-            .join(Product)\
-            .order_by(desc(PurchaseBatch.purchase_date))\
-            .limit(5)\
-            .all()
+        from sqlalchemy import func
+        
+        # Get distinct delivery dates/invoices (most recent first)
+        delivery_groups = db.query(
+            PurchaseBatch.purchase_date,
+            PurchaseBatch.invoice_number,
+            PurchaseBatch.supplier,
+            func.count(PurchaseBatch.id).label('batch_count'),
+            func.sum(PurchaseBatch.quantity).label('total_quantity'),
+            func.sum(PurchaseBatch.quantity * PurchaseBatch.price).label('total_value')
+        )\
+        .group_by(PurchaseBatch.purchase_date, PurchaseBatch.invoice_number, PurchaseBatch.supplier)\
+        .order_by(desc(PurchaseBatch.purchase_date))\
+        .limit(5)\
+        .all()
         
         latest_deliveries = []
-        for batch, product in latest_deliveries_query:
+        for date, invoice, supplier, batch_count, total_qty, total_value in delivery_groups:
+            # Get product details for this delivery
+            products_in_delivery = db.query(PurchaseBatch, Product)\
+                .join(Product)\
+                .filter(
+                    PurchaseBatch.purchase_date == date,
+                    PurchaseBatch.invoice_number == invoice,
+                    PurchaseBatch.supplier == supplier
+                )\
+                .all()
+            
+            product_details = []
+            for batch, product in products_in_delivery:
+                product_details.append({
+                    'name': product.name,
+                    'color': product.color,
+                    'size': batch.size,
+                    'quantity': batch.quantity,
+                    'price': batch.price,
+                    'value': batch.quantity * batch.price
+                })
+            
             latest_deliveries.append({
-                'purchase_date': batch.purchase_date,
-                'quantity': batch.quantity,
-                'size': batch.size,
-                'price': batch.price,
-                'invoice_number': batch.invoice_number,
-                'supplier': batch.supplier,
-                'product_id': product.id,
-                'product_name': product.name,
-                'product_color': product.color,
+                'purchase_date': date,
+                'invoice_number': invoice,
+                'supplier': supplier,
+                'batch_count': batch_count,
+                'total_quantity': total_qty,
+                'total_value': total_value,
+                'products': product_details,
             })
         
         # =====================================================================
@@ -426,20 +457,24 @@ def home():
                     'link': url_for('orders.order_detail', order_id=order['order_id'])
                 })
         
-        # Add recent deliveries to activity (latest_deliveries is now list of dicts)
+        # Add recent deliveries to activity (latest_deliveries is now grouped by delivery)
         for delivery in latest_deliveries[:3]:
             try:
                 batch_date = datetime.strptime(delivery['purchase_date'], '%Y-%m-%d')
             except:
                 batch_date = now
+            
+            # Show supplier or invoice if available
+            title_suffix = delivery['supplier'] or delivery['invoice_number'] or f"{delivery['total_quantity']} szt."
+            
             activities.append({
                 'type': 'delivery',
                 'icon': 'bi-box-seam',
                 'color': 'info',
-                'title': f'Dostawa: {delivery["product_name"]}',
-                'description': f'{delivery["quantity"]} szt. × {delivery["size"]} @ {delivery["price"]} zł',
+                'title': f'Dostawa: {title_suffix}',
+                'description': f'{delivery["total_quantity"]} szt. za {delivery["total_value"]:.2f} zł ({delivery["batch_count"]} modeli)',
                 'timestamp': batch_date,
-                'link': url_for('products.product_detail', product_id=delivery['product_id'])
+                'link': url_for('products.items')  # Link to products list since it's a delivery
             })
         
         # Sort activities by timestamp

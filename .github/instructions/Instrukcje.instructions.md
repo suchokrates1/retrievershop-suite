@@ -9,3 +9,4 @@ W kodzie należy stosować się do ustalonych standardów formatowania i konwenc
 Dokumentacja infrastruktury znajduje się w C:\Users\sucho\.config\infrastructure (odczytaj przed użyciem).
 Zawsze sprawdzaj logi kontenerów po wdrożeniu zmian w infrastrukturze, aby upewnić się, że wszystko działa poprawnie.
 Używaj aliasów do ssh
+Po wykonaniu commitu rób compose up build
