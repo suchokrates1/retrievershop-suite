@@ -321,19 +321,20 @@
                             </thead>
                             <tbody>
                                 {% for delivery in dashboard.latest_deliveries %}
+                                {% for product in delivery.products %}
                                 <tr>
                                     <td class="small">{{ delivery.purchase_date }}</td>
                                     <td>
-                                        <a href="{{ url_for('products.product_detail', product_id=delivery.product_id) }}">
-                                            {{ delivery.product_name }} <span class="text-muted">{{ delivery.product_color or '' }}</span>
-                                        </a>
+                                        <div class="fw-semibold">{{ product.name }}</div>
+                                        <small class="text-muted">{{ product.color or '' }}</small>
                                     </td>
-                                    <td>{{ delivery.size }}</td>
-                                    <td><span class="badge bg-info">{{ delivery.quantity }}</span></td>
-                                    <td class="text-success fw-semibold">{{ delivery.price }} zł</td>
+                                    <td>{{ product.size }}</td>
+                                    <td><span class="badge bg-info">{{ product.quantity }}</span></td>
+                                    <td class="text-success fw-semibold">{{ product.price }} zł</td>
                                     <td class="small text-muted">{{ delivery.invoice_number or '-' }}</td>
                                     <td class="small text-muted">{{ delivery.supplier or '-' }}</td>
                                 </tr>
+                                {% endfor %}
                                 {% endfor %}
                             </tbody>
                         </table>
