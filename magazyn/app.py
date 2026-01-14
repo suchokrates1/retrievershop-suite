@@ -388,6 +388,14 @@ def home():
         
         latest_deliveries = []
         for date, invoice, supplier, batch_count, total_qty, total_value in delivery_groups:
+            # Pomijamy dostawy z pustymi wartosciami (None z SQL NULL)
+            if not total_qty or total_qty == 0 or not total_value or total_value == 0:
+                continue
+            
+            # Pomijamy dostawy z nieprawidlowa data (00:00:00 lub pusta)
+            if not date or date == '0000-00-00':
+                continue
+            
             # Get product details for this delivery
             products_in_delivery = db.query(PurchaseBatch, Product)\
                 .join(Product)\
