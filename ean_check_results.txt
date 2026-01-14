@@ -1,4 +1,0 @@
-  File "C:\Users\sucho\retrievershop-suite\check_invoice_eans.py", line 55
-    ['ssh', 'rpi', f'cd retrievershop-suite && docker compose exec -T magazyn_app python -c "from magazyn.db import SessionLocal; from magazyn.models import Product, ProductSize; session = SessionLocal(); ps = session.query(ProductSize).filter_by(barcode=\\'{product["ean"]}\\').first(); p = session.query(Product).filter_by(id=ps.product_id).first() if ps else None; print(f\\'{p.name}|{ps.size}|{ps.barcode}|{ps.stock}|{p.id}|{ps.id}\\' if ps and p else \\'NOT_FOUND\\'); session.close()"'],
-                                                                                                                                                                                                                                                                                   ^
-SyntaxError: unexpected character after line continuation character
