@@ -24,6 +24,7 @@ scripts/debug/
 *.html
 *.png
 *.txt
+!requirements.txt
 allegro_cookies*.json
 tokens.json
 database.db
