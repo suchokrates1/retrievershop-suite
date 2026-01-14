@@ -16,7 +16,7 @@ bp = Blueprint("orders", __name__)
 
 
 # All valid statuses for the system
-# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → gotowe_do_odbioru → dostarczono → zakończono
+# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → w_punkcie → gotowe_do_odbioru → dostarczono → zakończono
 VALID_STATUSES = [
     # Etap wewnętrzny (magazyn)
     "pobrano",              # Pobrano z BaseLinker
@@ -29,6 +29,7 @@ VALID_STATUSES = [
     
     # Etap transportu (z Allegro API)
     "w_drodze",             # W tranzycie
+    "w_punkcie",            # W punkcie odbioru (paczkomat)
     "gotowe_do_odbioru",    # Gotowe do odbioru (paczkomat/punkt)
     
     # Finał
@@ -40,6 +41,26 @@ VALID_STATUSES = [
     "zwrot",                # Zwrot
     "anulowano",            # Anulowano
 ]
+
+# Hierarchia statusów - statusy mogą się tylko przesuwać "do przodu"
+# Im wyższy indeks, tym bardziej zaawansowany status
+# Statusy problemowe (niedostarczono, zwrot, anulowano) można ustawić zawsze
+STATUS_HIERARCHY = {
+    "pobrano": 0,
+    "niewydrukowano": 1,
+    "wydrukowano": 2,
+    "spakowano": 3,
+    "przekazano_kurierowi": 4,
+    "w_drodze": 5,
+    "w_punkcie": 6,
+    "gotowe_do_odbioru": 7,
+    "dostarczono": 8,
+    "zakończono": 9,
+    # Statusy problemowe - mogą być ustawione w każdym momencie
+    "niedostarczono": 999,
+    "zwrot": 999,
+    "anulowano": 999,
+}
 
 # Status IDs - ALL statuses for complete archive
 ALL_STATUS_IDS = [
@@ -829,7 +850,7 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     return order
 
 
-def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, **kwargs) -> Optional[OrderStatusLog]:
+def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, allow_backwards: bool = False, **kwargs) -> Optional[OrderStatusLog]:
     """
     Add a status log entry for an order.
     
@@ -838,19 +859,36 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
         order_id: ID zamówienia
         status: Nowy status
         skip_if_same: Jeśli True, nie dodaje statusu jeśli ostatni status jest taki sam (domyślnie True)
+        allow_backwards: Jeśli True, pozwala na cofanie statusów (domyślnie False)
         **kwargs: tracking_number, courier_code, notes
     
     Returns:
-        OrderStatusLog lub None jeśli pominięto (skip_if_same=True i status się nie zmienił)
+        OrderStatusLog lub None jeśli pominięto (duplikat lub cofnięcie)
     """
-    # Sprawdź czy ostatni status jest taki sam
-    if skip_if_same:
-        last_status = db.query(OrderStatusLog).filter(
-            OrderStatusLog.order_id == order_id
-        ).order_by(desc(OrderStatusLog.timestamp)).first()
+    # Sprawdź ostatni status
+    last_status = db.query(OrderStatusLog).filter(
+        OrderStatusLog.order_id == order_id
+    ).order_by(desc(OrderStatusLog.timestamp)).first()
+    
+    # Sprawdź czy to duplikat (ten sam status)
+    if skip_if_same and last_status and last_status.status == status:
+        return None  # Status się nie zmienił, pomijamy
+    
+    # Sprawdź hierarchię statusów (nie pozwól na cofanie)
+    if not allow_backwards and last_status:
+        last_priority = STATUS_HIERARCHY.get(last_status.status, -1)
+        new_priority = STATUS_HIERARCHY.get(status, -1)
         
-        if last_status and last_status.status == status:
-            return None  # Status się nie zmienił, pomijamy
+        # Jeśli nowy status ma niższy priorytet (cofanie) i nie jest statusem problemowym (999)
+        if new_priority != 999 and last_priority != -1 and new_priority < last_priority:
+            # Cofnięcie statusu - logujemy i pomijamy
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Pominięto cofnięcie statusu zamówienia {order_id}: "
+                f"{last_status.status} (priorytet {last_priority}) → {status} (priorytet {new_priority})"
+            )
+            return None
     
     log = OrderStatusLog(
         order_id=order_id,
