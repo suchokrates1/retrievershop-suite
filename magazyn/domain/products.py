@@ -51,6 +51,34 @@ def _clean_barcode(value) -> Optional[str]:
     return text
 
 
+def validate_ean(ean: Optional[str]) -> Tuple[bool, Optional[str]]:
+    """
+    Walidacja EAN (European Article Number).
+    
+    Args:
+        ean: Kod EAN do walidacji
+        
+    Returns:
+        Tuple (is_valid, error_message):
+            - is_valid: True jeśli EAN jest poprawny lub None, False jeśli niepoprawny
+            - error_message: None jeśli poprawny, komunikat błędu jeśli niepoprawny
+    """
+    # None lub pusty string jest dopuszczalny (produkty mogą nie mieć EAN)
+    if ean is None or ean == "":
+        return True, None
+    
+    # Sprawdzenie czy zawiera tylko cyfry
+    if not ean.isdigit():
+        return False, f"EAN '{ean}' zawiera niedozwolone znaki (dozwolone tylko cyfry)"
+    
+    # Sprawdzenie długości (tylko EAN-8 lub EAN-13)
+    length = len(ean)
+    if length not in (8, 13):
+        return False, f"EAN '{ean}' ma nieprawidłową długość ({length} cyfr). Wymagane: 8 lub 13 cyfr"
+    
+    return True, None
+
+
 def create_product(
     category: str,
     brand: str,
@@ -60,6 +88,13 @@ def create_product(
     barcodes: Dict[str, Optional[str]],
 ):
     """Create a product with sizes and return the Product instance."""
+    # Walidacja wszystkich EAN przed utworzeniem produktu
+    for size, barcode in barcodes.items():
+        if barcode:
+            is_valid, error_msg = validate_ean(barcode)
+            if not is_valid:
+                raise ValueError(f"Nieprawidłowy EAN dla rozmiaru {size}: {error_msg}")
+    
     with get_session() as db:
         product = Product(
             category=category,
@@ -93,6 +128,13 @@ def update_product(
     purchase_prices: Optional[Dict[str, Optional[float]]] = None,
 ):
     """Update product details and size information."""
+    # Walidacja wszystkich EAN przed aktualizacją produktu
+    for size, barcode in barcodes.items():
+        if barcode:
+            is_valid, error_msg = validate_ean(barcode)
+            if not is_valid:
+                raise ValueError(f"Nieprawidłowy EAN dla rozmiaru {size}: {error_msg}")
+    
     with get_session() as db:
         product = db.query(Product).filter_by(id=product_id).first()
         if not product:
@@ -267,6 +309,7 @@ __all__ = [
     "_to_int",
     "_to_decimal",
     "_clean_barcode",
+    "validate_ean",
     "create_product",
     "update_product",
     "delete_product",

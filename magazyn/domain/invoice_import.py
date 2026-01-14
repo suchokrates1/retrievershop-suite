@@ -19,7 +19,7 @@ from ..constants import (
 )
 from ..db import get_session
 from ..models import Product, ProductSize, PurchaseBatch
-from .products import _clean_barcode, _to_decimal, _to_int
+from .products import _clean_barcode, _to_decimal, _to_int, validate_ean
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +351,13 @@ def _import_invoice_df(
         quantity = _to_int(row.get("Ilość", 0))
         price = _to_decimal(row.get("Cena", 0))
         barcode = _clean_barcode(row.get("Barcode"))
+        
+        # Walidacja EAN
+        is_valid, error_msg = validate_ean(barcode)
+        if not is_valid:
+            logger.warning(f"Pomijam wiersz z niepoprawnym EAN: {error_msg}")
+            logger.warning(f"  Produkt: {name}, Kolor: {color}, Rozmiar: {size}")
+            continue
         
         # Parse name into structured fields
         category, brand, series = parse_product_name_to_fields(name)
