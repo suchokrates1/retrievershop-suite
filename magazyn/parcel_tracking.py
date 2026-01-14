@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from collections import defaultdict
 
-from sqlalchemy import and_
+from sqlalchemy import and_, desc
 
 from .db import get_session
 from .models import Order, OrderStatusLog
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Mapowanie statusów Allegro na wewnętrzne statusy
 # https://developer.allegro.pl/documentation/#operation/getParcelTrackingUsingGET
-# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → gotowe_do_odbioru → dostarczono → zakończono
+# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → w_punkcie → gotowe_do_odbioru → dostarczono → zakończono
 ALLEGRO_STATUS_MAP = {
     # Przesyłka utworzona/nadana
     "CREATED": "przekazano_kurierowi",  # Etykieta utworzona, paczka nadana
@@ -34,6 +34,9 @@ ALLEGRO_STATUS_MAP = {
     "COLLECTED": "w_drodze",  # Odebrana przez kuriera
     "IN_TRANSIT": "w_drodze",  # W tranzycie
     "OUT_FOR_DELIVERY": "w_drodze",  # W doręczeniu
+    
+    # W punkcie odbioru (paczkomat/punkt)
+    "AT_PICKUP_POINT": "w_punkcie",  # Dostarczona do punktu odbioru
     
     # Gotowe do odbioru (paczkomat/punkt)
     "READY_TO_PICKUP": "gotowe_do_odbioru",  # Gotowa do odbioru w punkcie
@@ -121,17 +124,39 @@ def sync_parcel_statuses() -> Dict[str, int]:
         
         with get_session() as db:
             # Pobierz zamówienia do sprawdzenia
-            # Statusy: wydrukowano, w_drodze (nie sprawdzamy "dostarczono" ani starszych)
-            orders = db.query(Order).join(
-                OrderStatusLog,
-                and_(
-                    OrderStatusLog.order_id == Order.order_id,
-                    OrderStatusLog.status.in_(["wydrukowano", "w_drodze"])
+            # Szukamy zamówień gdzie OSTATNI status to: wydrukowano, w_drodze lub w_punkcie
+            # (nie sprawdzamy "dostarczono" ani starszych)
+            
+            # Subquery: znajdź ID ostatniego wpisu statusu dla każdego zamówienia
+            latest_status_subq = (
+                db.query(
+                    OrderStatusLog.order_id,
+                    db.func.max(OrderStatusLog.timestamp).label("max_timestamp")
                 )
-            ).filter(
-                Order.delivery_package_nr.isnot(None),
-                Order.delivery_package_nr != ""
-            ).distinct().all()
+                .group_by(OrderStatusLog.order_id)
+                .subquery()
+            )
+            
+            # Główne zapytanie: zamówienia z ostatnim statusem w określonych statusach
+            orders = (
+                db.query(Order)
+                .join(OrderStatusLog, OrderStatusLog.order_id == Order.order_id)
+                .join(
+                    latest_status_subq,
+                    and_(
+                        OrderStatusLog.order_id == latest_status_subq.c.order_id,
+                        OrderStatusLog.timestamp == latest_status_subq.c.max_timestamp,
+                    ),
+                )
+                .filter(
+                    OrderStatusLog.status.in_(["wydrukowano", "w_drodze", "w_punkcie"]),
+                    Order.delivery_package_nr.isnot(None),
+                    Order.delivery_package_nr != "",
+                )
+                .distinct()
+                .all()
+            )
+
             
             logger.info(f"Znaleziono {len(orders)} zamówień do sprawdzenia statusów")
             
