@@ -434,39 +434,73 @@ def home():
         # Helper do pobierania bestselerow z danego okresu
         def get_bestsellers(from_timestamp=None, limit=10):
             """Pobiera najlepiej sprzedajace sie produkty z linkami do produktow."""
-            # Subquery do agregacji sprzedazy per EAN
-            sales_subq = db.query(
+            # Agregacja sprzedazy per nazwa+EAN (grupujemy po nazwie i EAN)
+            query = db.query(
                 OrderProduct.name.label('order_name'),
                 OrderProduct.ean,
+                OrderProduct.auction_id,  # Do fallback przez AllegroOffer
                 func.sum(OrderProduct.quantity).label('total_qty'),
                 func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label('total_revenue'),
                 func.count(func.distinct(OrderProduct.order_id)).label('order_count')
             ).join(Order)
             
             if from_timestamp:
-                sales_subq = sales_subq.filter(Order.date_add >= from_timestamp)
+                query = query.filter(Order.date_add >= from_timestamp)
             
-            sales_subq = sales_subq.group_by(OrderProduct.name, OrderProduct.ean).subquery()
+            results = query.group_by(OrderProduct.name, OrderProduct.ean, OrderProduct.auction_id)\
+                .order_by(desc('total_qty'))\
+                .limit(limit * 2)\
+                .all()  # Pobierz wiecej bo moga byc duplikaty
             
-            # Dolacz do ProductSize i Product aby miec product_id i dodatkowe dane
-            results = db.query(
-                sales_subq.c.order_name,
-                sales_subq.c.ean,
-                sales_subq.c.total_qty,
-                sales_subq.c.total_revenue,
-                sales_subq.c.order_count,
-                Product.id.label('product_id'),
-                Product.series,
-                Product.color,
-                ProductSize.size
-            ).outerjoin(ProductSize, ProductSize.barcode == sales_subq.c.ean)\
-            .outerjoin(Product, Product.id == ProductSize.product_id)\
-            .order_by(desc(sales_subq.c.total_qty))\
-            .limit(limit)\
-            .all()
-            
+            # Dla kazdego wyniku znajdz product_id
             items = []
-            for order_name, ean, qty, revenue, orders, product_id, series, color, size in results:
+            seen_names = set()  # Unikaj duplikatow po nazwie
+            
+            for order_name, ean, auction_id, qty, revenue, orders in results:
+                if len(items) >= limit:
+                    break
+                    
+                # Unikaj duplikatow (ten sam produkt moze miec rozne auction_id)
+                name_key = (order_name or '')[:50]
+                if name_key in seen_names:
+                    continue
+                seen_names.add(name_key)
+                
+                product_id = None
+                series = None
+                color = None
+                size = None
+                
+                # 1. Szukaj przez barcode/EAN
+                if ean:
+                    ps = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
+                    if ps:
+                        product_id = ps.product_id
+                        size = ps.size
+                        prod = db.query(Product).filter(Product.id == ps.product_id).first()
+                        if prod:
+                            series = prod.series
+                            color = prod.color
+                
+                # 2. Fallback: szukaj przez auction_id -> AllegroOffer
+                if not product_id and auction_id:
+                    offer = db.query(AllegroOffer).filter(AllegroOffer.offer_id == auction_id).first()
+                    if offer and offer.product_size_id:
+                        ps = db.query(ProductSize).filter(ProductSize.id == offer.product_size_id).first()
+                        if ps:
+                            product_id = ps.product_id
+                            size = ps.size
+                            prod = db.query(Product).filter(Product.id == ps.product_id).first()
+                            if prod:
+                                series = prod.series
+                                color = prod.color
+                    elif offer and offer.product_id:
+                        product_id = offer.product_id
+                        prod = db.query(Product).filter(Product.id == offer.product_id).first()
+                        if prod:
+                            series = prod.series
+                            color = prod.color
+                
                 # Buduj krotka nazwe: seria/kolor/rozmiar
                 short_parts = []
                 if series:
@@ -478,14 +512,15 @@ def home():
                 short_name = '/'.join(short_parts) if short_parts else (order_name or 'Brak nazwy')[:30]
                 
                 items.append({
-                    'name': order_name or 'Brak nazwy',  # Pelna nazwa do tooltip
-                    'short_name': short_name,  # Krotka nazwa do wyswietlenia
+                    'name': order_name or 'Brak nazwy',
+                    'short_name': short_name,
                     'ean': ean,
                     'quantity': int(qty or 0),
                     'revenue': float(revenue or 0),
                     'orders': int(orders or 0),
-                    'product_id': product_id,  # Do linku
+                    'product_id': product_id,
                 })
+            
             return items
         
         # Bestsellery wszechczasow (top 10)
