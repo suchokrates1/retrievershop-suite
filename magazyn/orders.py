@@ -10,7 +10,7 @@ from sqlalchemy import desc, or_
 
 from .auth import login_required
 from .db import get_session
-from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog
+from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog, AllegroOffer
 
 bp = Blueprint("orders", __name__)
 
@@ -459,19 +459,33 @@ def order_detail(order_id: str):
         # Get order products with warehouse links
         products = []
         for op in order.products:
-            # Try to link to warehouse via EAN
+            # Try to link to warehouse via EAN or auction_id->AllegroOffer
             warehouse_product = None
+            ps = None
+            
+            # 1. Najpierw probuj po EAN
             if op.ean:
                 ps = db.query(ProductSize).filter(ProductSize.barcode == op.ean).first()
-                if ps:
-                    warehouse_product = {
-                        "id": ps.product_id,
-                        "product_size_id": ps.id,
-                        "name": ps.product.name if ps.product else None,
-                        "color": ps.product.color if ps.product else None,
-                        "size": ps.size,
-                        "quantity_in_stock": ps.quantity,
-                    }
+            
+            # 2. Jesli nie znaleziono, probuj przez auction_id -> AllegroOffer
+            if not ps and op.auction_id:
+                allegro_offer = db.query(AllegroOffer).filter(
+                    AllegroOffer.offer_id == op.auction_id
+                ).first()
+                if allegro_offer and allegro_offer.product_size_id:
+                    ps = db.query(ProductSize).filter(
+                        ProductSize.id == allegro_offer.product_size_id
+                    ).first()
+            
+            if ps:
+                warehouse_product = {
+                    "id": ps.product_id,
+                    "product_size_id": ps.id,
+                    "name": ps.product.name if ps.product else None,
+                    "color": ps.product.color if ps.product else None,
+                    "size": ps.size,
+                    "quantity_in_stock": ps.quantity,
+                }
             
             products.append({
                 "id": op.id,
