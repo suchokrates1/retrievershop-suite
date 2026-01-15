@@ -579,7 +579,11 @@
                                         <span class="badge bg-danger">{{ item.sold_30d }}</span>
                                     </td>
                                     <td class="text-center">
-                                        {% set rotation = (item.stock / max(item.sold_30d, 1)) * 30 %}
+                                        {% if item.sold_30d > 0 %}
+                                            {% set rotation = (item.stock / item.sold_30d) * 30 %}
+                                        {% else %}
+                                            {% set rotation = 9999 %}
+                                        {% endif %}
                                         {% if rotation > 180 %}
                                             <span class="badge bg-danger">{{ "%.0f"|format(rotation) }} dni</span>
                                         {% elif rotation > 90 %}
