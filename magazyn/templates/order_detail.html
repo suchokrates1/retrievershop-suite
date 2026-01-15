@@ -251,11 +251,11 @@
                         </div>
                         
                         {# Informacje o zwroconych produktach #}
-                        {% if return_info.items %}
+                        {% if return_info.return_items %}
                         <div class="return-items mb-3">
                             <h6 class="text-muted">Zwracane produkty:</h6>
                             <ul class="list-unstyled mb-0">
-                                {% for item in return_info.items %}
+                                {% for item in return_info.return_items %}
                                 <li><i class="bi bi-box"></i> {{ item.name }} x{{ item.quantity }}</li>
                                 {% endfor %}
                             </ul>

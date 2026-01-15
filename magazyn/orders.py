@@ -605,7 +605,7 @@ def order_detail(order_id: str):
                 "status_text": status_text,
                 "status_class": status_class,
                 "customer_name": active_return.customer_name,
-                "items": return_items,
+                "return_items": return_items,
                 "return_tracking_number": active_return.return_tracking_number,
                 "return_carrier": active_return.return_carrier,
                 "messenger_notified": active_return.messenger_notified,
