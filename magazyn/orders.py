@@ -741,6 +741,29 @@ def reprint_label(order_id: str):
     return redirect(url_for(".orders_list"))
 
 
+@bp.route("/order/<order_id>/restore_return_stock", methods=["POST"])
+@login_required
+def restore_return_stock(order_id: str):
+    """Recznie przywroc stan magazynowy dla zwrotu."""
+    from .returns import restore_stock_for_return
+    from .models import Return
+    
+    with get_session() as db:
+        return_record = db.query(Return).filter(Return.order_id == order_id).first()
+        
+        if not return_record:
+            flash(f"Nie znaleziono zwrotu dla zamowienia {order_id}", "error")
+        elif return_record.stock_restored:
+            flash("Stan juz zostal przywrocony", "warning")
+        else:
+            if restore_stock_for_return(return_record.id):
+                flash("Stan magazynowy zostal przywrocony", "success")
+            else:
+                flash("Nie udalo sie przywrocic stanu - sprawdz czy produkty sa powiazane z magazynem", "error")
+    
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
 @bp.route("/order/<order_id>/download_label", methods=["GET"])
 @login_required
 def download_label(order_id: str):
