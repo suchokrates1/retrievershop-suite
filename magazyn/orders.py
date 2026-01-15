@@ -409,7 +409,13 @@ def orders_list():
                 for p in products[:3]
             ])
             if len(products) > 3:
-                product_summary += f" (+{len(products) - 3} więcej)"
+                product_summary += f" (+{len(products) - 3} wiecej)"
+            
+            # Sprawdz czy zamowienie ma aktywny zwrot
+            has_return = db.query(Return).filter(
+                Return.order_id == order.order_id,
+                Return.status != "cancelled"
+            ).first() is not None
             
             orders_data.append({
                 "order_id": order.order_id,
@@ -425,6 +431,7 @@ def orders_list():
                 "status_class": status_class,
                 "product_summary": product_summary,
                 "tracking_number": order.delivery_package_nr,
+                "has_return": has_return,
             })
         
         # Calculate pagination
