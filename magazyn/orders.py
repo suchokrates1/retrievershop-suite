@@ -10,7 +10,7 @@ from sqlalchemy import desc, or_
 
 from .auth import login_required
 from .db import get_session
-from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch
+from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog
 
 bp = Blueprint("orders", __name__)
 
@@ -96,6 +96,15 @@ SHIPPING_STAGES = [
     ("w_drodze", "bi-truck", "W drodze"),
     ("gotowe_do_odbioru", "bi-geo-alt", "Do odbioru"),
     ("dostarczono", "bi-check-circle", "Dostarczono"),
+]
+
+# Etapy zwrotu dla timeline
+# Format: (status_key, ikona, etykieta)
+RETURN_STAGES = [
+    ("pending", "bi-flag", "Zgloszono"),
+    ("in_transit", "bi-truck", "W drodze"),
+    ("delivered", "bi-box-arrow-in-down", "Odebrano"),
+    ("completed", "bi-check-circle", "Zakonczono"),
 ]
 # Map BaseLinker status_id to our internal status
 BASELINKER_STATUS_MAP = {
@@ -556,6 +565,78 @@ def order_detail(order_id: str):
         if current_stage_key in stage_keys:
             current_stage_index = stage_keys.index(current_stage_key)
         
+        # Pobierz informacje o zwrocie (jesli istnieje)
+        return_info = None
+        return_status_history = []
+        return_stage_index = -1
+        
+        active_return = db.query(Return).filter(
+            Return.order_id == order_id,
+            Return.status != "cancelled"  # Nie pokazuj anulowanych
+        ).order_by(desc(Return.created_at)).first()
+        
+        if active_return:
+            # Mapowanie statusow zwrotu na wyswietlanie
+            RETURN_STATUS_MAP = {
+                "pending": ("Zgloszono zwrot", "bg-warning text-dark"),
+                "in_transit": ("Paczka zwrotna w drodze", "bg-info"),
+                "delivered": ("Paczka zwrotna odebrana", "bg-primary"),
+                "completed": ("Zwrot zakonczony", "bg-success"),
+                "cancelled": ("Zwrot anulowany", "bg-secondary"),
+            }
+            
+            status_text, status_class = RETURN_STATUS_MAP.get(
+                active_return.status, 
+                (active_return.status, "bg-secondary")
+            )
+            
+            # Parsuj items_json
+            import json as json_module
+            return_items = []
+            if active_return.items_json:
+                try:
+                    return_items = json_module.loads(active_return.items_json)
+                except (json_module.JSONDecodeError, TypeError):
+                    pass
+            
+            return_info = {
+                "id": active_return.id,
+                "status": active_return.status,
+                "status_text": status_text,
+                "status_class": status_class,
+                "customer_name": active_return.customer_name,
+                "items": return_items,
+                "return_tracking_number": active_return.return_tracking_number,
+                "return_carrier": active_return.return_carrier,
+                "messenger_notified": active_return.messenger_notified,
+                "stock_restored": active_return.stock_restored,
+                "notes": active_return.notes,
+                "created_at": active_return.created_at,
+                "updated_at": active_return.updated_at,
+            }
+            
+            # Historia statusow zwrotu
+            return_logs = db.query(ReturnStatusLog).filter(
+                ReturnStatusLog.return_id == active_return.id
+            ).order_by(desc(ReturnStatusLog.timestamp)).all()
+            
+            for log in return_logs:
+                log_status_text, log_status_class = RETURN_STATUS_MAP.get(
+                    log.status, (log.status, "bg-secondary")
+                )
+                return_status_history.append({
+                    "status": log.status,
+                    "status_text": log_status_text,
+                    "status_class": log_status_class,
+                    "timestamp": log.timestamp,
+                    "notes": log.notes,
+                })
+            
+            # Indeks etapu zwrotu dla timeline
+            return_stage_keys = [s[0] for s in RETURN_STAGES]
+            if active_return.status in return_stage_keys:
+                return_stage_index = return_stage_keys.index(active_return.status)
+        
         return render_template(
             "order_detail.html",
             order=order,
@@ -572,6 +653,11 @@ def order_detail(order_id: str):
             tracking_url=tracking_url,
             shipping_stages=SHIPPING_STAGES,
             current_stage_index=current_stage_index,
+            # Dane zwrotu
+            return_info=return_info,
+            return_status_history=return_status_history,
+            return_stages=RETURN_STAGES,
+            return_stage_index=return_stage_index,
         )
 
 
