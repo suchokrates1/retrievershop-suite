@@ -8,11 +8,16 @@
     <div class="row mb-4">
         <div class="col">
             <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary mb-2">
-                <i class="bi bi-arrow-left"></i> Powrót do listy
+                <i class="bi bi-arrow-left"></i> Powrot do listy
             </a>
             <h2>
-                Zamówienie #{{ order.order_id }}
+                Zamowienie #{{ order.order_id }}
                 <span class="badge {{ current_status.status_class }} fs-6">{{ current_status.status_text }}</span>
+                {% if return_info %}
+                <span class="badge bg-danger fs-6 ms-1">
+                    <i class="bi bi-arrow-return-left"></i> ZWROT
+                </span>
+                {% endif %}
             </h2>
             {% if order.platform %}
             <span class="badge bg-secondary">{{ order.platform }}</span>
@@ -207,9 +212,101 @@
             {# Shipping info with Timeline #}
             <div class="card mb-3">
                 <div class="card-header">
-                    <i class="bi bi-truck"></i> Wysyłka
+                    <i class="bi bi-truck"></i> Wysylka
                 </div>
                 <div class="card-body">
+                    {% if return_info %}
+                    {# === SEKCJA ZWROTU === #}
+                    <div class="return-section mb-4">
+                        <div class="alert alert-danger mb-3">
+                            <h6 class="mb-2"><i class="bi bi-arrow-return-left"></i> Zwrot w toku</h6>
+                            <p class="mb-1"><strong>Status:</strong> {{ return_info.status_text }}</p>
+                            {% if return_info.return_tracking_number %}
+                            <p class="mb-1"><strong>Nr sledzenia:</strong> <code>{{ return_info.return_tracking_number }}</code></p>
+                            {% endif %}
+                            {% if return_info.notes %}
+                            <p class="mb-0"><small>{{ return_info.notes }}</small></p>
+                            {% endif %}
+                        </div>
+                        
+                        {# Timeline zwrotu #}
+                        <h6 class="text-muted mb-3">Przebieg zwrotu</h6>
+                        <div class="shipping-timeline mb-3">
+                            <div class="timeline-track">
+                                {% for stage_key, stage_icon, stage_label in return_stages %}
+                                {% set is_completed = loop.index0 <= return_stage_index %}
+                                {% set is_current = loop.index0 == return_stage_index %}
+                                <div class="timeline-step return-step {% if is_completed %}completed{% endif %} {% if is_current %}current{% endif %}" 
+                                     style="animation-delay: {{ loop.index0 * 0.1 }}s">
+                                    <div class="step-marker return-marker">
+                                        <i class="bi {{ stage_icon }}"></i>
+                                    </div>
+                                    <span class="step-label">{{ stage_label }}</span>
+                                </div>
+                                {% if not loop.last %}
+                                <div class="timeline-connector return-connector {% if loop.index0 < return_stage_index %}completed{% endif %}"></div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        {# Informacje o zwroconych produktach #}
+                        {% if return_info.items %}
+                        <div class="return-items mb-3">
+                            <h6 class="text-muted">Zwracane produkty:</h6>
+                            <ul class="list-unstyled mb-0">
+                                {% for item in return_info.items %}
+                                <li><i class="bi bi-box"></i> {{ item.name }} x{{ item.quantity }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        
+                        {# Status przywrocenia stanu #}
+                        <div class="d-flex gap-2">
+                            {% if return_info.messenger_notified %}
+                            <span class="badge bg-success"><i class="bi bi-check"></i> Powiadomienie wyslane</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass"></i> Oczekuje na powiadomienie</span>
+                            {% endif %}
+                            {% if return_info.stock_restored %}
+                            <span class="badge bg-success"><i class="bi bi-check"></i> Stan przywrocony</span>
+                            {% else %}
+                            <span class="badge bg-secondary"><i class="bi bi-hourglass"></i> Stan do przywrocenia</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    {# Zwinieta historia wysylki do klienta #}
+                    <details class="mb-3">
+                        <summary class="text-muted cursor-pointer">
+                            <i class="bi bi-clock-history"></i> Historia wysylki do klienta (przed zwrotem)
+                        </summary>
+                        <div class="mt-3">
+                            <div class="shipping-timeline opacity-50">
+                                <div class="timeline-track">
+                                    {% for stage_key, stage_icon, stage_label in shipping_stages %}
+                                    {% set is_completed = loop.index0 <= current_stage_index %}
+                                    {% set is_current = loop.index0 == current_stage_index %}
+                                    <div class="timeline-step {% if is_completed %}completed{% endif %} {% if is_current %}current{% endif %}" 
+                                         style="animation-delay: {{ loop.index0 * 0.1 }}s">
+                                        <div class="step-marker">
+                                            <i class="bi {{ stage_icon }}"></i>
+                                        </div>
+                                        <span class="step-label">{{ stage_label }}</span>
+                                    </div>
+                                    {% if not loop.last %}
+                                    <div class="timeline-connector {% if loop.index0 < current_stage_index %}completed{% endif %}"></div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                    {% else %}
+                    {# === NORMALNA SEKCJA WYSYLKI (bez zwrotu) === #}
                     {# Animowany Timeline #}
                     <div class="shipping-timeline mb-4">
                         <div class="timeline-track">
@@ -231,6 +328,7 @@
                     </div>
                     
                     <hr class="my-3">
+                    {% endif %}
                     
                     <p class="mb-2">
                         <strong>Metoda:</strong> {{ order.delivery_method or '-' }}
@@ -319,11 +417,37 @@
                 </div>
             </div>
 
+            {# Return status history (if return exists) #}
+            {% if return_info and return_status_history %}
+            <div class="card mb-3 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-arrow-return-left"></i> Historia zwrotu
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                    {% for log in return_status_history %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
+                                    {% if log.notes %}
+                                    <br><small class="text-muted">{{ log.notes }}</small>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
+                            </div>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
             {# Status history #}
             {% if status_history %}
             <div class="card mb-3">
                 <div class="card-header">
-                    <i class="bi bi-clock-history"></i> Historia statusów
+                    <i class="bi bi-clock-history"></i> Historia statusow{% if return_info %} (wysylka){% endif %}
                 </div>
                 <div class="card-body p-0">
                     <ul class="list-group list-group-flush">
@@ -464,7 +588,7 @@
     background: #198754;
 }
 
-/* Responsywność dla małych ekranów */
+/* Responsywnosc dla malych ekranow */
 @media (max-width: 576px) {
     .timeline-track {
         overflow-x: auto;
@@ -490,6 +614,56 @@
         min-width: 10px;
         margin-top: 14px;
     }
+}
+
+/* Style dla timeline zwrotu */
+.return-step.completed .step-marker.return-marker {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.return-step.current .step-marker.return-marker {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: white;
+    animation: pulse-danger 2s infinite;
+}
+
+@keyframes pulse-danger {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+    }
+}
+
+.timeline-connector.return-connector.completed {
+    background: #dc3545;
+}
+
+.return-section {
+    border-left: 4px solid #dc3545;
+    padding-left: 15px;
+}
+
+/* Cursor dla details/summary */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+details summary::before {
+    content: '+ ';
+    font-weight: bold;
+}
+
+details[open] summary::before {
+    content: '- ';
 }
 </style>
 {% endblock %}
