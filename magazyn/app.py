@@ -434,11 +434,11 @@ def home():
         # Helper do pobierania bestselerow z danego okresu
         def get_bestsellers(from_timestamp=None, limit=10):
             """Pobiera najlepiej sprzedajace sie produkty z linkami do produktow."""
-            # Agregacja sprzedazy per nazwa+EAN (grupujemy po nazwie i EAN)
+            # Agregacja sprzedazy per nazwa+EAN (BEZ auction_id - bo ten sam produkt 
+            # moze byc sprzedawany z roznych aukcji)
             query = db.query(
                 OrderProduct.name.label('order_name'),
                 OrderProduct.ean,
-                OrderProduct.auction_id,  # Do fallback przez AllegroOffer
                 func.sum(OrderProduct.quantity).label('total_qty'),
                 func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label('total_revenue'),
                 func.count(func.distinct(OrderProduct.order_id)).label('order_count')
@@ -447,25 +447,13 @@ def home():
             if from_timestamp:
                 query = query.filter(Order.date_add >= from_timestamp)
             
-            results = query.group_by(OrderProduct.name, OrderProduct.ean, OrderProduct.auction_id)\
+            results = query.group_by(OrderProduct.name, OrderProduct.ean)\
                 .order_by(desc('total_qty'))\
-                .limit(limit * 2)\
-                .all()  # Pobierz wiecej bo moga byc duplikaty
+                .limit(limit)\
+                .all()
             
-            # Dla kazdego wyniku znajdz product_id
             items = []
-            seen_names = set()  # Unikaj duplikatow po nazwie
-            
-            for order_name, ean, auction_id, qty, revenue, orders in results:
-                if len(items) >= limit:
-                    break
-                    
-                # Unikaj duplikatow (ten sam produkt moze miec rozne auction_id)
-                name_key = (order_name or '')[:50]
-                if name_key in seen_names:
-                    continue
-                seen_names.add(name_key)
-                
+            for order_name, ean, qty, revenue, orders in results:
                 product_id = None
                 series = None
                 color = None
@@ -482,24 +470,33 @@ def home():
                             series = prod.series
                             color = prod.color
                 
-                # 2. Fallback: szukaj przez auction_id -> AllegroOffer
-                if not product_id and auction_id:
-                    offer = db.query(AllegroOffer).filter(AllegroOffer.offer_id == auction_id).first()
-                    if offer and offer.product_size_id:
-                        ps = db.query(ProductSize).filter(ProductSize.id == offer.product_size_id).first()
-                        if ps:
-                            product_id = ps.product_id
-                            size = ps.size
-                            prod = db.query(Product).filter(Product.id == ps.product_id).first()
+                # 2. Fallback: znajdz auction_id dla tego produktu i szukaj przez AllegroOffer
+                if not product_id:
+                    # Znajdz dowolny auction_id dla tego name+ean
+                    op_with_auction = db.query(OrderProduct.auction_id)\
+                        .filter(OrderProduct.name == order_name, OrderProduct.ean == ean)\
+                        .filter(OrderProduct.auction_id.isnot(None))\
+                        .first()
+                    
+                    if op_with_auction and op_with_auction.auction_id:
+                        offer = db.query(AllegroOffer).filter(
+                            AllegroOffer.offer_id == op_with_auction.auction_id
+                        ).first()
+                        if offer and offer.product_size_id:
+                            ps = db.query(ProductSize).filter(ProductSize.id == offer.product_size_id).first()
+                            if ps:
+                                product_id = ps.product_id
+                                size = ps.size
+                                prod = db.query(Product).filter(Product.id == ps.product_id).first()
+                                if prod:
+                                    series = prod.series
+                                    color = prod.color
+                        elif offer and offer.product_id:
+                            product_id = offer.product_id
+                            prod = db.query(Product).filter(Product.id == offer.product_id).first()
                             if prod:
                                 series = prod.series
                                 color = prod.color
-                    elif offer and offer.product_id:
-                        product_id = offer.product_id
-                        prod = db.query(Product).filter(Product.id == offer.product_id).first()
-                        if prod:
-                            series = prod.series
-                            color = prod.color
                 
                 # Buduj krotka nazwe: seria/kolor/rozmiar
                 short_parts = []
