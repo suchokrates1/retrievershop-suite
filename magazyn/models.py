@@ -472,3 +472,67 @@ class OrderStatusLog(Base):
     # Relationship
     order = relationship("Order", back_populates="status_logs")
 
+
+# =============================================================================
+# Returns System - Obsluga zwrotow produktow
+# =============================================================================
+
+class Return(Base):
+    """Model zwrotu produktu."""
+    __tablename__ = "returns"
+    __table_args__ = (
+        Index("idx_returns_order_id", "order_id"),
+        Index("idx_returns_status", "status"),
+        Index("idx_returns_created_at", "created_at"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
+    
+    # Status zwrotu: pending, in_transit, delivered, completed, cancelled
+    # pending - zgloszony, in_transit - paczka w drodze, delivered - paczka u nas, completed - stan przywrocony
+    status = Column(String, nullable=False, default="pending")
+    
+    # Dane klienta (kopie na wypadek zmiany w zamowieniu)
+    customer_name = Column(String, nullable=True)
+    
+    # Produkty do zwrotu (JSON: [{"ean": "xxx", "name": "yyy", "quantity": 1}])
+    items_json = Column(Text, nullable=True)
+    
+    # Numer sledzenia paczki zwrotnej
+    return_tracking_number = Column(String, nullable=True)
+    return_carrier = Column(String, nullable=True)
+    
+    # Allegro Customer Return ID (jesli z Allegro)
+    allegro_return_id = Column(String, nullable=True)
+    
+    # Flagi procesowania
+    messenger_notified = Column(Boolean, default=False, nullable=False)
+    stock_restored = Column(Boolean, default=False, nullable=False)
+    
+    # Notatki
+    notes = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    
+    # Relationship
+    order = relationship("Order")
+
+
+class ReturnStatusLog(Base):
+    """Historia zmian statusu zwrotu."""
+    __tablename__ = "return_status_logs"
+    __table_args__ = (
+        Index("idx_return_status_logs_return_id", "return_id"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    return_id = Column(Integer, ForeignKey("returns.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+    timestamp = Column(DateTime, nullable=False, server_default=func.now())
+    
+    # Relationship
+    return_record = relationship("Return")
