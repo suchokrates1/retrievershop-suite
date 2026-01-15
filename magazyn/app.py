@@ -433,9 +433,10 @@ def home():
         
         # Helper do pobierania bestselerow z danego okresu
         def get_bestsellers(from_timestamp=None, limit=10):
-            """Pobiera najlepiej sprzedajace sie produkty."""
-            query = db.query(
-                OrderProduct.name,
+            """Pobiera najlepiej sprzedajace sie produkty z linkami do produktow."""
+            # Subquery do agregacji sprzedazy per EAN
+            sales_subq = db.query(
+                OrderProduct.name.label('order_name'),
                 OrderProduct.ean,
                 func.sum(OrderProduct.quantity).label('total_qty'),
                 func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label('total_revenue'),
@@ -443,23 +444,49 @@ def home():
             ).join(Order)
             
             if from_timestamp:
-                query = query.filter(Order.date_add >= from_timestamp)
+                sales_subq = sales_subq.filter(Order.date_add >= from_timestamp)
             
-            results = query.group_by(OrderProduct.name, OrderProduct.ean)\
-                .order_by(desc('total_qty'))\
-                .limit(limit)\
-                .all()
+            sales_subq = sales_subq.group_by(OrderProduct.name, OrderProduct.ean).subquery()
             
-            return [
-                {
-                    'name': name or 'Brak nazwy',
+            # Dolacz do ProductSize i Product aby miec product_id i dodatkowe dane
+            results = db.query(
+                sales_subq.c.order_name,
+                sales_subq.c.ean,
+                sales_subq.c.total_qty,
+                sales_subq.c.total_revenue,
+                sales_subq.c.order_count,
+                Product.id.label('product_id'),
+                Product.series,
+                Product.color,
+                ProductSize.size
+            ).outerjoin(ProductSize, ProductSize.barcode == sales_subq.c.ean)\
+            .outerjoin(Product, Product.id == ProductSize.product_id)\
+            .order_by(desc(sales_subq.c.total_qty))\
+            .limit(limit)\
+            .all()
+            
+            items = []
+            for order_name, ean, qty, revenue, orders, product_id, series, color, size in results:
+                # Buduj krotka nazwe: seria/kolor/rozmiar
+                short_parts = []
+                if series:
+                    short_parts.append(series)
+                if color:
+                    short_parts.append(color)
+                if size:
+                    short_parts.append(size)
+                short_name = '/'.join(short_parts) if short_parts else (order_name or 'Brak nazwy')[:30]
+                
+                items.append({
+                    'name': order_name or 'Brak nazwy',  # Pelna nazwa do tooltip
+                    'short_name': short_name,  # Krotka nazwa do wyswietlenia
                     'ean': ean,
                     'quantity': int(qty or 0),
                     'revenue': float(revenue or 0),
-                    'orders': int(orders or 0)
-                }
-                for name, ean, qty, revenue, orders in results
-            ]
+                    'orders': int(orders or 0),
+                    'product_id': product_id,  # Do linku
+                })
+            return items
         
         # Bestsellery wszechczasow (top 10)
         bestsellers_all_time = get_bestsellers(limit=10)
