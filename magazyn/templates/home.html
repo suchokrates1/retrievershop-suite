@@ -434,7 +434,16 @@
                                             <span class="text-muted">{{ loop.index }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="small">{{ item.name|truncate(35) }}</td>
+                                    <td class="small">
+                                        {% if item.product_id %}
+                                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
+                                           class="text-decoration-none" title="{{ item.name }}">
+                                            {{ item.short_name }}
+                                        </a>
+                                        {% else %}
+                                        <span title="{{ item.name }}">{{ item.short_name }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-center">
                                         <span class="badge bg-danger">{{ item.quantity }}</span>
                                     </td>
@@ -480,7 +489,16 @@
                                             <span class="text-muted">{{ loop.index }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="small">{{ item.name|truncate(30) }}</td>
+                                    <td class="small">
+                                        {% if item.product_id %}
+                                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
+                                           class="text-decoration-none" title="{{ item.name }}">
+                                            {{ item.short_name }}
+                                        </a>
+                                        {% else %}
+                                        <span title="{{ item.name }}">{{ item.short_name }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-center">
                                         <span class="badge bg-success">{{ item.quantity }}</span>
                                     </td>
@@ -527,7 +545,16 @@
                                             <span class="text-muted">{{ loop.index }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="small">{{ item.name|truncate(30) }}</td>
+                                    <td class="small">
+                                        {% if item.product_id %}
+                                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
+                                           class="text-decoration-none" title="{{ item.name }}">
+                                            {{ item.short_name }}
+                                        </a>
+                                        {% else %}
+                                        <span title="{{ item.name }}">{{ item.short_name }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-center">
                                         <span class="badge bg-primary">{{ item.quantity }}</span>
                                     </td>
