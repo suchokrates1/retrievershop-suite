@@ -18,7 +18,7 @@ import requests
 from sqlalchemy import desc
 
 from .db import get_session
-from .models import Return, ReturnStatusLog, Order, OrderProduct, ProductSize
+from .models import Return, ReturnStatusLog, Order, OrderProduct, ProductSize, AllegroOffer
 from .config import settings
 from .notifications import send_messenger
 from . import allegro_api
@@ -746,12 +746,35 @@ def restore_stock_for_return(return_id: int) -> bool:
                 quantity = item.get("quantity", 1)
                 product_size_id = item.get("product_size_id")
                 
-                # Znajdz ProductSize po EAN lub ID
+                # Znajdz ProductSize po EAN, ID lub przez auction_id z zamowienia
                 product_size = None
+                
+                # 1. Po product_size_id
                 if product_size_id:
                     product_size = db.query(ProductSize).filter(ProductSize.id == product_size_id).first()
-                elif ean:
+                
+                # 2. Po EAN
+                if not product_size and ean:
                     product_size = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
+                
+                # 3. Przez auction_id z OrderProduct -> AllegroOffer
+                if not product_size and return_record.order_id:
+                    # Znajdz OrderProduct z tym EAN w tym zamowieniu
+                    order_product = db.query(OrderProduct).filter(
+                        OrderProduct.order_id == return_record.order_id,
+                        OrderProduct.ean == ean
+                    ).first()
+                    
+                    if order_product and order_product.auction_id:
+                        allegro_offer = db.query(AllegroOffer).filter(
+                            AllegroOffer.offer_id == order_product.auction_id
+                        ).first()
+                        if allegro_offer and allegro_offer.product_size_id:
+                            product_size = db.query(ProductSize).filter(
+                                ProductSize.id == allegro_offer.product_size_id
+                            ).first()
+                            if product_size:
+                                logger.info(f"Znaleziono ProductSize przez auction_id: {order_product.auction_id} -> {product_size.id}")
                 
                 if product_size:
                     old_qty = product_size.quantity or 0
