@@ -263,7 +263,7 @@
                         {% endif %}
                         
                         {# Status przywrocenia stanu #}
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 align-items-center">
                             {% if return_info.messenger_notified %}
                             <span class="badge bg-success"><i class="bi bi-check"></i> Powiadomienie wyslane</span>
                             {% else %}
@@ -273,6 +273,12 @@
                             <span class="badge bg-success"><i class="bi bi-check"></i> Stan przywrocony</span>
                             {% else %}
                             <span class="badge bg-secondary"><i class="bi bi-hourglass"></i> Stan do przywrocenia</span>
+                            <form action="{{ url_for('orders.restore_return_stock', order_id=order.order_id) }}" method="POST" class="d-inline ms-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Przywrocic stan magazynowy dla tego zwrotu?')">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Przywroc stan
+                                </button>
+                            </form>
                             {% endif %}
                         </div>
                     </div>
