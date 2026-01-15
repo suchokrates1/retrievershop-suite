@@ -191,10 +191,18 @@ def check_baselinker_order_returns() -> Dict[str, int]:
                     
                     if existing:
                         # Aktualizuj status jesli sie zmienil
+                        # ALE nie cofaj statusu delivered/completed na nizszy!
                         fulfillment_status = return_data.get("fulfillment_status", 0)
                         new_status = _map_baselinker_fulfillment_status(fulfillment_status)
                         
-                        if existing.status != new_status:
+                        # Nie cofaj statusu delivered/completed
+                        status_order = [RETURN_STATUS_PENDING, RETURN_STATUS_IN_TRANSIT, 
+                                       RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]
+                        current_idx = status_order.index(existing.status) if existing.status in status_order else -1
+                        new_idx = status_order.index(new_status) if new_status in status_order else -1
+                        
+                        # Aktualizuj tylko jesli nowy status jest "wyzszy" lub to anulowanie
+                        if new_status == RETURN_STATUS_CANCELLED or (new_idx > current_idx and current_idx >= 0):
                             old_status = existing.status
                             existing.status = new_status
                             
@@ -210,6 +218,10 @@ def check_baselinker_order_returns() -> Dict[str, int]:
                             stats["updated"] += 1
                             logger.info(f"Zaktualizowano zwrot #{existing.id}: {old_status} -> {new_status}")
                         else:
+                            # Tylko aktualizuj numer sledzenia jesli brakuje
+                            if return_data.get("delivery_package_nr") and not existing.return_tracking_number:
+                                existing.return_tracking_number = return_data.get("delivery_package_nr")
+                                existing.return_carrier = return_data.get("delivery_package_module")
                             stats["existing"] += 1
                         continue
                     
@@ -274,15 +286,19 @@ def _map_baselinker_fulfillment_status(fulfillment_status: int) -> str:
     Mapuj BaseLinker fulfillment_status na wewnetrzny status zwrotu.
     
     BaseLinker fulfillment_status:
-    0 - active (paczka w drodze lub oczekuje)
-    5 - accepted (paczka dostarczona, zaakceptowana)
-    1 - done (zakonczony)
+    0 - active (nowy zwrot, paczka jeszcze nie nadana)
+    5 - accepted (zaakceptowany zwrot, paczka moze byc w drodze)
+    1 - done (zakonczony - refund wyslany)
     2 - canceled (anulowany)
+    
+    UWAGA: fulfillment_status=5 (accepted) NIE oznacza ze paczka fizycznie dotarla!
+    To tylko oznacza ze sprzedawca zaakceptowal zwrot.
+    Status delivered ustawiamy tylko na podstawie trackingu paczki.
     """
     status_map = {
-        0: RETURN_STATUS_IN_TRANSIT,  # active
-        5: RETURN_STATUS_DELIVERED,   # accepted - paczka u nas
-        1: RETURN_STATUS_COMPLETED,   # done
+        0: RETURN_STATUS_PENDING,     # active - nowy zwrot
+        5: RETURN_STATUS_IN_TRANSIT,  # accepted - w drodze (NIE delivered!)
+        1: RETURN_STATUS_COMPLETED,   # done - zakonczony
         2: RETURN_STATUS_CANCELLED,   # canceled
     }
     return status_map.get(fulfillment_status, RETURN_STATUS_PENDING)
