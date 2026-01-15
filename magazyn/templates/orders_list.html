@@ -73,6 +73,7 @@
             <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="fw-bold text-decoration-none">
                 {{ order.order_id }}
             </a>
+            {% if order.has_return %}<span class="badge bg-danger ms-1" title="Zwrot"><i class="bi bi-arrow-return-left"></i></span>{% endif %}
         </td>
         <td><small>{{ order.date_add | format_dt_short if order.date_add else '-' }}</small></td>
         <td><small>{{ order.product_summary or '-' }}</small></td>
