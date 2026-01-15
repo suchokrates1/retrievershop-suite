@@ -15,6 +15,7 @@ def _sync_worker(app):
     """Background worker that syncs orders and parcel statuses every hour."""
     from .orders import _sync_orders_from_baselinker, ALL_STATUS_IDS
     from .parcel_tracking import sync_parcel_statuses
+    from .returns import sync_returns
     
     logger.info("Order sync scheduler started - will sync every 1 hour")
     
@@ -33,6 +34,12 @@ def _sync_worker(app):
                     f"Parcel tracking sync completed: checked={stats['checked']}, "
                     f"updated={stats['updated']}, errors={stats['errors']}"
                 )
+                
+                # 3. Sync returns - sprawdz zwroty, wyslij powiadomienia, aktualizuj stany
+                logger.info("Starting automatic returns sync")
+                returns_stats = sync_returns()
+                logger.info(f"Returns sync completed: {returns_stats}")
+                
         except Exception as e:
             logger.error(f"Error in automatic sync: {e}", exc_info=True)
         
@@ -40,6 +47,7 @@ def _sync_worker(app):
         _stop_event.wait(3600)
     
     logger.info("Order sync scheduler stopped")
+
 
 
 def start_sync_scheduler(app):
