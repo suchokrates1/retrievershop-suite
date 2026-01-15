@@ -140,9 +140,160 @@ def create_return_from_order(order: Order, tracking_number: str = None, allegro_
         return return_record
 
 
+def check_baselinker_order_returns() -> Dict[str, int]:
+    """
+    Sprawdz zwroty przez BaseLinker getOrderReturns API.
+    
+    To jest glowne zrodlo danych o zwrotach - BaseLinker synchronizuje
+    zwroty z Allegro automatycznie i udostepnia je przez to API.
+    
+    Returns:
+        Slownik z liczba: created, existing, updated, errors
+    """
+    stats = {"created": 0, "existing": 0, "updated": 0, "errors": 0}
+    
+    try:
+        api_url = "https://api.baselinker.com/connector.php"
+        headers = {"X-BLToken": settings.API_TOKEN}
+        
+        # Pobierz zwroty z ostatnich 30 dni
+        from datetime import datetime, timedelta
+        date_from = int((datetime.now() - timedelta(days=30)).timestamp())
+        
+        params = {
+            "method": "getOrderReturns",
+            "parameters": json.dumps({
+                "date_from": date_from,
+            })
+        }
+        
+        response = requests.post(api_url, headers=headers, data=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("status") != "SUCCESS":
+            logger.error(f"Blad BaseLinker getOrderReturns: {data.get('error_message', 'Nieznany blad')}")
+            return stats
+        
+        returns_data = data.get("returns", [])
+        logger.info(f"Znaleziono {len(returns_data)} zwrotow w BaseLinker")
+        
+        with get_session() as db:
+            for return_data in returns_data:
+                bl_return_id = return_data.get("return_id")
+                order_id = str(return_data.get("order_id"))
+                
+                try:
+                    # Sprawdz czy zwrot juz istnieje
+                    existing = db.query(Return).filter(
+                        Return.order_id == order_id
+                    ).first()
+                    
+                    if existing:
+                        # Aktualizuj status jesli sie zmienil
+                        fulfillment_status = return_data.get("fulfillment_status", 0)
+                        new_status = _map_baselinker_fulfillment_status(fulfillment_status)
+                        
+                        if existing.status != new_status:
+                            old_status = existing.status
+                            existing.status = new_status
+                            
+                            # Aktualizuj numer sledzenia jesli pojawil sie nowy
+                            if return_data.get("delivery_package_nr") and not existing.return_tracking_number:
+                                existing.return_tracking_number = return_data.get("delivery_package_nr")
+                                existing.return_carrier = return_data.get("delivery_package_module")
+                            
+                            _add_return_status_log(
+                                db, existing.id, new_status,
+                                f"Aktualizacja z BaseLinker (fulfillment_status={fulfillment_status})"
+                            )
+                            stats["updated"] += 1
+                            logger.info(f"Zaktualizowano zwrot #{existing.id}: {old_status} -> {new_status}")
+                        else:
+                            stats["existing"] += 1
+                        continue
+                    
+                    # Sprawdz czy zamowienie istnieje w bazie
+                    order = db.query(Order).filter(Order.order_id == order_id).first()
+                    if not order:
+                        logger.debug(f"Zamowienie {order_id} nie istnieje w bazie - pomijam zwrot")
+                        continue
+                    
+                    # Pobierz produkty
+                    items = []
+                    for product in return_data.get("products", []):
+                        items.append({
+                            "ean": product.get("ean"),
+                            "name": product.get("name"),
+                            "quantity": product.get("quantity", 1),
+                            "reason_id": product.get("return_reason_id"),
+                        })
+                    
+                    # Okresl status na podstawie fulfillment_status
+                    fulfillment_status = return_data.get("fulfillment_status", 0)
+                    initial_status = _map_baselinker_fulfillment_status(fulfillment_status)
+                    
+                    # Utworz rekord zwrotu
+                    return_record = Return(
+                        order_id=order_id,
+                        status=initial_status,
+                        customer_name=return_data.get("delivery_fullname") or order.customer_name,
+                        items_json=json.dumps(items, ensure_ascii=False),
+                        return_tracking_number=return_data.get("delivery_package_nr"),
+                        return_carrier=return_data.get("delivery_package_module"),
+                        allegro_return_id=return_data.get("external_order_id"),  # Allegro return ID
+                        notes=f"BaseLinker return_id: {bl_return_id}, ref: {return_data.get('reference_number')}"
+                    )
+                    db.add(return_record)
+                    db.flush()
+                    
+                    # Dodaj wpis do historii
+                    _add_return_status_log(
+                        db, return_record.id, initial_status,
+                        f"Wykryto zwrot w BaseLinker (return_id={bl_return_id}, ref={return_data.get('reference_number')})"
+                    )
+                    
+                    stats["created"] += 1
+                    logger.info(f"Utworzono zwrot #{return_record.id} dla zamowienia {order_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Blad przetwarzania zwrotu BL#{bl_return_id}: {e}")
+                    stats["errors"] += 1
+            
+            db.commit()
+        
+    except Exception as e:
+        logger.error(f"Blad sprawdzania BaseLinker getOrderReturns: {e}")
+        stats["errors"] += 1
+    
+    return stats
+
+
+def _map_baselinker_fulfillment_status(fulfillment_status: int) -> str:
+    """
+    Mapuj BaseLinker fulfillment_status na wewnetrzny status zwrotu.
+    
+    BaseLinker fulfillment_status:
+    0 - active (paczka w drodze lub oczekuje)
+    5 - accepted (paczka dostarczona, zaakceptowana)
+    1 - done (zakonczony)
+    2 - canceled (anulowany)
+    """
+    status_map = {
+        0: RETURN_STATUS_IN_TRANSIT,  # active
+        5: RETURN_STATUS_DELIVERED,   # accepted - paczka u nas
+        1: RETURN_STATUS_COMPLETED,   # done
+        2: RETURN_STATUS_CANCELLED,   # canceled
+    }
+    return status_map.get(fulfillment_status, RETURN_STATUS_PENDING)
+
+
 def check_allegro_customer_returns() -> Dict[str, int]:
     """
-    Sprawdz zwroty bezposrednio z Allegro Customer Returns API.
+    [DEPRECATED] Sprawdz zwroty bezposrednio z Allegro Customer Returns API.
+    
+    UWAGA: Uzywaj check_baselinker_order_returns() zamiast tej funkcji!
+    BaseLinker synchronizuje zwroty z Allegro i udostepnia je przez getOrderReturns.
     
     BaseLinker NIE zmienia automatycznie statusu na Zwrot gdy klient
     zglosi zwrot w Allegro - musimy sprawdzac bezposrednio Allegro API.
@@ -670,11 +821,10 @@ def sync_returns() -> Dict[str, Any]:
     Glowna funkcja synchronizacji zwrotow.
     
     Wykonuje:
-    1. Sprawdzenie Allegro Customer Returns API (glowne zrodlo!)
-    2. Sprawdzenie BaseLinker pod katem nowych zwrotow (backup)
-    3. Wyslanie powiadomien Messenger
-    4. Sprawdzenie statusow paczek zwrotnych
-    5. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
+    1. Sprawdzenie BaseLinker getOrderReturns API (glowne zrodlo!)
+    2. Wyslanie powiadomien Messenger
+    3. Sprawdzenie statusow paczek zwrotnych (backup tracking)
+    4. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
     
     Returns:
         Slownik ze statystykami wszystkich operacji
@@ -682,8 +832,7 @@ def sync_returns() -> Dict[str, Any]:
     logger.info("Rozpoczynam synchronizacje zwrotow...")
     
     results = {
-        "allegro_check": check_allegro_customer_returns(),  # Glowne zrodlo!
-        "baselinker_check": check_baselinker_returns(),     # Backup
+        "baselinker_returns": check_baselinker_order_returns(),  # Glowne zrodlo!
         "notifications": send_pending_return_notifications(),
         "tracking_update": check_and_update_return_statuses(),
         "stock_restore": process_delivered_returns(),
