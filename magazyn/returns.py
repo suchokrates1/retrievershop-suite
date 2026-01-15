@@ -140,6 +140,154 @@ def create_return_from_order(order: Order, tracking_number: str = None, allegro_
         return return_record
 
 
+def check_allegro_customer_returns() -> Dict[str, int]:
+    """
+    Sprawdz zwroty bezposrednio z Allegro Customer Returns API.
+    
+    BaseLinker NIE zmienia automatycznie statusu na Zwrot gdy klient
+    zglosi zwrot w Allegro - musimy sprawdzac bezposrednio Allegro API.
+    
+    Returns:
+        Slownik z liczba: created, existing, updated, errors
+    """
+    from .settings_store import settings_store
+    
+    stats = {"created": 0, "existing": 0, "updated": 0, "errors": 0}
+    
+    try:
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        if not access_token:
+            logger.warning("Brak tokenu Allegro - pomijam sprawdzanie Customer Returns")
+            return stats
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.allegro.beta.v1+json"
+        }
+        
+        # Pobierz wszystkie zwroty (ostatnie 100)
+        response = requests.get(
+            "https://api.allegro.pl/order/customer-returns?limit=100",
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        customer_returns = data.get("customerReturns", [])
+        logger.info(f"Znaleziono {len(customer_returns)} zwrotow w Allegro Customer Returns API")
+        
+        with get_session() as db:
+            for return_data in customer_returns:
+                allegro_return_id = return_data.get("id")
+                allegro_order_id = return_data.get("orderId")  # external_order_id w naszej bazie
+                allegro_status = return_data.get("status")
+                
+                try:
+                    # Sprawdz czy zwrot juz istnieje po allegro_return_id
+                    existing = db.query(Return).filter(
+                        Return.allegro_return_id == allegro_return_id
+                    ).first()
+                    
+                    if existing:
+                        # Aktualizuj status jesli sie zmienil
+                        new_status = _map_allegro_return_status(allegro_status)
+                        if existing.status != new_status and new_status in [RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]:
+                            old_status = existing.status
+                            existing.status = new_status
+                            _add_return_status_log(
+                                db, existing.id, new_status,
+                                f"Aktualizacja z Allegro: {allegro_status}"
+                            )
+                            stats["updated"] += 1
+                            logger.info(f"Zaktualizowano zwrot #{existing.id}: {old_status} -> {new_status}")
+                        else:
+                            stats["existing"] += 1
+                        continue
+                    
+                    # Znajdz zamowienie po external_order_id
+                    order = db.query(Order).filter(
+                        Order.external_order_id == allegro_order_id
+                    ).first()
+                    
+                    if not order:
+                        logger.debug(f"Zamowienie Allegro {allegro_order_id} nie istnieje w bazie - pomijam")
+                        continue
+                    
+                    # Pobierz dane paczki zwrotnej
+                    parcels = return_data.get("parcels", [])
+                    return_tracking = None
+                    return_carrier = None
+                    if parcels:
+                        parcel = parcels[0]
+                        return_tracking = parcel.get("waybill")
+                        return_carrier = parcel.get("carrierId")
+                    
+                    # Pobierz produkty
+                    items = []
+                    for item in return_data.get("items", []):
+                        items.append({
+                            "name": item.get("name"),
+                            "quantity": item.get("quantity", 1),
+                            "reason": item.get("reason", {}).get("type"),
+                            "comment": item.get("reason", {}).get("userComment"),
+                        })
+                    
+                    # Okresl poczatkowy status
+                    initial_status = _map_allegro_return_status(allegro_status)
+                    
+                    # Utworz rekord zwrotu
+                    buyer = return_data.get("buyer", {})
+                    return_record = Return(
+                        order_id=order.order_id,
+                        status=initial_status,
+                        customer_name=buyer.get("login") or order.customer_name,
+                        items_json=json.dumps(items, ensure_ascii=False),
+                        return_tracking_number=return_tracking,
+                        return_carrier=return_carrier,
+                        allegro_return_id=allegro_return_id,
+                        notes=f"Allegro ref: {return_data.get('referenceNumber')}"
+                    )
+                    db.add(return_record)
+                    db.flush()
+                    
+                    # Dodaj wpis do historii
+                    _add_return_status_log(
+                        db, return_record.id, initial_status,
+                        f"Wykryto zwrot w Allegro (ref: {return_data.get('referenceNumber')}, status: {allegro_status})"
+                    )
+                    
+                    stats["created"] += 1
+                    logger.info(f"Utworzono zwrot #{return_record.id} dla zamowienia {order.order_id} (Allegro {allegro_order_id})")
+                    
+                except Exception as e:
+                    logger.error(f"Blad przetwarzania zwrotu Allegro {allegro_return_id}: {e}")
+                    stats["errors"] += 1
+            
+            db.commit()
+        
+    except Exception as e:
+        logger.error(f"Blad sprawdzania Allegro Customer Returns: {e}")
+        stats["errors"] += 1
+    
+    return stats
+
+
+def _map_allegro_return_status(allegro_status: str) -> str:
+    """Mapuj status Allegro na wewnetrzny status zwrotu."""
+    # Statusy Allegro: WAITING_FOR_PARCEL, PARCEL_IN_TRANSIT, PARCEL_DELIVERED, 
+    # ACCEPTED, REJECTED, COMMISSION_REFUNDED
+    status_map = {
+        "WAITING_FOR_PARCEL": RETURN_STATUS_PENDING,
+        "PARCEL_IN_TRANSIT": RETURN_STATUS_IN_TRANSIT,
+        "PARCEL_DELIVERED": RETURN_STATUS_DELIVERED,
+        "ACCEPTED": RETURN_STATUS_COMPLETED,
+        "COMMISSION_REFUNDED": RETURN_STATUS_COMPLETED,
+        "REJECTED": RETURN_STATUS_CANCELLED,
+    }
+    return status_map.get(allegro_status, RETURN_STATUS_PENDING)
+
+
 def check_baselinker_returns() -> Dict[str, int]:
     """
     Sprawdz zamowienia ze statusem Zwrot w BaseLinker i utworz rekordy zwrotow.
@@ -272,6 +420,8 @@ def track_return_parcel(return_id: int) -> Optional[str]:
     Returns:
         Aktualny status przesylki lub None
     """
+    from .settings_store import settings_store
+    
     with get_session() as db:
         return_record = db.query(Return).filter(Return.id == return_id).first()
         if not return_record:
@@ -283,7 +433,7 @@ def track_return_parcel(return_id: int) -> Optional[str]:
             return None
         
         # Sprawdz token Allegro
-        access_token = settings.ALLEGRO_ACCESS_TOKEN
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
         if not access_token:
             logger.error("Brak tokena dostepu Allegro")
             return None
@@ -292,7 +442,7 @@ def track_return_parcel(return_id: int) -> Optional[str]:
             # Uzyj Allegro API do sledzenia
             carrier_id = _map_carrier_to_allegro(return_record.return_carrier)
             if not carrier_id:
-                carrier_id = "ALLEGRO"  # Domyslnie
+                carrier_id = "INPOST"  # Domyslnie InPost
             
             headers = {
                 "Authorization": f"Bearer {access_token}",
@@ -308,10 +458,15 @@ def track_return_parcel(return_id: int) -> Optional[str]:
                 data = response.json()
                 waybills = data.get("waybills", [])
                 if waybills:
-                    events = waybills[0].get("tracking", {}).get("events", [])
-                    if events:
-                        latest_status = events[0].get("status")
+                    tracking_details = waybills[0].get("trackingDetails", {})
+                    statuses = tracking_details.get("statuses", [])
+                    if statuses:
+                        # Ostatni status jest na koncu listy
+                        latest_status = statuses[-1].get("code")
+                        logger.debug(f"Zwrot #{return_id} - status paczki: {latest_status}")
                         return latest_status
+            else:
+                logger.warning(f"Blad Allegro tracking API: {response.status_code} - {response.text[:200]}")
             
         except Exception as e:
             logger.error(f"Blad sledzenia paczki zwrotnej: {e}")
@@ -515,10 +670,11 @@ def sync_returns() -> Dict[str, Any]:
     Glowna funkcja synchronizacji zwrotow.
     
     Wykonuje:
-    1. Sprawdzenie BaseLinker pod katem nowych zwrotow
-    2. Wyslanie powiadomien Messenger
-    3. Sprawdzenie statusow paczek zwrotnych
-    4. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
+    1. Sprawdzenie Allegro Customer Returns API (glowne zrodlo!)
+    2. Sprawdzenie BaseLinker pod katem nowych zwrotow (backup)
+    3. Wyslanie powiadomien Messenger
+    4. Sprawdzenie statusow paczek zwrotnych
+    5. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
     
     Returns:
         Slownik ze statystykami wszystkich operacji
@@ -526,7 +682,8 @@ def sync_returns() -> Dict[str, Any]:
     logger.info("Rozpoczynam synchronizacje zwrotow...")
     
     results = {
-        "baselinker_check": check_baselinker_returns(),
+        "allegro_check": check_allegro_customer_returns(),  # Glowne zrodlo!
+        "baselinker_check": check_baselinker_returns(),     # Backup
         "notifications": send_pending_return_notifications(),
         "tracking_update": check_and_update_return_statuses(),
         "stock_restore": process_delivered_returns(),
