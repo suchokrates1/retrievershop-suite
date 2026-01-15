@@ -651,7 +651,7 @@ def order_detail(order_id: str):
             if active_return.status in return_stage_keys:
                 return_stage_index = return_stage_keys.index(active_return.status)
         
-        return render_template(
+        rendered = render_template(
             "order_detail.html",
             order=order,
             products=products,
@@ -673,6 +673,12 @@ def order_detail(order_id: str):
             return_stages=RETURN_STAGES,
             return_stage_index=return_stage_index,
         )
+        
+        # Zapobiegaj cache przegladarki
+        response = current_app.make_response(rendered)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return response
 
 
 @bp.route("/order/<order_id>/update_status", methods=["POST"])
