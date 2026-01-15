@@ -428,6 +428,118 @@ def home():
             })
         
         # =====================================================================
+        # BESTSELLERY I TRENDY
+        # =====================================================================
+        
+        # Helper do pobierania bestselerow z danego okresu
+        def get_bestsellers(from_timestamp=None, limit=10):
+            """Pobiera najlepiej sprzedajace sie produkty."""
+            query = db.query(
+                OrderProduct.name,
+                OrderProduct.ean,
+                func.sum(OrderProduct.quantity).label('total_qty'),
+                func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label('total_revenue'),
+                func.count(func.distinct(OrderProduct.order_id)).label('order_count')
+            ).join(Order)
+            
+            if from_timestamp:
+                query = query.filter(Order.date_add >= from_timestamp)
+            
+            results = query.group_by(OrderProduct.name, OrderProduct.ean)\
+                .order_by(desc('total_qty'))\
+                .limit(limit)\
+                .all()
+            
+            return [
+                {
+                    'name': name or 'Brak nazwy',
+                    'ean': ean,
+                    'quantity': int(qty or 0),
+                    'revenue': float(revenue or 0),
+                    'orders': int(orders or 0)
+                }
+                for name, ean, qty, revenue, orders in results
+            ]
+        
+        # Bestsellery wszechczasow (top 10)
+        bestsellers_all_time = get_bestsellers(limit=10)
+        
+        # Bestsellery ostatnich 30 dni
+        bestsellers_month = get_bestsellers(from_timestamp=month_ago, limit=10)
+        
+        # Bestsellery ostatnich 7 dni (trendy)
+        bestsellers_week = get_bestsellers(from_timestamp=week_ago, limit=5)
+        
+        # =====================================================================
+        # PRODUKTY WOLNOOBROTOWE (sprzedaz < 2 szt. w ciagu 30 dni mimo stanu > 5)
+        # =====================================================================
+        # Znajdz produkty ktore maja duzy stan ale sie nie sprzedaja
+        
+        # Subquery: sprzedaz w ostatnich 30 dniach per EAN
+        recent_sales_subq = db.query(
+            OrderProduct.ean,
+            func.sum(OrderProduct.quantity).label('sold_qty')
+        ).join(Order)\
+        .filter(Order.date_add >= month_ago)\
+        .group_by(OrderProduct.ean)\
+        .subquery()
+        
+        # Produkty z duzym stanem ale mala sprzedaza
+        slow_movers = db.query(
+            Product.name,
+            Product.color,
+            ProductSize.size,
+            ProductSize.quantity,
+            func.coalesce(recent_sales_subq.c.sold_qty, 0).label('sold_30d')
+        ).join(Product)\
+        .outerjoin(recent_sales_subq, ProductSize.barcode == recent_sales_subq.c.ean)\
+        .filter(
+            ProductSize.quantity >= 5,  # Duzy stan magazynowy
+            func.coalesce(recent_sales_subq.c.sold_qty, 0) < 2  # Mala sprzedaz
+        )\
+        .order_by(ProductSize.quantity.desc())\
+        .limit(10)\
+        .all()
+        
+        slow_moving_products = [
+            {
+                'name': name,
+                'color': color,
+                'size': size,
+                'stock': qty,
+                'sold_30d': int(sold)
+            }
+            for name, color, size, qty, sold in slow_movers
+        ]
+        
+        # =====================================================================
+        # POROWNANIE OKRESOW (trend wzrostu/spadku)
+        # =====================================================================
+        # Poprzedni tydzien vs aktualny tydzien
+        two_weeks_ago = int((now - timedelta(days=14)).timestamp())
+        
+        prev_week_orders = db.query(Order).filter(
+            Order.date_add >= two_weeks_ago,
+            Order.date_add < week_ago
+        ).count()
+        
+        prev_week_revenue = db.query(func.sum(OrderProduct.price_brutto * OrderProduct.quantity))\
+            .join(Order)\
+            .filter(Order.date_add >= two_weeks_ago, Order.date_add < week_ago)\
+            .scalar() or 0
+        
+        # Oblicz zmiane procentowa
+        orders_change = ((orders_week - prev_week_orders) / max(prev_week_orders, 1)) * 100
+        revenue_change = ((revenue_week - float(prev_week_revenue)) / max(float(prev_week_revenue), 1)) * 100
+        
+        trends = {
+            'orders_change': round(orders_change, 1),
+            'revenue_change': round(revenue_change, 1),
+            'prev_week_orders': prev_week_orders,
+            'prev_week_revenue': float(prev_week_revenue),
+        }
+        
+        # =====================================================================
         # Allegro offers - unlinked
         # =====================================================================
         unlinked_offers = db.query(AllegroOffer)\
@@ -517,6 +629,14 @@ def home():
             'latest_orders': latest_orders,
             'latest_deliveries': latest_deliveries,
             'activities': activities,
+            # Nowe sekcje - bestsellery i trendy
+            'bestsellers': {
+                'all_time': bestsellers_all_time,
+                'month': bestsellers_month,
+                'week': bestsellers_week,
+            },
+            'slow_moving': slow_moving_products,
+            'trends': trends,
         }
     
     return render_template("home.html", username=username, dashboard=dashboard)
