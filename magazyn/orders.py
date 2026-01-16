@@ -533,9 +533,11 @@ def order_detail(order_id: str):
         # Probuj pobrac rzeczywiste dane z Billing API
         try:
             access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
-            if access_token and order.order_id:
+            # Uzywamy external_order_id (UUID Allegro) zamiast order_id (BaseLinker)
+            allegro_order_id = order.external_order_id
+            if access_token and allegro_order_id:
                 from .allegro_api import get_order_billing_summary
-                billing_summary = get_order_billing_summary(access_token, order.order_id)
+                billing_summary = get_order_billing_summary(access_token, allegro_order_id)
                 
                 if billing_summary.get("success"):
                     allegro_commission = billing_summary["commission"]
@@ -545,14 +547,15 @@ def order_detail(order_id: str):
                     other_fees = billing_summary["other_fees"]
                     billing_entries = billing_summary["entries"]
                     billing_data_available = True
-                    logger.info(f"Pobrano dane billingowe dla zamowienia {order.order_id}: "
-                               f"prowizja={allegro_commission}, wystawienie={listing_fee}, "
-                               f"wysylka={allegro_shipping_fee}, promo={promo_fee}")
+                    logger.info(f"Pobrano dane billingowe dla zamowienia {order.order_id} "
+                               f"(Allegro: {allegro_order_id}): prowizja={allegro_commission}, "
+                               f"wystawienie={listing_fee}, wysylka={allegro_shipping_fee}, promo={promo_fee}")
                 else:
-                    logger.warning(f"Nie udalo sie pobrac danych billingowych dla {order.order_id}: "
-                                  f"{billing_summary.get('error')}")
+                    logger.warning(f"Nie udalo sie pobrac danych billingowych dla {order.order_id} "
+                                  f"(Allegro: {allegro_order_id}): {billing_summary.get('error')}")
         except Exception as e:
-            logger.warning(f"Blad podczas pobierania danych billingowych dla {order.order_id}: {e}")
+            logger.warning(f"Blad podczas pobierania danych billingowych dla {order.order_id} "
+                          f"(Allegro: {allegro_order_id if 'allegro_order_id' in dir() else 'N/A'}): {e}")
         
         # Jesli nie udalo sie pobrac z API, uzyj szacunkow
         if not billing_data_available:
