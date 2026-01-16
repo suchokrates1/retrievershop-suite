@@ -1088,3 +1088,230 @@ def fetch_parcel_tracking(access_token: str, carrier_id: str, waybills: list[str
     )
     
     return response.json()
+
+
+def fetch_billing_entries(
+    access_token: str,
+    order_id: Optional[str] = None,
+    offer_id: Optional[str] = None,
+    type_ids: Optional[list[str]] = None,
+    occurred_at_gte: Optional[str] = None,
+    occurred_at_lte: Optional[str] = None,
+    limit: int = 100,
+) -> dict:
+    """
+    Pobierz wpisy billingowe z Allegro API.
+    
+    Endpoint: GET /billing/billing-entries
+    
+    Args:
+        access_token: Token dostepu Allegro OAuth
+        order_id: UUID zamowienia do filtrowania (opcjonalnie)
+        offer_id: ID oferty do filtrowania (opcjonalnie)
+        type_ids: Lista typow billingowych do filtrowania, np. ["SUC", "LIS"] (opcjonalnie)
+        occurred_at_gte: Data od (ISO 8601), np. "2024-01-01T00:00:00Z" (opcjonalnie)
+        occurred_at_lte: Data do (ISO 8601) (opcjonalnie)
+        limit: Maksymalna liczba wynikow (domyslnie 100)
+    
+    Returns:
+        dict: Slownik z kluczem "billingEntries" zawierajacy liste wpisow billingowych.
+        Kazdy wpis zawiera:
+        - id: UUID wpisu
+        - occurredAt: Data zdarzenia
+        - type: {id, name} - typ oplaty (SUC=prowizja, LIS=wystawienie, itp.)
+        - offer: {id, name} - powiazana oferta
+        - value: {amount, currency} - kwota oplaty
+        - balance: {amount, currency} - saldo po operacji
+        - order: {id} - UUID zamowienia (jesli dotyczy)
+    
+    Typy billingowe (najczestsze):
+        SUC - Prowizja od sprzedazy (Success Fee)
+        LIS - Oplata za wystawienie (Listing Fee)
+        SHI - Koszt wysylki
+        PRO - Promocja
+        REF - Zwrot
+    
+    Raises:
+        HTTPError: Jesli zadanie API nie powiodlo sie
+    
+    Example:
+        >>> entries = fetch_billing_entries(token, order_id="29738e61-7f6a-11e8-ac45-09db60ede9d6")
+        >>> for entry in entries.get("billingEntries", []):
+        ...     print(f"{entry['type']['name']}: {entry['value']['amount']} PLN")
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    
+    params = {"limit": limit}
+    
+    if order_id:
+        params["order.id"] = order_id
+    if offer_id:
+        params["offer.id"] = offer_id
+    if occurred_at_gte:
+        params["occurredAt.gte"] = occurred_at_gte
+    if occurred_at_lte:
+        params["occurredAt.lte"] = occurred_at_lte
+    
+    # Typy billingowe jako parametry wielokrotne
+    if type_ids:
+        params_list = [(k, v) for k, v in params.items()]
+        for type_id in type_ids:
+            params_list.append(("type.id", type_id))
+        params = params_list
+    
+    url = f"{API_BASE_URL}/billing/billing-entries"
+    
+    response = _request_with_retry(
+        requests.get,
+        url,
+        endpoint="billing_entries",
+        headers=headers,
+        params=params,
+    )
+    
+    return response.json()
+
+
+def fetch_billing_types(access_token: str) -> list:
+    """
+    Pobierz liste wszystkich typow billingowych z Allegro API.
+    
+    Endpoint: GET /billing/billing-types
+    
+    Args:
+        access_token: Token dostepu Allegro OAuth
+    
+    Returns:
+        list: Lista slownikow z typami billingowymi, kazdy zawiera:
+        - id: Kod typu (np. "SUC", "LIS")
+        - description: Opis typu w jezyku polskim
+    
+    Example:
+        >>> types = fetch_billing_types(token)
+        >>> for t in types:
+        ...     print(f"{t['id']}: {t['description']}")
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+        "Accept-Language": "pl-PL",
+    }
+    
+    url = f"{API_BASE_URL}/billing/billing-types"
+    
+    response = _request_with_retry(
+        requests.get,
+        url,
+        endpoint="billing_types",
+        headers=headers,
+    )
+    
+    return response.json()
+
+
+def get_order_billing_summary(access_token: str, order_id: str) -> dict:
+    """
+    Pobierz podsumowanie kosztow billingowych dla zamowienia.
+    
+    Agreguje wszystkie wpisy billingowe dla danego zamowienia i zwraca
+    podsumowanie z podzilem na typy oplat.
+    
+    Args:
+        access_token: Token dostepu Allegro OAuth
+        order_id: UUID zamowienia (format: "29738e61-7f6a-11e8-ac45-09db60ede9d6")
+    
+    Returns:
+        dict: Slownik z podsumowaniem kosztow:
+        {
+            "success": True/False,
+            "commission": Decimal - prowizja od sprzedazy (SUC),
+            "listing_fee": Decimal - oplata za wystawienie (LIS),
+            "shipping_fee": Decimal - koszty wysylki (SHI),
+            "promo_fee": Decimal - oplaty promocyjne (PRO),
+            "other_fees": Decimal - pozostale oplaty,
+            "total_fees": Decimal - suma wszystkich oplat,
+            "refunds": Decimal - zwroty (wartosci dodatnie),
+            "entries": list - surowe wpisy billingowe,
+            "error": str - komunikat bledu (jesli success=False)
+        }
+    
+    Example:
+        >>> summary = get_order_billing_summary(token, "29738e61-7f6a-11e8-ac45-09db60ede9d6")
+        >>> if summary["success"]:
+        ...     print(f"Prowizja: {summary['commission']} PLN")
+        ...     print(f"Suma oplat: {summary['total_fees']} PLN")
+    """
+    from decimal import Decimal
+    
+    result = {
+        "success": False,
+        "commission": Decimal("0"),      # SUC - prowizja od sprzedazy
+        "listing_fee": Decimal("0"),     # LIS - oplata za wystawienie
+        "shipping_fee": Decimal("0"),    # Koszty wysylki (SHI i pokrewne)
+        "promo_fee": Decimal("0"),       # PRO - promocje
+        "other_fees": Decimal("0"),      # Pozostale
+        "total_fees": Decimal("0"),
+        "refunds": Decimal("0"),         # REF - zwroty (dodatnie)
+        "entries": [],
+        "error": None,
+    }
+    
+    try:
+        data = fetch_billing_entries(access_token, order_id=order_id)
+        entries = data.get("billingEntries", [])
+        result["entries"] = entries
+        
+        # Mapowanie typow billingowych na kategorie
+        # Wartosci sa zwykle ujemne (koszty), wiec bierzemy abs()
+        for entry in entries:
+            type_id = entry.get("type", {}).get("id", "")
+            value = entry.get("value", {})
+            amount_str = value.get("amount", "0")
+            
+            try:
+                amount = Decimal(amount_str)
+            except Exception:
+                amount = Decimal("0")
+            
+            # Klasyfikuj wg typu
+            if type_id == "SUC":
+                # Prowizja od sprzedazy (ujemna wartosc = koszt)
+                result["commission"] += abs(amount)
+            elif type_id == "LIS":
+                # Oplata za wystawienie
+                result["listing_fee"] += abs(amount)
+            elif type_id in ("SHI", "SHIP", "DLV", "DELIVERY"):
+                # Koszty wysylki
+                result["shipping_fee"] += abs(amount)
+            elif type_id in ("PRO", "PROMO", "ADS"):
+                # Promocje i reklamy
+                result["promo_fee"] += abs(amount)
+            elif type_id in ("REF", "REFUND"):
+                # Zwroty (dodatnie bo to wplyw)
+                if amount > 0:
+                    result["refunds"] += amount
+                else:
+                    result["other_fees"] += abs(amount)
+            else:
+                # Pozostale oplaty
+                if amount < 0:
+                    result["other_fees"] += abs(amount)
+        
+        # Suma wszystkich oplat (bez zwrotow)
+        result["total_fees"] = (
+            result["commission"] +
+            result["listing_fee"] +
+            result["shipping_fee"] +
+            result["promo_fee"] +
+            result["other_fees"]
+        )
+        
+        result["success"] = True
+        
+    except Exception as e:
+        result["error"] = str(e)
+    
+    return result

@@ -1,6 +1,7 @@
 """Orders blueprint - view and manage BaseLinker orders."""
 import json
 import time
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from decimal import Decimal
@@ -11,6 +12,9 @@ from sqlalchemy import desc, or_
 from .auth import login_required
 from .db import get_session
 from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog, AllegroOffer
+from .settings_store import settings_store
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("orders", __name__)
 
@@ -506,7 +510,7 @@ def order_detail(order_id: str):
                 "warehouse_product": warehouse_product,
             })
         
-        # Calculate Allegro Smart shipping cost
+        # Calculate Allegro Smart shipping cost (fallback if Billing API fails)
         shipping_cost = None
         if order.payment_done and order.delivery_method:
             shipping_cost = _calculate_allegro_smart_cost(
@@ -514,10 +518,52 @@ def order_detail(order_id: str):
                 order.delivery_method
             )
         
-        # Calculate financial metrics
+        # Calculate financial metrics - try to get real data from Allegro Billing API
         sale_price = Decimal(str(order.payment_done)) if order.payment_done else Decimal("0")
-        allegro_commission = sale_price * Decimal("0.123")  # 12.3%
-        sale_fee = Decimal("1.00")  # Fixed 1 PLN
+        
+        # Domyslne wartosci (fallback jesli API nie zwroci danych)
+        allegro_commission = Decimal("0")
+        listing_fee = Decimal("0")
+        allegro_shipping_fee = Decimal("0")
+        promo_fee = Decimal("0")
+        other_fees = Decimal("0")
+        billing_data_available = False
+        billing_entries = []
+        
+        # Probuj pobrac rzeczywiste dane z Billing API
+        try:
+            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+            if access_token and order.order_id:
+                from .allegro_api import get_order_billing_summary
+                billing_summary = get_order_billing_summary(access_token, order.order_id)
+                
+                if billing_summary.get("success"):
+                    allegro_commission = billing_summary["commission"]
+                    listing_fee = billing_summary["listing_fee"]
+                    allegro_shipping_fee = billing_summary["shipping_fee"]
+                    promo_fee = billing_summary["promo_fee"]
+                    other_fees = billing_summary["other_fees"]
+                    billing_entries = billing_summary["entries"]
+                    billing_data_available = True
+                    logger.info(f"Pobrano dane billingowe dla zamowienia {order.order_id}: "
+                               f"prowizja={allegro_commission}, wystawienie={listing_fee}, "
+                               f"wysylka={allegro_shipping_fee}, promo={promo_fee}")
+                else:
+                    logger.warning(f"Nie udalo sie pobrac danych billingowych dla {order.order_id}: "
+                                  f"{billing_summary.get('error')}")
+        except Exception as e:
+            logger.warning(f"Blad podczas pobierania danych billingowych dla {order.order_id}: {e}")
+        
+        # Jesli nie udalo sie pobrac z API, uzyj szacunkow
+        if not billing_data_available:
+            allegro_commission = sale_price * Decimal("0.123")  # 12.3% szacunkowo
+            listing_fee = Decimal("0")
+            allegro_shipping_fee = Decimal("0")
+            promo_fee = Decimal("0")
+            other_fees = Decimal("0")
+        
+        # Suma wszystkich oplat Allegro
+        total_allegro_fees = allegro_commission + listing_fee + allegro_shipping_fee + promo_fee + other_fees
         
         # Calculate purchase cost from order products
         purchase_cost = Decimal("0")
@@ -536,8 +582,13 @@ def order_detail(order_id: str):
                 if latest_batch:
                     purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
         
-        # Calculate real profit
-        real_profit = sale_price - allegro_commission - (shipping_cost or Decimal("0")) - sale_fee - purchase_cost
+        # Calculate real profit (using real Allegro fees if available, otherwise shipping_cost estimate)
+        # Jesli mamy dane z Billing API, uzywamy ich w calosci
+        # Jesli nie, uzywamy szacunkowej prowizji + shipping_cost
+        if billing_data_available:
+            real_profit = sale_price - total_allegro_fees - purchase_cost
+        else:
+            real_profit = sale_price - allegro_commission - (shipping_cost or Decimal("0")) - purchase_cost
         
         # Generate tracking URL
         tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_module, order.delivery_package_nr, order.delivery_method)
@@ -668,7 +719,13 @@ def order_detail(order_id: str):
             date_confirmed=_unix_to_datetime(order.date_confirmed),
             shipping_cost=shipping_cost,
             allegro_commission=allegro_commission,
-            sale_fee=sale_fee,
+            listing_fee=listing_fee,
+            allegro_shipping_fee=allegro_shipping_fee,
+            promo_fee=promo_fee,
+            other_fees=other_fees,
+            total_allegro_fees=total_allegro_fees,
+            billing_data_available=billing_data_available,
+            billing_entries=billing_entries,
             purchase_cost=purchase_cost,
             real_profit=real_profit,
             tracking_url=tracking_url,
