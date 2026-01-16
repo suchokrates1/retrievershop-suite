@@ -89,6 +89,19 @@ def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
 def _process_oauth_response() -> dict[str, object]:
     debug_steps: list[dict[str, str]] = []
 
+    # Loguj wszystkie parametry z callbacka (w tym bledy od Allegro)
+    all_args = dict(request.args)
+    _record_debug_step(debug_steps, "Wszystkie parametry callbacka", all_args)
+    current_app.logger.info(f"Allegro OAuth callback args: {all_args}")
+    
+    # Sprawdz czy Allegro zwrocilo blad
+    error = request.args.get("error")
+    error_description = request.args.get("error_description")
+    if error:
+        current_app.logger.error(f"Allegro OAuth error: {error} - {error_description}")
+        message = f"Allegro zwrocilo blad: {error}. {error_description or ''}"
+        return {"ok": False, "message": message, "debug_steps": debug_steps}
+
     expected_state = session.pop("allegro_oauth_state", None)
     _record_debug_step(debug_steps, "Oczekiwany state z sesji", expected_state)
 
