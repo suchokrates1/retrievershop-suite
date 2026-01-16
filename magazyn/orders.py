@@ -516,7 +516,7 @@ def order_detail(order_id: str):
         
         # Calculate financial metrics
         sale_price = Decimal(str(order.payment_done)) if order.payment_done else Decimal("0")
-        allegro_commission = sale_price * Decimal("0.125")  # 12.5%
+        allegro_commission = sale_price * Decimal("0.123")  # 12.3%
         sale_fee = Decimal("1.00")  # Fixed 1 PLN
         
         # Calculate purchase cost from order products
