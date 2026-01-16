@@ -222,11 +222,32 @@ def authorize():
     state = secrets.token_urlsafe(16)
     session["allegro_oauth_state"] = state
 
+    # Wymagane zakresy (scopes) dla pelnej funkcjonalnosci
+    # Dodajemy allegro:api:billing:read dla dostepu do danych billingowych (prowizje, oplaty)
+    scopes = [
+        "allegro:api:orders:read",
+        "allegro:api:orders:write",
+        "allegro:api:profile:read",
+        "allegro:api:sale:offers:read",
+        "allegro:api:sale:offers:write",
+        "allegro:api:sale:settings:read",
+        "allegro:api:sale:settings:write",
+        "allegro:api:shipments:read",
+        "allegro:api:shipments:write",
+        "allegro:api:billing:read",  # Dostep do danych billingowych (prowizje, oplaty)
+        "allegro:api:messaging",
+        "allegro:api:disputes",
+        "allegro:api:ratings",
+        "allegro:api:campaigns",
+        "allegro:api:ads",
+    ]
+
     params = {
         "response_type": "code",
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "state": state,
+        "scope": " ".join(scopes),
     }
     authorization_url = f"{ALLEGRO_AUTHORIZATION_URL}?{urlencode(params)}"
     current_app.logger.info("Redirecting user to Allegro authorization page")
