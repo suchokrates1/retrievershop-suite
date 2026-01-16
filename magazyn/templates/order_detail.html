@@ -392,21 +392,65 @@
                         {% endif %}
                     </p>
                     <hr>
-                    <h6 class="text-muted mb-2">Koszty:</h6>
-                    {% if shipping_cost %}
-                    <p class="mb-1 small">
-                        <strong>Koszt wysyłki:</strong> 
-                        <span class="text-danger">-{{ '%.2f'|format(shipping_cost) }} {{ order.currency or 'PLN' }}</span>
-                    </p>
+                    <h6 class="text-muted mb-2">
+                        Koszty Allegro:
+                        {% if billing_data_available %}
+                        <span class="badge bg-success small">Dane z API</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark small">Szacunkowo</span>
+                        {% endif %}
+                    </h6>
+                    
+                    {% if billing_data_available %}
+                        {# Rzeczywiste dane z Billing API #}
+                        {% if allegro_commission > 0 %}
+                        <p class="mb-1 small">
+                            <strong>Prowizja od sprzedazy:</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                        {% endif %}
+                        {% if listing_fee > 0 %}
+                        <p class="mb-1 small">
+                            <strong>Oplata za wystawienie:</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(listing_fee) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                        {% endif %}
+                        {% if allegro_shipping_fee > 0 %}
+                        <p class="mb-1 small">
+                            <strong>Koszt wysylki (Allegro):</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(allegro_shipping_fee) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                        {% endif %}
+                        {% if promo_fee > 0 %}
+                        <p class="mb-1 small">
+                            <strong>Oplaty promocyjne:</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(promo_fee) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                        {% endif %}
+                        {% if other_fees > 0 %}
+                        <p class="mb-1 small">
+                            <strong>Inne oplaty:</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(other_fees) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                        {% endif %}
+                        <p class="mb-1 small fw-bold">
+                            <strong>Suma oplat Allegro:</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(total_allegro_fees) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                    {% else %}
+                        {# Szacunkowe dane (brak API) #}
+                        {% if shipping_cost %}
+                        <p class="mb-1 small">
+                            <strong>Koszt wysylki (szacunkowo):</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(shipping_cost) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
+                        {% endif %}
+                        <p class="mb-1 small">
+                            <strong>Marza Allegro (~12.3%):</strong> 
+                            <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
+                        </p>
                     {% endif %}
-                    <p class="mb-1 small">
-                        <strong>Marża Allegro (12.3%):</strong> 
-                        <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
-                    </p>
-                    <p class="mb-1 small">
-                        <strong>Opłata za sprzedaż:</strong> 
-                        <span class="text-danger">-{{ '%.2f'|format(sale_fee) }} {{ order.currency or 'PLN' }}</span>
-                    </p>
+                    
                     {% if purchase_cost > 0 %}
                     <p class="mb-2 small">
                         <strong>Koszt zakupu:</strong> 
