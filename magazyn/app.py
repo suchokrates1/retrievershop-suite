@@ -274,12 +274,20 @@ def home():
     
     with get_session() as db:
         # =====================================================================
-        # Time periods
+        # Time periods - zakres od 1. do konca miesiaca
         # =====================================================================
         now = datetime.now()
         today_start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
-        week_ago = int((now - timedelta(days=7)).timestamp())
-        month_ago = int((now - timedelta(days=30)).timestamp())
+        # Poczatek tego tygodnia (poniedzialek)
+        week_start = now - timedelta(days=now.weekday())
+        week_start_ts = int(week_start.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        # Poczatek tego miesiaca
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start_ts = int(month_start.timestamp())
+        # Nazwa miesiaca
+        MONTH_NAMES = ['Styczen', 'Luty', 'Marzec', 'Kwiecien', 'Maj', 'Czerwiec',
+                       'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien']
+        current_month_name = MONTH_NAMES[now.month - 1]
         
         # =====================================================================
         # Orders statistics
@@ -287,16 +295,16 @@ def home():
         # Today's orders
         orders_today = db.query(Order).filter(Order.date_add >= today_start).count()
         
-        # This week orders
-        orders_week = db.query(Order).filter(Order.date_add >= week_ago).count()
+        # This week orders (od poczatku tygodnia)
+        orders_week = db.query(Order).filter(Order.date_add >= week_start_ts).count()
         
-        # This month orders
-        orders_month = db.query(Order).filter(Order.date_add >= month_ago).count()
+        # This month orders (od 1. dnia miesiaca)
+        orders_month = db.query(Order).filter(Order.date_add >= month_start_ts).count()
         
         # Pending orders (not shipped yet - no tracking number)
         pending_orders = db.query(Order).filter(
             Order.delivery_package_nr.is_(None),
-            Order.date_add >= month_ago
+            Order.date_add >= month_start_ts
         ).count()
         
         # =====================================================================
@@ -310,8 +318,70 @@ def home():
             return float(result or 0)
         
         revenue_today = calc_revenue(today_start)
-        revenue_week = calc_revenue(week_ago)
-        revenue_month = calc_revenue(month_ago)
+        revenue_week = calc_revenue(week_start_ts)
+        revenue_month = calc_revenue(month_start_ts)
+        
+        # =====================================================================
+        # Real profit calculation for this month
+        # =====================================================================
+        from .allegro_api import get_order_billing_summary
+        from .settings_store import settings_store as ss
+        
+        # Pobierz koszt pakowania
+        try:
+            packaging_cost_per_order = Decimal(str(ss.get("PACKAGING_COST") or "0.16"))
+        except (ValueError, TypeError):
+            packaging_cost_per_order = Decimal("0.16")
+        
+        # Pobierz wszystkie zamowienia z tego miesiaca
+        month_orders = db.query(Order).filter(Order.date_add >= month_start_ts).all()
+        
+        total_real_profit = Decimal("0")
+        total_products_sold = 0
+        access_token = ss.get("ALLEGRO_ACCESS_TOKEN")
+        
+        for order in month_orders:
+            sale_price = Decimal(str(order.payment_done or 0))
+            
+            # Liczba produktow
+            products_in_order = db.query(func.sum(OrderProduct.quantity)).filter(
+                OrderProduct.order_id == order.order_id
+            ).scalar() or 0
+            total_products_sold += int(products_in_order)
+            
+            # Oplaty Allegro - probuj z API
+            allegro_fees = Decimal("0")
+            if access_token and order.external_order_id:
+                try:
+                    billing = get_order_billing_summary(access_token, order.external_order_id)
+                    if billing.get("success"):
+                        allegro_fees = billing["total_fees"]
+                except Exception:
+                    pass
+            
+            # Fallback - szacunkowa prowizja 12.3%
+            if allegro_fees == 0 and sale_price > 0:
+                allegro_fees = sale_price * Decimal("0.123")
+            
+            # Koszt zakupu
+            purchase_cost = Decimal("0")
+            for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
+                if op.product_size and op.product_size.product:
+                    latest_batch = (
+                        db.query(PurchaseBatch)
+                        .filter(
+                            PurchaseBatch.product_id == op.product_size.product_id,
+                            PurchaseBatch.size == op.product_size.size
+                        )
+                        .order_by(desc(PurchaseBatch.purchase_date))
+                        .first()
+                    )
+                    if latest_batch:
+                        purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
+            
+            # Zysk = sprzedaz - oplaty - zakup - pakowanie
+            order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
+            total_real_profit += order_profit
         
         # =====================================================================
         # Inventory statistics
@@ -523,23 +593,23 @@ def home():
         # Bestsellery wszechczasow (top 10)
         bestsellers_all_time = get_bestsellers(limit=10)
         
-        # Bestsellery ostatnich 30 dni
-        bestsellers_month = get_bestsellers(from_timestamp=month_ago, limit=10)
+        # Bestsellery tego miesiaca
+        bestsellers_month = get_bestsellers(from_timestamp=month_start_ts, limit=10)
         
-        # Bestsellery ostatnich 7 dni (trendy)
-        bestsellers_week = get_bestsellers(from_timestamp=week_ago, limit=5)
+        # Bestsellery tego tygodnia (trendy)
+        bestsellers_week = get_bestsellers(from_timestamp=week_start_ts, limit=5)
         
         # =====================================================================
         # PRODUKTY WOLNOOBROTOWE (sprzedaz < 2 szt. w ciagu 30 dni mimo stanu > 5)
         # =====================================================================
         # Znajdz produkty ktore maja duzy stan ale sie nie sprzedaja
         
-        # Subquery: sprzedaz w ostatnich 30 dniach per EAN
+        # Subquery: sprzedaz w tym miesiacu per EAN
         recent_sales_subq = db.query(
             OrderProduct.ean,
             func.sum(OrderProduct.quantity).label('sold_qty')
         ).join(Order)\
-        .filter(Order.date_add >= month_ago)\
+        .filter(Order.date_add >= month_start_ts)\
         .group_by(OrderProduct.ean)\
         .subquery()
         
@@ -574,17 +644,17 @@ def home():
         # =====================================================================
         # POROWNANIE OKRESOW (trend wzrostu/spadku)
         # =====================================================================
-        # Poprzedni tydzien vs aktualny tydzien
-        two_weeks_ago = int((now - timedelta(days=14)).timestamp())
+        # Poprzedni tydzien (od pon do niedz przed aktualnym tygodniem)
+        prev_week_start = int((week_start - timedelta(days=7)).timestamp())
         
         prev_week_orders = db.query(Order).filter(
-            Order.date_add >= two_weeks_ago,
-            Order.date_add < week_ago
+            Order.date_add >= prev_week_start,
+            Order.date_add < week_start_ts
         ).count()
         
         prev_week_revenue = db.query(func.sum(OrderProduct.price_brutto * OrderProduct.quantity))\
             .join(Order)\
-            .filter(Order.date_add >= two_weeks_ago, Order.date_add < week_ago)\
+            .filter(Order.date_add >= prev_week_start, Order.date_add < week_start_ts)\
             .scalar() or 0
         
         # Oblicz zmiane procentowa
@@ -675,6 +745,11 @@ def home():
                 'week': revenue_week,
                 'month': revenue_month,
             },
+            'profit': {
+                'month': float(total_real_profit),
+                'products_sold': total_products_sold,
+            },
+            'current_month_name': current_month_name,
             'inventory': {
                 'total_products': total_products,
                 'total_stock': total_stock,
@@ -818,10 +893,110 @@ def test_message():
     if request.method == "POST":
         if print_agent.last_order_data:
             print_agent.send_messenger_message(print_agent.last_order_data)
-            msg = "Testowa wiadomość została wysłana."
+            msg = "Testowa wiadomosc zostala wyslana."
         else:
-            msg = "Brak danych ostatniego zamówienia."
+            msg = "Brak danych ostatniego zamowienia."
     return render_template("test.html", message=msg)
+
+
+@bp.route("/test_monthly_report", methods=["GET", "POST"])
+@login_required
+def test_monthly_report():
+    """Wyslij testowy raport miesiczny przez Messenger."""
+    from datetime import datetime, timedelta
+    from decimal import Decimal
+    from sqlalchemy import func, desc
+    from .notifications import send_report
+    from .allegro_api import get_order_billing_summary
+    
+    msg = None
+    summary = None
+    
+    if request.method == "POST":
+        # Oblicz podsumowanie dla biezacego miesiaca (od 1.)
+        now = datetime.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start_ts = int(month_start.timestamp())
+        
+        MONTH_NAMES = ['Styczen', 'Luty', 'Marzec', 'Kwiecien', 'Maj', 'Czerwiec',
+                       'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien']
+        month_name = MONTH_NAMES[now.month - 1]
+        
+        # Pobierz koszt pakowania
+        try:
+            packaging_cost_per_order = Decimal(str(settings_store.get("PACKAGING_COST") or "0.16"))
+        except (ValueError, TypeError):
+            packaging_cost_per_order = Decimal("0.16")
+        
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        
+        with get_session() as db:
+            orders = db.query(Order).filter(Order.date_add >= month_start_ts).all()
+            
+            total_revenue = Decimal("0")
+            total_profit = Decimal("0")
+            total_products = 0
+            
+            for order in orders:
+                sale_price = Decimal(str(order.payment_done or 0))
+                total_revenue += sale_price
+                
+                # Liczba produktow
+                products_in_order = db.query(func.sum(OrderProduct.quantity)).filter(
+                    OrderProduct.order_id == order.order_id
+                ).scalar() or 0
+                total_products += int(products_in_order)
+                
+                # Oplaty Allegro - probuj z API
+                allegro_fees = Decimal("0")
+                if access_token and order.external_order_id:
+                    try:
+                        billing = get_order_billing_summary(access_token, order.external_order_id)
+                        if billing.get("success"):
+                            allegro_fees = billing["total_fees"]
+                    except Exception:
+                        pass
+                
+                # Fallback - szacunkowa prowizja 12.3%
+                if allegro_fees == 0 and sale_price > 0:
+                    allegro_fees = sale_price * Decimal("0.123")
+                
+                # Koszt zakupu
+                purchase_cost = Decimal("0")
+                for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
+                    if op.product_size and op.product_size.product:
+                        latest_batch = (
+                            db.query(PurchaseBatch)
+                            .filter(
+                                PurchaseBatch.product_id == op.product_size.product_id,
+                                PurchaseBatch.size == op.product_size.size
+                            )
+                            .order_by(desc(PurchaseBatch.purchase_date))
+                            .first()
+                        )
+                        if latest_batch:
+                            purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
+                
+                # Zysk = sprzedaz - oplaty - zakup - pakowanie
+                order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
+                total_profit += order_profit
+        
+        summary = {
+            "month_name": month_name,
+            "products_sold": total_products,
+            "total_revenue": float(total_revenue),
+            "real_profit": float(total_profit),
+        }
+        
+        # Wyslij raport
+        message = (
+            f"W miesiącu {month_name} sprzedałaś {total_products} produktów "
+            f"za {total_revenue:.2f} zł co dało {total_profit:.2f} zł zysku"
+        )
+        send_report("Testowy raport miesieczny", [message])
+        msg = f"Raport wyslany! Tresc: {message}"
+    
+    return render_template("test_report.html", message=msg, summary=summary)
 
 
 # =============================================================================

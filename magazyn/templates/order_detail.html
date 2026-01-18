@@ -439,12 +439,6 @@
                         </p>
                     {% else %}
                         {# Szacunkowe dane (brak API) #}
-                        {% if shipping_cost %}
-                        <p class="mb-1 small">
-                            <strong>Koszt wysylki (szacunkowo):</strong> 
-                            <span class="text-danger">-{{ '%.2f'|format(shipping_cost) }} {{ order.currency or 'PLN' }}</span>
-                        </p>
-                        {% endif %}
                         <p class="mb-1 small">
                             <strong>Marza Allegro (~12.3%):</strong> 
                             <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
@@ -452,9 +446,15 @@
                     {% endif %}
                     
                     {% if purchase_cost > 0 %}
-                    <p class="mb-2 small">
+                    <p class="mb-1 small">
                         <strong>Koszt zakupu:</strong> 
                         <span class="text-danger">-{{ '%.2f'|format(purchase_cost) }} {{ order.currency or 'PLN' }}</span>
+                    </p>
+                    {% endif %}
+                    {% if packaging_cost > 0 %}
+                    <p class="mb-2 small">
+                        <strong>Koszt pakowania:</strong> 
+                        <span class="text-danger">-{{ '%.2f'|format(packaging_cost) }} {{ order.currency or 'PLN' }}</span>
                     </p>
                     {% endif %}
                     <hr>
