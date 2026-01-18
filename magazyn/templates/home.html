@@ -121,26 +121,32 @@
         <div class="col-md-8">
             <div class="card h-100">
                 <div class="card-header bg-dark text-white">
-                    <i class="bi bi-graph-up me-2"></i>Statystyki miesięczne (30 dni)
+                    <i class="bi bi-graph-up me-2"></i>{{ dashboard.current_month_name }} {{ now().strftime('%Y') }}
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
-                        <div class="col-4">
+                        <div class="col-3">
                             <div class="border-end">
                                 <h3 class="text-success mb-1">{{ dashboard.orders.month }}</h3>
-                                <small class="text-muted">Zamówień</small>
+                                <small class="text-muted">Zamowien</small>
                             </div>
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
                             <div class="border-end">
-                                <h3 class="text-primary mb-1">{{ "%.0f"|format(dashboard.revenue.month) }} zł</h3>
-                                <small class="text-muted">Przychód</small>
+                                <h3 class="text-primary mb-1">{{ "%.0f"|format(dashboard.revenue.month) }} zl</h3>
+                                <small class="text-muted">Przychod</small>
                             </div>
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
+                            <div class="border-end">
+                                <h3 class="{% if dashboard.profit.month > 0 %}text-success{% else %}text-danger{% endif %} mb-1">{{ "%.0f"|format(dashboard.profit.month) }} zl</h3>
+                                <small class="text-muted">Realny zysk</small>
+                            </div>
+                        </div>
+                        <div class="col-3">
                             <div>
-                                <h3 class="text-info mb-1">{{ "%.0f"|format(dashboard.revenue.month / (dashboard.orders.month or 1)) }} zł</h3>
-                                <small class="text-muted">Śr. zamówienie</small>
+                                <h3 class="text-info mb-1">{{ dashboard.profit.products_sold }}</h3>
+                                <small class="text-muted">Sprzedanych szt.</small>
                             </div>
                         </div>
                     </div>

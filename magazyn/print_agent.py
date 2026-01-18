@@ -1129,31 +1129,156 @@ class LabelAgent:
         return now >= start or now < end
 
     def _send_periodic_reports(self) -> None:
+        """Wysyła raporty tygodniowe i miesięczne przez Messenger.
+        
+        Format raportu:
+        - Tygodniowy: "W tym tygodniu sprzedałaś [ilość] produktów za [suma] zł co dało [zysk] zł zysku"
+        - Miesięczny: "W miesiącu [nazwa] sprzedałaś [ilość] produktów za [suma] zł co dało [zysk] zł zysku"
+        """
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+        
         now = datetime.now()
+        
+        # Wysylka raportu tygodniowego - co 7 dni
         if self.config.enable_weekly_reports and (
             not hasattr(self, "_last_weekly_report")
             or not self._last_weekly_report
             or now - self._last_weekly_report >= timedelta(days=7)
         ):
-            report = get_sales_summary(7)
-            lines = [
-                f"- {r['name']} {r['size']}: sprzedano {r['sold']}, zostalo {r['remaining']}"
-                for r in report
-            ]
-            send_report("Raport tygodniowy", lines)
-            self._last_weekly_report = now
-        if self.config.enable_monthly_reports and (
-            not hasattr(self, "_last_monthly_report")
-            or not self._last_monthly_report
-            or now - self._last_monthly_report >= timedelta(days=30)
-        ):
-            report = get_sales_summary(30)
-            lines = [
-                f"- {r['name']} {r['size']}: sprzedano {r['sold']}, zostalo {r['remaining']}"
-                for r in report
-            ]
-            send_report("Raport miesieczny", lines)
-            self._last_monthly_report = now
+            summary = self._get_period_summary(days=7)
+            if summary:
+                message = (
+                    f"W tym tygodniu sprzedałaś {summary['products_sold']} produktów "
+                    f"za {summary['total_revenue']:.2f} zł co dało {summary['real_profit']:.2f} zł zysku"
+                )
+                send_report("Raport tygodniowy", [message])
+                self._last_weekly_report = now
+        
+        # Wysylka raportu miesiecznego - 1. dnia miesiaca za poprzedni miesiac
+        if self.config.enable_monthly_reports:
+            # Sprawdz czy jest 1. dzien miesiaca i czy raport za poprzedni miesiac juz wyslany
+            is_first_day = now.day == 1
+            last_report_month = getattr(self, "_last_monthly_report_month", None)
+            
+            if is_first_day and last_report_month != (now.year, now.month):
+                # Pobierz dane za poprzedni miesiac
+                prev_month_end = (now.replace(day=1) - timedelta(days=1))
+                prev_month_start = prev_month_end.replace(day=1)
+                days_in_prev_month = (prev_month_end - prev_month_start).days + 1
+                
+                MONTH_NAMES = ['Styczen', 'Luty', 'Marzec', 'Kwiecien', 'Maj', 'Czerwiec',
+                               'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien']
+                month_name = MONTH_NAMES[prev_month_end.month - 1]
+                
+                summary = self._get_period_summary(days=days_in_prev_month, end_date=prev_month_end)
+                if summary:
+                    message = (
+                        f"W miesiącu {month_name} sprzedałaś {summary['products_sold']} produktów "
+                        f"za {summary['total_revenue']:.2f} zł co dało {summary['real_profit']:.2f} zł zysku"
+                    )
+                    send_report("Raport miesieczny", [message])
+                    self._last_monthly_report_month = (now.year, now.month)
+    
+    def _get_period_summary(self, days: int, end_date: datetime = None) -> dict:
+        """Pobiera podsumowanie sprzedazy za okres z obliczeniem realnego zysku.
+        
+        Args:
+            days: Liczba dni wstecz od end_date
+            end_date: Data koncowa (domyslnie teraz)
+            
+        Returns:
+            Dict z kluczami: products_sold, total_revenue, real_profit
+        """
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+        from sqlalchemy import desc
+        
+        if end_date is None:
+            end_date = datetime.now()
+        
+        start_date = end_date - timedelta(days=days)
+        start_ts = int(start_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        end_ts = int(end_date.replace(hour=23, minute=59, second=59, microsecond=999999).timestamp())
+        
+        try:
+            from .db import get_session
+            from .models import Order, OrderProduct, PurchaseBatch
+            from .settings_store import settings_store
+            from .allegro_api import get_order_billing_summary
+            from sqlalchemy import func
+            
+            # Pobierz koszt pakowania
+            try:
+                packaging_cost_per_order = Decimal(str(settings_store.get("PACKAGING_COST") or "0.16"))
+            except (ValueError, TypeError):
+                packaging_cost_per_order = Decimal("0.16")
+            
+            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+            
+            with get_session() as db:
+                orders = db.query(Order).filter(
+                    Order.date_add >= start_ts,
+                    Order.date_add <= end_ts
+                ).all()
+                
+                total_revenue = Decimal("0")
+                total_profit = Decimal("0")
+                total_products = 0
+                
+                for order in orders:
+                    sale_price = Decimal(str(order.payment_done or 0))
+                    total_revenue += sale_price
+                    
+                    # Liczba produktow
+                    products_in_order = db.query(func.sum(OrderProduct.quantity)).filter(
+                        OrderProduct.order_id == order.order_id
+                    ).scalar() or 0
+                    total_products += int(products_in_order)
+                    
+                    # Oplaty Allegro - probuj z API
+                    allegro_fees = Decimal("0")
+                    if access_token and order.external_order_id:
+                        try:
+                            billing = get_order_billing_summary(access_token, order.external_order_id)
+                            if billing.get("success"):
+                                allegro_fees = billing["total_fees"]
+                        except Exception:
+                            pass
+                    
+                    # Fallback - szacunkowa prowizja 12.3%
+                    if allegro_fees == 0 and sale_price > 0:
+                        allegro_fees = sale_price * Decimal("0.123")
+                    
+                    # Koszt zakupu
+                    purchase_cost = Decimal("0")
+                    for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
+                        if op.product_size and op.product_size.product:
+                            latest_batch = (
+                                db.query(PurchaseBatch)
+                                .filter(
+                                    PurchaseBatch.product_id == op.product_size.product_id,
+                                    PurchaseBatch.size == op.product_size.size
+                                )
+                                .order_by(desc(PurchaseBatch.purchase_date))
+                                .first()
+                            )
+                            if latest_batch:
+                                purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
+                    
+                    # Zysk = sprzedaz - oplaty - zakup - pakowanie
+                    order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
+                    total_profit += order_profit
+                
+                return {
+                    "products_sold": total_products,
+                    "total_revenue": float(total_revenue),
+                    "real_profit": float(total_profit),
+                }
+                
+        except Exception as e:
+            self.logger.error("Blad pobierania podsumowania sprzedazy: %s", e)
+            return None
 
     def _process_queue(self, queue: List[Dict[str, Any]], printed: Dict[str, Any]) -> List[Dict[str, Any]]:
         MAX_QUEUE_RETRIES = 10  # Maksymalna liczba prób drukowania z kolejki
