@@ -1227,14 +1227,15 @@ def get_order_billing_summary(access_token: str, order_id: str) -> dict:
         dict: Slownik z podsumowaniem kosztow:
         {
             "success": True/False,
-            "commission": Decimal - prowizja od sprzedazy (SUC),
-            "listing_fee": Decimal - oplata za wystawienie (LIS),
-            "shipping_fee": Decimal - koszty wysylki (SHI),
-            "promo_fee": Decimal - oplaty promocyjne (PRO),
+            "commission": Decimal - prowizja od sprzedazy,
+            "listing_fee": Decimal - oplata za wystawienie,
+            "shipping_fee": Decimal - koszty wysylki,
+            "promo_fee": Decimal - oplaty promocyjne,
             "other_fees": Decimal - pozostale oplaty,
             "total_fees": Decimal - suma wszystkich oplat,
             "refunds": Decimal - zwroty (wartosci dodatnie),
             "entries": list - surowe wpisy billingowe,
+            "fee_details": list - szczegoly oplat z nazwami,
             "error": str - komunikat bledu (jesli success=False)
         }
     
@@ -1248,15 +1249,51 @@ def get_order_billing_summary(access_token: str, order_id: str) -> dict:
     
     result = {
         "success": False,
-        "commission": Decimal("0"),      # SUC - prowizja od sprzedazy
-        "listing_fee": Decimal("0"),     # LIS - oplata za wystawienie
-        "shipping_fee": Decimal("0"),    # Koszty wysylki (SHI i pokrewne)
-        "promo_fee": Decimal("0"),       # PRO - promocje
+        "commission": Decimal("0"),      # Prowizje od sprzedazy
+        "listing_fee": Decimal("0"),     # Oplata za wystawienie
+        "shipping_fee": Decimal("0"),    # Koszty wysylki
+        "promo_fee": Decimal("0"),       # Promocje i reklamy
         "other_fees": Decimal("0"),      # Pozostale
         "total_fees": Decimal("0"),
-        "refunds": Decimal("0"),         # REF - zwroty (dodatnie)
+        "refunds": Decimal("0"),         # Zwroty (dodatnie)
         "entries": [],
+        "fee_details": [],               # Szczegoly oplat z nazwami
         "error": None,
+    }
+    
+    # Mapowanie typow billingowych Allegro na kategorie
+    # Zrodlo: rzeczywiste dane z API Allegro Billing
+    COMMISSION_TYPES = {
+        "SUC",   # Prowizja od sprzedazy
+        "FSF",   # Prowizja od sprzedazy oferty wyroznonej
+        "BRG",   # Prowizja od sprzedazy w Kampanii
+    }
+    
+    SHIPPING_TYPES = {
+        "HLB",   # Oplata za dostawe DHL Allegro Delivery
+        "ORB",   # Oplata za dostawe ORLEN Paczka Allegro Delivery
+        "DXP",   # Oplata za dostawe One Kurier Allegro Delivery
+        "HB4",   # Oplata za dostawe InPost
+        "SHI",   # Oplata za wysylke (ogolna)
+        "SHIP",  # Wysylka
+        "DLV",   # Dostawa
+    }
+    
+    PROMO_TYPES = {
+        "FEA",   # Oplata za wyroznenie
+        "DPG",   # Oplata za promowanie na stronie dzialu
+        "PRO",   # Promocja
+        "ADS",   # Reklama
+    }
+    
+    REFUND_TYPES = {
+        "REF",   # Zwrot kosztow
+        "CB2",   # Bonus z Kampanii
+        "PAD",   # Pobranie oplat z wplywow (dodatnie)
+    }
+    
+    LISTING_TYPES = {
+        "LIS",   # Oplata za wystawienie
     }
     
     try:
@@ -1264,10 +1301,10 @@ def get_order_billing_summary(access_token: str, order_id: str) -> dict:
         entries = data.get("billingEntries", [])
         result["entries"] = entries
         
-        # Mapowanie typow billingowych na kategorie
-        # Wartosci sa zwykle ujemne (koszty), wiec bierzemy abs()
         for entry in entries:
-            type_id = entry.get("type", {}).get("id", "")
+            type_info = entry.get("type", {})
+            type_id = type_info.get("id", "")
+            type_name = type_info.get("name", type_id)
             value = entry.get("value", {})
             amount_str = value.get("amount", "0")
             
@@ -1276,29 +1313,40 @@ def get_order_billing_summary(access_token: str, order_id: str) -> dict:
             except Exception:
                 amount = Decimal("0")
             
+            # Dodaj do szczegolowych oplat (tylko koszty, nie zwroty)
+            if amount < 0:
+                result["fee_details"].append({
+                    "type_id": type_id,
+                    "name": type_name,
+                    "amount": abs(amount),
+                })
+            
             # Klasyfikuj wg typu
-            if type_id == "SUC":
-                # Prowizja od sprzedazy (ujemna wartosc = koszt)
-                result["commission"] += abs(amount)
-            elif type_id == "LIS":
-                # Oplata za wystawienie
-                result["listing_fee"] += abs(amount)
-            elif type_id in ("SHI", "SHIP", "DLV", "DELIVERY"):
-                # Koszty wysylki
-                result["shipping_fee"] += abs(amount)
-            elif type_id in ("PRO", "PROMO", "ADS"):
-                # Promocje i reklamy
-                result["promo_fee"] += abs(amount)
-            elif type_id in ("REF", "REFUND"):
-                # Zwroty (dodatnie bo to wplyw)
+            if type_id in COMMISSION_TYPES:
+                result["commission"] += abs(amount) if amount < 0 else Decimal("0")
+            elif type_id in LISTING_TYPES:
+                result["listing_fee"] += abs(amount) if amount < 0 else Decimal("0")
+            elif type_id in SHIPPING_TYPES:
+                # Koszty wysylki - ujemne to koszty, dodatnie to zwroty
+                if amount < 0:
+                    result["shipping_fee"] += abs(amount)
+                else:
+                    result["refunds"] += amount
+            elif type_id in PROMO_TYPES:
+                result["promo_fee"] += abs(amount) if amount < 0 else Decimal("0")
+            elif type_id in REFUND_TYPES:
+                # Zwroty i bonusy (dodatnie to wplywy)
                 if amount > 0:
                     result["refunds"] += amount
-                else:
-                    result["other_fees"] += abs(amount)
             else:
                 # Pozostale oplaty
                 if amount < 0:
                     result["other_fees"] += abs(amount)
+                    result["fee_details"].append({
+                        "type_id": type_id,
+                        "name": type_name,
+                        "amount": abs(amount),
+                    })
         
         # Suma wszystkich oplat (bez zwrotow)
         result["total_fees"] = (
