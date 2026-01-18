@@ -67,6 +67,10 @@ ENV_INFO = {
         "Raport miesięczny",
         "Wysyłaj raport miesięczny",
     ),
+    "PACKAGING_COST": (
+        "Cena pakowania",
+        "Koszt pakowania jednego zamowienia (PLN)",
+    ),
     "BASELINKER_WEBHOOK_TOKEN": (
         "Token webhook BaseLinker",
         "Sekretny token do wywołań URL z BaseLinker (Wywołaj URL)",

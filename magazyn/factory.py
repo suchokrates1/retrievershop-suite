@@ -12,7 +12,6 @@ from .constants import ALL_SIZES
 from .products import bp as products_bp
 from .history import bp as history_bp
 from .sales import bp as sales_bp
-from .shipping import bp as shipping_bp
 from .allegro import bp as allegro_bp
 from .api_scraper import api_scraper_bp
 from .orders import bp as orders_bp
@@ -90,7 +89,6 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(products_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(sales_bp)
-    app.register_blueprint(shipping_bp)
     app.register_blueprint(allegro_bp)
     app.register_blueprint(api_scraper_bp)
     app.register_blueprint(diagnostics_bp)
