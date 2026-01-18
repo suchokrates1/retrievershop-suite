@@ -431,7 +431,25 @@
                         <p class="mb-1 small">
                             <strong>Inne oplaty:</strong> 
                             <span class="text-danger">-{{ '%.2f'|format(other_fees) }} {{ order.currency or 'PLN' }}</span>
+                            {% if fee_details %}
+                            <button class="btn btn-link btn-sm p-0 ms-1" type="button" data-bs-toggle="collapse" data-bs-target="#feeDetails">
+                                <i class="bi bi-info-circle"></i>
+                            </button>
+                            {% endif %}
                         </p>
+                        {% if fee_details %}
+                        <div class="collapse mb-2" id="feeDetails">
+                            <div class="card card-body py-2 px-3 bg-light small">
+                                <strong class="mb-1">Szczegoly oplat:</strong>
+                                {% for fee in fee_details %}
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ fee.name }} ({{ fee.type_id }})</span>
+                                    <span class="text-danger">-{{ '%.2f'|format(fee.amount) }} PLN</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
                         {% endif %}
                         <p class="mb-1 small fw-bold">
                             <strong>Suma oplat Allegro:</strong> 
