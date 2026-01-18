@@ -418,6 +418,7 @@ def order_detail(order_id: str):
         other_fees = Decimal("0")
         billing_data_available = False
         billing_entries = []
+        fee_details = []  # Szczegoly oplat z nazwami
         
         # Probuj pobrac rzeczywiste dane z Billing API
         try:
@@ -435,6 +436,7 @@ def order_detail(order_id: str):
                     promo_fee = billing_summary["promo_fee"]
                     other_fees = billing_summary["other_fees"]
                     billing_entries = billing_summary["entries"]
+                    fee_details = billing_summary.get("fee_details", [])
                     billing_data_available = True
                     logger.info(f"Pobrano dane billingowe dla zamowienia {order.order_id} "
                                f"(Allegro: {allegro_order_id}): prowizja={allegro_commission}, "
@@ -614,6 +616,7 @@ def order_detail(order_id: str):
             total_allegro_fees=total_allegro_fees,
             billing_data_available=billing_data_available,
             billing_entries=billing_entries,
+            fee_details=fee_details,
             purchase_cost=purchase_cost,
             packaging_cost=packaging_cost,
             real_profit=real_profit,
