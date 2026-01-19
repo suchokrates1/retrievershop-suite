@@ -1212,16 +1212,213 @@ def fetch_billing_types(access_token: str) -> list:
     return response.json()
 
 
-def get_order_billing_summary(access_token: str, order_id: str) -> dict:
+# =============================================================================
+# SZACOWANIE KOSZTOW WYSYLKI ALLEGRO SMART
+# =============================================================================
+# Tabela kosztow na podstawie:
+# https://help.allegro.com/pl/sell/a/allegro-smart-na-allegro-pl-informacje-dla-sprzedajacych-9g0rWRXKxHG
+# Aktualizacja: Styczen 2026
+
+from decimal import Decimal
+
+# Progi wartosci zamowienia (w PLN)
+ALLEGRO_SMART_THRESHOLDS = [
+    (Decimal("30.00"), Decimal("44.99")),
+    (Decimal("45.00"), Decimal("64.99")),
+    (Decimal("65.00"), Decimal("99.99")),
+    (Decimal("100.00"), Decimal("149.99")),
+    (Decimal("150.00"), Decimal("999999.99")),
+]
+
+# Koszty wysylki dla sprzedajacego wg metody dostawy i progu cenowego
+# Format: {klucz_metody: [koszt_prog1, koszt_prog2, koszt_prog3, koszt_prog4, koszt_prog5]}
+ALLEGRO_SMART_SHIPPING_COSTS = {
+    # === AUTOMATY PACZKOWE I PUNKTY ODBIORU ===
+    # Allegro Paczkomaty InPost
+    "paczkomaty_inpost": [Decimal("1.59"), Decimal("3.09"), Decimal("4.99"), Decimal("7.59"), Decimal("9.99")],
+    "allegro paczkomaty inpost": [Decimal("1.59"), Decimal("3.09"), Decimal("4.99"), Decimal("7.59"), Decimal("9.99")],
+    "inpost_paczkomaty": [Decimal("1.59"), Decimal("3.09"), Decimal("4.99"), Decimal("7.59"), Decimal("9.99")],
+    
+    # Allegro Automat DHL BOX 24/7 (Allegro Delivery)
+    "dhl_box": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro automat dhl box": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro Automat Pocztex
+    "automat_pocztex": [Decimal("1.29"), Decimal("2.49"), Decimal("4.29"), Decimal("6.69"), Decimal("8.89")],
+    "allegro automat pocztex": [Decimal("1.29"), Decimal("2.49"), Decimal("4.29"), Decimal("6.69"), Decimal("8.89")],
+    
+    # Allegro Automat ORLEN Paczka (Allegro Delivery)
+    "orlen_automat": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro automat orlen paczka": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "orlen paczka": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro Automat DPD Pickup (Allegro Delivery)
+    "dpd_automat": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro automat dpd pickup": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro One Box (Allegro Delivery)
+    "one_box": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro one box": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro Odbiór w Punkcie Pocztex
+    "punkt_pocztex": [Decimal("1.29"), Decimal("2.49"), Decimal("4.29"), Decimal("6.69"), Decimal("8.89")],
+    "allegro odbior w punkcie pocztex": [Decimal("1.29"), Decimal("2.49"), Decimal("4.29"), Decimal("6.69"), Decimal("8.89")],
+    
+    # Allegro Odbiór w Punkcie DPD Pickup (bez Allegro Delivery)
+    "punkt_dpd": [Decimal("1.59"), Decimal("3.09"), Decimal("4.99"), Decimal("7.59"), Decimal("9.99")],
+    
+    # Allegro Odbiór w Punkcie DPD Pickup (Allegro Delivery)
+    "punkt_dpd_delivery": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro odbior w punkcie dpd pickup": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro Odbiór w Punkcie DHL (Allegro Delivery)
+    "punkt_dhl": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro odbior w punkcie dhl": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro Odbiór w Punkcie ORLEN Paczka (Allegro Delivery)
+    "punkt_orlen": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro odbior w punkcie orlen paczka": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # Allegro One Punkt (Allegro Delivery)
+    "one_punkt": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    "allegro one punkt": [Decimal("0.99"), Decimal("1.89"), Decimal("3.59"), Decimal("5.89"), Decimal("7.79")],
+    
+    # === PRZESYLKI KURIERSKIE ===
+    # Allegro Kurier DPD (bez Allegro Delivery)
+    "kurier_dpd": [Decimal("1.99"), Decimal("3.99"), Decimal("5.79"), Decimal("9.09"), Decimal("11.49")],
+    "allegro kurier dpd": [Decimal("1.99"), Decimal("3.99"), Decimal("5.79"), Decimal("9.09"), Decimal("11.49")],
+    
+    # Allegro Kurier DPD (Allegro Delivery)
+    "kurier_dpd_delivery": [Decimal("1.79"), Decimal("3.69"), Decimal("5.39"), Decimal("8.59"), Decimal("10.89")],
+    
+    # Allegro Kurier DHL (Allegro Delivery)
+    "kurier_dhl": [Decimal("1.79"), Decimal("3.69"), Decimal("5.39"), Decimal("8.59"), Decimal("10.89")],
+    "allegro kurier dhl": [Decimal("1.79"), Decimal("3.69"), Decimal("5.39"), Decimal("8.59"), Decimal("10.89")],
+    "dhl": [Decimal("1.79"), Decimal("3.69"), Decimal("5.39"), Decimal("8.59"), Decimal("10.89")],
+    
+    # Allegro Kurier Pocztex
+    "kurier_pocztex": [Decimal("1.99"), Decimal("3.99"), Decimal("5.79"), Decimal("9.09"), Decimal("11.49")],
+    "allegro kurier pocztex": [Decimal("1.99"), Decimal("3.99"), Decimal("5.79"), Decimal("9.09"), Decimal("11.49")],
+    
+    # Allegro One Kurier (Allegro Delivery)
+    "one_kurier": [Decimal("1.79"), Decimal("3.69"), Decimal("5.39"), Decimal("8.59"), Decimal("10.89")],
+    "allegro one kurier": [Decimal("1.79"), Decimal("3.69"), Decimal("5.39"), Decimal("8.59"), Decimal("10.89")],
+    
+    # Allegro Przesyłka polecona
+    "przesylka_polecona": [Decimal("0.79"), Decimal("1.49"), Decimal("2.29"), Decimal("3.49"), Decimal("4.29")],
+    "allegro przesylka polecona": [Decimal("0.79"), Decimal("1.49"), Decimal("2.29"), Decimal("3.49"), Decimal("4.29")],
+    
+    # Allegro MiniPrzesyłka
+    "miniprzesylka": [Decimal("0.79"), Decimal("1.49"), Decimal("2.29"), Decimal("3.49"), Decimal("4.29")],
+    "allegro miniprzesylka": [Decimal("0.79"), Decimal("1.49"), Decimal("2.29"), Decimal("3.49"), Decimal("4.29")],
+}
+
+# Domyslne koszty (InPost Paczkomaty - najpopularniejsza metoda)
+DEFAULT_SHIPPING_COSTS = [Decimal("1.59"), Decimal("3.09"), Decimal("4.99"), Decimal("7.59"), Decimal("9.99")]
+
+
+def _normalize_delivery_method(delivery_method: str) -> str:
+    """Normalizuj nazwe metody dostawy do klucza slownikowego."""
+    if not delivery_method:
+        return ""
+    # Zamien na male litery i usun nadmiarowe spacje
+    normalized = delivery_method.lower().strip()
+    # Usun polskie znaki
+    normalized = normalized.replace("ó", "o").replace("ł", "l").replace("ą", "a")
+    normalized = normalized.replace("ę", "e").replace("ś", "s").replace("ż", "z")
+    normalized = normalized.replace("ź", "z").replace("ć", "c").replace("ń", "n")
+    return normalized
+
+
+def _get_threshold_index(order_value: Decimal) -> int:
+    """Zwroc indeks progu cenowego dla danej wartosci zamowienia."""
+    for i, (min_val, max_val) in enumerate(ALLEGRO_SMART_THRESHOLDS):
+        if min_val <= order_value <= max_val:
+            return i
+    # Powyzej 150 PLN
+    if order_value >= Decimal("150.00"):
+        return 4
+    # Ponizej 30 PLN - brak Smart, uzywamy najnizszego progu
+    return 0
+
+
+def estimate_allegro_shipping_cost(delivery_method: str, order_value: Decimal) -> dict:
+    """
+    Szacuj koszt wysylki Allegro Smart na podstawie metody dostawy i wartosci zamowienia.
+    
+    Args:
+        delivery_method: Nazwa metody dostawy (np. "Allegro Paczkomaty InPost")
+        order_value: Wartosc zamowienia w PLN
+    
+    Returns:
+        dict: {
+            "estimated_cost": Decimal - szacowany koszt,
+            "threshold_index": int - indeks progu cenowego (0-4),
+            "threshold_range": str - zakres cenowy (np. "100.00-149.99 PLN"),
+            "delivery_method_matched": str - dopasowana metoda lub "default",
+            "is_estimate": True - zawsze True, to szacunek
+        }
+    """
+    normalized = _normalize_delivery_method(delivery_method)
+    threshold_idx = _get_threshold_index(order_value)
+    
+    # Znajdz koszty dla metody dostawy
+    costs = None
+    matched_method = "default"
+    
+    # Szukaj dokladnego dopasowania
+    if normalized in ALLEGRO_SMART_SHIPPING_COSTS:
+        costs = ALLEGRO_SMART_SHIPPING_COSTS[normalized]
+        matched_method = normalized
+    else:
+        # Szukaj czesciowego dopasowania
+        for key, cost_list in ALLEGRO_SMART_SHIPPING_COSTS.items():
+            if key in normalized or normalized in key:
+                costs = cost_list
+                matched_method = key
+                break
+    
+    # Jesli nie znaleziono, uzyj domyslnych (InPost)
+    if costs is None:
+        costs = DEFAULT_SHIPPING_COSTS
+        matched_method = "default (inpost)"
+    
+    estimated_cost = costs[threshold_idx]
+    
+    # Formatuj zakres progu
+    min_val, max_val = ALLEGRO_SMART_THRESHOLDS[threshold_idx]
+    if threshold_idx == 4:
+        threshold_range = f"od {min_val} PLN"
+    else:
+        threshold_range = f"{min_val}-{max_val} PLN"
+    
+    return {
+        "estimated_cost": estimated_cost,
+        "threshold_index": threshold_idx,
+        "threshold_range": threshold_range,
+        "delivery_method_matched": matched_method,
+        "is_estimate": True,
+    }
+
+
+def get_order_billing_summary(
+    access_token: str, 
+    order_id: str,
+    delivery_method: str = None,
+    order_value: Decimal = None
+) -> dict:
     """
     Pobierz podsumowanie kosztow billingowych dla zamowienia.
     
     Agreguje wszystkie wpisy billingowe dla danego zamowienia i zwraca
-    podsumowanie z podzilem na typy oplat.
+    podsumowanie z podzilem na typy oplat. Jesli API nie zwroci kosztu wysylki,
+    a podano delivery_method i order_value, szacuje koszt na podstawie tabeli Allegro Smart.
     
     Args:
         access_token: Token dostepu Allegro OAuth
         order_id: UUID zamowienia (format: "29738e61-7f6a-11e8-ac45-09db60ede9d6")
+        delivery_method: Opcjonalna nazwa metody dostawy do szacowania
+        order_value: Opcjonalna wartosc zamowienia do szacowania
     
     Returns:
         dict: Slownik z podsumowaniem kosztow:
@@ -1361,5 +1558,24 @@ def get_order_billing_summary(access_token: str, order_id: str) -> dict:
         
     except Exception as e:
         result["error"] = str(e)
+    
+    # Jesli API nie zwrocilo kosztu wysylki, a mamy dane do szacowania - oszacuj
+    if result["shipping_fee"] == Decimal("0") and delivery_method and order_value:
+        estimate = estimate_allegro_shipping_cost(delivery_method, order_value)
+        result["estimated_shipping"] = estimate
+        result["shipping_fee_estimated"] = estimate["estimated_cost"]
+        # Dodaj szacowany koszt do fee_details
+        result["fee_details"].append({
+            "type_id": "EST",
+            "name": f"Szacowany koszt wysylki ({estimate['delivery_method_matched']})",
+            "amount": estimate["estimated_cost"],
+            "is_estimate": True,
+        })
+        # Zaktualizuj sume oplat z szacowanym kosztem
+        result["total_fees_with_estimate"] = result["total_fees"] + estimate["estimated_cost"]
+    else:
+        result["estimated_shipping"] = None
+        result["shipping_fee_estimated"] = None
+        result["total_fees_with_estimate"] = result["total_fees"]
     
     return result
