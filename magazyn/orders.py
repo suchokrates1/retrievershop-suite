@@ -419,6 +419,7 @@ def order_detail(order_id: str):
         billing_data_available = False
         billing_entries = []
         fee_details = []  # Szczegoly oplat z nazwami
+        estimated_shipping = None  # Szacowany koszt wysylki
         
         # Probuj pobrac rzeczywiste dane z Billing API
         try:
@@ -427,7 +428,13 @@ def order_detail(order_id: str):
             allegro_order_id = order.external_order_id
             if access_token and allegro_order_id:
                 from .allegro_api import get_order_billing_summary
-                billing_summary = get_order_billing_summary(access_token, allegro_order_id)
+                # Przekaz dane do szacowania kosztow wysylki
+                billing_summary = get_order_billing_summary(
+                    access_token, 
+                    allegro_order_id,
+                    delivery_method=order.delivery_method,
+                    order_value=sale_price
+                )
                 
                 if billing_summary.get("success"):
                     allegro_commission = billing_summary["commission"]
@@ -437,10 +444,17 @@ def order_detail(order_id: str):
                     other_fees = billing_summary["other_fees"]
                     billing_entries = billing_summary["entries"]
                     fee_details = billing_summary.get("fee_details", [])
+                    estimated_shipping = billing_summary.get("estimated_shipping")
                     billing_data_available = True
+                    
+                    # Jesli koszt wysylki jest szacowany, uzyj go
+                    if allegro_shipping_fee == Decimal("0") and billing_summary.get("shipping_fee_estimated"):
+                        allegro_shipping_fee = billing_summary["shipping_fee_estimated"]
+                    
                     logger.info(f"Pobrano dane billingowe dla zamowienia {order.order_id} "
                                f"(Allegro: {allegro_order_id}): prowizja={allegro_commission}, "
-                               f"wystawienie={listing_fee}, wysylka={allegro_shipping_fee}, promo={promo_fee}")
+                               f"wystawienie={listing_fee}, wysylka={allegro_shipping_fee}, promo={promo_fee}"
+                               f"{' (szacowana)' if estimated_shipping else ''}")
                 else:
                     logger.warning(f"Nie udalo sie pobrac danych billingowych dla {order.order_id} "
                                   f"(Allegro: {allegro_order_id}): {billing_summary.get('error')}")

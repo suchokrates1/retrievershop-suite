@@ -407,7 +407,10 @@
                             {% for fee in fee_details %}
                             <p class="mb-1 small">
                                 <strong>{{ fee.name }}:</strong> 
-                                <span class="text-danger">-{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}</span>
+                                <span class="{% if fee.is_estimate %}text-warning{% else %}text-danger{% endif %}">
+                                    -{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
+                                    {% if fee.is_estimate %}<i class="bi bi-calculator ms-1" title="Szacowany koszt"></i>{% endif %}
+                                </span>
                             </p>
                             {% endfor %}
                         {% else %}
@@ -438,25 +441,9 @@
                             {% endif %}
                         {% endif %}
                         
-                        {# Koszt wysylki - zawsze pokazuj, nawet jesli jeszcze nie naliczony #}
-                        {% if allegro_shipping_fee > 0 %}
-                        <p class="mb-1 small">
-                            <strong>Koszt wysylki (Allegro Smart):</strong> 
-                            <span class="text-danger">-{{ '%.2f'|format(allegro_shipping_fee) }} {{ order.currency or 'PLN' }}</span>
-                        </p>
-                        {% else %}
-                        <p class="mb-1 small">
-                            <strong>Koszt wysylki (Allegro Smart):</strong> 
-                            <span class="text-muted"><i class="bi bi-clock me-1"></i>oczekuje na rozliczenie (3-5 dni)</span>
-                        </p>
-                        {% endif %}
-                        
                         <p class="mb-1 small fw-bold">
                             <strong>Suma oplat Allegro:</strong> 
                             <span class="text-danger">-{{ '%.2f'|format(total_allegro_fees) }} {{ order.currency or 'PLN' }}</span>
-                            {% if allegro_shipping_fee == 0 %}
-                            <span class="text-muted small">(bez wysylki)</span>
-                            {% endif %}
                         </p>
                     {% else %}
                         {# Szacunkowe dane (brak API) #}
