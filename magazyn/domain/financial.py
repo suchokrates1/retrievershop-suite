@@ -180,7 +180,7 @@ class FinancialCalculator:
     
     def get_allegro_fees(
         self, 
-        order_id: str, 
+        external_order_id: str, 
         sale_price: Decimal,
         access_token: Optional[str] = None,
         delivery_method: Optional[str] = None
@@ -192,7 +192,7 @@ class FinancialCalculator:
         jesli to sie nie uda - szacuje na podstawie prowizji.
         
         Args:
-            order_id: ID zamowienia Allegro
+            external_order_id: UUID zamowienia Allegro (external_order_id)
             sale_price: Cena sprzedazy
             access_token: Token dostepu Allegro (opcjonalny)
             delivery_method: Metoda dostawy do szacowania kosztu wysylki
@@ -201,12 +201,12 @@ class FinancialCalculator:
             Tuple (oplaty, zrodlo) gdzie zrodlo to 'api' lub 'estimated'
         """
         # Probuj pobrac z API
-        if access_token:
+        if access_token and external_order_id:
             try:
                 from ..allegro_api import get_order_billing_summary
-                billing = get_order_billing_summary(order_id, access_token)
-                if billing and billing.get("total_fees_with_estimate"):
-                    fees = Decimal(str(billing["total_fees_with_estimate"]))
+                billing = get_order_billing_summary(access_token, external_order_id)
+                if billing and billing.get("success") and billing.get("total_fees"):
+                    fees = Decimal(str(billing["total_fees"]))
                     return (fees, 'api')
             except Exception:
                 pass
@@ -249,10 +249,11 @@ class FinancialCalculator:
         # Cena sprzedazy
         sale_price = Decimal(str(order.payment_done or 0))
         
-        # Oplaty Allegro
+        # Oplaty Allegro - uzyj external_order_id dla billing API
         delivery_method = getattr(order, 'delivery_method', None)
+        external_order_id = getattr(order, 'external_order_id', None)
         allegro_fees, fee_source = self.get_allegro_fees(
-            order.order_id,
+            external_order_id,
             sale_price,
             access_token,
             delivery_method
