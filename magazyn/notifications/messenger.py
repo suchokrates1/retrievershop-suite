@@ -140,9 +140,7 @@ def get_messenger_client() -> Optional[MessengerClient]:
 
 def send_messenger(message: str) -> bool:
     """
-    Wysyla wiadomosc przez domyslnego klienta.
-    
-    Przed uzyciem nalezy wywolac init_messenger().
+    Wysyla wiadomosc przez domyslnego klienta lub bezposrednio przez settings.
     
     Args:
         message: Tresc wiadomosci
@@ -150,11 +148,42 @@ def send_messenger(message: str) -> bool:
     Returns:
         True jesli wyslano pomyslnie, False w przeciwnym razie
     """
-    if not _default_client:
-        logger.warning("Klient Messenger nie zainicjalizowany - pomijam wyslanie")
-        return False
+    # Jesli jest zainicjalizowany klient - uzyj go
+    if _default_client:
+        return _default_client.send_text(message)
     
-    return _default_client.send_text(message)
+    # Fallback - uzyj settings z config (kompatybilnosc wsteczna)
+    try:
+        from ..config import settings
+        if not settings.PAGE_ACCESS_TOKEN or not settings.RECIPIENT_ID:
+            logger.warning("Brak konfiguracji Messenger w settings")
+            return False
+        
+        payload = {
+            "recipient": {"id": settings.RECIPIENT_ID},
+            "message": {"text": message}
+        }
+        
+        response = requests.post(
+            MESSENGER_API_URL,
+            headers={
+                "Authorization": f"Bearer {settings.PAGE_ACCESS_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            data=json.dumps(payload),
+            timeout=DEFAULT_TIMEOUT
+        )
+        
+        if response.status_code == 200:
+            logger.debug("Wiadomosc wyslana pomyslnie (via settings)")
+            return True
+        else:
+            logger.error(f"Blad wysylania: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Blad wysylania wiadomosci: {e}")
+        return False
 
 
 def send_messenger_lines(lines: List[str]) -> bool:
