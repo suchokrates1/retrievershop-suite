@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Callable
 
 from ..db import sqlite_connect
 from ..notifications import send_messenger
+from ..utils import short_preview
 from ..allegro_api import (
     fetch_discussions,
     fetch_discussion_chat,
@@ -24,14 +25,7 @@ from requests.exceptions import HTTPError
 logger = logging.getLogger(__name__)
 
 
-def _short_preview(text: str, limit: int = 140) -> str:
-    """Skraca tekst do podanego limitu znakow."""
-    if not text:
-        return ""
-    text = text.replace("\n", " ").strip()
-    if len(text) <= limit:
-        return text
-    return text[:limit - 3] + "..."
+# Funkcja short_preview importowana z magazyn.utils
 
 
 class AllegroSyncService:
@@ -179,7 +173,7 @@ class AllegroSyncService:
         
         # Powiadomienie i autoresponder
         if last_buyer_message:
-            preview = _short_preview(last_buyer_message["text"])
+            preview = short_preview(last_buyer_message["text"], normalize_whitespace=True)
             send_messenger(
                 f"Użytkownik {last_buyer_message['login']} napisał w dyskusji: \"{preview}\""
             )
@@ -330,7 +324,7 @@ class AllegroSyncService:
         
         # Powiadomienie i autoresponder
         if last_interlocutor_message:
-            preview = _short_preview(last_interlocutor_message["text"])
+            preview = short_preview(last_interlocutor_message["text"], normalize_whitespace=True)
             send_messenger(
                 f"Użytkownik {last_interlocutor_message['login']} napisał wiadomość: \"{preview}\""
             )
