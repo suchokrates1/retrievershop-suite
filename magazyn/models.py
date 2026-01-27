@@ -284,6 +284,25 @@ class AppSetting(Base):
     )
 
 
+class FixedCost(Base):
+    """Koszty stale (np. ksiegowosc, skladki ZUS, serwisy).
+    
+    Koszty te sa odejmowane od miesiecznego zysku.
+    Wartosc moze byc ujemna (np. dotacja, zwrot).
+    """
+    __tablename__ = "fixed_costs"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)  # Nazwa kosztu (np. "Ksiegowosc")
+    amount = Column(Numeric(10, 2), nullable=False)  # Kwota w PLN (moze byc ujemna)
+    description = Column(Text, nullable=True)  # Opcjonalny opis
+    is_active = Column(Boolean, default=True, nullable=False)  # Czy koszt jest aktywny
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<FixedCost {self.name}: {self.amount} PLN>"
+
+
 class AllegroRepliedThread(Base):
     __tablename__ = "allegro_replied_threads"
     thread_id = Column(String, primary_key=True)

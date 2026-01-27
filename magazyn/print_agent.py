@@ -1171,24 +1171,29 @@ class LabelAgent:
                                'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien']
                 month_name = MONTH_NAMES[prev_month_end.month - 1]
                 
-                summary = self._get_period_summary(days=days_in_prev_month, end_date=prev_month_end)
+                summary = self._get_period_summary(days=days_in_prev_month, end_date=prev_month_end, include_fixed_costs=True)
                 if summary:
+                    # Dodaj informacje o kosztach stalych jesli sa
+                    fixed_info = ""
+                    if summary.get('fixed_costs', 0) > 0:
+                        fixed_info = f" (po odliczeniu {summary['fixed_costs']:.0f} zł kosztów stałych)"
                     message = (
                         f"W miesiącu {month_name} sprzedałaś {summary['products_sold']} produktów "
-                        f"za {summary['total_revenue']:.2f} zł co dało {summary['real_profit']:.2f} zł zysku"
+                        f"za {summary['total_revenue']:.2f} zł co dało {summary['real_profit']:.2f} zł zysku{fixed_info}"
                     )
                     send_report("Raport miesieczny", [message])
                     self._last_monthly_report_month = (now.year, now.month)
     
-    def _get_period_summary(self, days: int, end_date: datetime = None) -> dict:
+    def _get_period_summary(self, days: int, end_date: datetime = None, include_fixed_costs: bool = False) -> dict:
         """Pobiera podsumowanie sprzedazy za okres z obliczeniem realnego zysku.
         
         Args:
             days: Liczba dni wstecz od end_date
             end_date: Data koncowa (domyslnie teraz)
+            include_fixed_costs: Czy odejmowac koszty stale (dla raportow miesiecznych)
             
         Returns:
-            Dict z kluczami: products_sold, total_revenue, real_profit
+            Dict z kluczami: products_sold, total_revenue, real_profit, fixed_costs (opcjonalnie)
         """
         from datetime import datetime, timedelta
         from decimal import Decimal
@@ -1270,11 +1275,27 @@ class LabelAgent:
                     order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
                     total_profit += order_profit
                 
-                return {
+                # Odejmij koszty stale dla raportow miesiecznych
+                fixed_costs_total = Decimal("0")
+                fixed_costs_list = []
+                if include_fixed_costs:
+                    from .models import FixedCost
+                    fixed_costs = db.query(FixedCost).filter(FixedCost.is_active == True).all()
+                    for fc in fixed_costs:
+                        fixed_costs_total += Decimal(str(fc.amount))
+                        fixed_costs_list.append({'name': fc.name, 'amount': float(fc.amount)})
+                    total_profit -= fixed_costs_total
+                
+                result = {
                     "products_sold": total_products,
                     "total_revenue": float(total_revenue),
                     "real_profit": float(total_profit),
                 }
+                if include_fixed_costs:
+                    result["profit_before_fixed"] = float(total_profit + fixed_costs_total)
+                    result["fixed_costs"] = float(fixed_costs_total)
+                    result["fixed_costs_list"] = fixed_costs_list
+                return result
                 
         except Exception as e:
             self.logger.error("Blad pobierania podsumowania sprzedazy: %s", e)
