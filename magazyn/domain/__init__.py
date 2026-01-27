@@ -6,4 +6,5 @@ __all__ = [
     "reports",
     "invoice_import",
     "allegro_prices",
+    "financial",
 ]
