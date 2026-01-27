@@ -383,6 +383,22 @@ def home():
             order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
             total_real_profit += order_profit
         
+        # Odejmij koszty stale od zysku miesiecznego
+        from .models import FixedCost
+        total_fixed_costs = Decimal("0")
+        fixed_costs_list = []
+        fixed_costs_query = db.query(FixedCost).filter(FixedCost.is_active == True).all()
+        for fc in fixed_costs_query:
+            total_fixed_costs += Decimal(str(fc.amount))
+            fixed_costs_list.append({
+                'name': fc.name,
+                'amount': float(fc.amount),
+            })
+        
+        # Zysk netto = zysk brutto - koszty stale
+        total_real_profit_before_fixed = total_real_profit
+        total_real_profit -= total_fixed_costs
+        
         # =====================================================================
         # Inventory statistics
         # =====================================================================
@@ -747,6 +763,9 @@ def home():
             },
             'profit': {
                 'month': float(total_real_profit),
+                'month_before_fixed': float(total_real_profit_before_fixed),
+                'fixed_costs': float(total_fixed_costs),
+                'fixed_costs_list': fixed_costs_list,
                 'products_sold': total_products_sold,
             },
             'current_month_name': current_month_name,
@@ -854,12 +873,138 @@ def settings_page():
         settings_list.append(
             {"key": key, "label": label, "desc": desc, "value": val}
         )
+    
+    # Pobierz koszty stale
+    from .models import FixedCost
+    with get_session() as db_session:
+        fixed_costs = db_session.query(FixedCost).order_by(FixedCost.name).all()
+        # Konwertuj na liste slownikow zeby uniknac problemow z sesja
+        fixed_costs_list = [{
+            'id': fc.id,
+            'name': fc.name,
+            'amount': float(fc.amount),
+            'description': fc.description,
+            'is_active': fc.is_active,
+        } for fc in fixed_costs]
+        total_fixed_costs = sum(fc['amount'] for fc in fixed_costs_list if fc['is_active'])
+    
     return render_template(
         "settings.html",
         settings=settings_list,
         db_path_notice=db_path_notice,
         boolean_keys=BOOLEAN_KEYS,
+        fixed_costs=fixed_costs_list,
+        total_fixed_costs=total_fixed_costs,
     )
+
+
+@bp.route("/fixed-costs/add", methods=["POST"])
+@login_required
+def add_fixed_cost():
+    """Dodaj nowy koszt staly."""
+    from .models import FixedCost
+    from decimal import Decimal, InvalidOperation
+    
+    name = request.form.get("name", "").strip()
+    amount_str = request.form.get("amount", "0").strip().replace(",", ".")
+    description = request.form.get("description", "").strip()
+    
+    if not name:
+        flash("Nazwa kosztu jest wymagana.")
+        return redirect(url_for("settings_page"))
+    
+    try:
+        amount = Decimal(amount_str)
+    except (InvalidOperation, ValueError):
+        flash("Nieprawidlowa kwota.")
+        return redirect(url_for("settings_page"))
+    
+    new_cost = FixedCost(
+        name=name,
+        amount=amount,
+        description=description if description else None,
+        is_active=True,
+    )
+    with get_session() as db_session:
+        db_session.add(new_cost)
+        db_session.commit()
+    
+    flash(f"Dodano koszt staly: {name} ({amount} PLN)")
+    return redirect(url_for("settings_page"))
+
+
+@bp.route("/fixed-costs/<int:cost_id>/toggle", methods=["POST"])
+@login_required
+def toggle_fixed_cost(cost_id):
+    """Wlacz/wylacz koszt staly."""
+    from .models import FixedCost
+    
+    with get_session() as db_session:
+        cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
+        if cost:
+            cost.is_active = not cost.is_active
+            db_session.commit()
+            status = "aktywny" if cost.is_active else "nieaktywny"
+            flash(f"Koszt '{cost.name}' jest teraz {status}.")
+        else:
+            flash("Nie znaleziono kosztu.")
+    
+    return redirect(url_for("settings_page"))
+
+
+@bp.route("/fixed-costs/<int:cost_id>/delete", methods=["POST"])
+@login_required
+def delete_fixed_cost(cost_id):
+    """Usun koszt staly."""
+    from .models import FixedCost
+    
+    with get_session() as db_session:
+        cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
+        if cost:
+            name = cost.name
+            db_session.delete(cost)
+            db_session.commit()
+            flash(f"Usunieto koszt staly: {name}")
+        else:
+            flash("Nie znaleziono kosztu.")
+    
+    return redirect(url_for("settings_page"))
+
+
+@bp.route("/fixed-costs/<int:cost_id>/edit", methods=["POST"])
+@login_required
+def edit_fixed_cost(cost_id):
+    """Edytuj koszt staly."""
+    from .models import FixedCost
+    from decimal import Decimal, InvalidOperation
+    
+    with get_session() as db_session:
+        cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
+        if not cost:
+            flash("Nie znaleziono kosztu.")
+            return redirect(url_for("settings_page"))
+        
+        name = request.form.get("name", "").strip()
+        amount_str = request.form.get("amount", "0").strip().replace(",", ".")
+        description = request.form.get("description", "").strip()
+        
+        if not name:
+            flash("Nazwa kosztu jest wymagana.")
+            return redirect(url_for("settings_page"))
+        
+        try:
+            amount = Decimal(amount_str)
+        except (InvalidOperation, ValueError):
+            flash("Nieprawidlowa kwota.")
+            return redirect(url_for("settings_page"))
+        
+        cost.name = name
+        cost.amount = amount
+        cost.description = description if description else None
+        db_session.commit()
+        
+        flash(f"Zaktualizowano koszt staly: {name}")
+    return redirect(url_for("settings_page"))
 
 
 @bp.route("/logs")
@@ -870,7 +1015,7 @@ def agent_logs():
             lines = f.readlines()[-200:]
         log_text = "<br>".join(line.rstrip() for line in lines[::-1])
     except Exception as e:
-        log_text = f"Błąd czytania logów: {e}"
+        log_text = f"Blad czytania logow: {e}"
     return render_template("logs.html", logs=log_text)
 
 
