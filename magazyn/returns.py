@@ -442,14 +442,16 @@ def check_allegro_customer_returns() -> Dict[str, int]:
 
 def _map_allegro_return_status(allegro_status: str) -> str:
     """Mapuj status Allegro na wewnetrzny status zwrotu."""
-    # Statusy Allegro: WAITING_FOR_PARCEL, PARCEL_IN_TRANSIT, PARCEL_DELIVERED, 
-    # ACCEPTED, REJECTED, COMMISSION_REFUNDED
+    # Statusy Allegro: CREATED, WAITING_FOR_PARCEL, PARCEL_IN_TRANSIT, 
+    # PARCEL_DELIVERED, ACCEPTED, REJECTED, COMMISSION_REFUNDED, FINISHED
     status_map = {
+        "CREATED": RETURN_STATUS_PENDING,
         "WAITING_FOR_PARCEL": RETURN_STATUS_PENDING,
         "PARCEL_IN_TRANSIT": RETURN_STATUS_IN_TRANSIT,
         "PARCEL_DELIVERED": RETURN_STATUS_DELIVERED,
         "ACCEPTED": RETURN_STATUS_COMPLETED,
         "COMMISSION_REFUNDED": RETURN_STATUS_COMPLETED,
+        "FINISHED": RETURN_STATUS_COMPLETED,
         "REJECTED": RETURN_STATUS_CANCELLED,
     }
     return status_map.get(allegro_status, RETURN_STATUS_PENDING)
