@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from decimal import Decimal
 
-from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file
+from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file, jsonify
 from sqlalchemy import desc, or_
 
 from .auth import login_required
@@ -485,6 +485,85 @@ def restore_return_stock(order_id: str):
                 flash("Stan magazynowy zostal przywrocony", "success")
             else:
                 flash("Nie udalo sie przywrocic stanu - sprawdz czy produkty sa powiazane z magazynem", "error")
+    
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
+@bp.route("/order/<order_id>/check_refund_eligibility", methods=["GET"])
+@login_required
+def check_refund_eligibility(order_id: str):
+    """
+    Sprawdz czy zamowienie kwalifikuje sie do zwrotu pieniedzy.
+    
+    Zwraca JSON z informacjami o kwocie i statusie.
+    """
+    from .returns import check_refund_eligibility as check_eligibility
+    
+    eligible, message, details = check_eligibility(order_id)
+    
+    return jsonify({
+        "eligible": eligible,
+        "message": message,
+        "details": details
+    })
+
+
+@bp.route("/order/<order_id>/process_refund", methods=["POST"])
+@login_required
+def process_refund(order_id: str):
+    """
+    Przetworz zwrot pieniedzy dla zamowienia.
+    
+    UWAGA: Ta operacja jest NIEODWRACALNA!
+    
+    Wymaga potwierdzenia przez:
+    1. Pole confirm=true w POST
+    2. Pole allegro_return_id musi zgadzac sie z baza
+    """
+    from .returns import process_refund as do_refund, check_refund_eligibility as check_eligibility
+    from .models import Return
+    
+    # Sprawdz czy potwierdzono operacje
+    confirm = request.form.get("confirm") == "true" or request.json and request.json.get("confirm") == True
+    if not confirm:
+        flash("Operacja wymaga potwierdzenia", "error")
+        return redirect(url_for(".order_detail", order_id=order_id))
+    
+    # Dodatkowa walidacja - sprawdz allegro_return_id
+    expected_return_id = request.form.get("allegro_return_id") or (request.json and request.json.get("allegro_return_id"))
+    
+    with get_session() as db:
+        return_record = db.query(Return).filter(Return.order_id == order_id).first()
+        
+        if not return_record:
+            flash("Nie znaleziono zwrotu dla tego zamowienia", "error")
+            return redirect(url_for(".order_detail", order_id=order_id))
+        
+        if return_record.allegro_return_id != expected_return_id:
+            flash("Blad walidacji - ID zwrotu Allegro nie zgadza sie", "error")
+            return redirect(url_for(".order_detail", order_id=order_id))
+    
+    # Sprawdz jeszcze raz kwalifikowalnosc
+    eligible, check_message, _ = check_eligibility(order_id)
+    if not eligible:
+        flash(f"Zwrot nie kwalifikuje sie: {check_message}", "error")
+        return redirect(url_for(".order_detail", order_id=order_id))
+    
+    # Opcjonalne parametry
+    delivery_cost_covered = request.form.get("delivery_cost_covered", "true") == "true"
+    reason = request.form.get("reason", "")
+    
+    # Wykonaj zwrot
+    success, message = do_refund(
+        order_id=order_id,
+        delivery_cost_covered=delivery_cost_covered,
+        reason=reason
+    )
+    
+    if success:
+        flash(f"Zwrot pieniedzy zainicjowany pomyslnie! {message}", "success")
+    else:
+        flash(f"Blad zwrotu pieniedzy: {message}", "error")
     
     return redirect(url_for(".order_detail", order_id=order_id))
 

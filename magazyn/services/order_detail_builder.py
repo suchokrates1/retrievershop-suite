@@ -296,6 +296,7 @@ class OrderDetailBuilder:
             "return_items": return_items,
             "return_tracking_number": active_return.return_tracking_number,
             "return_carrier": active_return.return_carrier,
+            "allegro_return_id": active_return.allegro_return_id,
             "messenger_notified": active_return.messenger_notified,
             "stock_restored": active_return.stock_restored,
             "notes": active_return.notes,

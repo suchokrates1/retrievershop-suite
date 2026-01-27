@@ -263,7 +263,7 @@
                         {% endif %}
                         
                         {# Status przywrocenia stanu #}
-                        <div class="d-flex gap-2 align-items-center">
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
                             {% if return_info.messenger_notified %}
                             <span class="badge bg-success"><i class="bi bi-check"></i> Powiadomienie wyslane</span>
                             {% else %}
@@ -281,6 +281,24 @@
                             </form>
                             {% endif %}
                         </div>
+                        
+                        {# Przycisk zwrotu pieniedzy - tylko dla statusu delivered/in_transit i gdy mamy allegro_return_id #}
+                        {% if return_info.status in ['delivered', 'in_transit'] and return_info.allegro_return_id %}
+                        <div class="mt-3 pt-3 border-top">
+                            <h6 class="text-danger mb-2"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
+                            <button type="button" class="btn btn-danger btn-sm" id="refundBtn"
+                                    data-bs-toggle="modal" data-bs-target="#refundModal">
+                                <i class="bi bi-currency-exchange"></i> Zwroc pieniadze klientowi
+                            </button>
+                            <small class="d-block text-muted mt-1">
+                                Ta operacja jest NIEODWRACALNA. Upewnij sie, ze paczka dotarla i produkty sa sprawdzone.
+                            </small>
+                        </div>
+                        {% elif return_info.status == 'completed' %}
+                        <div class="mt-3 pt-3 border-top">
+                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
+                        </div>
+                        {% endif %}
                     </div>
                     
                     <hr class="my-3">
@@ -724,4 +742,163 @@ details[open] summary::before {
     content: '- ';
 }
 </style>
+
+{# Modal potwierdzenia zwrotu pieniedzy #}
+{% if return_info and return_info.status in ['delivered', 'in_transit'] and return_info.allegro_return_id %}
+<div class="modal fade" id="refundModal" tabindex="-1" aria-labelledby="refundModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="refundModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Potwierdzenie zwrotu pieniedzy
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Zamknij"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger mb-3">
+                    <strong>UWAGA!</strong> Ta operacja jest <strong>NIEODWRACALNA</strong>. 
+                    Pieniadze zostana zwrocone klientowi poprzez Allegro.
+                </div>
+                
+                <div id="refundCheckLoading" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Sprawdzanie...</span>
+                    </div>
+                    <p class="mt-2 mb-0">Sprawdzanie kwalifikowalnosci zwrotu...</p>
+                </div>
+                
+                <div id="refundCheckResult" style="display: none;">
+                    <div id="refundEligible" style="display: none;">
+                        <h6>Szczegoly zwrotu:</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <td><strong>Kwota do zwrotu:</strong></td>
+                                <td id="refundAmount" class="text-success fw-bold"></td>
+                            </tr>
+                            <tr>
+                                <td><strong>W tym koszt dostawy:</strong></td>
+                                <td id="refundDelivery"></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Status Allegro:</strong></td>
+                                <td id="refundAllegroStatus"></td>
+                            </tr>
+                        </table>
+                        
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="deliveryCostCovered" checked>
+                            <label class="form-check-label" for="deliveryCostCovered">
+                                Zwroc takze koszt dostawy
+                            </label>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <label for="refundReason" class="form-label">Komentarz (opcjonalnie):</label>
+                            <textarea class="form-control" id="refundReason" rows="2" maxlength="500" 
+                                      placeholder="Np. Towar zwrocony w pelnym stanie"></textarea>
+                        </div>
+                        
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="confirmRefund" required>
+                            <label class="form-check-label text-danger" for="confirmRefund">
+                                <strong>Potwierdzam zwrot pieniedzy klientowi</strong>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="refundNotEligible" class="alert alert-warning" style="display: none;">
+                        <i class="bi bi-x-circle me-2"></i>
+                        <span id="refundNotEligibleReason"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <form id="refundForm" action="{{ url_for('orders.process_refund', order_id=order.order_id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="confirm" value="true">
+                    <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id }}">
+                    <input type="hidden" name="delivery_cost_covered" id="deliveryCostCoveredInput" value="true">
+                    <input type="hidden" name="reason" id="reasonInput" value="">
+                    <button type="submit" class="btn btn-danger" id="confirmRefundBtn" disabled>
+                        <i class="bi bi-currency-exchange"></i> Zwroc pieniadze
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var refundModal = document.getElementById('refundModal');
+    if (!refundModal) return;
+    
+    refundModal.addEventListener('show.bs.modal', function () {
+        // Reset stanu
+        document.getElementById('refundCheckLoading').style.display = 'block';
+        document.getElementById('refundCheckResult').style.display = 'none';
+        document.getElementById('refundEligible').style.display = 'none';
+        document.getElementById('refundNotEligible').style.display = 'none';
+        document.getElementById('confirmRefund').checked = false;
+        document.getElementById('confirmRefundBtn').disabled = true;
+        
+        // Sprawdz kwalifikowalnosc
+        fetch('{{ url_for("orders.check_refund_eligibility", order_id=order.order_id) }}')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('refundCheckLoading').style.display = 'none';
+                document.getElementById('refundCheckResult').style.display = 'block';
+                
+                if (data.eligible && data.details) {
+                    document.getElementById('refundEligible').style.display = 'block';
+                    document.getElementById('refundAmount').textContent = 
+                        data.details.total_amount.toFixed(2) + ' ' + data.details.currency;
+                    document.getElementById('refundDelivery').textContent = 
+                        data.details.delivery_amount.toFixed(2) + ' ' + data.details.currency;
+                    document.getElementById('refundAllegroStatus').textContent = data.details.allegro_status;
+                } else {
+                    document.getElementById('refundNotEligible').style.display = 'block';
+                    document.getElementById('refundNotEligibleReason').textContent = data.message;
+                }
+            })
+            .catch(error => {
+                document.getElementById('refundCheckLoading').style.display = 'none';
+                document.getElementById('refundCheckResult').style.display = 'block';
+                document.getElementById('refundNotEligible').style.display = 'block';
+                document.getElementById('refundNotEligibleReason').textContent = 
+                    'Blad sprawdzania: ' + error.message;
+            });
+    });
+    
+    // Wlacz przycisk tylko gdy checkbox jest zaznaczony
+    document.getElementById('confirmRefund').addEventListener('change', function() {
+        document.getElementById('confirmRefundBtn').disabled = !this.checked;
+    });
+    
+    // Aktualizuj hidden inputs przed submitem
+    document.getElementById('refundForm').addEventListener('submit', function(e) {
+        if (!document.getElementById('confirmRefund').checked) {
+            e.preventDefault();
+            alert('Musisz potwierdzic operacje!');
+            return false;
+        }
+        
+        document.getElementById('deliveryCostCoveredInput').value = 
+            document.getElementById('deliveryCostCovered').checked ? 'true' : 'false';
+        document.getElementById('reasonInput').value = 
+            document.getElementById('refundReason').value;
+        
+        // Dodatkowe potwierdzenie
+        var kwota = document.getElementById('refundAmount').textContent;
+        if (!confirm('Czy na pewno chcesz zwrocic ' + kwota + ' klientowi?\n\nTa operacja jest NIEODWRACALNA!')) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endif %}
+
 {% endblock %}

@@ -68,6 +68,15 @@ from .tracking import (
     fetch_parcel_tracking,
 )
 
+from .refunds import (
+    get_customer_return,
+    validate_return_for_refund,
+    initiate_refund,
+    get_refund_status,
+    ALLEGRO_RETURN_STATUS_DELIVERED,
+    REFUNDABLE_STATUSES,
+)
+
 __all__ = [
     # Core
     "AUTH_URL",
@@ -109,4 +118,11 @@ __all__ = [
     "upload_issue_attachment_complete",
     # Tracking
     "fetch_parcel_tracking",
+    # Refunds
+    "get_customer_return",
+    "validate_return_for_refund",
+    "initiate_refund",
+    "get_refund_status",
+    "ALLEGRO_RETURN_STATUS_DELIVERED",
+    "REFUNDABLE_STATUSES",
 ]
