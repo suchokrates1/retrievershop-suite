@@ -13,6 +13,9 @@ from .order_detail_builder import (
 )
 from .return_sync import ReturnSyncService, create_return_sync_service
 
+# Re-export z domain/inventory dla kompatybilnosci wstecznej
+from ..domain.inventory import consume_order_stock, get_sales_summary
+
 __all__ = [
     "PriceCheckerService",
     "DebugContext",
@@ -23,4 +26,7 @@ __all__ = [
     "RETURN_STAGES",
     "ReturnSyncService",
     "create_return_sync_service",
+    # Kompatybilnosc wsteczna
+    "consume_order_stock",
+    "get_sales_summary",
 ]
