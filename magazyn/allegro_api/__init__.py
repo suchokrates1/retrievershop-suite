@@ -1,31 +1,36 @@
 """
-Klient Allegro API - kompatybilność wsteczna.
+Pakiet allegro_api - modularny klient API Allegro.
 
-Ten plik re-eksportuje wszystkie funkcje z pakietu allegro_api/ dla
-zachowania kompatybilności wstecznej z istniejącym kodem.
-
-Nowy kod powinien importować bezpośrednio z:
-    from magazyn.allegro_api import ...
-lub z konkretnych modułów:
-    from magazyn.allegro_api.auth import get_access_token
-    from magazyn.allegro_api.billing import fetch_billing_entries
+Moduły:
+- core: Podstawowe funkcje HTTP, retry logic, rate limiting
+- auth: Autoryzacja OAuth, refresh token
+- offers: Pobieranie ofert
+- messaging: Dyskusje, wątki, wiadomości
+- billing: Wpisy billingowe, typy opłat
+- shipping: Szacowanie kosztów wysyłki Allegro Smart
+- attachments: Obsługa załączników
+- tracking: Śledzenie przesyłek
 """
 
-# Re-export z pakietu allegro_api dla kompatybilności wstecznej
-from .allegro_api import (
-    # Core
+from .core import (
     AUTH_URL,
     API_BASE_URL,
     DEFAULT_TIMEOUT,
     MAX_RETRY_ATTEMPTS,
     MAX_BACKOFF_SECONDS,
-    # Auth
+)
+
+from .auth import (
     get_access_token,
     refresh_token,
-    # Offers
+)
+
+from .offers import (
     fetch_offers,
     fetch_product_listing,
-    # Messaging
+)
+
+from .messaging import (
     fetch_discussions,
     fetch_message_threads,
     fetch_discussion_issues,
@@ -33,16 +38,22 @@ from .allegro_api import (
     fetch_thread_messages,
     send_thread_message,
     send_discussion_message,
-    # Billing
+)
+
+from .billing import (
     fetch_billing_entries,
     fetch_billing_types,
     get_order_billing_summary,
-    # Shipping
+)
+
+from .shipping import (
     estimate_allegro_shipping_cost,
     ALLEGRO_SMART_THRESHOLDS,
     ALLEGRO_SMART_SHIPPING_COSTS,
     DEFAULT_SHIPPING_COSTS,
-    # Attachments
+)
+
+from .attachments import (
     download_attachment,
     create_attachment_declaration,
     upload_attachment,
@@ -51,20 +62,26 @@ from .allegro_api import (
     create_issue_attachment_declaration,
     upload_issue_attachment,
     upload_issue_attachment_complete,
-    # Tracking
+)
+
+from .tracking import (
     fetch_parcel_tracking,
 )
 
 __all__ = [
+    # Core
     "AUTH_URL",
     "API_BASE_URL",
     "DEFAULT_TIMEOUT",
     "MAX_RETRY_ATTEMPTS",
     "MAX_BACKOFF_SECONDS",
+    # Auth
     "get_access_token",
     "refresh_token",
+    # Offers
     "fetch_offers",
     "fetch_product_listing",
+    # Messaging
     "fetch_discussions",
     "fetch_message_threads",
     "fetch_discussion_issues",
@@ -72,13 +89,16 @@ __all__ = [
     "fetch_thread_messages",
     "send_thread_message",
     "send_discussion_message",
+    # Billing
     "fetch_billing_entries",
     "fetch_billing_types",
     "get_order_billing_summary",
+    # Shipping
     "estimate_allegro_shipping_cost",
     "ALLEGRO_SMART_THRESHOLDS",
     "ALLEGRO_SMART_SHIPPING_COSTS",
     "DEFAULT_SHIPPING_COSTS",
+    # Attachments
     "download_attachment",
     "create_attachment_declaration",
     "upload_attachment",
@@ -87,5 +107,6 @@ __all__ = [
     "create_issue_attachment_declaration",
     "upload_issue_attachment",
     "upload_issue_attachment_complete",
+    # Tracking
     "fetch_parcel_tracking",
 ]

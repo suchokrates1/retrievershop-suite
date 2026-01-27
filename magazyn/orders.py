@@ -13,6 +13,12 @@ from .auth import login_required
 from .db import get_session
 from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog, AllegroOffer
 from .settings_store import settings_store
+from .services.order_detail_builder import (
+    OrderDetailBuilder,
+    build_order_detail_context,
+    SHIPPING_STAGES as SERVICE_SHIPPING_STAGES,
+    RETURN_STAGES as SERVICE_RETURN_STAGES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -358,291 +364,20 @@ def order_detail(order_id: str):
         if not order:
             abort(404)
         
-        # Get order products with warehouse links
-        products = []
-        for op in order.products:
-            # Try to link to warehouse via EAN or auction_id->AllegroOffer
-            warehouse_product = None
-            ps = None
-            
-            # 1. Najpierw probuj po EAN
-            if op.ean:
-                ps = db.query(ProductSize).filter(ProductSize.barcode == op.ean).first()
-            
-            # 2. Jesli nie znaleziono, probuj przez auction_id -> AllegroOffer
-            if not ps and op.auction_id:
-                allegro_offer = db.query(AllegroOffer).filter(
-                    AllegroOffer.offer_id == op.auction_id
-                ).first()
-                if allegro_offer and allegro_offer.product_size_id:
-                    ps = db.query(ProductSize).filter(
-                        ProductSize.id == allegro_offer.product_size_id
-                    ).first()
-            
-            if ps:
-                warehouse_product = {
-                    "id": ps.product_id,
-                    "product_size_id": ps.id,
-                    "name": ps.product.name if ps.product else None,
-                    "color": ps.product.color if ps.product else None,
-                    "size": ps.size,
-                    "quantity_in_stock": ps.quantity,
-                }
-            
-            products.append({
-                "id": op.id,
-                "name": op.name,
-                "sku": op.sku,
-                "ean": op.ean,
-                "quantity": op.quantity,
-                "price_brutto": op.price_brutto,
-                "attributes": op.attributes,
-                "auction_id": op.auction_id,
-                "warehouse_product": warehouse_product,
-            })
+        # Uzyj nowego serwisu do budowania kontekstu
+        context = build_order_detail_context(db, order)
         
-        # Calculate financial metrics - try to get real data from Allegro Billing API
-        sale_price = Decimal(str(order.payment_done)) if order.payment_done else Decimal("0")
-        
-        # Pobierz koszt pakowania z ustawien (domyslnie 0.16 PLN)
-        try:
-            packaging_cost = Decimal(str(settings_store.get("PACKAGING_COST") or "0.16"))
-        except (ValueError, TypeError):
-            packaging_cost = Decimal("0.16")
-        
-        # Domyslne wartosci (fallback jesli API nie zwroci danych)
-        allegro_commission = Decimal("0")
-        listing_fee = Decimal("0")
-        allegro_shipping_fee = Decimal("0")
-        promo_fee = Decimal("0")
-        other_fees = Decimal("0")
-        billing_data_available = False
-        billing_entries = []
-        fee_details = []  # Szczegoly oplat z nazwami
-        estimated_shipping = None  # Szacowany koszt wysylki
-        
-        # Probuj pobrac rzeczywiste dane z Billing API
-        try:
-            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
-            # Uzywamy external_order_id (UUID Allegro) zamiast order_id (BaseLinker)
-            allegro_order_id = order.external_order_id
-            if access_token and allegro_order_id:
-                from .allegro_api import get_order_billing_summary
-                # Przekaz dane do szacowania kosztow wysylki
-                billing_summary = get_order_billing_summary(
-                    access_token, 
-                    allegro_order_id,
-                    delivery_method=order.delivery_method,
-                    order_value=sale_price
-                )
-                
-                if billing_summary.get("success"):
-                    allegro_commission = billing_summary["commission"]
-                    listing_fee = billing_summary["listing_fee"]
-                    allegro_shipping_fee = billing_summary["shipping_fee"]
-                    promo_fee = billing_summary["promo_fee"]
-                    other_fees = billing_summary["other_fees"]
-                    billing_entries = billing_summary["entries"]
-                    fee_details = billing_summary.get("fee_details", [])
-                    estimated_shipping = billing_summary.get("estimated_shipping")
-                    billing_data_available = True
-                    
-                    # Jesli koszt wysylki jest szacowany, uzyj go
-                    if allegro_shipping_fee == Decimal("0") and billing_summary.get("shipping_fee_estimated"):
-                        allegro_shipping_fee = billing_summary["shipping_fee_estimated"]
-                    
-                    logger.info(f"Pobrano dane billingowe dla zamowienia {order.order_id} "
-                               f"(Allegro: {allegro_order_id}): prowizja={allegro_commission}, "
-                               f"wystawienie={listing_fee}, wysylka={allegro_shipping_fee}, promo={promo_fee}"
-                               f"{' (szacowana)' if estimated_shipping else ''}")
-                else:
-                    logger.warning(f"Nie udalo sie pobrac danych billingowych dla {order.order_id} "
-                                  f"(Allegro: {allegro_order_id}): {billing_summary.get('error')}")
-        except Exception as e:
-            logger.warning(f"Blad podczas pobierania danych billingowych dla {order.order_id} "
-                          f"(Allegro: {allegro_order_id if 'allegro_order_id' in dir() else 'N/A'}): {e}")
-        
-        # Jesli nie udalo sie pobrac z API, uzyj szacunkow
-        if not billing_data_available:
-            allegro_commission = sale_price * Decimal("0.123")  # 12.3% szacunkowo
-            listing_fee = Decimal("0")
-            allegro_shipping_fee = Decimal("0")
-            promo_fee = Decimal("0")
-            other_fees = Decimal("0")
-        
-        # Suma wszystkich oplat Allegro
-        total_allegro_fees = allegro_commission + listing_fee + allegro_shipping_fee + promo_fee + other_fees
-        
-        # Calculate purchase cost from order products
-        purchase_cost = Decimal("0")
-        for op in order.products:
-            if op.product_size and op.product_size.product:
-                # Get latest purchase batch for this product
-                latest_batch = (
-                    db.query(PurchaseBatch)
-                    .filter(
-                        PurchaseBatch.product_id == op.product_size.product_id,
-                        PurchaseBatch.size == op.product_size.size
-                    )
-                    .order_by(desc(PurchaseBatch.purchase_date))
-                    .first()
-                )
-                if latest_batch:
-                    purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
-        
-        # Calculate real profit
-        # Zysk = Cena sprzedazy - oplaty Allegro - koszt zakupu - koszt pakowania
-        # Gdy brak danych z Billing API, szacujemy prowizje na 12.3%
-        real_profit = sale_price - total_allegro_fees - purchase_cost - packaging_cost
-        
-        # Generate tracking URL
-        tracking_url = _get_tracking_url(order.courier_code, order.delivery_package_module, order.delivery_package_nr, order.delivery_method)
-        
-        # Get status history
-        status_logs = (
-            db.query(OrderStatusLog)
-            .filter(OrderStatusLog.order_id == order_id)
-            .order_by(desc(OrderStatusLog.timestamp))
-            .all()
+        # Dodaj dodatkowe dane potrzebne w szablonie
+        context["date_add"] = _unix_to_datetime(order.date_add)
+        context["date_confirmed"] = _unix_to_datetime(order.date_confirmed)
+        context["tracking_url"] = _get_tracking_url(
+            order.courier_code, 
+            order.delivery_package_module, 
+            order.delivery_package_nr, 
+            order.delivery_method
         )
         
-        # Build status history with deduplication (keep only newest occurrence of each status)
-        status_history = []
-        seen_statuses = set()
-        for log in status_logs:
-            # Skip if we already have this status (keeps first/newest occurrence)
-            if log.status in seen_statuses:
-                continue
-            seen_statuses.add(log.status)
-            
-            status_text, status_class = _get_status_display(log.status)
-            status_history.append({
-                "status": log.status,
-                "status_text": status_text,
-                "status_class": status_class,
-                "timestamp": log.timestamp,
-                "tracking_number": log.tracking_number,
-                "courier_code": log.courier_code,
-                "notes": log.notes,
-            })
-        
-        # Get current status
-        current_status = status_history[0] if status_history else {
-            "status": "niewydrukowano",
-            "status_text": "Niewydrukowano",
-            "status_class": "bg-secondary",
-        }
-        
-        # Przygotuj dane do timeline
-        # Określ aktualny etap na podstawie najnowszego statusu
-        current_stage_key = current_status.get("status", "pobrano")
-        # Znajdź indeks aktualnego etapu
-        stage_keys = [s[0] for s in SHIPPING_STAGES]
-        current_stage_index = -1
-        if current_stage_key in stage_keys:
-            current_stage_index = stage_keys.index(current_stage_key)
-        
-        # Pobierz informacje o zwrocie (jesli istnieje)
-        return_info = None
-        return_status_history = []
-        return_stage_index = -1
-        
-        active_return = db.query(Return).filter(
-            Return.order_id == order_id,
-            Return.status != "cancelled"  # Nie pokazuj anulowanych
-        ).order_by(desc(Return.created_at)).first()
-        
-        if active_return:
-            # Mapowanie statusow zwrotu na wyswietlanie
-            RETURN_STATUS_MAP = {
-                "pending": ("Zgloszono zwrot", "bg-warning text-dark"),
-                "in_transit": ("Paczka zwrotna w drodze", "bg-info"),
-                "delivered": ("Paczka zwrotna odebrana", "bg-primary"),
-                "completed": ("Zwrot zakonczony", "bg-success"),
-                "cancelled": ("Zwrot anulowany", "bg-secondary"),
-            }
-            
-            status_text, status_class = RETURN_STATUS_MAP.get(
-                active_return.status, 
-                (active_return.status, "bg-secondary")
-            )
-            
-            # Parsuj items_json
-            import json as json_module
-            return_items = []
-            if active_return.items_json:
-                try:
-                    return_items = json_module.loads(active_return.items_json)
-                except (json_module.JSONDecodeError, TypeError):
-                    pass
-            
-            return_info = {
-                "id": active_return.id,
-                "status": active_return.status,
-                "status_text": status_text,
-                "status_class": status_class,
-                "customer_name": active_return.customer_name,
-                "return_items": return_items,
-                "return_tracking_number": active_return.return_tracking_number,
-                "return_carrier": active_return.return_carrier,
-                "messenger_notified": active_return.messenger_notified,
-                "stock_restored": active_return.stock_restored,
-                "notes": active_return.notes,
-                "created_at": active_return.created_at,
-                "updated_at": active_return.updated_at,
-            }
-            
-            # Historia statusow zwrotu
-            return_logs = db.query(ReturnStatusLog).filter(
-                ReturnStatusLog.return_id == active_return.id
-            ).order_by(desc(ReturnStatusLog.timestamp)).all()
-            
-            for log in return_logs:
-                log_status_text, log_status_class = RETURN_STATUS_MAP.get(
-                    log.status, (log.status, "bg-secondary")
-                )
-                return_status_history.append({
-                    "status": log.status,
-                    "status_text": log_status_text,
-                    "status_class": log_status_class,
-                    "timestamp": log.timestamp,
-                    "notes": log.notes,
-                })
-            
-            # Indeks etapu zwrotu dla timeline
-            return_stage_keys = [s[0] for s in RETURN_STAGES]
-            if active_return.status in return_stage_keys:
-                return_stage_index = return_stage_keys.index(active_return.status)
-        
-        rendered = render_template(
-            "order_detail.html",
-            order=order,
-            products=products,
-            status_history=status_history,
-            current_status=current_status,
-            date_add=_unix_to_datetime(order.date_add),
-            date_confirmed=_unix_to_datetime(order.date_confirmed),
-            allegro_commission=allegro_commission,
-            listing_fee=listing_fee,
-            allegro_shipping_fee=allegro_shipping_fee,
-            promo_fee=promo_fee,
-            other_fees=other_fees,
-            total_allegro_fees=total_allegro_fees,
-            billing_data_available=billing_data_available,
-            billing_entries=billing_entries,
-            fee_details=fee_details,
-            purchase_cost=purchase_cost,
-            packaging_cost=packaging_cost,
-            real_profit=real_profit,
-            tracking_url=tracking_url,
-            shipping_stages=SHIPPING_STAGES,
-            current_stage_index=current_stage_index,
-            # Dane zwrotu
-            return_info=return_info,
-            return_status_history=return_status_history,
-            return_stages=RETURN_STAGES,
-            return_stage_index=return_stage_index,
-        )
+        rendered = render_template("order_detail.html", **context)
         
         # Zapobiegaj cache przegladarki
         response = current_app.make_response(rendered)
