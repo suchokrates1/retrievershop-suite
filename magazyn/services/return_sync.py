@@ -15,7 +15,7 @@ import requests
 from ..config import settings
 from ..db import get_session
 from ..models import Return, Order
-from ..notifications import send_return_notification
+from ..returns import _send_return_notification as send_return_notification
 
 
 logger = logging.getLogger(__name__)
