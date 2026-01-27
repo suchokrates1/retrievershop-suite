@@ -139,7 +139,7 @@
                         </div>
                         <div class="col-3">
                             <div class="border-end" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" 
-                                title="Zysk brutto: {{ '%.0f'|format(dashboard.profit.month_before_fixed) }} zl{% if dashboard.profit.fixed_costs_list %}<br>Koszty stale: -{{ '%.0f'|format(dashboard.profit.fixed_costs) }} zl{% for fc in dashboard.profit.fixed_costs_list %}<br>&nbsp;&nbsp;- {{ fc.name }}: {{ '%.0f'|format(fc.amount) }} zl{% endfor %}{% endif %}">
+                                title="Zysk brutto: {{ '%.0f'|format(dashboard.profit.month_before_fixed) }} zl{% if dashboard.profit.returned_orders %}<br>Pominietych zwrotow: {{ dashboard.profit.returned_orders }}{% endif %}{% if dashboard.profit.fixed_costs_list %}<br>Koszty stale: -{{ '%.0f'|format(dashboard.profit.fixed_costs) }} zl{% for fc in dashboard.profit.fixed_costs_list %}<br>&nbsp;&nbsp;- {{ fc.name }}: {{ '%.0f'|format(fc.amount) }} zl{% endfor %}{% endif %}">
                                 <h3 class="{% if dashboard.profit.month > 0 %}text-success{% else %}text-danger{% endif %} mb-1">{{ "%.0f"|format(dashboard.profit.month) }} zl</h3>
                                 <small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>
                             </div>
