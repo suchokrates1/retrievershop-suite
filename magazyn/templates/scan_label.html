@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block page_vars %}
     {% set barcode_mode = 'label' %}
-    {% set barcode_endpoint = url_for('products.label_barcode_scan') %}
-    {% set label_barcode_endpoint = url_for('products.label_barcode_scan') %}
+    {% set barcode_endpoint = url_for('scanning.label_barcode_scan') %}
+    {% set label_barcode_endpoint = url_for('scanning.label_barcode_scan') %}
     {% set barcode_error_message = 'Nie znaleziono paczki dla zeskanowanej etykiety.' %}
 {% endblock %}
 {% block content %}
