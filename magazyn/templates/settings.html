@@ -68,8 +68,151 @@
     <button type="submit" form="settingsForm" class="btn btn-primary">Zapisz</button>
     <form method="post" action="{{ url_for('allegro.authorize') }}" class="d-inline ms-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline-secondary">Połącz z Allegro</button>
+        <button type="submit" class="btn btn-outline-secondary">Polacz z Allegro</button>
     </form>
+</div>
+
+<hr class="my-4">
+
+{# Sekcja kosztow stalych #}
+<div class="card col-md-10 mx-auto mb-4">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Koszty stale (miesieczne)</h5>
+        <span class="badge bg-dark">Suma: {{ '%.2f'|format(total_fixed_costs) }} PLN/mies.</span>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Koszty stale sa automatycznie odejmowane od miesiecznego zysku na stronie glownej i w raportach.
+            Mozesz dodawac rowniez wartosci ujemne (np. dotacje, zwroty).
+        </p>
+        
+        {# Formularz dodawania nowego kosztu #}
+        <form method="post" action="{{ url_for('add_fixed_cost') }}" class="row g-2 mb-4 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-4">
+                <label for="new_cost_name" class="form-label small">Nazwa kosztu</label>
+                <input type="text" class="form-control form-control-sm" id="new_cost_name" name="name" 
+                       placeholder="np. Ksiegowosc, ZUS, Hosting..." required>
+            </div>
+            <div class="col-md-2">
+                <label for="new_cost_amount" class="form-label small">Kwota (PLN)</label>
+                <input type="number" step="0.01" class="form-control form-control-sm" id="new_cost_amount" 
+                       name="amount" placeholder="0.00" required>
+            </div>
+            <div class="col-md-4">
+                <label for="new_cost_desc" class="form-label small">Opis (opcjonalnie)</label>
+                <input type="text" class="form-control form-control-sm" id="new_cost_desc" name="description" 
+                       placeholder="Dodatkowe informacje...">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-success btn-sm w-100">
+                    <i class="bi bi-plus-lg"></i> Dodaj
+                </button>
+            </div>
+        </form>
+        
+        {# Lista kosztow stalych #}
+        {% if fixed_costs %}
+        <table class="table table-sm table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Nazwa</th>
+                    <th>Kwota</th>
+                    <th>Opis</th>
+                    <th>Status</th>
+                    <th class="text-end">Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cost in fixed_costs %}
+                <tr class="{{ 'table-secondary text-muted' if not cost.is_active else '' }}">
+                    <td>
+                        <strong>{{ cost.name }}</strong>
+                    </td>
+                    <td>
+                        <span class="{{ 'text-danger' if cost.amount > 0 else 'text-success' }}">
+                            {{ '%.2f'|format(cost.amount) }} PLN
+                        </span>
+                    </td>
+                    <td class="small text-muted">{{ cost.description or '-' }}</td>
+                    <td>
+                        {% if cost.is_active %}
+                        <span class="badge bg-success">Aktywny</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Nieaktywny</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {# Przycisk edycji - otwiera modal #}
+                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                data-bs-toggle="modal" data-bs-target="#editModal{{ cost.id }}"
+                                title="Edytuj">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        {# Przycisk wlacz/wylacz #}
+                        <form method="post" action="{{ url_for('toggle_fixed_cost', cost_id=cost.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline-{{ 'warning' if cost.is_active else 'success' }} btn-sm"
+                                    title="{{ 'Dezaktywuj' if cost.is_active else 'Aktywuj' }}">
+                                <i class="bi bi-{{ 'pause' if cost.is_active else 'play' }}"></i>
+                            </button>
+                        </form>
+                        {# Przycisk usun #}
+                        <form method="post" action="{{ url_for('delete_fixed_cost', cost_id=cost.id) }}" class="d-inline"
+                              onsubmit="return confirm('Na pewno usunac koszt {{ cost.name }}?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Usun">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                
+                {# Modal edycji #}
+                <div class="modal fade" id="editModal{{ cost.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form method="post" action="{{ url_for('edit_fixed_cost', cost_id=cost.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Edytuj koszt: {{ cost.name }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nazwa</label>
+                                        <input type="text" class="form-control" name="name" value="{{ cost.name }}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Kwota (PLN)</label>
+                                        <input type="number" step="0.01" class="form-control" name="amount" 
+                                               value="{{ cost.amount }}" required>
+                                        <small class="text-muted">Wartosc ujemna = przychod/dotacja</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Opis</label>
+                                        <input type="text" class="form-control" name="description" 
+                                               value="{{ cost.description or '' }}">
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                                    <button type="submit" class="btn btn-primary">Zapisz</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            Brak zdefiniowanych kosztow stalych. Dodaj pierwsze koszty (np. Ksiegowosc, ZUS, hosting).
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <hr class="my-4">
