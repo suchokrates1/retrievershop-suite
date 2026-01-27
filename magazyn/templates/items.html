@@ -14,8 +14,8 @@
                 <i class="bi bi-plus-circle"></i> +
             </a>
             <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info me-2">Dostawa z faktury</a>
-            <a href="{{ url_for('products.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
-            <a href="{{ url_for('products.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj etykietę paczki</a>
+            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
+            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj etykietę paczki</a>
         </div>
     </div>
 <div class="table-responsive">
