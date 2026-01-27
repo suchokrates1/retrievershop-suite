@@ -1208,9 +1208,9 @@ class LabelAgent:
         
         try:
             from .db import get_session
-            from .models import Order, OrderProduct, PurchaseBatch
+            from .models import Order, OrderProduct, PurchaseBatch, Return
             from .settings_store import settings_store
-            from .allegro_api import get_order_billing_summary
+            from .allegro_api import get_order_billing_summary, estimate_allegro_shipping_cost
             from sqlalchemy import func
             
             # Pobierz koszt pakowania
@@ -1222,6 +1222,13 @@ class LabelAgent:
             access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
             
             with get_session() as db:
+                # Pobierz ID zamowien ze zwrotami
+                returned_order_ids = set(
+                    r.order_id for r in db.query(Return.order_id).filter(
+                        Return.status.in_(['completed', 'delivered', 'in_transit', 'pending'])
+                    ).all()
+                )
+                
                 orders = db.query(Order).filter(
                     Order.date_add >= start_ts,
                     Order.date_add <= end_ts
@@ -1232,6 +1239,10 @@ class LabelAgent:
                 total_products = 0
                 
                 for order in orders:
+                    # Pomin zamowienia ze zwrotami
+                    if order.order_id in returned_order_ids:
+                        continue
+                    
                     sale_price = Decimal(str(order.payment_done or 0))
                     total_revenue += sale_price
                     
@@ -1241,19 +1252,38 @@ class LabelAgent:
                     ).scalar() or 0
                     total_products += int(products_in_order)
                     
-                    # Oplaty Allegro - probuj z API
+                    # Oplaty Allegro - probuj z API (zawiera prowizje + wysylke)
                     allegro_fees = Decimal("0")
+                    got_billing_from_api = False
                     if access_token and order.external_order_id:
                         try:
-                            billing = get_order_billing_summary(access_token, order.external_order_id)
+                            billing = get_order_billing_summary(
+                                access_token, 
+                                order.external_order_id,
+                                delivery_method=order.delivery_method,
+                                order_value=sale_price
+                            )
                             if billing.get("success"):
-                                allegro_fees = billing["total_fees"]
+                                allegro_fees = billing.get("total_fees_with_estimate", billing["total_fees"])
+                                got_billing_from_api = True
                         except Exception:
                             pass
                     
-                    # Fallback - szacunkowa prowizja 12.3%
-                    if allegro_fees == 0 and sale_price > 0:
+                    # Fallback - szacunkowa prowizja 12.3% + szacowany koszt wysylki
+                    if not got_billing_from_api and sale_price > 0:
                         allegro_fees = sale_price * Decimal("0.123")
+                        # Dodaj szacowany koszt wysylki
+                        if order.delivery_method:
+                            try:
+                                shipping_estimate = estimate_allegro_shipping_cost(
+                                    order.delivery_method, 
+                                    sale_price
+                                )
+                                allegro_fees += shipping_estimate["estimated_cost"]
+                            except Exception:
+                                allegro_fees += Decimal("8.99")
+                        else:
+                            allegro_fees += Decimal("8.99")
                     
                     # Koszt zakupu
                     purchase_cost = Decimal("0")
