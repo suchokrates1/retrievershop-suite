@@ -1,40 +1,17 @@
-import json
+"""
+Modul do wysylania alertow (niski stan magazynowy, email).
+
+Przeniesione ze starego magazyn/notifications.py dla kompatybilnosci.
+"""
+
 import logging
 import smtplib
 from email.message import EmailMessage
 
-import requests
-
-from .config import settings
-from .allegro_api import DEFAULT_TIMEOUT
+from ..config import settings
+from .messenger import send_messenger
 
 logger = logging.getLogger(__name__)
-
-
-def send_messenger(text: str) -> bool:
-    """Send a simple Messenger message if configured."""
-    if not settings.PAGE_ACCESS_TOKEN or not settings.RECIPIENT_ID:
-        return False
-    try:
-        resp = requests.post(
-            "https://graph.facebook.com/v17.0/me/messages",
-            headers={
-                "Authorization": f"Bearer {settings.PAGE_ACCESS_TOKEN}",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(
-                {
-                    "recipient": {"id": settings.RECIPIENT_ID},
-                    "message": {"text": text},
-                }
-            ),
-            timeout=DEFAULT_TIMEOUT,
-        )
-        logger.info("Messenger response: %s %s", resp.status_code, resp.text)
-        return resp.status_code == 200
-    except Exception as exc:
-        logger.error("Messenger send failed: %s", exc)
-        return False
 
 
 def send_email(subject: str, body: str) -> bool:
@@ -71,11 +48,3 @@ def send_stock_alert(name: str, size: str, quantity: int) -> None:
     if send_messenger(text):
         return
     send_email("Low stock alert", text)
-
-
-def send_report(title: str, lines: list[str]) -> None:
-    """Send a summary report via Messenger or email."""
-    body = title + "\n" + "\n".join(lines)
-    if send_messenger(body):
-        return
-    send_email(title, body)
