@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-from .core import API_BASE_URL, DEFAULT_TIMEOUT, request_with_retry
+from .core import API_BASE_URL, DEFAULT_TIMEOUT, _request_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,13 @@ def get_customer_return(access_token: str, return_id: str) -> Tuple[Optional[Dic
     }
     
     try:
-        response = request_with_retry("GET", url, headers=headers, timeout=DEFAULT_TIMEOUT)
+        response = _request_with_retry(
+            requests.get,
+            url,
+            endpoint="customer-returns",
+            headers=headers,
+            timeout=DEFAULT_TIMEOUT
+        )
         
         if response.status_code == 200:
             return response.json(), None
@@ -165,7 +171,14 @@ def initiate_refund(
     
     try:
         logger.info(f"Inicjuje zwrot pieniedzy dla return_id={return_id}")
-        response = request_with_retry("POST", url, headers=headers, json=payload, timeout=DEFAULT_TIMEOUT)
+        response = _request_with_retry(
+            requests.post,
+            url,
+            endpoint="customer-returns-refund",
+            headers=headers,
+            json=payload,
+            timeout=DEFAULT_TIMEOUT
+        )
         
         if response.status_code in (200, 201, 204):
             # Pobierz zaktualizowane dane zwrotu
