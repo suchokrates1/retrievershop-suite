@@ -40,6 +40,7 @@ from .env_info import ENV_INFO
 from .config import settings
 from .settings_store import SettingsPersistenceError, settings_store
 from .settings_io import HIDDEN_KEYS
+from .domain.financial import FinancialCalculator
 
 # Settings with boolean values represented as "1" or "0"
 BOOLEAN_KEYS = {
@@ -322,128 +323,41 @@ def home():
         revenue_month = calc_revenue(month_start_ts)
         
         # =====================================================================
-        # Real profit calculation for this month
+        # Real profit calculation for this month (using centralized calculator)
         # =====================================================================
-        from .allegro_api import get_order_billing_summary, estimate_allegro_shipping_cost
         from .settings_store import settings_store as ss
         
-        # Pobierz koszt pakowania
-        try:
-            packaging_cost_per_order = Decimal(str(ss.get("PACKAGING_COST") or "0.16"))
-        except (ValueError, TypeError):
-            packaging_cost_per_order = Decimal("0.16")
+        access_token = ss.get("ALLEGRO_ACCESS_TOKEN")
+        calculator = FinancialCalculator(db, ss)
         
-        # Pobierz wszystkie zamowienia z tego miesiaca
-        month_orders = db.query(Order).filter(Order.date_add >= month_start_ts).all()
+        # Oblicz zysk netto uwzgledniajac koszty stale
+        now_ts = int(now.timestamp())
+        summary = calculator.get_period_summary(
+            month_start_ts, 
+            now_ts,
+            include_fixed_costs=True,
+            access_token=access_token
+        )
         
-        # Pobierz ID zamowien ze zwrotami (status completed = pieniadze zwrocone)
+        total_real_profit = summary.net_profit
+        total_real_profit_before_fixed = summary.gross_profit
+        total_fixed_costs = summary.fixed_costs
+        fixed_costs_list = summary.fixed_costs_list
+        total_products_sold = summary.products_sold
+        
+        # Policz zwroty osobno dla dashboardu
         from .models import Return
         returned_order_ids = set(
             r.order_id for r in db.query(Return.order_id).filter(
                 Return.status.in_(['completed', 'delivered', 'in_transit', 'pending'])
             ).all()
         )
-        
-        total_real_profit = Decimal("0")
-        total_products_sold = 0
-        total_returned_orders = 0
-        access_token = ss.get("ALLEGRO_ACCESS_TOKEN")
-        
-        for order in month_orders:
-            # Pomin zamowienia ze zwrotami
-            if order.order_id in returned_order_ids:
-                total_returned_orders += 1
-                continue
-            
-            sale_price = Decimal(str(order.payment_done or 0))
-            
-            # Liczba produktow
-            products_in_order = db.query(func.sum(OrderProduct.quantity)).filter(
-                OrderProduct.order_id == order.order_id
-            ).scalar() or 0
-            total_products_sold += int(products_in_order)
-            
-            # Oplaty Allegro - probuj z API (zawiera prowizje + wysylke)
-            allegro_fees = Decimal("0")
-            got_billing_from_api = False
-            if access_token and order.external_order_id:
-                try:
-                    billing = get_order_billing_summary(
-                        access_token, 
-                        order.external_order_id,
-                        delivery_method=order.delivery_method,
-                        order_value=sale_price
-                    )
-                    if billing.get("success"):
-                        # Uzyj sumy z szacowanym kosztem wysylki jesli API nie zwrocilo
-                        allegro_fees = billing.get("total_fees_with_estimate", billing["total_fees"])
-                        got_billing_from_api = True
-                except Exception:
-                    pass
-            
-            # Fallback - szacunkowa prowizja 12.3% + szacowany koszt wysylki
-            if not got_billing_from_api and sale_price > 0:
-                allegro_fees = sale_price * Decimal("0.123")
-                # Dodaj szacowany koszt wysylki
-                if order.delivery_method:
-                    try:
-                        shipping_estimate = estimate_allegro_shipping_cost(
-                            order.delivery_method, 
-                            sale_price
-                        )
-                        allegro_fees += shipping_estimate["estimated_cost"]
-                    except Exception:
-                        # Domyslny koszt wysylki jesli nie mozna oszacowac
-                        allegro_fees += Decimal("8.99")
-                else:
-                    # Brak metody dostawy - dodaj sredni koszt
-                    allegro_fees += Decimal("8.99")
-            
-            # Koszt zakupu
-            purchase_cost = Decimal("0")
-            for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
-                product_size = op.product_size
-                
-                # Fallback: szukaj przez allegro_offers jesli brak bezposredniego powiazania
-                if not product_size and op.auction_id:
-                    allegro_offer = db.query(AllegroOffer).filter(
-                        AllegroOffer.offer_id == op.auction_id
-                    ).first()
-                    if allegro_offer and allegro_offer.product_size:
-                        product_size = allegro_offer.product_size
-                
-                if product_size and product_size.product:
-                    latest_batch = (
-                        db.query(PurchaseBatch)
-                        .filter(
-                            PurchaseBatch.product_id == product_size.product_id,
-                            PurchaseBatch.size == product_size.size
-                        )
-                        .order_by(desc(PurchaseBatch.purchase_date))
-                        .first()
-                    )
-                    if latest_batch:
-                        purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
-            
-            # Zysk = sprzedaz - oplaty - zakup - pakowanie
-            order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
-            total_real_profit += order_profit
-        
-        # Odejmij koszty stale od zysku miesiecznego
-        from .models import FixedCost
-        total_fixed_costs = Decimal("0")
-        fixed_costs_list = []
-        fixed_costs_query = db.query(FixedCost).filter(FixedCost.is_active == True).all()
-        for fc in fixed_costs_query:
-            total_fixed_costs += Decimal(str(fc.amount))
-            fixed_costs_list.append({
-                'name': fc.name,
-                'amount': float(fc.amount),
-            })
-        
-        # Zysk netto = zysk brutto - koszty stale
-        total_real_profit_before_fixed = total_real_profit
-        total_real_profit -= total_fixed_costs
+        total_returned_orders = len([
+            o for o in db.query(Order).filter(
+                Order.date_add >= month_start_ts,
+                Order.order_id.in_(returned_order_ids)
+            ).all()
+        ])
         
         # =====================================================================
         # Inventory statistics
@@ -1095,11 +1009,8 @@ def test_message():
 @login_required
 def test_monthly_report():
     """Wyslij testowy raport miesiczny przez Messenger."""
-    from datetime import datetime, timedelta
-    from decimal import Decimal
-    from sqlalchemy import func, desc
+    from datetime import datetime
     from .notifications import send_report
-    from .allegro_api import get_order_billing_summary
     
     msg = None
     summary = None
@@ -1109,91 +1020,35 @@ def test_monthly_report():
         now = datetime.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         month_start_ts = int(month_start.timestamp())
+        now_ts = int(now.timestamp())
         
         MONTH_NAMES = ['Styczen', 'Luty', 'Marzec', 'Kwiecien', 'Maj', 'Czerwiec',
                        'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien']
         month_name = MONTH_NAMES[now.month - 1]
         
-        # Pobierz koszt pakowania
-        try:
-            packaging_cost_per_order = Decimal(str(settings_store.get("PACKAGING_COST") or "0.16"))
-        except (ValueError, TypeError):
-            packaging_cost_per_order = Decimal("0.16")
-        
         access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
         
         with get_session() as db:
-            orders = db.query(Order).filter(Order.date_add >= month_start_ts).all()
-            
-            total_revenue = Decimal("0")
-            total_profit = Decimal("0")
-            total_products = 0
-            
-            for order in orders:
-                sale_price = Decimal(str(order.payment_done or 0))
-                total_revenue += sale_price
-                
-                # Liczba produktow
-                products_in_order = db.query(func.sum(OrderProduct.quantity)).filter(
-                    OrderProduct.order_id == order.order_id
-                ).scalar() or 0
-                total_products += int(products_in_order)
-                
-                # Oplaty Allegro - probuj z API
-                allegro_fees = Decimal("0")
-                if access_token and order.external_order_id:
-                    try:
-                        billing = get_order_billing_summary(access_token, order.external_order_id)
-                        if billing.get("success"):
-                            allegro_fees = billing["total_fees"]
-                    except Exception:
-                        pass
-                
-                # Fallback - szacunkowa prowizja 12.3%
-                if allegro_fees == 0 and sale_price > 0:
-                    allegro_fees = sale_price * Decimal("0.123")
-                
-                # Koszt zakupu
-                purchase_cost = Decimal("0")
-                for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
-                    product_size = op.product_size
-                    
-                    # Fallback: szukaj przez allegro_offers jesli brak bezposredniego powiazania
-                    if not product_size and op.auction_id:
-                        allegro_offer = db.query(AllegroOffer).filter(
-                            AllegroOffer.offer_id == op.auction_id
-                        ).first()
-                        if allegro_offer and allegro_offer.product_size:
-                            product_size = allegro_offer.product_size
-                    
-                    if product_size and product_size.product:
-                        latest_batch = (
-                            db.query(PurchaseBatch)
-                            .filter(
-                                PurchaseBatch.product_id == product_size.product_id,
-                                PurchaseBatch.size == product_size.size
-                            )
-                            .order_by(desc(PurchaseBatch.purchase_date))
-                            .first()
-                        )
-                        if latest_batch:
-                            purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
-                
-                # Zysk = sprzedaz - oplaty - zakup - pakowanie
-                order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
-                total_profit += order_profit
+            # Uzyj centralnego kalkulatora finansowego
+            calculator = FinancialCalculator(db, settings_store)
+            period_summary = calculator.get_period_summary(
+                month_start_ts, 
+                now_ts,
+                include_fixed_costs=False,  # Raport testowy bez kosztow stalych
+                access_token=access_token
+            )
         
         summary = {
             "month_name": month_name,
-            "products_sold": total_products,
-            "total_revenue": float(total_revenue),
-            "real_profit": float(total_profit),
+            "products_sold": period_summary.products_sold,
+            "total_revenue": float(period_summary.total_revenue),
+            "real_profit": float(period_summary.gross_profit),
         }
         
         # Wyslij raport
         message = (
-            f"W miesiącu {month_name} sprzedałaś {total_products} produktów "
-            f"za {total_revenue:.2f} zł co dało {total_profit:.2f} zł zysku"
+            f"W miesiącu {month_name} sprzedałaś {period_summary.products_sold} produktów "
+            f"za {period_summary.total_revenue:.2f} zł co dało {period_summary.gross_profit:.2f} zł zysku"
         )
         send_report("Testowy raport miesieczny", [message])
         msg = f"Raport wyslany! Tresc: {message}"

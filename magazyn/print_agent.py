@@ -1196,8 +1196,6 @@ class LabelAgent:
             Dict z kluczami: products_sold, total_revenue, real_profit, fixed_costs (opcjonalnie)
         """
         from datetime import datetime, timedelta
-        from decimal import Decimal
-        from sqlalchemy import desc
         
         if end_date is None:
             end_date = datetime.now()
@@ -1208,133 +1206,29 @@ class LabelAgent:
         
         try:
             from .db import get_session
-            from .models import Order, OrderProduct, PurchaseBatch, Return, AllegroOffer
+            from .domain.financial import FinancialCalculator
             from .settings_store import settings_store
-            from .allegro_api import get_order_billing_summary, estimate_allegro_shipping_cost
-            from sqlalchemy import func
-            
-            # Pobierz koszt pakowania
-            try:
-                packaging_cost_per_order = Decimal(str(settings_store.get("PACKAGING_COST") or "0.16"))
-            except (ValueError, TypeError):
-                packaging_cost_per_order = Decimal("0.16")
             
             access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
             
             with get_session() as db:
-                # Pobierz ID zamowien ze zwrotami
-                returned_order_ids = set(
-                    r.order_id for r in db.query(Return.order_id).filter(
-                        Return.status.in_(['completed', 'delivered', 'in_transit', 'pending'])
-                    ).all()
+                calculator = FinancialCalculator(db, settings_store)
+                summary = calculator.get_period_summary(
+                    start_ts, 
+                    end_ts,
+                    include_fixed_costs=include_fixed_costs,
+                    access_token=access_token
                 )
                 
-                orders = db.query(Order).filter(
-                    Order.date_add >= start_ts,
-                    Order.date_add <= end_ts
-                ).all()
-                
-                total_revenue = Decimal("0")
-                total_profit = Decimal("0")
-                total_products = 0
-                
-                for order in orders:
-                    # Pomin zamowienia ze zwrotami
-                    if order.order_id in returned_order_ids:
-                        continue
-                    
-                    sale_price = Decimal(str(order.payment_done or 0))
-                    total_revenue += sale_price
-                    
-                    # Liczba produktow
-                    products_in_order = db.query(func.sum(OrderProduct.quantity)).filter(
-                        OrderProduct.order_id == order.order_id
-                    ).scalar() or 0
-                    total_products += int(products_in_order)
-                    
-                    # Oplaty Allegro - probuj z API (zawiera prowizje + wysylke)
-                    allegro_fees = Decimal("0")
-                    got_billing_from_api = False
-                    if access_token and order.external_order_id:
-                        try:
-                            billing = get_order_billing_summary(
-                                access_token, 
-                                order.external_order_id,
-                                delivery_method=order.delivery_method,
-                                order_value=sale_price
-                            )
-                            if billing.get("success"):
-                                allegro_fees = billing.get("total_fees_with_estimate", billing["total_fees"])
-                                got_billing_from_api = True
-                        except Exception:
-                            pass
-                    
-                    # Fallback - szacunkowa prowizja 12.3% + szacowany koszt wysylki
-                    if not got_billing_from_api and sale_price > 0:
-                        allegro_fees = sale_price * Decimal("0.123")
-                        # Dodaj szacowany koszt wysylki
-                        if order.delivery_method:
-                            try:
-                                shipping_estimate = estimate_allegro_shipping_cost(
-                                    order.delivery_method, 
-                                    sale_price
-                                )
-                                allegro_fees += shipping_estimate["estimated_cost"]
-                            except Exception:
-                                allegro_fees += Decimal("8.99")
-                        else:
-                            allegro_fees += Decimal("8.99")
-                    
-                    # Koszt zakupu
-                    purchase_cost = Decimal("0")
-                    for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
-                        product_size = op.product_size
-                        
-                        # Fallback: szukaj przez allegro_offers jesli brak bezposredniego powiazania
-                        if not product_size and op.auction_id:
-                            allegro_offer = db.query(AllegroOffer).filter(
-                                AllegroOffer.offer_id == op.auction_id
-                            ).first()
-                            if allegro_offer and allegro_offer.product_size:
-                                product_size = allegro_offer.product_size
-                        
-                        if product_size and product_size.product:
-                            latest_batch = (
-                                db.query(PurchaseBatch)
-                                .filter(
-                                    PurchaseBatch.product_id == product_size.product_id,
-                                    PurchaseBatch.size == product_size.size
-                                )
-                                .order_by(desc(PurchaseBatch.purchase_date))
-                                .first()
-                            )
-                            if latest_batch:
-                                purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
-                    
-                    # Zysk = sprzedaz - oplaty - zakup - pakowanie
-                    order_profit = sale_price - allegro_fees - purchase_cost - packaging_cost_per_order
-                    total_profit += order_profit
-                
-                # Odejmij koszty stale dla raportow miesiecznych
-                fixed_costs_total = Decimal("0")
-                fixed_costs_list = []
-                if include_fixed_costs:
-                    from .models import FixedCost
-                    fixed_costs = db.query(FixedCost).filter(FixedCost.is_active == True).all()
-                    for fc in fixed_costs:
-                        fixed_costs_total += Decimal(str(fc.amount))
-                        fixed_costs_list.append({'name': fc.name, 'amount': float(fc.amount)})
-                    total_profit -= fixed_costs_total
-                
                 result = {
-                    "products_sold": total_products,
-                    "total_revenue": float(total_revenue),
-                    "real_profit": float(total_profit),
+                    "products_sold": summary.products_sold,
+                    "total_revenue": float(summary.total_revenue),
+                    "real_profit": float(summary.net_profit if include_fixed_costs else summary.gross_profit),
                 }
                 if include_fixed_costs:
-                    result["profit_before_fixed"] = float(total_profit + fixed_costs_total)
-                    result["fixed_costs"] = float(fixed_costs_total)
-                    result["fixed_costs_list"] = fixed_costs_list
+                    result["profit_before_fixed"] = float(summary.gross_profit)
+                    result["fixed_costs"] = float(summary.fixed_costs)
+                    result["fixed_costs_list"] = summary.fixed_costs_list
                 return result
                 
         except Exception as e:
