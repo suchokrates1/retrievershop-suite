@@ -28,6 +28,7 @@ from .db import sqlite_connect
 from .notifications import send_report, send_messenger
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
+from .utils import short_preview
 from .allegro_token_refresher import token_refresher
 from .allegro_api import (
     fetch_discussions,
@@ -72,11 +73,7 @@ def parse_time_str(value: str) -> dt_time:
         raise ValueError(f"Invalid time value: {value}") from exc
 
 
-def _short_preview(text: str, limit: int = 140) -> str:
-    clean = (text or "").strip()
-    if len(clean) <= limit:
-        return clean
-    return clean[: max(limit - 3, 0)] + "..."
+# Uzywamy short_preview z modulu utils
 
 
 @dataclass

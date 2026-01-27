@@ -297,10 +297,13 @@ class FinancialCalculator:
             PeriodSummary z pelnym podsumowaniem
         """
         from ..models import Order, OrderProduct, Return, FixedCost
-        from sqlalchemy import func
+        from sqlalchemy import func, select
         
-        # Pobierz zamowienia z wykluczonymi zwrotami
-        return_order_ids = self.db.query(Return.order_id).distinct().subquery()
+        # Pobierz zamowienia z wykluczonymi zwrotami (tylko te ze statusem 'delivered')
+        # Zwroty in_transit/pending nie sa wykluczane - klient zglosi ale nie nadal
+        return_order_ids = select(Return.order_id).where(
+            Return.status == 'delivered'
+        ).distinct()
         
         orders = self.db.query(Order).filter(
             Order.date_add >= start_timestamp,
