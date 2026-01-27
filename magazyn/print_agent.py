@@ -1208,7 +1208,7 @@ class LabelAgent:
         
         try:
             from .db import get_session
-            from .models import Order, OrderProduct, PurchaseBatch, Return
+            from .models import Order, OrderProduct, PurchaseBatch, Return, AllegroOffer
             from .settings_store import settings_store
             from .allegro_api import get_order_billing_summary, estimate_allegro_shipping_cost
             from sqlalchemy import func
@@ -1288,12 +1288,22 @@ class LabelAgent:
                     # Koszt zakupu
                     purchase_cost = Decimal("0")
                     for op in db.query(OrderProduct).filter(OrderProduct.order_id == order.order_id).all():
-                        if op.product_size and op.product_size.product:
+                        product_size = op.product_size
+                        
+                        # Fallback: szukaj przez allegro_offers jesli brak bezposredniego powiazania
+                        if not product_size and op.auction_id:
+                            allegro_offer = db.query(AllegroOffer).filter(
+                                AllegroOffer.offer_id == op.auction_id
+                            ).first()
+                            if allegro_offer and allegro_offer.product_size:
+                                product_size = allegro_offer.product_size
+                        
+                        if product_size and product_size.product:
                             latest_batch = (
                                 db.query(PurchaseBatch)
                                 .filter(
-                                    PurchaseBatch.product_id == op.product_size.product_id,
-                                    PurchaseBatch.size == op.product_size.size
+                                    PurchaseBatch.product_id == product_size.product_id,
+                                    PurchaseBatch.size == product_size.size
                                 )
                                 .order_by(desc(PurchaseBatch.purchase_date))
                                 .first()
