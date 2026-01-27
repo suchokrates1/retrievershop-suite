@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block page_vars %}
     {% set barcode_mode = 'product' %}
-    {% set barcode_endpoint = url_for('products.barcode_scan') %}
+    {% set barcode_endpoint = url_for('scanning.barcode_scan') %}
 {% endblock %}
 {% block content %}
     <div class="container text-center">

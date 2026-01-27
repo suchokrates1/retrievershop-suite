@@ -29,7 +29,7 @@
         <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info">
             <i class="bi bi-file-earmark-plus me-1"></i>Import faktury
         </a>
-        <a href="{{ url_for('products.barcode_scan_page', next=url_for('home')) }}" class="btn btn-secondary">
+        <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('home')) }}" class="btn btn-secondary">
             <i class="bi bi-upc-scan me-1"></i>Skanuj kod
         </a>
         <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-warning">
