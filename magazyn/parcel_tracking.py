@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from collections import defaultdict
 
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, func
 
 from .db import get_session
 from .models import Order, OrderStatusLog
@@ -131,7 +131,7 @@ def sync_parcel_statuses() -> Dict[str, int]:
             latest_status_subq = (
                 db.query(
                     OrderStatusLog.order_id,
-                    db.func.max(OrderStatusLog.timestamp).label("max_timestamp")
+                    func.max(OrderStatusLog.timestamp).label("max_timestamp")
                 )
                 .group_by(OrderStatusLog.order_id)
                 .subquery()
