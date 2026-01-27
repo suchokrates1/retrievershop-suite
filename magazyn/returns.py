@@ -12,7 +12,7 @@ Ten modul odpowiada za:
 import json
 import logging
 from datetime import datetime
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 
 import requests
 from sqlalchemy import desc
@@ -928,3 +928,140 @@ def mark_return_as_delivered(return_id: int) -> bool:
         
         logger.info(f"Zwrot #{return_id} oznaczony jako dostarczony")
         return True
+
+
+def process_refund(
+    order_id: str, 
+    delivery_cost_covered: bool = True,
+    reason: str = None
+) -> Tuple[bool, str]:
+    """
+    Przetworz zwrot pieniedzy dla zamowienia.
+    
+    Ta funkcja:
+    1. Sprawdza czy zwrot istnieje w bazie i ma status delivered
+    2. Pobiera allegro_return_id
+    3. Wywoluje Allegro API aby zainicjowac zwrot pieniedzy
+    4. Aktualizuje status zwrotu w bazie na completed
+    
+    UWAGA: Operacja jest NIEODWRACALNA!
+    
+    Args:
+        order_id: ID zamowienia
+        delivery_cost_covered: Czy zwrocic koszt dostawy
+        reason: Opcjonalny komentarz
+        
+    Returns:
+        Tuple (sukces, komunikat)
+    """
+    from .settings_store import settings_store
+    from . import allegro_api
+    
+    with get_session() as db:
+        # Znajdz zwrot dla zamowienia
+        return_record = db.query(Return).filter(Return.order_id == order_id).first()
+        
+        if not return_record:
+            return False, f"Nie znaleziono zwrotu dla zamowienia {order_id}"
+        
+        # Sprawdz status - musi byc delivered
+        if return_record.status not in (RETURN_STATUS_DELIVERED, RETURN_STATUS_IN_TRANSIT):
+            return False, f"Zwrot musi byc w statusie 'delivered' lub 'in_transit'. Aktualny status: {return_record.status}"
+        
+        # Sprawdz czy mamy allegro_return_id
+        if not return_record.allegro_return_id:
+            return False, "Brak ID zwrotu Allegro - zwrot nie pochodzi z Allegro lub nie zostal zsynchronizowany"
+        
+        # Pobierz token Allegro
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        if not access_token:
+            return False, "Brak tokenu Allegro - zaloguj sie do Allegro"
+        
+        # Wywolaj API Allegro
+        success, message, response_data = allegro_api.initiate_refund(
+            access_token=access_token,
+            return_id=return_record.allegro_return_id,
+            delivery_cost_covered=delivery_cost_covered,
+            reason=reason
+        )
+        
+        if success:
+            # Aktualizuj status w bazie
+            return_record.status = RETURN_STATUS_COMPLETED
+            _add_return_status_log(
+                db,
+                return_record.id,
+                RETURN_STATUS_COMPLETED,
+                f"Zwrot pieniedzy zainicjowany przez Allegro API. {reason or ''}"
+            )
+            db.commit()
+            
+            logger.info(f"Zwrot pieniedzy dla zamowienia {order_id} przetworzony pomyslnie")
+        else:
+            logger.error(f"Blad zwrotu pieniedzy dla zamowienia {order_id}: {message}")
+        
+        return success, message
+
+
+def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
+    """
+    Sprawdz czy zamowienie kwalifikuje sie do zwrotu pieniedzy.
+    
+    Zwraca szczegoly o kwocie do zwrotu i statusie.
+    
+    Args:
+        order_id: ID zamowienia
+        
+    Returns:
+        Tuple (kwalifikuje_sie, komunikat, szczegoly)
+    """
+    from .settings_store import settings_store
+    from . import allegro_api
+    
+    with get_session() as db:
+        return_record = db.query(Return).filter(Return.order_id == order_id).first()
+        
+        if not return_record:
+            return False, "Brak zwrotu dla tego zamowienia", None
+        
+        if return_record.status == RETURN_STATUS_COMPLETED:
+            return False, "Zwrot juz zostal rozliczony", None
+        
+        if return_record.status == RETURN_STATUS_CANCELLED:
+            return False, "Zwrot zostal anulowany", None
+        
+        if return_record.status not in (RETURN_STATUS_DELIVERED, RETURN_STATUS_IN_TRANSIT):
+            return False, f"Zwrot musi byc w statusie 'delivered' lub 'in_transit'. Aktualny: {return_record.status}", None
+        
+        if not return_record.allegro_return_id:
+            return False, "Brak ID zwrotu Allegro", None
+        
+        # Pobierz szczegoly z Allegro API
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        if not access_token:
+            return False, "Brak tokenu Allegro", None
+        
+        return_data, error = allegro_api.get_customer_return(access_token, return_record.allegro_return_id)
+        if error:
+            return False, f"Blad pobierania danych z Allegro: {error}", None
+        
+        can_refund, validation_msg = allegro_api.validate_return_for_refund(return_data)
+        
+        if not can_refund:
+            return False, validation_msg, None
+        
+        # Przygotuj szczegoly
+        refund = return_data.get("refund", {})
+        total_value = refund.get("totalValue", {})
+        delivery = refund.get("delivery", {})
+        
+        details = {
+            "allegro_status": return_data.get("status"),
+            "total_amount": float(total_value.get("amount", 0)),
+            "currency": total_value.get("currency", "PLN"),
+            "delivery_amount": float(delivery.get("amount", 0)) if delivery else 0,
+            "items": return_data.get("items", []),
+            "allegro_return_id": return_record.allegro_return_id,
+        }
+        
+        return True, validation_msg, details
