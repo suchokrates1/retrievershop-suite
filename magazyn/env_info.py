@@ -77,10 +77,14 @@ ENV_INFO = {
     ),
     "ALLEGRO_SCRAPER_API_URL": (
         "URL Scrapera Allegro",
-        "Adres API lokalnego scrapera (np. http://192.168.31.150:5555) - pozostaw puste aby używać wbudowanego Selenium",
+        "Adres API lokalnego scrapera (np. http://192.168.31.150:5555) - pozostaw puste aby uzywac wbudowanego Selenium",
     ),
     "ALLEGRO_PROXY_URL": (
         "URL Proxy Allegro",
         "Adres proxy dla scrapera Allegro (format: user:pass@host:port)",
+    ),
+    "PRICE_MAX_DISCOUNT_PERCENT": (
+        "Max znizka dla sugestii cen (%)",
+        "Maksymalny procent obnizki przy ktorym pokazywane sa sugestie cen w raportach (domyslnie 5%)",
     ),
 }

@@ -555,3 +555,68 @@ class ReturnStatusLog(Base):
     
     # Relationship
     return_record = relationship("Return")
+
+
+# =============================================================================
+# Price Reports System - Raporty cenowe konkurencji
+# =============================================================================
+
+class PriceReport(Base):
+    """Raport cenowy - glowna tabela."""
+    __tablename__ = "price_reports"
+    __table_args__ = (
+        Index("idx_price_reports_created_at", "created_at"),
+        Index("idx_price_reports_status", "status"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    
+    # Status: pending, running, completed, failed
+    status = Column(String, nullable=False, default="pending")
+    
+    # Postep
+    items_total = Column(Integer, nullable=False, default=0)
+    items_checked = Column(Integer, nullable=False, default=0)
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    items = relationship("PriceReportItem", back_populates="report", cascade="all, delete-orphan")
+
+
+class PriceReportItem(Base):
+    """Pojedynczy wpis w raporcie cenowym."""
+    __tablename__ = "price_report_items"
+    __table_args__ = (
+        Index("idx_price_report_items_report_id", "report_id"),
+        Index("idx_price_report_items_offer_id", "offer_id"),
+        Index("idx_price_report_items_is_cheapest", "is_cheapest"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, ForeignKey("price_reports.id", ondelete="CASCADE"), nullable=False)
+    
+    # Oferta
+    offer_id = Column(String, nullable=False)
+    product_name = Column(String, nullable=True)
+    
+    # Ceny
+    our_price = Column(Numeric(10, 2), nullable=True)
+    competitor_price = Column(Numeric(10, 2), nullable=True)
+    competitor_seller = Column(String, nullable=True)
+    competitor_url = Column(String, nullable=True)
+    
+    # Analiza
+    is_cheapest = Column(Boolean, nullable=False, default=True)
+    price_difference = Column(Float, nullable=True)  # our_price - competitor_price
+    our_position = Column(Integer, nullable=True)
+    total_offers = Column(Integer, nullable=True)
+    
+    # Metadata
+    checked_at = Column(DateTime, nullable=False, server_default=func.now())
+    error = Column(String, nullable=True)
+    
+    # Relationship
+    report = relationship("PriceReport", back_populates="items")
