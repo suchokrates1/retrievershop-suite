@@ -110,6 +110,19 @@ def get_active_offers_count() -> int:
         return 0
 
 
+def sync_allegro_offers_before_report():
+    """Synchronizuje oferty z Allegro przed utworzeniem raportu."""
+    try:
+        from .allegro_sync import sync_offers
+        logger.info("Rozpoczynam synchronizacje ofert z Allegro...")
+        result = sync_offers()
+        logger.info(f"Synchronizacja zakonczona: pobrano {result.get('fetched', 0)}, dopasowano {result.get('matched', 0)}")
+        return result
+    except Exception as e:
+        logger.error(f"Blad synchronizacji ofert: {e}")
+        return None
+
+
 def create_new_report() -> int:
     """Tworzy nowy raport cenowy w bazie."""
     from .db import get_session
@@ -434,6 +447,9 @@ def _scheduler_main(app):
                     if running:
                         logger.info(f"Raport #{running.id} juz w toku - pomijam")
                     else:
+                        # Synchronizuj oferty przed raportem
+                        sync_allegro_offers_before_report()
+                        
                         # Utworz nowy raport
                         report_id = create_new_report()
                         
@@ -500,10 +516,14 @@ def start_price_report_now() -> int:
     """Reczne uruchomienie raportu cenowego (poza harmonogramem).
     
     Dla recznego uruchomienia:
+    - Synchronizacja ofert z Allegro
     - Pierwsza partia startuje natychmiast
     - Pozostale partie rozlozone rownomiernie na 48h z losowoscia
     """
     from flask import current_app
+    
+    # Synchronizuj oferty przed raportem
+    sync_allegro_offers_before_report()
     
     # Utworz raport
     report_id = create_new_report()
