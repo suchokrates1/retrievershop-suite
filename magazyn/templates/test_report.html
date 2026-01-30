@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2><i class="bi bi-envelope-paper me-2"></i>Test raportu miesiecznego</h2>
+    
+    <div class="card mt-4">
+        <div class="card-body">
+            <p class="text-muted mb-4">
+                Kliknij przycisk aby wyslac testowy raport miesieczny przez Messenger.
+                Raport zawiera podsumowanie sprzedazy od 1. dnia biezacego miesiaca.
+            </p>
+            
+            {% if message %}
+            <div class="alert alert-success">
+                {{ message }}
+            </div>
+            {% endif %}
+            
+            {% if summary %}
+            <div class="card bg-light mb-4">
+                <div class="card-body">
+                    <h5>Podsumowanie {{ summary.month_name }}:</h5>
+                    <ul class="mb-0">
+                        <li>Sprzedane produkty: <strong>{{ summary.products_sold }}</strong> szt.</li>
+                        <li>Laczny przychod: <strong>{{ "%.2f"|format(summary.total_revenue) }}</strong> zl</li>
+                        <li>Realny zysk: <strong class="{% if summary.real_profit > 0 %}text-success{% else %}text-danger{% endif %}">{{ "%.2f"|format(summary.real_profit) }}</strong> zl</li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+            
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-send me-2"></i>Wyslij testowy raport
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="mt-3">
+        <a href="{{ url_for('settings_page') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Powrot do ustawien
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,80 @@
+{
+  "usableSessionsCount": 2,
+  "retiredSessionsCount": 0,
+  "sessions": [
+    {
+      "id": "session_sBavdFQk6b",
+      "cookieJar": {
+        "version": "tough-cookie@6.0.0",
+        "storeType": "MemoryCookieStore",
+        "rejectPublicSuffixes": true,
+        "enableLooseMode": false,
+        "allowSpecialUseDomain": true,
+        "prefixSecurity": "silent",
+        "cookies": []
+      },
+      "userData": {},
+      "maxErrorScore": 3,
+      "errorScoreDecrement": 0.5,
+      "expiresAt": "2026-01-30T11:33:25.252Z",
+      "createdAt": "2026-01-30T10:43:25.252Z",
+      "usageCount": 0,
+      "maxUsageCount": 50,
+      "errorScore": 0
+    },
+    {
+      "id": "session_EOAq87J9mE",
+      "cookieJar": {
+        "version": "tough-cookie@6.0.0",
+        "storeType": "MemoryCookieStore",
+        "rejectPublicSuffixes": true,
+        "enableLooseMode": false,
+        "allowSpecialUseDomain": true,
+        "prefixSecurity": "silent",
+        "cookies": [
+          {
+            "key": "_cmuid",
+            "value": "8932b406-d7fe-458f-9584-271df59d10e5",
+            "expires": "2027-03-06T10:43:31.000Z",
+            "domain": "allegro.pl",
+            "path": "/",
+            "secure": true,
+            "hostOnly": false,
+            "creation": "2026-01-30T10:43:32.314Z",
+            "lastAccessed": "2026-01-30T10:43:32.314Z"
+          },
+          {
+            "key": "wdctx",
+            "value": "v5.Knf8dLiKKYtWmvvpV7mn9eSIyRvCnIvL-FiqNc5P1AvZtsApZoSFgzXyvxQlGvHLsoqmuPvEJ5k7d3xDwfWr_-5HAVP1xVldpfhxU3l1YJUefO03ZaOHCOE3OmMkqVB4JteM7__0VipHG1w3qLL0nEdntNO_oALkfiV9E5RRGCEht6hqDNeE-WfbGIbCRh4P14g3RilfEQuTiLvjOqLijrS3hGzYkd3fO5-PjhaKQUE.YcUImPUASKinoMu65mV6IQ.8ELEzOpr6EE",
+            "expires": "2026-03-01T10:43:31.000Z",
+            "domain": "allegro.pl",
+            "path": "/",
+            "secure": true,
+            "hostOnly": false,
+            "creation": "2026-01-30T10:43:32.315Z",
+            "lastAccessed": "2026-01-30T10:43:32.315Z"
+          },
+          {
+            "key": "datadome",
+            "value": "JhyrGX3mEcfNKCgIKDikbHNygGtc8_agvA9QHpyrX4xpmeReIN8pw9oT0LXrjnSL1tjzQcKqFD5_zj62ad5nPrL69XqEzFCgvv_q9HSbppzCpclCYSjr4Y1kiiqg_YEj",
+            "expires": "2027-01-30T10:43:31.000Z",
+            "domain": "allegro.pl",
+            "path": "/",
+            "secure": true,
+            "hostOnly": false,
+            "creation": "2026-01-30T10:43:32.315Z",
+            "lastAccessed": "2026-01-30T10:43:32.315Z"
+          }
+        ]
+      },
+      "userData": {},
+      "maxErrorScore": 3,
+      "errorScoreDecrement": 0.5,
+      "expiresAt": "2026-01-30T11:33:25.255Z",
+      "createdAt": "2026-01-30T10:43:25.255Z",
+      "usageCount": 1,
+      "maxUsageCount": 50,
+      "errorScore": 0
+    }
+  ]
+}
