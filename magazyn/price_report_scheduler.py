@@ -497,20 +497,29 @@ def stop_price_report_scheduler():
 
 
 def start_price_report_now() -> int:
-    """Reczne uruchomienie raportu cenowego (poza harmonogramem)."""
+    """Reczne uruchomienie raportu cenowego (poza harmonogramem).
+    
+    Dla recznego uruchomienia raport wykonuje sie natychmiast
+    z krotkimi odstepami miedzy partiami (1-3 minuty).
+    """
     from flask import current_app
     
     # Utworz raport
     report_id = create_new_report()
     
-    # Oblicz harmonogram - od teraz do +48h
-    now = datetime.now()
-    end_time = now + timedelta(hours=48)
-    
     total_offers = get_active_offers_count()
-    schedule = calculate_schedule(total_offers, now, end_time)
+    num_batches = (total_offers + BATCH_SIZE - 1) // BATCH_SIZE
     
-    logger.info(f"Reczny raport #{report_id}: {len(schedule)} partii dla {total_offers} ofert")
+    # Dla recznego raportu - natychmiastowe uruchomienie
+    # z krotkimi odstepami (1-3 minuty miedzy partiami)
+    now = datetime.now()
+    schedule = []
+    for i in range(num_batches):
+        # Pierwsza partia od razu, kolejne co 1-3 minuty
+        delay_minutes = i * random.uniform(1, 3)
+        schedule.append(now + timedelta(minutes=delay_minutes))
+    
+    logger.info(f"Reczny raport #{report_id}: {len(schedule)} partii dla {total_offers} ofert (natychmiast)")
     
     # Uruchom worker
     app = current_app._get_current_object()
