@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline-secondary btn-sm mb-2">
+            <i class="bi bi-arrow-left"></i> Powrot do listy
+        </a>
+        <h2>Ustawienia raportow cenowych</h2>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-sliders"></i> Parametry</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="max_discount" class="form-label">
+                            Maksymalna znizka dla sugestii cen (%)
+                        </label>
+                        <input type="number" class="form-control" id="max_discount" name="max_discount" 
+                               value="{{ max_discount }}" min="0" max="50" step="0.5">
+                        <div class="form-text">
+                            Sugestie cen beda pokazywane tylko gdy wymagana obnizka nie przekracza tego procentu.
+                            <br>
+                            Np. przy 5%: jesli nasza cena to 100 zl, sugestia pojawi sie tylko gdy konkurent ma min. 95 zl.
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check"></i> Zapisz ustawienia
+                    </button>
+                </div>
+            </div>
+        </form>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> Harmonogram automatyczny</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <th>Start sprawdzania</th>
+                        <td>Piatek 16:00</td>
+                    </tr>
+                    <tr>
+                        <th>Koniec sprawdzania</th>
+                        <td>Niedziela 16:00</td>
+                    </tr>
+                    <tr>
+                        <th>Przerwy nocne</th>
+                        <td>02:00 - 06:00</td>
+                    </tr>
+                    <tr>
+                        <th>Powiadomienie</th>
+                        <td>Niedziela po 16:00 (Messenger)</td>
+                    </tr>
+                    <tr>
+                        <th>Partie</th>
+                        <td>5 ofert z losowymi odstepami (30-90 min)</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

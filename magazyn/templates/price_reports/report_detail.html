@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline-secondary btn-sm mb-2">
+            <i class="bi bi-arrow-left"></i> Powrot do listy
+        </a>
+        <h2>Raport cenowy #{{ report.id }}</h2>
+        <p class="text-muted mb-0">
+            {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}
+            {% if report.status == 'completed' %}
+                <span class="badge bg-success ms-2">Zakonczony</span>
+            {% elif report.status == 'running' %}
+                <span class="badge bg-primary ms-2">W toku ({{ report.items_checked }}/{{ report.items_total }})</span>
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<!-- Statystyki -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="mb-0">{{ stats.total }}</h3>
+                <small class="text-muted">Sprawdzonych ofert</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body text-success">
+                <h3 class="mb-0">{{ stats.cheapest }}</h3>
+                <small>Jestesmy najtansi</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body text-danger">
+                <h3 class="mb-0">{{ stats.not_cheapest }}</h3>
+                <small>Drozsi od konkurencji</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body text-warning">
+                <h3 class="mb-0">{{ stats.with_suggestion }}</h3>
+                <small>Z sugestia obnizki (max {{ max_discount }}%)</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtry -->
+<div class="btn-group mb-3" role="group">
+    <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='all') }}" 
+       class="btn btn-outline-primary {% if filter_mode == 'all' %}active{% endif %}">
+        Wszystkie ({{ stats.total }})
+    </a>
+    <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='not_cheapest') }}" 
+       class="btn btn-outline-danger {% if filter_mode == 'not_cheapest' %}active{% endif %}">
+        Drozsi ({{ stats.not_cheapest }})
+    </a>
+    <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='cheapest') }}" 
+       class="btn btn-outline-success {% if filter_mode == 'cheapest' %}active{% endif %}">
+        Najtansi ({{ stats.cheapest }})
+    </a>
+</div>
+
+{% if items %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Produkt</th>
+                <th class="text-end">Nasza cena</th>
+                <th class="text-end">Cena konkurenta</th>
+                <th>Konkurent</th>
+                <th class="text-center">Pozycja</th>
+                <th class="text-center">Status</th>
+                <th>Sugestia</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr class="{% if item.error %}table-warning{% elif not item.is_cheapest %}table-danger{% endif %}">
+                <td>
+                    <span title="{{ item.product_name }}">
+                        {{ item.product_name[:50] }}{% if item.product_name|length > 50 %}...{% endif %}
+                    </span>
+                    <br>
+                    <small class="text-muted">{{ item.offer_id }}</small>
+                </td>
+                <td class="text-end">
+                    {% if item.our_price %}
+                        <strong>{{ "%.2f"|format(item.our_price) }} zl</strong>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    {% if item.competitor_price %}
+                        {{ "%.2f"|format(item.competitor_price) }} zl
+                        {% if item.price_difference %}
+                            <br>
+                            <small class="{% if item.price_difference > 0 %}text-danger{% else %}text-success{% endif %}">
+                                {% if item.price_difference > 0 %}+{% endif %}{{ "%.2f"|format(item.price_difference) }} zl
+                            </small>
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.competitor_seller %}
+                        {{ item.competitor_seller }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if item.our_position %}
+                        {{ item.our_position }}/{{ item.total_offers }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if item.error %}
+                        <span class="badge bg-warning" title="{{ item.error }}">Blad</span>
+                    {% elif item.is_cheapest %}
+                        <span class="badge bg-success"><i class="bi bi-check"></i> OK</span>
+                    {% else %}
+                        <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drozsi</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.suggestion %}
+                        <span class="badge bg-warning text-dark">
+                            <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zl
+                        </span>
+                        <br>
+                        <small class="text-muted">-{{ "%.1f"|format(item.suggestion.discount_percent) }}%</small>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
+                       class="btn btn-sm btn-outline-primary" title="Nasza oferta">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                    {% if item.competitor_url %}
+                        <a href="{{ item.competitor_url }}" target="_blank" 
+                           class="btn btn-sm btn-outline-secondary" title="Oferta konkurenta">
+                            <i class="bi bi-person"></i>
+                        </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-secondary text-center">
+    <i class="bi bi-inbox fs-1"></i>
+    <p class="mt-2 mb-0">Brak danych dla wybranego filtra</p>
+</div>
+{% endif %}
+
+<!-- Legenda -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h6 class="card-title">Legenda</h6>
+        <ul class="list-inline mb-0">
+            <li class="list-inline-item">
+                <span class="badge bg-success"><i class="bi bi-check"></i> OK</span> - Jestesmy najtansi
+            </li>
+            <li class="list-inline-item">
+                <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drozsi</span> - Konkurent jest tanszy
+            </li>
+            <li class="list-inline-item">
+                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-down"></i></span> - Sugerowana cena (obnizka max {{ max_discount }}%)
+            </li>
+            <li class="list-inline-item">
+                <span class="badge bg-warning">Blad</span> - Nie udalo sie sprawdzic
+            </li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
