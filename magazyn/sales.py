@@ -74,7 +74,7 @@ def list_sales():
 
 
 def _sales_keys(values):
-    keywords = ("SHIPPING", "COMMISSION", "EMAIL", "SMTP")
+    keywords = ("SHIPPING", "COMMISSION", "EMAIL", "SMTP", "PRICE_MAX_DISCOUNT")
     return [
         k for k in values.keys() if any(word in k for word in keywords)
     ]

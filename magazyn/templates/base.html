@@ -45,13 +45,14 @@
                 </div>
                 {% if show_menu %}
                 <ul class="navbar-nav flex-row flex-nowrap gap-3 d-none d-md-flex align-items-center mt-2">
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona glowna</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamowienia</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers_and_prices') }}">Oferty i ceny Allegro</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
                     <li class="nav-item">
                         <a class="nav-link text-white" href="{{ url_for('discussions.discussions_list') }}">
-                            Wiadomości / Dyskusje
+                            Wiadomosci / Dyskusje
                             {% if unread_count > 0 %}
                                 <span class="badge bg-danger">{{ unread_count }}</span>
                             {% endif %}
@@ -76,8 +77,8 @@
                             <li><a class="dropdown-item" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedazy</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('agent_logs') }}">Logi</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('scanning.scan_logs') }}">Logi skanow</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('test_print') }}">Testuj drukarke</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -92,13 +93,14 @@
         <button id="mobileMenuClose" class="mobile-close btn btn-link text-white custom-btn" type="button" aria-label="Close">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
         <ul class="nav flex-column h-100">
-            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona glowna</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamowienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers_and_prices') }}">Oferty i ceny Allegro</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
             <li class="nav-item">
                 <a class="nav-link text-white" href="{{ url_for('discussions.discussions_list') }}">
-                    Wiadomości / Dyskusje
+                    Wiadomosci / Dyskusje
                     {% if unread_count > 0 %}
                         <span class="badge bg-danger">{{ unread_count }}</span>
                     {% endif %}
@@ -106,9 +108,9 @@
             </li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('agent_logs') }}">Logi</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('test_print') }}">Testuj drukarke</a></li>
             <li class="nav-item mt-auto text-center">
-                <a class="btn btn-danger w-100 custom-btn" href="{{ url_for('logout') }}">Wyloguj się</a>
+                <a class="btn btn-danger w-100 custom-btn" href="{{ url_for('logout') }}">Wyloguj sie</a>
             </li>
         </ul>
     </div>
