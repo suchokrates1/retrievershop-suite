@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Raporty cenowe</h2>
+    <div>
+        <a href="{{ url_for('price_reports.settings') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-gear"></i> Ustawienia
+        </a>
+        <form action="{{ url_for('price_reports.start_manual_report') }}" method="post" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Rozpoczac generowanie raportu cenowego?')">
+                <i class="bi bi-play-fill"></i> Uruchom raport recznie
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Status biezacego raportu -->
+<div id="currentReportStatus" class="alert alert-info d-none mb-4">
+    <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+        <div>
+            <strong>Raport w toku:</strong> 
+            <span id="statusProgress">0</span>/<span id="statusTotal">0</span> ofert 
+            (<span id="statusPercent">0</span>%)
+        </div>
+    </div>
+    <div class="progress mt-2" style="height: 5px;">
+        <div id="statusProgressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+    </div>
+</div>
+
+{% if reports %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>#</th>
+                <th>Data utworzenia</th>
+                <th>Status</th>
+                <th>Ofert</th>
+                <th>Najtansi</th>
+                <th>Drozsi</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for report in reports %}
+            <tr>
+                <td>{{ report.id }}</td>
+                <td>{{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}</td>
+                <td>
+                    {% if report.status == 'completed' %}
+                        <span class="badge bg-success">Zakonczony</span>
+                    {% elif report.status == 'running' %}
+                        <span class="badge bg-primary">W toku</span>
+                    {% elif report.status == 'pending' %}
+                        <span class="badge bg-warning">Oczekuje</span>
+                    {% else %}
+                        <span class="badge bg-danger">{{ report.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ report.total_offers }}</td>
+                <td>
+                    <span class="text-success">
+                        <i class="bi bi-check-circle"></i> {{ report.we_are_cheapest }}
+                    </span>
+                </td>
+                <td>
+                    {% if report.we_are_not_cheapest > 0 %}
+                        <span class="text-danger">
+                            <i class="bi bi-exclamation-triangle"></i> {{ report.we_are_not_cheapest }}
+                        </span>
+                    {% else %}
+                        <span class="text-muted">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('price_reports.report_detail', report_id=report.id) }}" 
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i> Szczegoly
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-secondary text-center">
+    <i class="bi bi-inbox fs-1"></i>
+    <p class="mt-2 mb-0">Brak raportow cenowych</p>
+    <p class="text-muted">Raporty sa generowane automatycznie w weekendy lub mozesz uruchomic recznie.</p>
+</div>
+{% endif %}
+
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title"><i class="bi bi-info-circle"></i> Informacje</h5>
+        <ul class="mb-0">
+            <li>Raporty sa generowane automatycznie od <strong>piatku 16:00</strong> do <strong>niedzieli 16:00</strong></li>
+            <li>Oferty sa sprawdzane partiami z losowymi odstepami (przerwy nocne 02:00-06:00)</li>
+            <li>Powiadomienie o gotowym raporcie wysylane jest w niedziele po 16:00</li>
+            <li>Mozesz tez uruchomic raport recznie w dowolnym momencie</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+// Sprawdzaj status co 30 sekund
+function checkStatus() {
+    fetch('{{ url_for("price_reports.current_status") }}')
+        .then(r => r.json())
+        .then(data => {
+            const statusDiv = document.getElementById('currentReportStatus');
+            if (data.status === 'running' || data.status === 'pending') {
+                statusDiv.classList.remove('d-none');
+                document.getElementById('statusProgress').textContent = data.items_checked;
+                document.getElementById('statusTotal').textContent = data.items_total;
+                document.getElementById('statusPercent').textContent = data.progress_percent;
+                document.getElementById('statusProgressBar').style.width = data.progress_percent + '%';
+            } else {
+                statusDiv.classList.add('d-none');
+            }
+        })
+        .catch(console.error);
+}
+
+checkStatus();
+setInterval(checkStatus, 30000);
+</script>
+{% endblock %}

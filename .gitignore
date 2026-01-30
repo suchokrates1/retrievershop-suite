@@ -22,6 +22,7 @@ scripts/debug/
 
 # Pliki testowe i tymczasowe
 *.html
+!magazyn/templates/**/*.html
 *.png
 *.txt
 !requirements.txt
