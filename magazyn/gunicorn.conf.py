@@ -23,11 +23,18 @@ def post_worker_init(worker):
         
         # If we got here, we acquired the lock - this worker starts the scheduler
         from magazyn.factory import _start_order_sync_scheduler
+        from magazyn.price_report_scheduler import start_price_report_scheduler
+        from magazyn.factory import _app_instance
         
         _start_order_sync_scheduler()
-        worker.log.info(f"✅ Order sync scheduler started in worker {worker.pid}")
+        worker.log.info(f"Order sync scheduler started in worker {worker.pid}")
+        
+        # Start price report scheduler
+        if _app_instance:
+            start_price_report_scheduler(_app_instance)
+            worker.log.info(f"Price report scheduler started in worker {worker.pid}")
         
     except (OSError, IOError):
         # Lock already held by another worker - skip scheduler initialization
-        worker.log.info(f"⏭️  Worker {worker.pid} skipped scheduler (already running in another worker)")
+        worker.log.info(f"Worker {worker.pid} skipped scheduler (already running in another worker)")
 
