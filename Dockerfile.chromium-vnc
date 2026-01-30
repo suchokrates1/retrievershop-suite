@@ -1,0 +1,55 @@
+# Chromium z Xvfb i VNC dla price checkera
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    chromium-browser \
+    xvfb \
+    x11vnc \
+    python3 \
+    python3-pip \
+    fonts-liberation \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install playwright sqlalchemy
+
+# Skrypt startowy
+COPY <<'EOF' /start.sh
+#!/bin/bash
+set -e
+
+# Uruchom Xvfb
+Xvfb :99 -screen 0 1920x1080x24 &
+sleep 2
+
+# Uruchom VNC
+x11vnc -display :99 -forever -nopw -shared &
+sleep 1
+
+# Uruchom Chromium z CDP
+chromium-browser \
+    --remote-debugging-port=9222 \
+    --remote-debugging-address=0.0.0.0 \
+    --no-first-run \
+    --no-sandbox \
+    --disable-gpu \
+    --disable-dev-shm-usage \
+    --user-data-dir=/root/.config/chromium \
+    &
+
+echo "Chromium uruchomiony. VNC na :5900, CDP na :9222"
+echo "Polacz sie przez VNC i zaloguj na Allegro"
+
+# Czekaj
+tail -f /dev/null
+EOF
+
+RUN chmod +x /start.sh
+
+EXPOSE 5900 9222
+
+CMD ["/start.sh"]
