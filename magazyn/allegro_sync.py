@@ -109,6 +109,7 @@ def sync_offers():
     fetched_count = 0
     matched_count = 0
     trend_report: list = []
+    synced_offer_ids: set[str] = set()  # Zbior ID ofert z API
 
     with get_session() as session:
         while True:
@@ -280,9 +281,16 @@ def sync_offers():
                 product_id = product_size.product_id if product_size else None
                 product_size_id = product_size.id if product_size else None
 
+                offer_id = offer.get("id")
+                synced_offer_ids.add(offer_id)
+                
+                # Pobierz status publikacji z API
+                publication = offer.get("publication", {})
+                publication_status = publication.get("status", "ACTIVE")
+                
                 existing = (
                     session.query(AllegroOffer)
-                    .filter_by(offer_id=offer.get("id"))
+                    .filter_by(offer_id=offer_id)
                     .first()
                 )
                 timestamp_dt = datetime.now(timezone.utc)
@@ -292,6 +300,7 @@ def sync_offers():
                     existing.title = title
                     existing.price = price
                     existing.ean = offer_ean
+                    existing.publication_status = publication_status
                     if product_size is not None or existing.product_size_id is None:
                         existing.product_id = product_id
                         existing.product_size_id = product_size_id
@@ -299,19 +308,20 @@ def sync_offers():
                 else:
                     session.add(
                         AllegroOffer(
-                            offer_id=offer.get("id"),
+                            offer_id=offer_id,
                             title=title,
                             price=price,
                             ean=offer_ean,
                             product_id=product_id,
                             product_size_id=product_size_id,
+                            publication_status=publication_status,
                             synced_at=timestamp,
                         )
                     )
 
                 allegro_prices.record_price_point(
                     session,
-                    offer_id=offer.get("id"),
+                    offer_id=offer_id,
                     product_size_id=product_size_id,
                     price=price,
                     recorded_at=timestamp_dt,
@@ -329,6 +339,18 @@ def sync_offers():
             # Move to next page
             offset += limit
 
+        # Oznacz oferty ktorych nie ma w API jako ENDED
+        if synced_offer_ids:
+            stale_offers = session.query(AllegroOffer).filter(
+                AllegroOffer.publication_status == "ACTIVE",
+                ~AllegroOffer.offer_id.in_(synced_offer_ids)
+            ).all()
+            for stale in stale_offers:
+                stale.publication_status = "ENDED"
+                logger.debug(f"Oznaczono oferte {stale.offer_id} jako ENDED (brak w API)")
+            if stale_offers:
+                logger.info(f"Oznaczono {len(stale_offers)} ofert jako ENDED (brak w API)")
+        
         session.flush()
         trend_report = allegro_prices.generate_trend_report(session)
 
