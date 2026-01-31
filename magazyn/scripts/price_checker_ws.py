@@ -137,11 +137,15 @@ def parse_delivery_days(text: str) -> Optional[int]:
         except:
             pass
     
-    # Dni tygodnia
+    # Dni tygodnia - z polskimi znakami i bez
     days_of_week = {
-        "poniedzialek": 0, "wtorek": 1, "sroda": 2, "srod": 2,
-        "czwartek": 3, "piatek": 4, "sobota": 5, "sobot": 5,
-        "niedziela": 6, "niedziel": 6
+        "poniedzialek": 0, "poniedziałek": 0, "poniedział": 0,
+        "wtorek": 1, "wtor": 1,
+        "sroda": 2, "środa": 2, "srod": 2, "środ": 2,
+        "czwartek": 3, "czwart": 3,
+        "piatek": 4, "piątek": 4, "piąt": 4, "piat": 4,
+        "sobota": 5, "sobot": 5, "sobo": 5,
+        "niedziela": 6, "niedziel": 6, "niedz": 6
     }
     for day_name, day_num in days_of_week.items():
         if day_name in t:
@@ -154,7 +158,7 @@ def parse_delivery_days(text: str) -> Optional[int]:
     
     if "jutro" in t:
         return 1
-    if "dzisiaj" in t or "dzis" in t:
+    if "dzisiaj" in t or "dzis" in t or "dziś" in t:
         return 0
     
     return None
@@ -356,13 +360,13 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
         # Tekst dostawy (np. "dostawa w sobote", "dostawa za 2-3 dni")
         delivery_text_match = re.search(r'(dostawa\s+(?:w\s+\w+|za\s+\d+.*?dni|od\s+\d+))', text, re.IGNORECASE)
-        # Czy to moja oferta?
-        is_mine = "Top oferta" in text
+        # Czy to moja oferta? - sprawdz "Top oferta" LUB nazwe sprzedawcy
+        seller = seller_match.group(1) if seller_match else "nieznany"
+        is_mine = "Top oferta" in text or seller.lower() == MY_SELLER.lower()
         
         if price_match:
             price = parse_price(price_match.group(1))
             total = parse_price(delivery_match.group(1)) if delivery_match else price
-            seller = seller_match.group(1) if seller_match else "nieznany"
             delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
             delivery_days = parse_delivery_days(delivery_text)
             
