@@ -50,6 +50,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY magazyn/ ./magazyn/
 COPY magazyn/scripts/price_checker_service.py ./
 
+# Copy .env.example for settings_io (required by settings_store)
+COPY .env.example ./.env.example
+
 # Create directories
 RUN mkdir -p /app/logs /app/data /app/chrome-profile
 
