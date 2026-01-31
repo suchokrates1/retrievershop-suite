@@ -211,7 +211,6 @@ def save_report_item(report_id: int, result: dict):
     with get_session() as session:
         our_price = Decimal(str(result["our_price"])) if result["our_price"] else None
         competitor_price = None
-        competitor_price_with_delivery = None
         competitor_seller = None
         competitor_url = None
         is_cheapest = True
@@ -219,14 +218,13 @@ def save_report_item(report_id: int, result: dict):
         
         if result["cheapest"]:
             competitor_price = Decimal(str(result["cheapest"]["price"]))
-            competitor_price_with_delivery = Decimal(str(result["cheapest"]["price_with_delivery"]))
             competitor_seller = result["cheapest"]["seller"]
             competitor_url = result["cheapest"]["url"]
             
             if our_price:
-                # Porownujemy po cenie z dostawa (realny koszt dla klienta)
-                is_cheapest = our_price <= competitor_price_with_delivery
-                price_difference = float(our_price - competitor_price_with_delivery)
+                # Porownujemy po cenie bazowej (wszyscy maja Smart)
+                is_cheapest = our_price <= competitor_price
+                price_difference = float(our_price - competitor_price)
         
         item = PriceReportItem(
             report_id=report_id,
