@@ -559,3 +559,70 @@ def start_price_report_now() -> int:
     worker.start()
     
     return report_id
+
+
+def resume_price_report(report_id: int = None) -> int:
+    """Wznawia przetwarzanie istniejacego raportu.
+    
+    Jesli report_id nie podany, wznawia ostatni raport ze statusem 'running' lub 'pending'.
+    """
+    from flask import current_app
+    from .db import get_session
+    from .models import PriceReport, AllegroOffer, PriceReportItem
+    
+    with get_session() as session:
+        if report_id:
+            report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
+        else:
+            # Znajdz ostatni niezakonczony raport
+            report = session.query(PriceReport).filter(
+                PriceReport.status.in_(["pending", "running"])
+            ).order_by(PriceReport.id.desc()).first()
+        
+        if not report:
+            logger.error("Nie znaleziono raportu do wznowienia")
+            return None
+        
+        report_id = report.id
+        
+        # Ile zostalo do sprawdzenia
+        total_active = session.query(AllegroOffer).filter(
+            AllegroOffer.publication_status == "ACTIVE"
+        ).count()
+        
+        already_checked = session.query(PriceReportItem).filter(
+            PriceReportItem.report_id == report_id
+        ).count()
+        
+        remaining = total_active - already_checked
+        
+        # Ustaw status na running
+        report.status = "running"
+        session.commit()
+        
+        logger.info(f"Wznawiam raport #{report_id}: {already_checked} sprawdzonych, {remaining} pozostalo")
+    
+    if remaining <= 0:
+        logger.info(f"Raport #{report_id} juz zakonczony - finalizuje")
+        finalize_report(report_id)
+        return report_id
+    
+    # Oblicz harmonogram dla pozostalych ofert
+    now = datetime.now()
+    end_time = now + timedelta(hours=24)  # 24h na dokonczenie
+    
+    schedule = calculate_schedule(remaining, now, end_time)
+    
+    logger.info(f"Wznowienie raportu #{report_id}: {len(schedule)} partii dla {remaining} pozostalych ofert")
+    
+    # Uruchom worker
+    app = current_app._get_current_object()
+    worker = threading.Thread(
+        target=_report_worker,
+        args=(app, report_id, schedule),
+        daemon=True,
+        name=f"PriceReportWorker-{report_id}"
+    )
+    worker.start()
+    
+    return report_id

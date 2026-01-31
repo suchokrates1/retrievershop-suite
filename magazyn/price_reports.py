@@ -204,6 +204,25 @@ def start_manual_report():
     return redirect(url_for("price_reports.reports_list"))
 
 
+@bp.route("/resume/<int:report_id>", methods=["POST"])
+@login_required
+def resume_report(report_id):
+    """Wznawia przetwarzanie przerwanego raportu."""
+    from .price_report_scheduler import resume_price_report
+    
+    try:
+        resumed_id = resume_price_report(report_id)
+        if resumed_id:
+            flash(f"Wznowiono raport #{resumed_id}", "success")
+        else:
+            flash("Nie znaleziono raportu do wznowienia", "error")
+    except Exception as e:
+        logger.error(f"Blad wznawiania raportu: {e}", exc_info=True)
+        flash(f"Blad: {e}", "error")
+    
+    return redirect(url_for("price_reports.reports_list"))
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
