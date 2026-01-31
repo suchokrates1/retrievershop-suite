@@ -195,7 +195,8 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
         "my_position": result.my_position,
         "competitors_count": len(result.competitors) if result.competitors else 0,
         "cheapest": {
-            "price": result.cheapest_competitor.price_with_delivery,
+            "price": result.cheapest_competitor.price,
+            "price_with_delivery": result.cheapest_competitor.price_with_delivery,
             "seller": result.cheapest_competitor.seller,
             "url": result.cheapest_competitor.offer_url,
         } if result.cheapest_competitor else None,
@@ -210,6 +211,7 @@ def save_report_item(report_id: int, result: dict):
     with get_session() as session:
         our_price = Decimal(str(result["our_price"])) if result["our_price"] else None
         competitor_price = None
+        competitor_price_with_delivery = None
         competitor_seller = None
         competitor_url = None
         is_cheapest = True
@@ -217,12 +219,14 @@ def save_report_item(report_id: int, result: dict):
         
         if result["cheapest"]:
             competitor_price = Decimal(str(result["cheapest"]["price"]))
+            competitor_price_with_delivery = Decimal(str(result["cheapest"]["price_with_delivery"]))
             competitor_seller = result["cheapest"]["seller"]
             competitor_url = result["cheapest"]["url"]
             
             if our_price:
-                is_cheapest = our_price <= competitor_price
-                price_difference = float(our_price - competitor_price)
+                # Porownujemy po cenie z dostawa (realny koszt dla klienta)
+                is_cheapest = our_price <= competitor_price_with_delivery
+                price_difference = float(our_price - competitor_price_with_delivery)
         
         item = PriceReportItem(
             report_id=report_id,
