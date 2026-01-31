@@ -360,9 +360,9 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
         # Tekst dostawy (np. "dostawa w sobote", "dostawa za 2-3 dni")
         delivery_text_match = re.search(r'(dostawa\s+(?:w\s+\w+|za\s+\d+.*?dni|od\s+\d+))', text, re.IGNORECASE)
-        # Czy to moja oferta? - sprawdz "Top oferta" LUB nazwe sprzedawcy
+        # Czy to moja oferta? - sprawdz TYLKO nazwe sprzedawcy (nie "Top oferta" bo moze byc u konkurencji)
         seller = seller_match.group(1) if seller_match else "nieznany"
-        is_mine = "Top oferta" in text or seller.lower() == MY_SELLER.lower()
+        is_mine = seller.lower() == MY_SELLER.lower()
         
         if price_match:
             price = parse_price(price_match.group(1))
