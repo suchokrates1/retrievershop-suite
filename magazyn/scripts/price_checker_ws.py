@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 CDP_HOST = "192.168.31.147"  # minipc
 CDP_PORT = 9223
 MY_SELLER = "Retriever_Shop"
-MAX_DELIVERY_DAYS = 4  # Filtruj sprzedawcow z dluga dostawa (chinczycy)
+MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa (chinczycy)
 
 # Polskie miesiace do parsowania daty dostawy
 POLISH_MONTHS = {
