@@ -33,13 +33,19 @@ from magazyn.notifications import send_messenger
 
 # Use Camoufox scraper (better anti-detection than Selenium)
 # Falls back to Selenium if Camoufox not available
+SCRAPER_ENGINE = None
 try:
     from magazyn.camoufox_scraper import (
         fetch_competitors_for_offer_camoufox as fetch_competitors_for_offer,
         parse_price_amount,
+        Camoufox,
     )
-    SCRAPER_ENGINE = "camoufox"
+    if Camoufox is not None:
+        SCRAPER_ENGINE = "camoufox"
 except ImportError:
+    pass
+
+if SCRAPER_ENGINE is None:
     from magazyn.allegro_scraper import (
         fetch_competitors_for_offer,
         parse_price_amount,
