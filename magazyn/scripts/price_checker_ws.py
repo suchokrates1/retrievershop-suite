@@ -459,12 +459,14 @@ async def check_offer_price(
             result.competitors = competitors_filtered
             
             # Najtanszy konkurent (tylko z szybka dostawa)
+            # Sortuj po cenie bazowej (price), nie z dostawa - wszyscy uzywaja Smart
             if competitors_filtered:
-                result.cheapest_competitor = min(competitors_filtered, key=lambda x: x.price_with_delivery)
+                result.cheapest_competitor = min(competitors_filtered, key=lambda x: x.price)
             
             # Moja pozycja (tylko wsrod ofert z szybka dostawa)
+            # Sortuj po cenie bazowej (price), nie z dostawa - wszyscy uzywaja Smart
             offers_for_ranking = [o for o in all_offers if o.is_mine or (o.delivery_days is None or o.delivery_days <= max_delivery_days)]
-            sorted_offers = sorted(offers_for_ranking, key=lambda x: x.price_with_delivery)
+            sorted_offers = sorted(offers_for_ranking, key=lambda x: x.price)
             for i, o in enumerate(sorted_offers, 1):
                 if o.is_mine:
                     result.my_position = i
@@ -502,7 +504,7 @@ def print_result(result: PriceCheckResult):
     if result.cheapest_competitor:
         c = result.cheapest_competitor
         days_info = f" (dostawa {c.delivery_days}d)" if c.delivery_days is not None else ""
-        print(f"\nNajtansza konkurencja: {c.seller} - {c.price_with_delivery:.2f} zl z dostawa{days_info}")
+        print(f"\nNajtansza konkurencja: {c.seller} - {c.price:.2f} zl{days_info}")
         if c.offer_url:
             print(f"Link: {c.offer_url}")
         
