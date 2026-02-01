@@ -94,8 +94,8 @@
                 <th style="width: 110px;" class="text-end">Cena konkurenta</th>
                 <th style="width: 120px;">Konkurent</th>
                 <th style="width: 70px;" class="text-center">Pozycja</th>
-                <th style="width: 80px;" class="text-center">Status</th>
-                <th style="width: 100px;">Sugestia</th>
+                <th style="width: 65px;" class="text-center">Status</th>
+                <th style="width: 85px;">Sugestia</th>
                 <th style="width: 180px;">Akcje</th>
             </tr>
         </thead>
@@ -161,19 +161,19 @@
                         <!-- Nasza oferta -->
                         <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
                            class="btn btn-outline-primary" title="Nasza oferta">
-                            <i class="bi bi-box-arrow-up-right"></i>
+                            <i class="bi bi-box-arrow-up-right fs-6"></i>
                         </a>
                         {% if item.competitor_url %}
                             <!-- Oferta konkurenta -->
                             <a href="{{ item.competitor_url }}" target="_blank" 
                                class="btn btn-outline-secondary" title="Oferta konkurenta">
-                                <i class="bi bi-person"></i>
+                                <i class="bi bi-person fs-6"></i>
                             </a>
                         {% endif %}
                         <!-- Sprawdz ponownie -->
                         <button type="button" class="btn btn-outline-info btn-recheck" 
                                 data-item-id="{{ item.id }}" title="Sprawdz cene ponownie">
-                            <i class="bi bi-arrow-clockwise"></i>
+                            <i class="bi bi-arrow-clockwise fs-6"></i>
                         </button>
                         {% if item.suggestion %}
                             <!-- Zmien cene -->
@@ -183,7 +183,7 @@
                                     data-target-price="{{ item.suggestion.target_price }}"
                                     data-product-name="{{ item.product_name[:30] }}"
                                     title="Zmien cene na {{ item.suggestion.target_price }} zl">
-                                <i class="bi bi-cash-coin"></i>
+                                <i class="bi bi-cash-coin fs-6"></i>
                             </button>
                         {% endif %}
                         {% if item.competitor_seller %}
@@ -191,7 +191,7 @@
                             <button type="button" class="btn btn-outline-danger btn-exclude-seller" 
                                     data-seller="{{ item.competitor_seller }}"
                                     title="Wyklucz sprzedawce {{ item.competitor_seller }}">
-                                <i class="bi bi-person-x"></i>
+                                <i class="bi bi-person-x fs-6"></i>
                             </button>
                         {% endif %}
                     </div>
