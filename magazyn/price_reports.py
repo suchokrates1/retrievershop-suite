@@ -116,7 +116,7 @@ def report_detail(report_id: int):
         elif filter_mode == "errors":
             query = query.filter(PriceReportItem.error != None)
         
-        items = query.order_by(PriceReportItem.price_difference.desc()).all()
+        items = query.all()
         
         max_discount = get_max_discount_percent()
         
@@ -151,6 +151,25 @@ def report_detail(report_id: int):
                 "checked_at": item.checked_at,
                 "error": item.error,
             })
+        
+        # Sortowanie custom:
+        # 1. Produkty z sugestiami na poczatku
+        # 2. Produkty z najwyzszym miejscem (nizsza pozycja = wyzej)
+        # 3. Najtansi alfabetycznie na koncu
+        def sort_key(item):
+            has_suggestion = 1 if item["suggestion"] else 0
+            is_cheapest = 1 if item["is_cheapest"] else 0
+            position = item["our_position"] if item["our_position"] else 999
+            name = item["product_name"].lower()
+            
+            # Zwracamy tuple:
+            # - is_cheapest (0 dla nie najtanszych, 1 dla najtanszych - zeby nie najtansi byli pierwsi)
+            # - has_suggestion odwrotnie (0 dla z sugestia, 1 dla bez - zeby z sugestia byly pierwsze)
+            # - position (rosnaco - nizsze pozycje wyzej)
+            # - name (alfabetycznie)
+            return (is_cheapest, -has_suggestion, position, name)
+        
+        items_data.sort(key=sort_key)
         
         stats = {
             "total": len(items),
