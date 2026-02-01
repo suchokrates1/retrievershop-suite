@@ -10,7 +10,9 @@ alembic upgrade head
 echo "Running custom migrations..."
 python -c "
 from magazyn.migrations.create_price_reports_tables import upgrade
+from magazyn.migrations.create_excluded_sellers_table import upgrade as upgrade_excluded
 upgrade()
+upgrade_excluded()
 "
 
 echo "Starting Gunicorn..."
