@@ -96,7 +96,7 @@
             <tr class="{% if item.error %}table-warning{% elif not item.is_cheapest %}table-danger{% endif %}">
                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     <span title="{{ item.product_name }}">
-                        {{ item.product_name[:30] }}{% if item.product_name|length > 30 %}...{% endif %}
+                        {{ item.product_name }}
                     </span>
                     <br>
                     <small class="text-muted">{{ item.offer_id }}</small>
