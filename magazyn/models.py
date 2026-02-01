@@ -620,3 +620,13 @@ class PriceReportItem(Base):
     
     # Relationship
     report = relationship("PriceReport", back_populates="items")
+
+
+class ExcludedSeller(Base):
+    """Wykluczony sprzedawca z analizy konkurencji."""
+    __tablename__ = "excluded_sellers"
+    
+    id = Column(Integer, primary_key=True)
+    seller_name = Column(String, unique=True, nullable=False)
+    excluded_at = Column(DateTime, nullable=False, server_default=func.now())
+    reason = Column(String, nullable=True)  # Opcjonalny powod wykluczenia

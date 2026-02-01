@@ -150,16 +150,44 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
-                       class="btn btn-sm btn-outline-primary" title="Nasza oferta">
-                        <i class="bi bi-box-arrow-up-right"></i>
-                    </a>
-                    {% if item.competitor_url %}
-                        <a href="{{ item.competitor_url }}" target="_blank" 
-                           class="btn btn-sm btn-outline-secondary" title="Oferta konkurenta">
-                            <i class="bi bi-person"></i>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <!-- Nasza oferta -->
+                        <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
+                           class="btn btn-outline-primary" title="Nasza oferta">
+                            <i class="bi bi-box-arrow-up-right"></i>
                         </a>
-                    {% endif %}
+                        {% if item.competitor_url %}
+                            <!-- Oferta konkurenta -->
+                            <a href="{{ item.competitor_url }}" target="_blank" 
+                               class="btn btn-outline-secondary" title="Oferta konkurenta">
+                                <i class="bi bi-person"></i>
+                            </a>
+                        {% endif %}
+                        <!-- Sprawdz ponownie -->
+                        <button type="button" class="btn btn-outline-info btn-recheck" 
+                                data-item-id="{{ item.id }}" title="Sprawdz cene ponownie">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        {% if item.suggestion %}
+                            <!-- Zmien cene -->
+                            <button type="button" class="btn btn-outline-warning btn-change-price" 
+                                    data-item-id="{{ item.id }}"
+                                    data-current-price="{{ item.our_price }}"
+                                    data-target-price="{{ item.suggestion.target_price }}"
+                                    data-product-name="{{ item.product_name[:30] }}"
+                                    title="Zmien cene na {{ item.suggestion.target_price }} zl">
+                                <i class="bi bi-cash-coin"></i>
+                            </button>
+                        {% endif %}
+                        {% if item.competitor_seller %}
+                            <!-- Wyklucz sprzedawce -->
+                            <button type="button" class="btn btn-outline-danger btn-exclude-seller" 
+                                    data-seller="{{ item.competitor_seller }}"
+                                    title="Wyklucz sprzedawce {{ item.competitor_seller }}">
+                                <i class="bi bi-person-x"></i>
+                            </button>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endfor %}
@@ -191,6 +219,222 @@
                 <span class="badge bg-warning">Blad</span> - Nie udalo sie sprawdzic
             </li>
         </ul>
+        <hr>
+        <h6>Przyciski akcji:</h6>
+        <ul class="list-inline mb-0">
+            <li class="list-inline-item"><i class="bi bi-box-arrow-up-right text-primary"></i> - Nasza oferta</li>
+            <li class="list-inline-item"><i class="bi bi-person text-secondary"></i> - Oferta konkurenta</li>
+            <li class="list-inline-item"><i class="bi bi-arrow-clockwise text-info"></i> - Sprawdz ponownie</li>
+            <li class="list-inline-item"><i class="bi bi-cash-coin text-warning"></i> - Zmien cene</li>
+            <li class="list-inline-item"><i class="bi bi-person-x text-danger"></i> - Wyklucz sprzedawce</li>
+        </ul>
     </div>
 </div>
+
+<!-- Modal potwierdzenia zmiany ceny -->
+<div class="modal fade" id="changePriceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Potwierdz zmiane ceny</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong id="modal-product-name"></strong></p>
+                <div class="alert alert-warning">
+                    <p class="mb-1">Czy na pewno chcesz zmienic cene?</p>
+                    <p class="mb-0">
+                        <strong id="modal-current-price"></strong> zl 
+                        <i class="bi bi-arrow-right"></i> 
+                        <strong id="modal-target-price"></strong> zl
+                    </p>
+                </div>
+                <div id="profit-calculation" class="mb-3">
+                    <p class="text-muted small mb-1">Ladowanie kalkulacji zysku...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-warning" id="confirm-change-price">
+                    <i class="bi bi-check"></i> Zmien cene
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal wykluczenia sprzedawcy -->
+<div class="modal fade" id="excludeSellerModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Wyklucz sprzedawce</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Wykluczyc sprzedawce <strong id="exclude-seller-name"></strong> z porownan cen?</p>
+                <form id="exclude-seller-form" method="post" action="{{ url_for('price_reports.exclude_seller') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="seller_name" id="exclude-seller-input">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-danger" id="confirm-exclude-seller">
+                    <i class="bi bi-person-x"></i> Wyklucz
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = '{{ csrf_token() }}';
+    
+    // Sprawdz ponownie
+    document.querySelectorAll('.btn-recheck').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const itemId = this.dataset.itemId;
+            const row = this.closest('tr');
+            const icon = this.querySelector('i');
+            
+            icon.classList.remove('bi-arrow-clockwise');
+            icon.classList.add('bi-hourglass-split');
+            this.disabled = true;
+            
+            try {
+                const response = await fetch(`/price-reports/recheck-item/${itemId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Odswiez strone zeby pokazac nowe dane
+                    location.reload();
+                } else {
+                    alert('Blad: ' + result.error);
+                }
+            } catch (e) {
+                alert('Blad polaczenia: ' + e.message);
+            } finally {
+                icon.classList.remove('bi-hourglass-split');
+                icon.classList.add('bi-arrow-clockwise');
+                this.disabled = false;
+            }
+        });
+    });
+    
+    // Zmien cene
+    let currentItemId = null;
+    let currentTargetPrice = null;
+    
+    document.querySelectorAll('.btn-change-price').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            currentItemId = this.dataset.itemId;
+            const currentPrice = this.dataset.currentPrice;
+            currentTargetPrice = this.dataset.targetPrice;
+            const productName = this.dataset.productName;
+            
+            document.getElementById('modal-product-name').textContent = productName;
+            document.getElementById('modal-current-price').textContent = currentPrice;
+            document.getElementById('modal-target-price').textContent = currentTargetPrice;
+            document.getElementById('profit-calculation').innerHTML = '<p class="text-muted small mb-1">Ladowanie kalkulacji zysku...</p>';
+            
+            const modal = new bootstrap.Modal(document.getElementById('changePriceModal'));
+            modal.show();
+            
+            // Pobierz kalkulacje zysku
+            try {
+                const response = await fetch(`/price-reports/calculate-profit/${currentItemId}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const d = result.data;
+                    let html = `
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td>Zmiana ceny:</td>
+                                <td class="text-end text-danger">-${d.price_change_percent}%</td>
+                            </tr>
+                            <tr>
+                                <td>Aktualny zysk:</td>
+                                <td class="text-end">${d.current_profit.toFixed(2)} zl</td>
+                            </tr>
+                            <tr>
+                                <td>Nowy zysk:</td>
+                                <td class="text-end">${d.new_profit.toFixed(2)} zl</td>
+                            </tr>
+                            <tr class="${d.profit_change < 0 ? 'table-danger' : 'table-success'}">
+                                <td><strong>Zmiana zysku:</strong></td>
+                                <td class="text-end"><strong>${d.profit_change > 0 ? '+' : ''}${d.profit_change.toFixed(2)} zl</strong></td>
+                            </tr>
+                        </table>
+                    `;
+                    if (d.note) {
+                        html += `<p class="text-muted small mt-2 mb-0">${d.note}</p>`;
+                    }
+                    document.getElementById('profit-calculation').innerHTML = html;
+                } else {
+                    document.getElementById('profit-calculation').innerHTML = `<p class="text-danger small">${result.error}</p>`;
+                }
+            } catch (e) {
+                document.getElementById('profit-calculation').innerHTML = `<p class="text-danger small">Blad ladowania: ${e.message}</p>`;
+            }
+        });
+    });
+    
+    document.getElementById('confirm-change-price').addEventListener('click', async function() {
+        if (!currentItemId || !currentTargetPrice) return;
+        
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Zmieniam...';
+        
+        try {
+            const formData = new FormData();
+            formData.append('new_price', currentTargetPrice);
+            
+            const response = await fetch(`/price-reports/change-price/${currentItemId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                bootstrap.Modal.getInstance(document.getElementById('changePriceModal')).hide();
+                location.reload();
+            } else {
+                alert('Blad: ' + result.error);
+            }
+        } catch (e) {
+            alert('Blad polaczenia: ' + e.message);
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-check"></i> Zmien cene';
+        }
+    });
+    
+    // Wyklucz sprzedawce
+    document.querySelectorAll('.btn-exclude-seller').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const seller = this.dataset.seller;
+            document.getElementById('exclude-seller-name').textContent = seller;
+            document.getElementById('exclude-seller-input').value = seller;
+            
+            const modal = new bootstrap.Modal(document.getElementById('excludeSellerModal'));
+            modal.show();
+        });
+    });
+    
+    document.getElementById('confirm-exclude-seller').addEventListener('click', function() {
+        document.getElementById('exclude-seller-form').submit();
+    });
+});
+</script>
 {% endblock %}
