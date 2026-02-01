@@ -2,6 +2,7 @@
 Pobieranie ofert z Allegro API.
 """
 from typing import Callable, Optional
+from decimal import Decimal
 
 import requests
 
@@ -263,3 +264,63 @@ def fetch_product_listing(
         params["page"] = page
 
     return offers
+
+
+def change_offer_price(offer_id: str, new_price: Decimal) -> dict:
+    """
+    Zmienia cene oferty na Allegro.
+
+    Parameters
+    ----------
+    offer_id : str
+        ID oferty Allegro.
+    new_price : Decimal
+        Nowa cena oferty.
+
+    Returns
+    -------
+    dict
+        Odpowiedz z Allegro API lub slownik z bledem.
+    """
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not token:
+        return {"success": False, "error": "Brak tokenu Allegro"}
+    
+    # Allegro API wymaga PATCH na /sale/product-offers/{offerId}
+    # z body: {"sellingMode": {"price": {"amount": "123.45", "currency": "PLN"}}}
+    url = f"{API_BASE_URL}/sale/product-offers/{offer_id}"
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+        "Content-Type": "application/vnd.allegro.public.v1+json",
+    }
+    
+    payload = {
+        "sellingMode": {
+            "price": {
+                "amount": str(new_price),
+                "currency": "PLN"
+            }
+        }
+    }
+    
+    try:
+        response = _request_with_retry(
+            requests.patch,
+            url,
+            endpoint="change-price",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        return {"success": True, "data": response.json()}
+    except requests.exceptions.HTTPError as e:
+        error_detail = _extract_allegro_error_details(e.response)
+        return {
+            "success": False, 
+            "error": error_detail.get("message", str(e)),
+            "details": error_detail
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
