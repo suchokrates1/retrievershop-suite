@@ -738,3 +738,39 @@ def restart_price_report(report_id: int) -> dict:
         "remaining": remaining,
         "message": f"Raport zrestartowany"
     }
+
+
+def auto_resume_incomplete_reports():
+    """Automatycznie wznawia niedokonczone raporty przy starcie aplikacji.
+    
+    Wywolywane przy starcie serwera - sprawdza czy sa raporty w statusie
+    'pending' lub 'running' i automatycznie je wznawia.
+    """
+    from .db import get_session
+    from .models import PriceReport
+    
+    try:
+        with get_session() as session:
+            incomplete = session.query(PriceReport).filter(
+                PriceReport.status.in_(["pending", "running"])
+            ).order_by(PriceReport.id.desc()).all()
+            
+            if not incomplete:
+                logger.info("Brak niedokonczonych raportow do wznowienia")
+                return
+            
+            for report in incomplete:
+                logger.info(f"Znaleziono niedokonczony raport #{report.id} ({report.items_checked}/{report.items_total})")
+                try:
+                    # Wznow raport (bez app context - bedzie dodany w resume_price_report)
+                    from flask import has_app_context
+                    if has_app_context():
+                        resumed_id = resume_price_report(report.id)
+                        if resumed_id:
+                            logger.info(f"Automatycznie wznowiono raport #{resumed_id}")
+                    else:
+                        logger.warning(f"Brak app context - nie mozna wznoowic raportu #{report.id}")
+                except Exception as e:
+                    logger.error(f"Blad wznawiania raportu #{report.id}: {e}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Blad sprawdzania niedokonczonych raportow: {e}", exc_info=True)
