@@ -334,13 +334,13 @@
                     {# Animowany Timeline #}
                     <div class="shipping-timeline mb-4">
                         <div class="timeline-track">
-                            {% for stage_key, stage_icon, stage_label in shipping_stages %}
+                            {% for stage_key, stage_label, stage_icon, stage_desc in shipping_stages %}
                             {% set is_completed = loop.index0 <= current_stage_index %}
                             {% set is_current = loop.index0 == current_stage_index %}
                             <div class="timeline-step {% if is_completed %}completed{% endif %} {% if is_current %}current{% endif %}" 
                                  style="animation-delay: {{ loop.index0 * 0.1 }}s">
                                 <div class="step-marker">
-                                    <i class="bi {{ stage_icon }}"></i>
+                                    <i class="bi bi-{{ stage_icon }}"></i>
                                 </div>
                                 <span class="step-label">{{ stage_label }}</span>
                             </div>
