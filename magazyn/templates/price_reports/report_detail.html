@@ -16,6 +16,15 @@
             {% endif %}
         </p>
     </div>
+    <div>
+        <form action="{{ url_for('price_reports.restart_report', report_id=report.id) }}" method="post" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-warning" 
+                    onclick="return confirm('Restartowac raport? Oferty z bledami zostana sprawdzone ponownie.')">
+                <i class="bi bi-arrow-repeat"></i> Restart raportu
+            </button>
+        </form>
+    </div>
 </div>
 
 <!-- Statystyki -->

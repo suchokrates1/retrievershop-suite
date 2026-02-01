@@ -230,6 +230,30 @@ def resume_report(report_id):
     return redirect(url_for("price_reports.reports_list"))
 
 
+@bp.route("/restart/<int:report_id>", methods=["POST"])
+@login_required
+def restart_report(report_id):
+    """Restartuje raport - sprawdza niesprawdzone oferty i te z bledami.
+    
+    - Usuwa wpisy z bledami (zeby mogly byc sprawdzone ponownie)
+    - Resetuje status raportu na 'running'
+    - Uruchamia kontynuowanie sprawdzania
+    """
+    from .price_report_scheduler import restart_price_report
+    
+    try:
+        result = restart_price_report(report_id)
+        if result.get("success"):
+            flash(f"Zrestartowano raport #{report_id}: {result.get('removed_errors', 0)} bledow usunieto, {result.get('remaining', 0)} do sprawdzenia", "success")
+        else:
+            flash(result.get("error", "Nieznany blad"), "error")
+    except Exception as e:
+        logger.error(f"Blad restartowania raportu: {e}", exc_info=True)
+        flash(f"Blad: {e}", "error")
+    
+    return redirect(url_for("price_reports.report_detail", report_id=report_id))
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
@@ -323,8 +347,14 @@ def remove_excluded_seller(seller_id):
 @bp.route("/recheck-item/<int:item_id>", methods=["POST"])
 @login_required
 def recheck_item(item_id):
-    """Ponownie sprawdza cene produktu (natychmiast, bez kolejki)."""
+    """Ponownie sprawdza cene produktu (natychmiast, bez kolejki).
+    
+    Dodatkowo:
+    - Pobiera aktualna cene naszej oferty z Allegro i aktualizuje jesli sie zmienila
+    - Przelicza statystyki raportu
+    """
     from .scripts.price_checker_ws import check_offer_price, CDP_HOST, CDP_PORT, MAX_DELIVERY_DAYS
+    from .allegro_api.offers import get_offer_details
     
     try:
         with get_session() as session:
@@ -337,14 +367,25 @@ def recheck_item(item_id):
             
             report_id = item.report_id
             offer_id = item.offer_id
-            our_price = float(item.our_price) if item.our_price else None
+            old_our_price = float(item.our_price) if item.our_price else None
             title = item.product_name
         
-        # Uruchom sprawdzenie
+        # Najpierw pobierz aktualna cene naszej oferty z Allegro API
+        our_offer_data = get_offer_details(offer_id)
+        current_our_price = old_our_price
+        price_updated = False
+        
+        if our_offer_data.get("success") and our_offer_data.get("price"):
+            current_our_price = float(our_offer_data["price"])
+            if old_our_price and abs(current_our_price - old_our_price) > 0.001:
+                price_updated = True
+                logger.info(f"Cena oferty {offer_id} zmienila sie: {old_our_price} -> {current_our_price}")
+        
+        # Uruchom sprawdzenie konkurencji
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(
-            check_offer_price(offer_id, title, our_price, CDP_HOST, CDP_PORT, MAX_DELIVERY_DAYS)
+            check_offer_price(offer_id, title, current_our_price, CDP_HOST, CDP_PORT, MAX_DELIVERY_DAYS)
         )
         loop.close()
         
@@ -353,6 +394,16 @@ def recheck_item(item_id):
             item = session.query(PriceReportItem).filter(
                 PriceReportItem.id == item_id
             ).first()
+            
+            # Zaktualizuj nasza cene jesli sie zmienila
+            if price_updated:
+                item.our_price = Decimal(str(current_our_price))
+                # Zaktualizuj tez w tabeli AllegroOffer
+                offer = session.query(AllegroOffer).filter(
+                    AllegroOffer.offer_id == offer_id
+                ).first()
+                if offer:
+                    offer.price = Decimal(str(current_our_price))
             
             if result.success and result.cheapest_competitor:
                 item.competitor_price = Decimal(str(result.cheapest_competitor.price))
@@ -365,6 +416,16 @@ def recheck_item(item_id):
                     item.is_cheapest = item.our_price <= item.competitor_price
                     item.price_difference = float(item.our_price - item.competitor_price)
                 
+                item.error = None
+            elif result.success and not result.cheapest_competitor:
+                # Brak konkurencji - jestesmy jedyni
+                item.competitor_price = None
+                item.competitor_seller = None
+                item.competitor_url = None
+                item.our_position = 1
+                item.total_offers = 1
+                item.is_cheapest = True
+                item.price_difference = None
                 item.error = None
             else:
                 item.error = result.error or "Blad sprawdzania"
@@ -386,7 +447,10 @@ def recheck_item(item_id):
             
             return jsonify({
                 "success": True,
+                "price_updated": price_updated,
+                "old_price": old_our_price,
                 "data": {
+                    "our_price": float(item.our_price) if item.our_price else None,
                     "competitor_price": float(item.competitor_price) if item.competitor_price else None,
                     "competitor_seller": item.competitor_seller,
                     "is_cheapest": item.is_cheapest,
