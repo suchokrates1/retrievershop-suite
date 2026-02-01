@@ -146,9 +146,13 @@ def create_new_report() -> int:
 
 
 def get_unchecked_offers(report_id: int, limit: int = BATCH_SIZE) -> List[dict]:
-    """Pobiera oferty do sprawdzenia (jeszcze nie sprawdzone w tym raporcie)."""
+    """Pobiera oferty do sprawdzenia (jeszcze nie sprawdzone w tym raporcie).
+    
+    Przed zwroceniem aktualizuje ceny ofert z API Allegro aby miec najnowsze dane.
+    """
     from .db import get_session
     from .models import AllegroOffer, PriceReportItem
+    from .allegro_api.offers import get_offer_details
     
     with get_session() as session:
         # Znajdz oferty ktore nie maja jeszcze wpisu w tym raporcie
@@ -161,15 +165,33 @@ def get_unchecked_offers(report_id: int, limit: int = BATCH_SIZE) -> List[dict]:
             ~AllegroOffer.offer_id.in_(checked_offer_ids)
         ).limit(limit).all()
         
-        return [
-            {
+        # Aktualizuj ceny z API Allegro przed sprawdzaniem
+        result_offers = []
+        for o in offers:
+            current_price = float(o.price) if o.price else None
+            
+            # Pobierz aktualna cene z API
+            try:
+                offer_details = get_offer_details(o.offer_id)
+                if offer_details.get("success") and offer_details.get("price"):
+                    new_price = offer_details["price"]
+                    # Aktualizuj w bazie jezeli sie zmienila
+                    if new_price != o.price:
+                        logger.info(f"Aktualizacja ceny oferty {o.offer_id}: {o.price} -> {new_price}")
+                        o.price = new_price
+                        session.commit()
+                        current_price = float(new_price)
+            except Exception as e:
+                logger.warning(f"Nie udalo sie zaktualizowac ceny oferty {o.offer_id}: {e}")
+            
+            result_offers.append({
                 "offer_id": o.offer_id,
                 "title": o.title,
-                "price": float(o.price) if o.price else None,
+                "price": current_price,
                 "product_size_id": o.product_size_id,
-            }
-            for o in offers
-        ]
+            })
+        
+        return result_offers
 
 
 async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
