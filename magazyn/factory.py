@@ -117,11 +117,13 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     start_print_agent(app)
     
     # Auto-resume incomplete price reports after container restart
-    from .price_report_scheduler import auto_resume_incomplete_reports
-    try:
-        auto_resume_incomplete_reports()
-    except Exception as e:
-        app.logger.error(f"Failed to auto-resume price reports: {e}")
+    # Musi byc w app context
+    with app.app_context():
+        from .price_report_scheduler import auto_resume_incomplete_reports
+        try:
+            auto_resume_incomplete_reports()
+        except Exception as e:
+            app.logger.error(f"Failed to auto-resume price reports: {e}")
     
     # Store app instance for scheduler initialization from gunicorn hook
     global _app_instance
