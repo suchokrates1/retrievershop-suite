@@ -626,3 +626,93 @@ def resume_price_report(report_id: int = None) -> int:
     worker.start()
     
     return report_id
+
+
+def restart_price_report(report_id: int) -> dict:
+    """Restartuje raport - usuwa wpisy z bledami i kontynuuje sprawdzanie.
+    
+    Returns
+    -------
+    dict
+        Slownik z wynikiem operacji.
+    """
+    from flask import current_app
+    from .db import get_session
+    from .models import PriceReport, AllegroOffer, PriceReportItem
+    
+    with get_session() as session:
+        report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
+        
+        if not report:
+            return {"success": False, "error": "Nie znaleziono raportu"}
+        
+        # Usun wpisy z bledami - beda sprawdzone ponownie
+        error_items = session.query(PriceReportItem).filter(
+            PriceReportItem.report_id == report_id,
+            PriceReportItem.error != None
+        ).all()
+        
+        removed_errors = len(error_items)
+        for item in error_items:
+            session.delete(item)
+        
+        # Zaktualizuj licznik items_checked
+        checked_count = session.query(PriceReportItem).filter(
+            PriceReportItem.report_id == report_id
+        ).count()
+        report.items_checked = checked_count
+        
+        # Ile ofert zostalo do sprawdzenia
+        total_active = session.query(AllegroOffer).filter(
+            AllegroOffer.publication_status == "ACTIVE"
+        ).count()
+        
+        # Zaktualizuj items_total na wypadek gdyby sie zmienila liczba ofert
+        report.items_total = total_active
+        
+        remaining = total_active - checked_count
+        
+        # Ustaw status na running
+        report.status = "running"
+        session.commit()
+        
+        logger.info(f"Restart raportu #{report_id}: usunieto {removed_errors} bledow, {remaining} do sprawdzenia")
+    
+    if remaining <= 0:
+        logger.info(f"Raport #{report_id} nie ma ofert do sprawdzenia - finalizuje")
+        finalize_report(report_id)
+        return {
+            "success": True,
+            "removed_errors": removed_errors,
+            "remaining": 0,
+            "message": "Raport zakonczony - brak ofert do sprawdzenia"
+        }
+    
+    # Oblicz harmonogram - szybszy dla restartu (6h zamiast 24h)
+    now = datetime.now()
+    end_time = now + timedelta(hours=6)
+    
+    schedule = calculate_schedule(remaining, now, end_time)
+    
+    # Pierwsza partia natychmiast
+    if schedule:
+        schedule[0] = now
+    
+    logger.info(f"Restart raportu #{report_id}: {len(schedule)} partii dla {remaining} ofert (pierwsza natychmiast)")
+    
+    # Uruchom worker
+    app = current_app._get_current_object()
+    worker = threading.Thread(
+        target=_report_worker,
+        args=(app, report_id, schedule),
+        daemon=True,
+        name=f"PriceReportWorker-{report_id}"
+    )
+    worker.start()
+    
+    return {
+        "success": True,
+        "removed_errors": removed_errors,
+        "remaining": remaining,
+        "message": f"Raport zrestartowany"
+    }

@@ -266,6 +266,67 @@ def fetch_product_listing(
     return offers
 
 
+def get_offer_details(offer_id: str) -> dict:
+    """
+    Pobiera szczegoly oferty z Allegro (w tym aktualna cene).
+
+    Parameters
+    ----------
+    offer_id : str
+        ID oferty Allegro.
+
+    Returns
+    -------
+    dict
+        Slownik z danymi oferty lub bledem.
+    """
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not token:
+        return {"success": False, "error": "Brak tokenu Allegro"}
+    
+    url = f"{API_BASE_URL}/sale/product-offers/{offer_id}"
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    
+    try:
+        response = _request_with_retry(
+            requests.get,
+            url,
+            endpoint="get-offer",
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        # Wyciagnij cene z odpowiedzi
+        price = None
+        selling_mode = data.get("sellingMode", {})
+        if selling_mode:
+            price_data = selling_mode.get("price", {})
+            if price_data:
+                price = Decimal(str(price_data.get("amount", 0)))
+        
+        return {
+            "success": True,
+            "price": price,
+            "title": data.get("name"),
+            "status": data.get("publication", {}).get("status"),
+            "data": data
+        }
+    except requests.exceptions.HTTPError as e:
+        error_detail = _extract_allegro_error_details(e.response)
+        return {
+            "success": False, 
+            "error": error_detail.get("message", str(e)),
+            "details": error_detail
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def change_offer_price(offer_id: str, new_price: Decimal) -> dict:
     """
     Zmienia cene oferty na Allegro.
