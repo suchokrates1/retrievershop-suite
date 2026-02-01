@@ -94,7 +94,7 @@ def reports_list():
 @login_required
 def report_detail(report_id: int):
     """Szczegoly raportu cenowego."""
-    filter_mode = request.args.get("filter", "all")  # all, not_cheapest, cheapest
+    filter_mode = request.args.get("filter", "all")  # all, not_cheapest, cheapest, errors
     
     with get_session() as session:
         report = session.query(PriceReport).filter(
@@ -113,6 +113,8 @@ def report_detail(report_id: int):
             query = query.filter(PriceReportItem.is_cheapest == False)
         elif filter_mode == "cheapest":
             query = query.filter(PriceReportItem.is_cheapest == True)
+        elif filter_mode == "errors":
+            query = query.filter(PriceReportItem.error != None)
         
         items = query.order_by(PriceReportItem.price_difference.desc()).all()
         
@@ -155,6 +157,7 @@ def report_detail(report_id: int):
             "cheapest": sum(1 for i in items if i.is_cheapest),
             "not_cheapest": sum(1 for i in items if not i.is_cheapest),
             "with_suggestion": sum(1 for i in items_data if i.get("suggestion")),
+            "errors": sum(1 for i in items if i.error),
         }
         
         return render_template(
