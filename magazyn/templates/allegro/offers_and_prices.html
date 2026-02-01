@@ -2,7 +2,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="mb-0">Oferty i ceny Allegro</h1>
+        <h1 class="mb-0">Oferty Allegro</h1>
         <div class="mt-2">
             <span class="badge bg-primary fs-6">Pobrane: {{ total_offers }}</span>
             <span class="badge bg-success fs-6">Powiazane: {{ matched_offers }}</span>
@@ -16,12 +16,6 @@
                 <i class="bi bi-arrow-clockwise"></i> Odswież oferty
             </button>
         </form>
-        <a href="allegro-scraper://start" class="btn btn-success">
-            <i class="bi bi-play-circle"></i> Uruchom Scraper Worker
-        </a>
-        <a href="/download/scraper" class="btn btn-outline-primary">
-            <i class="bi bi-download"></i> Pobierz Worker
-        </a>
     </div>
 </div>
 
@@ -29,22 +23,8 @@
     <strong>Jak to działa?</strong>
     <ol class="mb-0 mt-2">
         <li>Kliknij "Odśwież oferty" aby pobrać najnowsze oferty z Allegro</li>
-        <li>Kliknij "Uruchom Scraper Worker" aby sprawdzić ceny konkurencji (pierwszy raz wymaga instalacji)</li>
-        <li>Worker działa w tle i aktualizuje ceny automatycznie</li>
         <li>Powiąż oferty z produktami z magazynu używając dropdownów</li>
     </ol>
-</div>
-
-<div id="scraper-queue-status" class="alert alert-secondary d-none">
-    <div class="d-flex justify-content-between align-items-center">
-        <span>Status kolejki:</span>
-        <div>
-            <span class="badge bg-warning">Oczekujące: <span id="queue-pending">0</span></span>
-            <span class="badge bg-primary">W trakcie: <span id="queue-processing">0</span></span>
-            <span class="badge bg-success">Gotowe: <span id="queue-done">0</span></span>
-            <span class="badge bg-danger">Błędy: <span id="queue-errors">0</span></span>
-        </div>
-    </div>
 </div>
 
 <div class="table-responsive">
@@ -56,10 +36,6 @@
                 <th scope="col">Tytuł</th>
                 <th scope="col">Nasza cena</th>
                 <th scope="col">Powiązanie z magazynem</th>
-                <th scope="col">Konkurencja</th>
-                <th scope="col">Średnia cena</th>
-                <th scope="col">Najniższa</th>
-                <th scope="col">Najwyższa</th>
             </tr>
         </thead>
         <tbody>
@@ -106,26 +82,6 @@
                         <button type="submit" class="btn btn-sm btn-outline-primary">Zapisz</button>
                     </form>
                 </td>
-                <td>
-                    {% if offer.competitors %}
-                        <span class="badge bg-info">{{ offer.competitor_count }} ofert</span>
-                        <div class="mt-1">
-                            {% for competitor in offer.competitors[:3] %}
-                                <div class="small text-muted">
-                                    {{ competitor.price }} zł - {{ competitor.seller|truncate(30) }}
-                                </div>
-                            {% endfor %}
-                            {% if offer.competitor_count > 3 %}
-                                <div class="small text-muted">...i {{ offer.competitor_count - 3 }} więcej</div>
-                            {% endif %}
-                        </div>
-                    {% else %}
-                        <span class="text-muted">Brak danych</span>
-                    {% endif %}
-                </td>
-                <td class="fw-semibold">{{ offer.avg_competitor_price or '-' }}</td>
-                <td class="{% if offer.min_competitor_price and offer.price|float < offer.min_competitor_price|float %}text-success fw-bold{% endif %}">{{ offer.min_competitor_price or '-' }}</td>
-                <td>{{ offer.max_competitor_price or '-' }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -183,32 +139,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-
-// Poll scraper queue status every 5 seconds
-function updateQueueStatus() {
-    fetch('/api/scraper/status')
-        .then(res => res.json())
-        .then(data => {
-            const statusDiv = document.getElementById('scraper-queue-status');
-            if (!statusDiv) return;
-            
-            // Show status if there are any tasks
-            if (data.pending > 0 || data.processing > 0 || data.done > 0) {
-                statusDiv.classList.remove('d-none');
-                document.getElementById('queue-pending').textContent = data.pending || 0;
-                document.getElementById('queue-processing').textContent = data.processing || 0;
-                document.getElementById('queue-done').textContent = data.done || 0;
-                document.getElementById('queue-errors').textContent = data.errors || 0;
-            }
-        })
-        .catch(() => {
-            // Silently fail if API not available
-        });
-}
-
-// Update status every 5 seconds
-setInterval(updateQueueStatus, 5000);
-updateQueueStatus(); // Initial call
-
-
+</script>
 {% endblock %}

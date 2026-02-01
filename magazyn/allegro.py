@@ -492,38 +492,6 @@ def offers_and_prices():
 
         offers_data = []
         for offer, size, product in rows:
-            # Get latest competitor data from database (saved by scraper)
-            latest_competitor = (
-                db.query(AllegroPriceHistory)
-                .filter(
-                    AllegroPriceHistory.offer_id == offer.offer_id,
-                    AllegroPriceHistory.competitor_price.isnot(None)
-                )
-                .order_by(AllegroPriceHistory.recorded_at.desc())
-                .first()
-            )
-            
-            current_app.logger.info(f"Offer {offer.offer_id}: latest_competitor = {latest_competitor}")
-            
-            competitors = []
-            if latest_competitor:
-                competitors = [{
-                    'price': float(latest_competitor.competitor_price),
-                    'seller': latest_competitor.competitor_seller,
-                    'url': latest_competitor.competitor_url,
-                    'delivery_days': latest_competitor.competitor_delivery_days
-                }]
-            
-            # Calculate price statistics
-            competitor_prices = [c['price'] for c in competitors if c.get('price')]
-            avg_price = None
-            min_price = None
-            max_price = None
-            if competitor_prices:
-                avg_price = sum(competitor_prices) / len(competitor_prices)
-                min_price = min(competitor_prices)
-                max_price = max(competitor_prices)
-
             # Create label for linked product
             label = None
             product_for_label = product or (size.product if size else None)
@@ -547,16 +515,10 @@ def offers_and_prices():
                 "selected_label": label,
                 "barcode": size.barcode if size else None,
                 "ean": "",
-                "competitors": competitors,
-                "competitor_count": len(competitors),
-                "avg_competitor_price": _format_decimal(avg_price),
-                "min_competitor_price": _format_decimal(min_price),
-                "max_competitor_price": _format_decimal(max_price),
                 "is_linked": bool(offer.product_size_id or offer.product_id),
             }
             
             # Fetch EAN only for unlinked offers (where it's actually needed)
-            # This speeds up page load significantly (only ~50 unlinked vs 214 total offers)
             ean_value = offer.ean or ""
             if not ean_value and not (offer.product_size_id or offer.product_id):
                 try:
