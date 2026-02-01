@@ -745,9 +745,12 @@ def auto_resume_incomplete_reports():
     
     Wywolywane przy starcie serwera - sprawdza czy sa raporty w statusie
     'pending' lub 'running' i automatycznie je wznawia.
+    
+    WYMAGA: app context (musi byc wywolane w 'with app.app_context()')
     """
     from .db import get_session
     from .models import PriceReport
+    from flask import current_app
     
     try:
         with get_session() as session:
@@ -762,14 +765,11 @@ def auto_resume_incomplete_reports():
             for report in incomplete:
                 logger.info(f"Znaleziono niedokonczony raport #{report.id} ({report.items_checked}/{report.items_total})")
                 try:
-                    # Wznow raport (bez app context - bedzie dodany w resume_price_report)
-                    from flask import has_app_context
-                    if has_app_context():
-                        resumed_id = resume_price_report(report.id)
-                        if resumed_id:
-                            logger.info(f"Automatycznie wznowiono raport #{resumed_id}")
+                    resumed_id = resume_price_report(report.id)
+                    if resumed_id:
+                        logger.info(f"Automatycznie wznowiono raport #{resumed_id}")
                     else:
-                        logger.warning(f"Brak app context - nie mozna wznoowic raportu #{report.id}")
+                        logger.warning(f"Nie udalo sie wznoowic raportu #{report.id}")
                 except Exception as e:
                     logger.error(f"Blad wznawiania raportu #{report.id}: {e}", exc_info=True)
     except Exception as e:
