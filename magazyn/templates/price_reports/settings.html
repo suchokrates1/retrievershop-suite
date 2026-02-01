@@ -10,7 +10,7 @@
     </div>
 </div>
 
-<div class="row justify-content-center">
+<div class="row">
     <div class="col-md-6">
         <form method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -68,6 +68,75 @@
                         <td>5 ofert z losowymi odstepami (30-90 min)</td>
                     </tr>
                 </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <!-- Wykluczeni sprzedawcy -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person-x"></i> Wykluczeni sprzedawcy</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    Sprzedawcy na tej liscie beda pomijani przy porownywaniu cen konkurencji.
+                </p>
+                
+                <!-- Formularz dodawania -->
+                <form method="post" action="{{ url_for('price_reports.exclude_seller') }}" class="mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="seller_name" 
+                               placeholder="Nick sprzedawcy na Allegro" required>
+                        <button type="submit" class="btn btn-outline-danger">
+                            <i class="bi bi-plus"></i> Wyklucz
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Lista wykluczonych -->
+                {% if excluded_sellers %}
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Sprzedawca</th>
+                            <th>Data wykluczenia</th>
+                            <th class="text-end">Akcja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for seller in excluded_sellers %}
+                        <tr>
+                            <td>
+                                <strong>{{ seller.seller_name }}</strong>
+                                {% if seller.reason %}
+                                <br><small class="text-muted">{{ seller.reason }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ seller.excluded_at.strftime('%Y-%m-%d %H:%M') if seller.excluded_at else '-' }}</small>
+                            </td>
+                            <td class="text-end">
+                                <form method="post" action="{{ url_for('price_reports.remove_excluded_seller', seller_id=seller.id) }}" 
+                                      style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" 
+                                            title="Przywroc sprzedawce">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-check-circle fs-4"></i>
+                    <p class="mb-0 mt-2">Brak wykluczonych sprzedawcow</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

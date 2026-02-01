@@ -53,11 +53,47 @@ POLISH_MONTHS = {
     "lip": 7, "sie": 8, "wrz": 9, "paz": 10, "lis": 11, "gru": 12
 }
 
+# Cache dla wykluczonych sprzedawcow (unikamy zapytan do DB przy kazdym sprawdzeniu)
+_excluded_sellers_cache: set = set()
+_excluded_sellers_loaded: bool = False
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def get_excluded_sellers() -> set:
+    """Pobiera liste wykluczonych sprzedawcow z bazy danych."""
+    global _excluded_sellers_cache, _excluded_sellers_loaded
+    
+    if _excluded_sellers_loaded:
+        return _excluded_sellers_cache
+    
+    try:
+        from magazyn.db import get_session
+        from magazyn.models import ExcludedSeller
+        
+        with get_session() as session:
+            excluded = session.query(ExcludedSeller.seller_name).all()
+            _excluded_sellers_cache = {e.seller_name for e in excluded}
+            _excluded_sellers_loaded = True
+            if _excluded_sellers_cache:
+                logger.info(f"Zaladowano {len(_excluded_sellers_cache)} wykluczonych sprzedawcow")
+    except Exception as e:
+        logger.warning(f"Nie udalo sie pobrac wykluczonych sprzedawcow: {e}")
+        _excluded_sellers_cache = set()
+        _excluded_sellers_loaded = True
+    
+    return _excluded_sellers_cache
+
+
+def reload_excluded_sellers():
+    """Wymusza ponowne zaladowanie listy wykluczonych sprzedawcow."""
+    global _excluded_sellers_loaded
+    _excluded_sellers_loaded = False
+    return get_excluded_sellers()
 
 
 @dataclass
@@ -444,28 +480,42 @@ async def check_offer_price(
             if my_offer and not result.my_price:
                 result.my_price = my_offer.price
             
-            # Filtruj konkurencje po czasie dostawy (bez mojej oferty)
+            # Pobierz wykluczonych sprzedawcow
+            excluded_sellers = get_excluded_sellers()
+            
+            # Filtruj konkurencje po czasie dostawy i wykluczonych (bez mojej oferty)
             competitors_all = [o for o in all_offers if not o.is_mine]
             competitors_filtered = [
                 o for o in competitors_all
-                if o.delivery_days is None or o.delivery_days <= max_delivery_days
+                if (o.delivery_days is None or o.delivery_days <= max_delivery_days)
+                and o.seller not in excluded_sellers
             ]
             
             # Loguj odfiltrowanych
-            filtered_count = len(competitors_all) - len(competitors_filtered)
-            if filtered_count > 0:
-                logger.info(f"Odfiltrowano {filtered_count} ofert z dostawa > {max_delivery_days} dni")
+            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days and o.delivery_days > max_delivery_days])
+            filtered_by_excluded = len([o for o in competitors_all if o.seller in excluded_sellers])
+            
+            if filtered_by_delivery > 0:
+                logger.info(f"Odfiltrowano {filtered_by_delivery} ofert z dostawa > {max_delivery_days} dni")
+            if filtered_by_excluded > 0:
+                logger.info(f"Odfiltrowano {filtered_by_excluded} ofert od wykluczonych sprzedawcow")
             
             result.competitors = competitors_filtered
             
-            # Najtanszy konkurent (tylko z szybka dostawa)
+            # Najtanszy konkurent (tylko z szybka dostawa i bez wykluczonych)
             # Sortuj po cenie bazowej (price), nie z dostawa - wszyscy uzywaja Smart
             if competitors_filtered:
                 result.cheapest_competitor = min(competitors_filtered, key=lambda x: x.price)
             
-            # Moja pozycja (tylko wsrod ofert z szybka dostawa)
+            # Moja pozycja (tylko wsrod ofert z szybka dostawa i bez wykluczonych)
             # Sortuj po cenie bazowej (price), nie z dostawa - wszyscy uzywaja Smart
-            offers_for_ranking = [o for o in all_offers if o.is_mine or (o.delivery_days is None or o.delivery_days <= max_delivery_days)]
+            offers_for_ranking = [
+                o for o in all_offers 
+                if o.is_mine or (
+                    (o.delivery_days is None or o.delivery_days <= max_delivery_days)
+                    and o.seller not in excluded_sellers
+                )
+            ]
             sorted_offers = sorted(offers_for_ranking, key=lambda x: x.price)
             for i, o in enumerate(sorted_offers, 1):
                 if o.is_mine:
