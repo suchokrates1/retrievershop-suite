@@ -40,9 +40,8 @@ SessionLocal = None
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 
 SQLITE_CONNECT_ARGS = {"check_same_thread": False, "timeout": 5}
-# DELETE mode zamiast WAL - pliki .db-wal i .db-shm nie sa propagowane przez Docker bind mount
-# pojedynczego pliku, co powoduje utrate danych przy rebuild kontenera
-SQLITE_JOURNAL_MODE = "DELETE"
+# WAL mode - wymaga montowania katalogu (nie pojedynczego pliku) w Docker
+SQLITE_JOURNAL_MODE = "WAL"
 SQLITE_BUSY_TIMEOUT_MS = 30000
 
 
