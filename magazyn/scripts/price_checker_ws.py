@@ -521,16 +521,16 @@ async def check_offer_price(
             competitors_all = [o for o in all_offers if not o.is_mine]
             competitors_filtered = [
                 o for o in competitors_all
-                if (o.delivery_days is None or o.delivery_days <= max_delivery_days)
+                if (o.delivery_days is None or o.delivery_days < max_delivery_days)
                 and o.seller not in excluded_sellers
             ]
             
             # Loguj odfiltrowanych
-            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days is not None and o.delivery_days > max_delivery_days])
+            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days is not None and o.delivery_days >= max_delivery_days])
             filtered_by_excluded = len([o for o in competitors_all if o.seller in excluded_sellers])
             
             if filtered_by_delivery > 0:
-                logger.info(f"Odfiltrowano {filtered_by_delivery} ofert z dostawa > {max_delivery_days} dni")
+                logger.info(f"Odfiltrowano {filtered_by_delivery} ofert z dostawa >= {max_delivery_days} dni")
             if filtered_by_excluded > 0:
                 logger.info(f"Odfiltrowano {filtered_by_excluded} ofert od wykluczonych sprzedawcow")
             
@@ -546,7 +546,7 @@ async def check_offer_price(
             offers_for_ranking = [
                 o for o in all_offers 
                 if o.is_mine or (
-                    (o.delivery_days is None or o.delivery_days <= max_delivery_days)
+                    (o.delivery_days is None or o.delivery_days < max_delivery_days)
                     and o.seller not in excluded_sellers
                 )
             ]
