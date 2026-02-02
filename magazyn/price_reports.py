@@ -589,8 +589,19 @@ def calculate_profit(item_id):
             if not product_size:
                 return _calculate_fallback_profit(our_price, competitor_price)
             
-            # Srednia cena zakupu
-            purchase_price = float(product_size.avg_purchase_price or 0)
+            # Srednia cena zakupu - oblicz z PurchaseBatch
+            from .models import PurchaseBatch
+            batches = session.query(PurchaseBatch).filter(
+                PurchaseBatch.product_id == product_size.product_id,
+                PurchaseBatch.size == product_size.size
+            ).all()
+            
+            if batches:
+                total_qty = sum(b.quantity for b in batches)
+                total_value = sum(b.quantity * float(b.price) for b in batches)
+                purchase_price = total_value / total_qty if total_qty > 0 else 0
+            else:
+                purchase_price = 0
             
             # Koszty wysylki (z progow)
             from .models import ShippingThreshold
