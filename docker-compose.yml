@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: magazyn/Dockerfile
     volumes:
-      - ./data:/app/data
+      - ./magazyn/database.db:/app/database.db
       - ./.env:/app/.env
       - ./.env.example:/app/.env.example:ro
       - ./agent.log:/app/agent.log
