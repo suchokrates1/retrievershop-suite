@@ -109,14 +109,20 @@
 <script>
 // Sprawdzaj status co 5 sekund
 let lastReportStatus = null;
+let lastItemsChecked = 0;
 
 function checkStatus() {
     fetch('{{ url_for("price_reports.current_status") }}')
         .then(r => r.json())
         .then(data => {
             const statusDiv = document.getElementById('currentReportStatus');
-            if (data.status === 'running' || data.status === 'pending') {
-                statusDiv.classList.remove('d-none');
+            const isRunning = (data.status === 'running' || data.status === 'pending');
+            
+            if (isRunning) {
+                // Pokaz pasek tylko jesli nie jest juz widoczny
+                if (statusDiv.classList.contains('d-none')) {
+                    statusDiv.classList.remove('d-none');
+                }
                 document.getElementById('statusReportId').textContent = data.id;
                 document.getElementById('statusProgress').textContent = data.items_checked;
                 document.getElementById('statusTotal').textContent = data.items_total;
@@ -124,19 +130,29 @@ function checkStatus() {
                 document.getElementById('statusProgressBar').style.width = data.progress_percent + '%';
                 document.getElementById('statusReportLink').href = '{{ url_for("price_reports.report_detail", report_id=0) }}'.replace('/0', '/' + data.id);
                 lastReportStatus = 'running';
+                lastItemsChecked = data.items_checked;
             } else {
-                // Raport zakonczony lub brak - odswierz strone tylko raz
+                // Raport zakonczony lub brak
                 if (lastReportStatus === 'running') {
-                    lastReportStatus = null;
+                    // Byl raport w toku, teraz sie zakonczyl - odswierz strone
+                    lastReportStatus = 'completed';
                     location.reload();
+                    return;
                 }
-                statusDiv.classList.add('d-none');
+                // Ukryj pasek tylko jesli jest widoczny
+                if (!statusDiv.classList.contains('d-none')) {
+                    statusDiv.classList.add('d-none');
+                }
             }
         })
-        .catch(console.error);
+        .catch(err => {
+            // Blad sieci - nie rob nic, sprobuj ponownie przy nastepnym interwale
+            console.error('Blad sprawdzania statusu:', err);
+        });
 }
 
-checkStatus();
-setInterval(checkStatus, 5000);  // Co 5 sekund
+// Pierwsze sprawdzenie po 1 sekundzie, potem co 5 sekund
+setTimeout(checkStatus, 1000);
+setInterval(checkStatus, 5000);
 </script>
 {% endblock %}
