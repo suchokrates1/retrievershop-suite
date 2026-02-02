@@ -29,7 +29,7 @@
 
 <!-- Statystyki -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center">
             <div class="card-body">
                 <h3 class="mb-0">{{ stats.total }}</h3>
@@ -37,7 +37,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center border-success">
             <div class="card-body text-success">
                 <h3 class="mb-0">{{ stats.cheapest }}</h3>
@@ -45,7 +45,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center border-danger">
             <div class="card-body text-danger">
                 <h3 class="mb-0">{{ stats.not_cheapest }}</h3>
@@ -53,11 +53,19 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center border-warning">
             <div class="card-body text-warning">
                 <h3 class="mb-0">{{ stats.with_suggestion }}</h3>
-                <small>Z sugestia obnizki (max {{ max_discount }}%)</small>
+                <small>Z sugestia obnizki</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center border-info">
+            <div class="card-body text-info">
+                <h3 class="mb-0">{{ stats.other_offer_ok }}</h3>
+                <small>Inna aukcja OK</small>
             </div>
         </div>
     </div>
@@ -152,6 +160,10 @@
                         </span>
                         <br>
                         <small class="text-muted">-{{ "%.1f"|format(item.suggestion.discount_percent) }}%</small>
+                    {% elif item.suggestion_note == "inna_aukcja_ok" %}
+                        <span class="badge bg-info text-dark" title="Inna aukcja tego produktu jest najtansza - cena ustawiona celowo">
+                            <i class="bi bi-link-45deg"></i> Inna aukcja OK
+                        </span>
                     {% else %}
                         -
                     {% endif %}
