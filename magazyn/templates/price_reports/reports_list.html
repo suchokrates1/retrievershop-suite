@@ -108,6 +108,8 @@
 
 <script>
 // Sprawdzaj status co 5 sekund
+let lastReportStatus = null;
+
 function checkStatus() {
     fetch('{{ url_for("price_reports.current_status") }}')
         .then(r => r.json())
@@ -121,17 +123,11 @@ function checkStatus() {
                 document.getElementById('statusPercent').textContent = data.progress_percent;
                 document.getElementById('statusProgressBar').style.width = data.progress_percent + '%';
                 document.getElementById('statusReportLink').href = '{{ url_for("price_reports.report_detail", report_id=0) }}'.replace('/0', '/' + data.id);
-                
-                // Odswierz tabele co minute jesli raport sie zmienia
-                if (window.lastChecked !== data.items_checked) {
-                    window.lastChecked = data.items_checked;
-                    if (data.items_checked % 5 === 0) {  // Co 5 ofert
-                        location.reload();
-                    }
-                }
+                lastReportStatus = 'running';
             } else {
-                if (!statusDiv.classList.contains('d-none')) {
-                    // Raport zakonczony - odswierz strone
+                // Raport zakonczony lub brak - odswierz strone tylko raz
+                if (lastReportStatus === 'running') {
+                    lastReportStatus = null;
                     location.reload();
                 }
                 statusDiv.classList.add('d-none');

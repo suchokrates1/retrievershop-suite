@@ -120,11 +120,52 @@ def report_detail(report_id: int):
         
         max_discount = get_max_discount_percent()
         
+        # Pobierz mapowanie offer_id -> product_size_id z AllegroOffer
+        offer_ids = [item.offer_id for item in items]
+        offers = session.query(AllegroOffer).filter(
+            AllegroOffer.offer_id.in_(offer_ids)
+        ).all()
+        offer_to_product_size = {o.offer_id: o.product_size_id for o in offers}
+        
+        # Znajdz wszystkie oferty dla kazdego product_size_id (w calym raporcie, nie tylko filtrowane)
+        all_items = session.query(PriceReportItem).filter(
+            PriceReportItem.report_id == report_id
+        ).all()
+        
+        # Grupuj oferty wg product_size_id
+        product_size_offers = {}
+        for item in all_items:
+            ps_id = offer_to_product_size.get(item.offer_id)
+            if ps_id:
+                if ps_id not in product_size_offers:
+                    product_size_offers[ps_id] = []
+                product_size_offers[ps_id].append({
+                    "offer_id": item.offer_id,
+                    "is_cheapest": item.is_cheapest,
+                    "our_price": item.our_price,
+                })
+        
+        # Znajdz product_size_id gdzie przynajmniej jedna oferta jest najtansza
+        products_with_cheapest = set()
+        for ps_id, ps_offers in product_size_offers.items():
+            if any(o["is_cheapest"] for o in ps_offers):
+                products_with_cheapest.add(ps_id)
+        
         items_data = []
         for item in items:
+            ps_id = offer_to_product_size.get(item.offer_id)
+            ps_offers = product_size_offers.get(ps_id, []) if ps_id else []
+            has_multiple_offers = len(ps_offers) > 1
+            other_offer_is_cheapest = ps_id in products_with_cheapest and not item.is_cheapest
+            
             # Oblicz sugestie ceny
             suggestion = None
-            if not item.is_cheapest and item.competitor_price and item.our_price:
+            suggestion_note = None
+            
+            if other_offer_is_cheapest and has_multiple_offers:
+                # Inna oferta tego produktu jest najtansza - cena ustawiona celowo
+                suggestion_note = "inna_aukcja_ok"
+            elif not item.is_cheapest and item.competitor_price and item.our_price:
                 target_price = float(item.competitor_price) - 0.01
                 discount_needed = ((float(item.our_price) - target_price) / float(item.our_price)) * 100
                 
@@ -148,6 +189,8 @@ def report_detail(report_id: int):
                 "our_position": item.our_position,
                 "total_offers": item.total_offers,
                 "suggestion": suggestion,
+                "suggestion_note": suggestion_note,
+                "has_multiple_offers": has_multiple_offers,
                 "checked_at": item.checked_at,
                 "error": item.error,
             })
@@ -155,19 +198,22 @@ def report_detail(report_id: int):
         # Sortowanie custom:
         # 1. Produkty z sugestiami na poczatku
         # 2. Produkty z najwyzszym miejscem (nizsza pozycja = wyzej)
-        # 3. Najtansi alfabetycznie na koncu
+        # 3. Produkty z "inna_aukcja_ok" na koncu sekcji "nie najtanszych"
+        # 4. Najtansi alfabetycznie na koncu
         def sort_key(item):
             has_suggestion = 1 if item["suggestion"] else 0
             is_cheapest = 1 if item["is_cheapest"] else 0
+            other_is_ok = 1 if item.get("suggestion_note") == "inna_aukcja_ok" else 0
             position = item["our_position"] if item["our_position"] else 999
-            name = item["product_name"].lower()
+            name = item["product_name"].lower() if item["product_name"] else ""
             
             # Zwracamy tuple:
-            # - is_cheapest (0 dla nie najtanszych, 1 dla najtanszych - zeby nie najtansi byli pierwsi)
-            # - has_suggestion odwrotnie (0 dla z sugestia, 1 dla bez - zeby z sugestia byly pierwsze)
-            # - position (rosnaco - nizsze pozycje wyzej)
+            # - is_cheapest (0 dla nie najtanszych, 1 dla najtanszych)
+            # - other_is_ok (0 dla wymagajacych uwagi, 1 dla "inna aukcja OK")
+            # - has_suggestion odwrotnie (0 dla z sugestia, 1 dla bez)
+            # - position (rosnaco)
             # - name (alfabetycznie)
-            return (is_cheapest, -has_suggestion, position, name)
+            return (is_cheapest, other_is_ok, -has_suggestion, position, name)
         
         items_data.sort(key=sort_key)
         
@@ -176,6 +222,7 @@ def report_detail(report_id: int):
             "cheapest": sum(1 for i in items if i.is_cheapest),
             "not_cheapest": sum(1 for i in items if not i.is_cheapest),
             "with_suggestion": sum(1 for i in items_data if i.get("suggestion")),
+            "other_offer_ok": sum(1 for i in items_data if i.get("suggestion_note") == "inna_aukcja_ok"),
             "errors": sum(1 for i in items if i.error),
         }
         
