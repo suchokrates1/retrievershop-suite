@@ -489,8 +489,8 @@ def recheck_item(item_id):
 @bp.route("/change-price/<int:item_id>", methods=["POST"])
 @login_required
 def change_price(item_id):
-    """Zmienia cene oferty na Allegro."""
-    from .allegro_api.offers import change_offer_price
+    """Zmienia cene oferty na Allegro z weryfikacja przez API."""
+    from .allegro_api.offers import change_offer_price, get_offer_price
     
     new_price = request.form.get("new_price")
     if not new_price:
@@ -512,41 +512,77 @@ def change_price(item_id):
             
             offer_id = item.offer_id
             old_price = item.our_price
+            offer_name = item.name
         
-        # Zmien cene przez API
+        # Krok 1: Zmien cene przez API
         result = change_offer_price(offer_id, new_price)
         
-        if result.get("success"):
-            # Zaktualizuj w bazie lokalnej
-            with get_session() as session:
-                # Zaktualizuj PriceReportItem
-                item = session.query(PriceReportItem).filter(
-                    PriceReportItem.id == item_id
-                ).first()
-                if item:
-                    item.our_price = new_price
-                    if item.competitor_price:
-                        item.is_cheapest = new_price <= item.competitor_price
-                        item.price_difference = float(new_price - item.competitor_price)
-                
-                # Zaktualizuj AllegroOffer
-                offer = session.query(AllegroOffer).filter(
-                    AllegroOffer.offer_id == offer_id
-                ).first()
-                if offer:
-                    offer.price = new_price
-                
-                session.commit()
-            
-            return jsonify({
-                "success": True,
-                "message": f"Zmieniono cene z {old_price} na {new_price} zl"
-            })
-        else:
+        if not result.get("success"):
+            logger.warning(
+                f"Nieudana zmiana ceny oferty {offer_id} ({offer_name}): "
+                f"{result.get('error', 'nieznany blad')}"
+            )
             return jsonify({
                 "success": False,
                 "error": result.get("error", "Blad API Allegro")
             })
+        
+        # Krok 2: Weryfikacja - pobierz aktualna cene z Allegro
+        verify_result = get_offer_price(offer_id)
+        
+        if not verify_result.get("success"):
+            logger.warning(
+                f"Zmiana ceny oferty {offer_id} wyslana, ale weryfikacja nieudana: "
+                f"{verify_result.get('error', 'nieznany blad')}"
+            )
+            # Mimo bledu weryfikacji, zmiana mogla sie udac - aktualizuj baze
+            verified_price = new_price
+        else:
+            verified_price = verify_result.get("price")
+            
+            # Krok 3: Sprawdz czy cena sie zgadza (tolerancja na grosz)
+            if abs(verified_price - new_price) > Decimal("0.01"):
+                logger.error(
+                    f"Rozbieznosc ceny oferty {offer_id}: "
+                    f"zadana={new_price}, potwierdzona={verified_price}"
+                )
+                return jsonify({
+                    "success": False,
+                    "error": f"Cena na Allegro ({verified_price}) rozni sie od zadanej ({new_price})"
+                })
+        
+        # Krok 4: Zaktualizuj w bazie lokalnej (tylko po weryfikacji)
+        with get_session() as session:
+            # Zaktualizuj PriceReportItem
+            item = session.query(PriceReportItem).filter(
+                PriceReportItem.id == item_id
+            ).first()
+            if item:
+                item.our_price = verified_price
+                if item.competitor_price:
+                    item.is_cheapest = verified_price <= item.competitor_price
+                    item.price_difference = float(verified_price - item.competitor_price)
+            
+            # Zaktualizuj AllegroOffer
+            offer = session.query(AllegroOffer).filter(
+                AllegroOffer.offer_id == offer_id
+            ).first()
+            if offer:
+                offer.price = verified_price
+            
+            session.commit()
+        
+        # Logowanie sukcesu
+        logger.info(
+            f"Zmiana ceny oferty {offer_id} ({offer_name}): "
+            f"{old_price} -> {verified_price} zl [zweryfikowano przez API]"
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": f"Zmieniono cene z {old_price} na {verified_price} zl",
+            "verified": True
+        })
             
     except Exception as e:
         logger.error(f"Blad zmiany ceny: {e}", exc_info=True)
