@@ -136,9 +136,11 @@ def parse_delivery_days(text: str) -> Optional[int]:
     """Parsuje tekst dostawy na liczbe dni.
     
     Rozpoznaje formaty:
+    - 'dostawa pt. 6 lut.' -> dni do 6 lutego
     - 'dostawa w sobote' -> oblicza dni do soboty
     - 'dostawa za 2-3 dni' -> srednia (2)
     - '5 lut' -> dni do 5 lutego
+    - 'pojutrze' -> 2
     - 'jutro' -> 1
     - 'dzisiaj' -> 0
     """
@@ -160,10 +162,14 @@ def parse_delivery_days(text: str) -> Optional[int]:
     if m:
         return int(m.group(1))
     
-    # 'X sty' - konkretna data (np. '5 lut')
-    m = re.search(r"(\d{1,2})\s+(sty|lut|mar|kwi|maj|cze|lip|sie|wrz|paz|lis|gru)", t)
+    # 'X sty' lub 'pt. X sty' - konkretna data (np. '5 lut', 'pt. 6 lut.')
+    # Usun opcjonalny dzien tygodnia na poczatku
+    t_clean = re.sub(r'^dostawa\s+(?:pon|wt|[sś]r|czw|pt|sob|niedz)\.?\s*', 'dostawa ', t)
+    m = re.search(r"(\d{1,2})\s+(sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)", t_clean)
     if m:
-        day, month = int(m.group(1)), POLISH_MONTHS.get(m.group(2), 1)
+        day = int(m.group(1))
+        month_str = m.group(2).replace('ź', 'z')  # paz/paź -> paz
+        month = POLISH_MONTHS.get(month_str, 1)
         today = datetime.now()
         try:
             target = datetime(today.year, month, day)
@@ -175,12 +181,12 @@ def parse_delivery_days(text: str) -> Optional[int]:
     
     # Dni tygodnia - z polskimi znakami i bez
     days_of_week = {
-        "poniedzialek": 0, "poniedziałek": 0, "poniedział": 0,
-        "wtorek": 1, "wtor": 1,
-        "sroda": 2, "środa": 2, "srod": 2, "środ": 2,
-        "czwartek": 3, "czwart": 3,
-        "piatek": 4, "piątek": 4, "piąt": 4, "piat": 4,
-        "sobota": 5, "sobot": 5, "sobo": 5,
+        "poniedzialek": 0, "poniedziałek": 0, "poniedział": 0, "pon": 0,
+        "wtorek": 1, "wtor": 1, "wt": 1,
+        "sroda": 2, "środa": 2, "srod": 2, "środ": 2, "sr": 2, "śr": 2,
+        "czwartek": 3, "czwart": 3, "czw": 3,
+        "piatek": 4, "piątek": 4, "piąt": 4, "piat": 4, "pt": 4,
+        "sobota": 5, "sobot": 5, "sobo": 5, "sob": 5,
         "niedziela": 6, "niedziel": 6, "niedz": 6
     }
     for day_name, day_num in days_of_week.items():
@@ -192,6 +198,8 @@ def parse_delivery_days(text: str) -> Optional[int]:
                 days_ahead += 7
             return days_ahead
     
+    if "pojutrze" in t:
+        return 2
     if "jutro" in t:
         return 1
     if "dzisiaj" in t or "dzis" in t or "dziś" in t:
@@ -399,13 +407,23 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         # Cena z dostawa
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
         # Tekst dostawy - rozszerzone wzorce:
-        # 1. "dostawa w sobote" (dzien tygodnia)
-        # 2. "dostawa za 2-3 dni"
-        # 3. "dostawa od 5"
-        # 4. "dostawa 6 lut" (konkretna data)
-        # 5. "dostawa jutro" / "dostawa dzisiaj"
+        # Formaty z Allegro:
+        # - "dostawa pt. 6 lut." (dzien + data)
+        # - "dostawa czw. 5 lut. – pt. 6 lut." (zakres)
+        # - "dostawa pojutrze"
+        # - "dostawa jutro"
+        # - "dostawa w sobote"
+        # - "dostawa za 2-3 dni"
+        # - "dostawa od 5 dni"
         delivery_text_match = re.search(
-            r'(dostawa\s+(?:w\s+\w+|za\s+\d+.*?dni|od\s+\d+|\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|paz|pa[zż]|lis|gru)|jutro|dzisiaj|dzi[sś]))',
+            r'(dostawa\s+(?:'
+            r'(?:pon|wt|[sś]r|czw|pt|sob|niedz)\.?\s+\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)\.?'  # "pt. 6 lut."
+            r'|w\s+\w+'  # "w sobote"
+            r'|za\s+\d+.*?dni'  # "za 2-3 dni"
+            r'|od\s+\d+'  # "od 5"
+            r'|\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)\.?'  # "6 lut"
+            r'|pojutrze|jutro|dzisiaj|dzi[sś]'  # slowa
+            r'))',
             text,
             re.IGNORECASE
         )
