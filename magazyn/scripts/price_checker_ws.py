@@ -394,8 +394,17 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         price_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*\n', text)
         # Cena z dostawa
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
-        # Tekst dostawy (np. "dostawa w sobote", "dostawa za 2-3 dni")
-        delivery_text_match = re.search(r'(dostawa\s+(?:w\s+\w+|za\s+\d+.*?dni|od\s+\d+))', text, re.IGNORECASE)
+        # Tekst dostawy - rozszerzone wzorce:
+        # 1. "dostawa w sobote" (dzien tygodnia)
+        # 2. "dostawa za 2-3 dni"
+        # 3. "dostawa od 5"
+        # 4. "dostawa 6 lut" (konkretna data)
+        # 5. "dostawa jutro" / "dostawa dzisiaj"
+        delivery_text_match = re.search(
+            r'(dostawa\s+(?:w\s+\w+|za\s+\d+.*?dni|od\s+\d+|\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|paz|pa[zż]|lis|gru)|jutro|dzisiaj|dzi[sś]))',
+            text,
+            re.IGNORECASE
+        )
         # Czy to moja oferta? - sprawdz TYLKO nazwe sprzedawcy (nie "Top oferta" bo moze byc u konkurencji)
         seller = seller_match.group(1) if seller_match else "nieznany"
         is_mine = seller.lower() == MY_SELLER.lower()
@@ -487,12 +496,12 @@ async def check_offer_price(
             competitors_all = [o for o in all_offers if not o.is_mine]
             competitors_filtered = [
                 o for o in competitors_all
-                if (o.delivery_days is None or o.delivery_days <= max_delivery_days)
+                if (o.delivery_days is not None and o.delivery_days <= max_delivery_days)
                 and o.seller not in excluded_sellers
             ]
             
             # Loguj odfiltrowanych
-            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days and o.delivery_days > max_delivery_days])
+            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days is None or o.delivery_days > max_delivery_days])
             filtered_by_excluded = len([o for o in competitors_all if o.seller in excluded_sellers])
             
             if filtered_by_delivery > 0:
@@ -512,7 +521,7 @@ async def check_offer_price(
             offers_for_ranking = [
                 o for o in all_offers 
                 if o.is_mine or (
-                    (o.delivery_days is None or o.delivery_days <= max_delivery_days)
+                    (o.delivery_days is not None and o.delivery_days <= max_delivery_days)
                     and o.seller not in excluded_sellers
                 )
             ]
