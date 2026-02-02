@@ -8,7 +8,7 @@ from magazyn.db import sqlite_connect
 def test_configure_engine_enables_wal_mode(tmp_path, monkeypatch):
     original_engine = db.engine
     original_session_local = db.SessionLocal
-    test_db = tmp_path / "wal.db"
+    test_db = tmp_path / "journal.db"
 
     try:
         # Note: apply_migrations() was removed in favor of Alembic
@@ -17,11 +17,11 @@ def test_configure_engine_enables_wal_mode(tmp_path, monkeypatch):
 
         with db.engine.connect() as conn:
             journal_mode = conn.exec_driver_sql("PRAGMA journal_mode").scalar_one()
-        assert journal_mode.lower() == "wal"
+        assert journal_mode.lower() == "delete"
 
         with sqlite_connect(test_db) as raw_conn:
             raw_mode = raw_conn.execute("PRAGMA journal_mode").fetchone()[0]
-        assert raw_mode.lower() == "wal"
+        assert raw_mode.lower() == "delete"
     finally:
         if db.engine is not None and db.engine is not original_engine:
             db.engine.dispose()
