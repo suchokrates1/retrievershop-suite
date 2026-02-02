@@ -382,6 +382,10 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         text = art.get("text", "")
         offer_id = art.get("offerId")
         
+        # DEBUG: loguj surowy tekst kafelka
+        logger.debug(f"=== ARTICLE {art.get('index')} ===")
+        logger.debug(f"Raw text: {repr(text[:300])}")
+        
         # Sprzedawca - dwa wzorce:
         # 1. "| \n sprzedawca" - normalne oferty konkurencji
         # 2. "od \n Super Sprzedawcy? \n | \n sprzedawca" LUB "od \n sprzedawca" - bez "|"
@@ -414,6 +418,9 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
             total = parse_price(delivery_match.group(1)) if delivery_match else price
             delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
             delivery_days = parse_delivery_days(delivery_text)
+            
+            # DEBUG: loguj wykryte wartosci
+            logger.debug(f"Seller: {seller}, Price: {price}, Delivery text: '{delivery_text}', Days: {delivery_days}")
             
             # Buduj URL oferty
             offer_url = ""
@@ -496,12 +503,12 @@ async def check_offer_price(
             competitors_all = [o for o in all_offers if not o.is_mine]
             competitors_filtered = [
                 o for o in competitors_all
-                if (o.delivery_days is not None and o.delivery_days <= max_delivery_days)
+                if (o.delivery_days is None or o.delivery_days <= max_delivery_days)
                 and o.seller not in excluded_sellers
             ]
             
             # Loguj odfiltrowanych
-            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days is None or o.delivery_days > max_delivery_days])
+            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days is not None and o.delivery_days > max_delivery_days])
             filtered_by_excluded = len([o for o in competitors_all if o.seller in excluded_sellers])
             
             if filtered_by_delivery > 0:
@@ -521,7 +528,7 @@ async def check_offer_price(
             offers_for_ranking = [
                 o for o in all_offers 
                 if o.is_mine or (
-                    (o.delivery_days is not None and o.delivery_days <= max_delivery_days)
+                    (o.delivery_days is None or o.delivery_days <= max_delivery_days)
                     and o.seller not in excluded_sellers
                 )
             ]
