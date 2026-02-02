@@ -172,38 +172,38 @@
                     <div class="btn-group btn-group-sm" role="group">
                         <!-- Nasza oferta -->
                         <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
-                           class="btn btn-outline-primary" title="Nasza oferta">
-                            <i class="bi bi-box-arrow-up-right fs-6"></i>
+                           class="btn btn-outline-primary d-inline-flex align-items-center" title="Nasza oferta">
+                            <i class="bi bi-box-arrow-up-right"></i>
                         </a>
                         {% if item.competitor_url %}
                             <!-- Oferta konkurenta -->
                             <a href="{{ item.competitor_url }}" target="_blank" 
-                               class="btn btn-outline-secondary" title="Oferta konkurenta">
-                                <i class="bi bi-person fs-6"></i>
+                               class="btn btn-outline-secondary d-inline-flex align-items-center" title="Oferta konkurenta">
+                                <i class="bi bi-person"></i>
                             </a>
                         {% endif %}
                         <!-- Sprawdz ponownie -->
-                        <button type="button" class="btn btn-outline-info btn-recheck" 
+                        <button type="button" class="btn btn-outline-info btn-recheck d-inline-flex align-items-center" 
                                 data-item-id="{{ item.id }}" title="Sprawdz cene ponownie">
-                            <i class="bi bi-arrow-clockwise fs-6"></i>
+                            <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         {% if item.suggestion %}
                             <!-- Zmien cene -->
-                            <button type="button" class="btn btn-outline-warning btn-change-price" 
+                            <button type="button" class="btn btn-outline-warning btn-change-price d-inline-flex align-items-center" 
                                     data-item-id="{{ item.id }}"
                                     data-current-price="{{ item.our_price }}"
                                     data-target-price="{{ item.suggestion.target_price }}"
                                     data-product-name="{{ item.product_name[:30] }}"
                                     title="Zmien cene na {{ item.suggestion.target_price }} zl">
-                                <i class="bi bi-cash-coin fs-6"></i>
+                                <i class="bi bi-cash-coin"></i>
                             </button>
                         {% endif %}
                         {% if item.competitor_seller %}
                             <!-- Wyklucz sprzedawce -->
-                            <button type="button" class="btn btn-outline-danger btn-exclude-seller" 
+                            <button type="button" class="btn btn-outline-danger btn-exclude-seller d-inline-flex align-items-center" 
                                     data-seller="{{ item.competitor_seller }}"
                                     title="Wyklucz sprzedawce {{ item.competitor_seller }}">
-                                <i class="bi bi-person-x fs-6"></i>
+                                <i class="bi bi-person-x"></i>
                             </button>
                         {% endif %}
                     </div>
