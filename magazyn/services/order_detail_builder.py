@@ -192,12 +192,30 @@ class OrderDetailBuilder:
         purchase_cost = Decimal("0")
         
         for op in order.products:
-            if op.product_size and op.product_size.product:
+            ps = op.product_size
+            
+            # Jesli brak bezposredniego powiazania, szukaj po EAN
+            if not ps and op.ean:
+                ps = self.db.query(ProductSize).filter(
+                    ProductSize.barcode == op.ean
+                ).first()
+            
+            # Jesli nadal brak, szukaj przez auction_id -> AllegroOffer
+            if not ps and op.auction_id:
+                allegro_offer = self.db.query(AllegroOffer).filter(
+                    AllegroOffer.offer_id == op.auction_id
+                ).first()
+                if allegro_offer and allegro_offer.product_size_id:
+                    ps = self.db.query(ProductSize).filter(
+                        ProductSize.id == allegro_offer.product_size_id
+                    ).first()
+            
+            if ps and ps.product:
                 latest_batch = (
                     self.db.query(PurchaseBatch)
                     .filter(
-                        PurchaseBatch.product_id == op.product_size.product_id,
-                        PurchaseBatch.size == op.product_size.size
+                        PurchaseBatch.product_id == ps.product_id,
+                        PurchaseBatch.size == ps.size
                     )
                     .order_by(desc(PurchaseBatch.purchase_date))
                     .first()
