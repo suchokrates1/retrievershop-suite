@@ -645,10 +645,13 @@ def import_invoice():
                 filename = file.filename or ""
                 ext = filename.rsplit(".", 1)[-1].lower()
                 pdf_path = None
+                invoice_number = None
+                supplier = None
+                
                 if ext in {"xlsx", "xls"}:
                     df = pd.read_excel(io.BytesIO(data))
                 elif ext == "pdf":
-                    df = _parse_pdf(io.BytesIO(data))
+                    df, invoice_number, supplier = _parse_pdf(io.BytesIO(data))
                     tmp = tempfile.NamedTemporaryFile(
                         delete=False, suffix=".pdf"
                     )
@@ -701,6 +704,8 @@ def import_invoice():
                             row["match_type"] = match_type
                 
                 session["invoice_rows"] = rows
+                session["invoice_number"] = invoice_number
+                session["invoice_supplier"] = supplier
                 if pdf_path:
                     session["invoice_pdf"] = pdf_path
                 else:
@@ -708,6 +713,8 @@ def import_invoice():
                 return render_template(
                     "review_invoice.html",
                     rows=rows,
+                    invoice_number=invoice_number,
+                    supplier=supplier,
                     pdf_url=(
                         url_for("products.invoice_pdf") if pdf_path else None
                     ),
@@ -733,6 +740,8 @@ def invoice_pdf():
 @login_required
 def confirm_invoice():
     rows = session.get("invoice_rows") or []
+    invoice_number = session.get("invoice_number")
+    supplier = session.get("invoice_supplier")
     confirmed = []
     for idx, base in enumerate(rows):
         if not request.form.get(f"accept_{idx}"):
@@ -753,6 +762,8 @@ def confirm_invoice():
                         ps.size,
                         _to_int(qty_val),
                         _to_decimal(price_val),
+                        invoice_number=invoice_number,
+                        supplier=supplier,
                     )
             continue
         confirmed.append(
@@ -771,10 +782,10 @@ def confirm_invoice():
         )
     if confirmed:
         try:
-            import_invoice_rows(confirmed)
-            flash("Zaimportowano fakturę")
+            import_invoice_rows(confirmed, invoice_number=invoice_number, supplier=supplier)
+            flash("Zaimportowano fakture")
         except Exception as e:
-            flash(f"Błąd podczas importu faktury: {e}")
+            flash(f"Blad podczas importu faktury: {e}")
     pdf_path = session.pop("invoice_pdf", None)
     if pdf_path:
         try:
@@ -782,6 +793,8 @@ def confirm_invoice():
         except OSError:
             pass
     session.pop("invoice_rows", None)
+    session.pop("invoice_number", None)
+    session.pop("invoice_supplier", None)
     return redirect(url_for("products.items"))
 
 

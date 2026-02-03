@@ -226,7 +226,7 @@ def record_purchase(
         supplier: Supplier name
         notes: Additional notes
     """
-    purchase_date = purchase_date or datetime.datetime.now().isoformat()
+    purchase_date = purchase_date or datetime.datetime.now().strftime('%Y-%m-%d')
     with get_session() as session:
         price = to_decimal(price)
         session.add(

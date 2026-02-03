@@ -76,6 +76,7 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
         ("frontline", "Front Line"),
         ("fron line", "Front Line"),
         ("frolin", "Front Line"),
+        ("premium", "Premium"),  # Generic premium (e.g. Pas samochodowy Premium)
         ("active", "Active"),
         ("blossom", "Blossom"),
         ("tropical", "Tropical"),
@@ -318,17 +319,59 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _parse_pdf(file) -> pd.DataFrame:
-    """Parse PDF invoices in various formats."""
+def _extract_invoice_metadata(text: str) -> Tuple[str, str]:
+    """Extract invoice number and supplier from PDF text."""
+    invoice_number = None
+    supplier = None
+    
+    # Szukaj numeru faktury: "Faktura FS 2026/02/000006" lub "Faktura VAT 123/2026"
+    invoice_match = re.search(r'Faktura\s+(?:FS|VAT)?\s*([A-Z0-9/-]+)', text, re.IGNORECASE)
+    if invoice_match:
+        invoice_number = invoice_match.group(1).strip()
+    
+    # Szukaj dostawcy - TipTop format ma strukture:
+    # "Sprzedawca\nNabywca / Platnik\nTIP-TOP Agnieszka Pawlicka\n..."
+    # Czyli sprzedawca jest w trzeciej linii po "Sprzedawca"
+    # Szukamy firmy przed NIP (format: "Nazwa firmy\nAdres\nKod Miasto\nNIP: xxx")
+    
+    # Proba 1: TipTop - szukaj nazwy przed pierwszym NIP
+    tiptop_match = re.search(r'Nabywca[^\n]*\n([A-ZŻŹĆŃÓŁĘĄŚ][A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ\s\-]+?)(?:\n|Retriever)', text)
+    if tiptop_match:
+        supplier = tiptop_match.group(1).strip()
+    else:
+        # Proba 2: Standardowy format - po "Sprzedawca"
+        supplier_match = re.search(r'Sprzedawca[\s\n]+([^\n]+?)(?:\n|ul\.|NIP)', text)
+        if supplier_match:
+            candidate = supplier_match.group(1).strip()
+            # Ignoruj naglowki kolumn
+            if candidate not in ('Nabywca / Platnik', 'Nabywca', 'Odbiorca'):
+                supplier = candidate
+    
+    return invoice_number, supplier
+
+
+def _parse_pdf(file) -> Tuple[pd.DataFrame, str, str]:
+    """Parse PDF invoices in various formats.
+    
+    Returns:
+        Tuple of (DataFrame, invoice_number, supplier)
+    """
     data = file.read()
     file_obj = io.BytesIO(data)
     reader = PdfReader(io.BytesIO(data))
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    
+    # Wyciagnij metadane faktury
+    invoice_number, supplier = _extract_invoice_metadata(text)
+    
     file_obj.seek(0)
     if "Kod kreskowy" in text:
-        return _parse_tiptop_invoice(file_obj)
-    file_obj.seek(0)
-    return _parse_simple_pdf(file_obj)
+        df = _parse_tiptop_invoice(file_obj)
+    else:
+        file_obj.seek(0)
+        df = _parse_simple_pdf(file_obj)
+    
+    return df, invoice_number, supplier
 
 
 def _import_invoice_df(
@@ -343,6 +386,8 @@ def _import_invoice_df(
         invoice_number: Invoice/receipt number for tracking
         supplier: Supplier name
     """
+    # Jedna data dla calej dostawy/faktury
+    delivery_date = datetime.now().strftime('%Y-%m-%d')
     for _, row in df.iterrows():
         name = normalize_product_title_fragment(row.get("Nazwa", ""))
         name = resolve_product_alias(name)
@@ -431,7 +476,7 @@ def _import_invoice_df(
                     quantity=quantity,
                     remaining_quantity=quantity,  # FIFO support
                     price=price,
-                    purchase_date=datetime.now().isoformat(),
+                    purchase_date=delivery_date,
                     barcode=barcode,
                     invoice_number=invoice_number,
                     supplier=supplier,
