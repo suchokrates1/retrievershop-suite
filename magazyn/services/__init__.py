@@ -12,6 +12,13 @@ from .order_detail_builder import (
     RETURN_STAGES,
 )
 from .return_sync import ReturnSyncService, create_return_sync_service
+from .allegro_promotions import (
+    PromoOption,
+    PromoSummary,
+    get_promotions_summary,
+    check_and_notify_promotions,
+    disable_promotion,
+)
 
 # Re-export z domain dla kompatybilnosci wstecznej
 from ..domain.inventory import consume_order_stock
@@ -27,6 +34,12 @@ __all__ = [
     "RETURN_STAGES",
     "ReturnSyncService",
     "create_return_sync_service",
+    # Allegro promotions
+    "PromoOption",
+    "PromoSummary",
+    "get_promotions_summary",
+    "check_and_notify_promotions",
+    "disable_promotion",
     # Kompatybilnosc wsteczna
     "consume_order_stock",
     "get_sales_summary",
