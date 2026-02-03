@@ -111,9 +111,15 @@
             {% for item in items %}
             <tr class="{% if item.error %}table-warning{% elif not item.is_cheapest %}table-danger{% endif %}">
                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {% if item.product_id %}
+                    <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" class="text-decoration-none" title="{{ item.product_name }}">
+                        {{ item.product_name }}
+                    </a>
+                    {% else %}
                     <span title="{{ item.product_name }}">
                         {{ item.product_name }}
                     </span>
+                    {% endif %}
                     <br>
                     <small class="text-muted">{{ item.offer_id }} | {% if item.our_price %}<strong>{{ "%.2f"|format(item.our_price) }} zl</strong>{% else %}-{% endif %}</small>
                 </td>

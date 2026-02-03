@@ -364,7 +364,11 @@
                                                 <tbody>
                                                     {% for product in delivery.products %}
                                                     <tr>
-                                                        <td class="small">{{ product.name }}</td>
+                                                        <td class="small">
+                                                            <a href="{{ url_for('products.product_detail', product_id=product.product_id) }}" class="text-decoration-none">
+                                                                {{ product.name }}
+                                                            </a>
+                                                        </td>
                                                         <td class="small text-muted">{{ product.color or '-' }}</td>
                                                         <td class="small">{{ product.size }}</td>
                                                         <td class="text-center"><span class="badge bg-info">{{ product.quantity }}</span></td>
