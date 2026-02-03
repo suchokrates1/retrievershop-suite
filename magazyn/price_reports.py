@@ -120,12 +120,13 @@ def report_detail(report_id: int):
         
         max_discount = get_max_discount_percent()
         
-        # Pobierz mapowanie offer_id -> product_size_id z AllegroOffer
+        # Pobierz mapowanie offer_id -> product_size_id oraz product_id z AllegroOffer
         offer_ids = [item.offer_id for item in items]
         offers = session.query(AllegroOffer).filter(
             AllegroOffer.offer_id.in_(offer_ids)
         ).all()
         offer_to_product_size = {o.offer_id: o.product_size_id for o in offers}
+        offer_to_product_id = {o.offer_id: o.product_id for o in offers}
         
         # Znajdz wszystkie oferty dla kazdego product_size_id (w calym raporcie, nie tylko filtrowane)
         all_items = session.query(PriceReportItem).filter(
@@ -179,6 +180,7 @@ def report_detail(report_id: int):
             items_data.append({
                 "id": item.id,
                 "offer_id": item.offer_id,
+                "product_id": offer_to_product_id.get(item.offer_id),
                 "product_name": item.product_name,
                 "our_price": item.our_price,
                 "competitor_price": item.competitor_price,
