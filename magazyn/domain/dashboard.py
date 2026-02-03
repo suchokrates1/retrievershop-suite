@@ -296,6 +296,7 @@ class DashboardService:
             
             product_details = [
                 {
+                    'product_id': product.id,
                     'name': product.name,
                     'color': product.color,
                     'size': batch.size,
