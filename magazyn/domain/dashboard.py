@@ -93,6 +93,16 @@ class AllegroStats:
 
 
 @dataclass
+class PromoStats:
+    """Statystyki wyrozien Allegro."""
+    active_count: int = 0
+    renewing_tomorrow_count: int = 0
+    estimated_monthly_cost: float = 0.0
+    renewing_tomorrow: List[Dict[str, Any]] = field(default_factory=list)
+    error: Optional[str] = None
+
+
+@dataclass
 class TrendStats:
     """Statystyki trendow."""
     orders_change: float = 0.0
@@ -241,6 +251,41 @@ class DashboardService:
             total_offers=total_offers,
             unlinked_offers=unlinked_offers
         )
+    
+    def get_promo_stats(self) -> PromoStats:
+        """
+        Pobiera statystyki wyrozien Allegro.
+        
+        Uzywa serwisu allegro_promotions do pobrania danych z API.
+        """
+        try:
+            from ..services.allegro_promotions import get_promotions_summary
+            
+            summary = get_promotions_summary()
+            
+            if summary.error:
+                return PromoStats(error=summary.error)
+            
+            renewing_tomorrow_list = [
+                {
+                    'offer_id': p.offer_id,
+                    'offer_name': p.offer_name[:50],
+                    'package_name': p.package_name,
+                    'estimated_cost': p.estimated_cost,
+                }
+                for p in summary.renewing_tomorrow
+            ]
+            
+            return PromoStats(
+                active_count=summary.active_count,
+                renewing_tomorrow_count=len(summary.renewing_tomorrow),
+                estimated_monthly_cost=summary.total_estimated_monthly_cost,
+                renewing_tomorrow=renewing_tomorrow_list,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Blad pobierania promo stats: {e}")
+            return PromoStats(error=str(e))
     
     def get_latest_orders(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Pobiera ostatnie zamowienia."""
@@ -560,6 +605,7 @@ class DashboardService:
         profit_stats = self.get_profit_stats(access_token)
         inventory_stats = self.get_inventory_stats()
         allegro_stats = self.get_allegro_stats()
+        promo_stats = self.get_promo_stats()
         trends = self.get_trends()
         
         latest_orders = self.get_latest_orders(10)
@@ -594,6 +640,13 @@ class DashboardService:
             'allegro': {
                 'total_offers': allegro_stats.total_offers,
                 'unlinked_offers': allegro_stats.unlinked_offers,
+            },
+            'promotions': {
+                'active_count': promo_stats.active_count,
+                'renewing_tomorrow_count': promo_stats.renewing_tomorrow_count,
+                'estimated_monthly_cost': promo_stats.estimated_monthly_cost,
+                'renewing_tomorrow': promo_stats.renewing_tomorrow,
+                'error': promo_stats.error,
             },
             'latest_orders': latest_orders,
             'latest_deliveries': latest_deliveries,
