@@ -172,12 +172,51 @@
                     </div>
                     {% if dashboard.allegro.unlinked_offers > 0 %}
                     <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-outline-warning btn-sm mt-3">
-                        <i class="bi bi-link me-1"></i>Powiąż oferty
+                        <i class="bi bi-link me-1"></i>Powiaz oferty
                     </a>
                     {% endif %}
                 </div>
             </div>
         </div>
+        
+        <!-- Wyroznienia Allegro -->
+        {% if dashboard.promotions and not dashboard.promotions.error %}
+        <div class="col-md-4">
+            <div class="card h-100 {% if dashboard.promotions.renewing_tomorrow_count > 0 %}border-warning{% endif %}">
+                <div class="card-header {% if dashboard.promotions.renewing_tomorrow_count > 0 %}bg-warning text-dark{% else %}bg-dark text-white{% endif %}">
+                    <i class="bi bi-star-fill me-2"></i>Wyroznienia
+                    {% if dashboard.promotions.renewing_tomorrow_count > 0 %}
+                    <span class="badge bg-danger float-end">{{ dashboard.promotions.renewing_tomorrow_count }} jutro!</span>
+                    {% endif %}
+                </div>
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Aktywne wyroznienia:</span>
+                        <span class="badge bg-info fs-6">{{ dashboard.promotions.active_count }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Szac. koszt mies.:</span>
+                        <span class="badge bg-secondary fs-6">{{ "%.2f"|format(dashboard.promotions.estimated_monthly_cost) }} zl</span>
+                    </div>
+                    {% if dashboard.promotions.renewing_tomorrow %}
+                    <hr class="my-2">
+                    <small class="text-danger fw-bold mb-1">Przedluzaja sie jutro:</small>
+                    <ul class="list-unstyled small mb-0">
+                        {% for promo in dashboard.promotions.renewing_tomorrow[:3] %}
+                        <li class="text-truncate">
+                            <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                            {{ promo.offer_name }} ({{ "%.2f"|format(promo.estimated_cost) }} zl)
+                        </li>
+                        {% endfor %}
+                        {% if dashboard.promotions.renewing_tomorrow|length > 3 %}
+                        <li class="text-muted">...i {{ dashboard.promotions.renewing_tomorrow|length - 3 }} wiecej</li>
+                        {% endif %}
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Main Content Row -->
