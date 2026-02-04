@@ -293,8 +293,16 @@ def find_by_barcode(barcode: str) -> Optional[dict]:
                 parts.append(series)
             name = " ".join(parts)
             
+            # Dla produktow z rozmiarem Uniwersalny (poza szelkami) - krotszy format TTS
+            # Format: "Kategoria kolor" np. "Pas samochodowy rozowy", "Amortyzator czarny"
+            if size == "Uniwersalny" and category and category.lower() != "szelki":
+                tts_name = f"{category} {color}".strip() if color else category
+            else:
+                tts_name = name
+            
             return {
                 "name": name,
+                "tts_name": tts_name,
                 "category": category,
                 "brand": brand,
                 "series": series,
