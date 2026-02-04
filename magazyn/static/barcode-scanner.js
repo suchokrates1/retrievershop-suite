@@ -174,20 +174,9 @@
         getResultElements().forEach((element) => showElement(element, message, SUCCESS_CLASS));
         getErrorElements().forEach((element) => hideElement(element));
         playBeep(beepElement);
+        // TTS - tylko krotki format (tts_name lub series+size+color)
         const speechMessage = asLabel ? buildLabelSpeechText(data) : buildProductSpeechText(data);
         speak(speechMessage);
-        
-        // Read flash messages via TTS (e.g., auto-packing confirmation) - immediate
-        setTimeout(() => {
-            const flashMessages = document.querySelectorAll('.alert.alert-success:not([data-tts-read])');
-            flashMessages.forEach((alert) => {
-                const text = alert.textContent.trim();
-                if (text) {
-                    speak(text);
-                    alert.setAttribute('data-tts-read', 'true');
-                }
-            });
-        }, 100); // Minimal delay for DOM update
     };
 
     const showError = (message) => {
