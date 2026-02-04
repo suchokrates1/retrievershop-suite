@@ -97,6 +97,12 @@
     };
 
     const buildProductSpeechText = (data) => {
+        // Uzyj tts_name jesli dostepne (krotszy format dla produktow Uniwersalnych)
+        // np. "Pas samochodowy rozowy", "Amortyzator czarny"
+        if (data.tts_name) {
+            return data.tts_name;
+        }
+        
         const speechParts = [];
         // Series or name
         if (data.series) {
