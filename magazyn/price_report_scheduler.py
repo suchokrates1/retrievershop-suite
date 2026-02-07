@@ -207,20 +207,27 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
         MAX_DELIVERY_DAYS
     )
     
+    # Calkowita liczba konkurentow PRZED filtrami
+    competitors_all_count = result.competitors_all_count if result.success else 0
+    
     return {
         "offer_id": offer["offer_id"],
         "title": offer["title"],
-        "our_price": offer["price"],
+        # Uzywaj ceny z dialogu (result.my_price) zamiast ceny z bazy (offer["price"])
+        # Zapewnia spojnosc miedzy pozycja (liczona z dialogu) a is_cheapest
+        "our_price": result.my_price if result.my_price else offer["price"],
         "product_size_id": offer["product_size_id"],
         "success": result.success,
         "error": result.error,
         "my_position": result.my_position,
         "competitors_count": len(result.competitors) if result.competitors else 0,
+        "competitors_all_count": competitors_all_count,
         "cheapest": {
             "price": result.cheapest_competitor.price,
             "price_with_delivery": result.cheapest_competitor.price_with_delivery,
             "seller": result.cheapest_competitor.seller,
             "url": result.cheapest_competitor.offer_url,
+            "is_super_seller": result.cheapest_competitor.is_super_seller,
         } if result.cheapest_competitor else None,
     }
 
@@ -238,10 +245,13 @@ def save_report_item(report_id: int, result: dict):
         is_cheapest = True
         price_difference = None
         
+        # Dane o najtanszym konkurencie
+        competitor_is_super = None
         if result["cheapest"]:
             competitor_price = Decimal(str(result["cheapest"]["price"]))
             competitor_seller = result["cheapest"]["seller"]
             competitor_url = result["cheapest"]["url"]
+            competitor_is_super = result["cheapest"].get("is_super_seller", False)
             
             if our_price:
                 # Porownujemy po cenie bazowej (wszyscy maja Smart)
@@ -260,6 +270,8 @@ def save_report_item(report_id: int, result: dict):
             price_difference=price_difference,
             our_position=result["my_position"],
             total_offers=result["competitors_count"] + 1,
+            competitors_all_count=result.get("competitors_all_count"),
+            competitor_is_super_seller=competitor_is_super,
             error=result["error"],
         )
         session.add(item)

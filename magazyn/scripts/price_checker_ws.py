@@ -106,6 +106,9 @@ class CompetitorOffer:
     delivery_days: Optional[int] = None
     delivery_text: str = ""
     offer_url: str = ""
+    is_super_seller: bool = False
+    has_smart: bool = False
+    offer_id: Optional[str] = None
 
 
 @dataclass
@@ -117,6 +120,7 @@ class PriceCheckResult:
     competitors: List[CompetitorOffer] = None
     cheapest_competitor: Optional[CompetitorOffer] = None
     my_position: int = 0
+    competitors_all_count: int = 0  # Przed filtrami (kontekst)
     error: Optional[str] = None
     checked_at: str = ""
     
@@ -431,6 +435,12 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         seller = seller_match.group(1) if seller_match else "nieznany"
         is_mine = seller.lower() == MY_SELLER.lower()
         
+        # Super Sprzedawca - tekst moze zawierac "Super Sprzedawc" (odmienne formy)
+        is_super_seller = bool(re.search(r'Super\s+Sprzedawc', text))
+        
+        # Smart! - darmowa dostawa Smart
+        has_smart = bool(re.search(r'Smart!|smart!', text))
+        
         if price_match:
             price = parse_price(price_match.group(1))
             total = parse_price(delivery_match.group(1)) if delivery_match else price
@@ -456,7 +466,10 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
                 is_mine=is_mine,
                 delivery_days=delivery_days,
                 delivery_text=delivery_text,
-                offer_url=offer_url
+                offer_url=offer_url,
+                is_super_seller=is_super_seller,
+                has_smart=has_smart,
+                offer_id=offer_id,
             ))
     
     return offers
@@ -511,7 +524,9 @@ async def check_offer_price(
             
             # Znajdz moja oferte
             my_offer = next((o for o in all_offers if o.is_mine), None)
-            if my_offer and not result.my_price:
+            if my_offer:
+                # Zawsze uzywaj ceny z dialogu - zapewnia spojnosc
+                # miedzy pozycja (liczona z dialog) a porownaniem cen
                 result.my_price = my_offer.price
             
             # Pobierz wykluczonych sprzedawcow
@@ -519,6 +534,7 @@ async def check_offer_price(
             
             # Filtruj konkurencje po czasie dostawy i wykluczonych (bez mojej oferty)
             competitors_all = [o for o in all_offers if not o.is_mine]
+            result.competitors_all_count = len(competitors_all)
             competitors_filtered = [
                 o for o in competitors_all
                 if (o.delivery_days is None or o.delivery_days < max_delivery_days)
