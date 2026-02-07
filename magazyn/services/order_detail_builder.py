@@ -2,6 +2,7 @@
 OrderDetailBuilder - serwis budujacy szczegoly zamowienia.
 
 Wyodrebniony z orders.py dla lepszej czytelnosci i testowalnosci.
+Deleguje kalkulacje finansowe do FinancialCalculator (domain/financial.py).
 """
 import json
 import logging
@@ -11,6 +12,7 @@ from typing import Optional
 from sqlalchemy import desc
 
 from ..db import get_session
+from ..domain.financial import FinancialCalculator
 from ..models import (
     Order, 
     OrderProduct, 
@@ -68,6 +70,7 @@ class OrderDetailBuilder:
     
     def __init__(self, db_session):
         self.db = db_session
+        self._calculator = FinancialCalculator(db_session, settings_store)
     
     def build_products_list(self, order: Order) -> list[dict]:
         """Buduj liste produktow z powiazaniami do magazynu."""
@@ -123,12 +126,16 @@ class OrderDetailBuilder:
         Pobierz dane billingowe z Allegro API.
         
         Returns:
-            dict z kluczami: commission, listing_fee, shipping_fee, promo_fee,
+            dict z kluczami: commission, promoted_commission, is_promoted_sale,
+            promotion_type, listing_fee, shipping_fee, promo_fee,
             other_fees, billing_data_available, billing_entries, fee_details,
             estimated_shipping
         """
         result = {
             "commission": Decimal("0"),
+            "promoted_commission": Decimal("0"),
+            "is_promoted_sale": False,
+            "promotion_type": None,
             "listing_fee": Decimal("0"),
             "shipping_fee": Decimal("0"),
             "promo_fee": Decimal("0"),
@@ -155,6 +162,9 @@ class OrderDetailBuilder:
                 
                 if billing_summary.get("success"):
                     result["commission"] = billing_summary["commission"]
+                    result["promoted_commission"] = billing_summary.get("promoted_commission", Decimal("0"))
+                    result["is_promoted_sale"] = billing_summary.get("is_promoted_sale", False)
+                    result["promotion_type"] = billing_summary.get("promotion_type")
                     result["listing_fee"] = billing_summary["listing_fee"]
                     result["shipping_fee"] = billing_summary["shipping_fee"]
                     result["promo_fee"] = billing_summary["promo_fee"]
@@ -171,7 +181,7 @@ class OrderDetailBuilder:
                     logger.info(
                         f"Pobrano dane billingowe dla zamowienia {order.order_id} "
                         f"(Allegro: {allegro_order_id}): prowizja={result['commission']}, "
-                        f"wysylka={result['shipping_fee']}"
+                        f"wysylka={result['shipping_fee']}, promowane={result['is_promoted_sale']}"
                     )
                 else:
                     logger.warning(
@@ -188,42 +198,8 @@ class OrderDetailBuilder:
         return result
     
     def calculate_purchase_cost(self, order: Order) -> Decimal:
-        """Oblicz koszt zakupu produktow w zamowieniu."""
-        purchase_cost = Decimal("0")
-        
-        for op in order.products:
-            ps = op.product_size
-            
-            # Jesli brak bezposredniego powiazania, szukaj po EAN
-            if not ps and op.ean:
-                ps = self.db.query(ProductSize).filter(
-                    ProductSize.barcode == op.ean
-                ).first()
-            
-            # Jesli nadal brak, szukaj przez auction_id -> AllegroOffer
-            if not ps and op.auction_id:
-                allegro_offer = self.db.query(AllegroOffer).filter(
-                    AllegroOffer.offer_id == op.auction_id
-                ).first()
-                if allegro_offer and allegro_offer.product_size_id:
-                    ps = self.db.query(ProductSize).filter(
-                        ProductSize.id == allegro_offer.product_size_id
-                    ).first()
-            
-            if ps and ps.product:
-                latest_batch = (
-                    self.db.query(PurchaseBatch)
-                    .filter(
-                        PurchaseBatch.product_id == ps.product_id,
-                        PurchaseBatch.size == ps.size
-                    )
-                    .order_by(desc(PurchaseBatch.purchase_date))
-                    .first()
-                )
-                if latest_batch:
-                    purchase_cost += Decimal(str(latest_batch.price)) * op.quantity
-        
-        return purchase_cost
+        """Oblicz koszt zakupu produktow w zamowieniu (delegacja do FinancialCalculator)."""
+        return self._calculator.get_purchase_cost_for_order(order.order_id)
     
     def build_status_history(self, order_id: str) -> tuple[list[dict], dict]:
         """
@@ -398,6 +374,9 @@ class OrderDetailBuilder:
             "status_history": status_history,
             "current_status": current_status,
             "allegro_commission": billing["commission"],
+            "promoted_commission": billing["promoted_commission"],
+            "is_promoted_sale": billing["is_promoted_sale"],
+            "promotion_type": billing["promotion_type"],
             "listing_fee": billing["listing_fee"],
             "allegro_shipping_fee": billing["shipping_fee"],
             "promo_fee": billing["promo_fee"],

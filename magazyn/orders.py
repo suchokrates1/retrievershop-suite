@@ -16,8 +16,6 @@ from .settings_store import settings_store
 from .services.order_detail_builder import (
     OrderDetailBuilder,
     build_order_detail_context,
-    SHIPPING_STAGES as SERVICE_SHIPPING_STAGES,
-    RETURN_STAGES as SERVICE_RETURN_STAGES,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,26 +94,7 @@ ACTIVE_STATUS_IDS = [
     # Excluded: 91621 (Zakończone), 91622 (Anulowane), 91623 (Zwrot)
 ]
 
-# Etapy wysyłki dla timeline - kolejność ma znaczenie!
-# Format: (status_key, ikona, etykieta)
-SHIPPING_STAGES = [
-    ("pobrano", "bi-inbox", "Pobrano"),
-    ("wydrukowano", "bi-printer", "Wydrukowano"),
-    ("spakowano", "bi-box-seam", "Spakowano"),
-    ("przekazano_kurierowi", "bi-person-badge", "Przekazano"),
-    ("w_drodze", "bi-truck", "W drodze"),
-    ("gotowe_do_odbioru", "bi-geo-alt", "Do odbioru"),
-    ("dostarczono", "bi-check-circle", "Dostarczono"),
-]
-
-# Etapy zwrotu dla timeline
-# Format: (status_key, ikona, etykieta)
-RETURN_STAGES = [
-    ("pending", "bi-flag", "Zgloszono"),
-    ("in_transit", "bi-truck", "W drodze"),
-    ("delivered", "bi-box-arrow-in-down", "Odebrano"),
-    ("completed", "bi-check-circle", "Zakonczono"),
-]
+# SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
 # Map BaseLinker status_id to our internal status
 BASELINKER_STATUS_MAP = {
     91615: "pobrano",           # Nowe zamówienie
