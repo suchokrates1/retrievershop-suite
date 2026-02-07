@@ -18,6 +18,12 @@
                     <i class="bi bi-arrow-return-left"></i> ZWROT
                 </span>
                 {% endif %}
+                {% if is_promoted_sale %}
+                <span class="badge {% if promotion_type == 'allegro_ads' %}bg-primary{% else %}bg-info{% endif %} fs-6 ms-1" title="Sprzedaz z {{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznionej oferty' }}">
+                    <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %}"></i>
+                    {{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznione' }}
+                </span>
+                {% endif %}
             </h2>
             {% if order.platform %}
             <span class="badge bg-secondary">{{ order.platform }}</span>
@@ -490,6 +496,16 @@
                             {{ '%.2f'|format(real_profit) }} {{ order.currency or 'PLN' }}
                         </span>
                     </p>
+                    {% if is_promoted_sale and promoted_commission > 0 %}
+                    <div class="alert {% if promotion_type == 'allegro_ads' %}alert-primary{% else %}alert-info{% endif %} mt-3 mb-0 py-2 px-3">
+                        <small>
+                            <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %} me-1"></i>
+                            <strong>{{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznione' }}:</strong>
+                            Prowizja promowana: {{ '%.2f'|format(promoted_commission) }} {{ order.currency or 'PLN' }}
+                            (z lacznej prowizji {{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }})
+                        </small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 

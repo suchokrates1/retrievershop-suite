@@ -132,11 +132,17 @@ def fetch_billing_types(access_token: str) -> list:
 
 
 # Mapowanie typow billingowych Allegro na kategorie
-COMMISSION_TYPES = {
-    "SUC",   # Prowizja od sprzedazy
-    "FSF",   # Prowizja od sprzedazy oferty wyroznonej
-    "BRG",   # Prowizja od sprzedazy w Kampanii
+ORGANIC_COMMISSION_TYPES = {
+    "SUC",   # Prowizja od sprzedazy (organiczna)
 }
+
+PROMOTED_COMMISSION_TYPES = {
+    "FSF",   # Prowizja od sprzedazy oferty wyroznionej
+    "BRG",   # Prowizja od sprzedazy w Kampanii (Allegro Ads)
+}
+
+# Wszystkie typy prowizji (kompatybilnosc wsteczna)
+COMMISSION_TYPES = ORGANIC_COMMISSION_TYPES | PROMOTED_COMMISSION_TYPES
 
 SHIPPING_TYPES = {
     "HLB",   # Oplata za dostawe DHL Allegro Delivery
@@ -210,6 +216,9 @@ def get_order_billing_summary(
     result = {
         "success": False,
         "commission": Decimal("0"),
+        "promoted_commission": Decimal("0"),
+        "is_promoted_sale": False,
+        "promotion_type": None,
         "listing_fee": Decimal("0"),
         "shipping_fee": Decimal("0"),
         "promo_fee": Decimal("0"),
@@ -245,7 +254,16 @@ def get_order_billing_summary(
                     "amount": abs(amount),
                 })
             
-            if type_id in COMMISSION_TYPES:
+            if type_id in PROMOTED_COMMISSION_TYPES:
+                fee = abs(amount) if amount < 0 else Decimal("0")
+                result["commission"] += fee
+                result["promoted_commission"] += fee
+                result["is_promoted_sale"] = True
+                if type_id == "FSF":
+                    result["promotion_type"] = "wyroznione"
+                elif type_id == "BRG" and result["promotion_type"] != "wyroznione":
+                    result["promotion_type"] = "allegro_ads"
+            elif type_id in ORGANIC_COMMISSION_TYPES:
                 result["commission"] += abs(amount) if amount < 0 else Decimal("0")
             elif type_id in LISTING_TYPES:
                 result["listing_fee"] += abs(amount) if amount < 0 else Decimal("0")
