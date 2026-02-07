@@ -612,7 +612,9 @@ class PriceReportItem(Base):
     is_cheapest = Column(Boolean, nullable=False, default=True)
     price_difference = Column(Float, nullable=True)  # our_price - competitor_price
     our_position = Column(Integer, nullable=True)
-    total_offers = Column(Integer, nullable=True)
+    total_offers = Column(Integer, nullable=True)  # oferty po filtrze (Smart + nie-wykluczeni)
+    competitors_all_count = Column(Integer, nullable=True)  # wszystkie oferty przed filtrami
+    competitor_is_super_seller = Column(Boolean, nullable=True)  # najtanszy konkurent to Super Sprzedawca?
     
     # Metadata
     checked_at = Column(DateTime, nullable=False, server_default=func.now())

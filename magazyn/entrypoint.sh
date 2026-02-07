@@ -11,6 +11,7 @@ echo "Running custom migrations..."
 python -c "
 from magazyn.migrations.create_price_reports_tables import upgrade
 from magazyn.migrations.create_excluded_sellers_table import upgrade as upgrade_excluded
+from magazyn.migrations.add_competitor_details_to_report_items import upgrade as upgrade_competitor_details
 from magazyn.db import engine, configure_engine
 from magazyn.config import settings
 
@@ -21,6 +22,7 @@ if engine is None:
 
 upgrade()
 upgrade_excluded(engine)
+upgrade_competitor_details()
 "
 
 echo "Starting Gunicorn..."
