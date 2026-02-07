@@ -190,6 +190,8 @@ def report_detail(report_id: int):
                 "price_difference": item.price_difference,
                 "our_position": item.our_position,
                 "total_offers": item.total_offers,
+                "competitors_all_count": getattr(item, 'competitors_all_count', None),
+                "competitor_is_super_seller": getattr(item, 'competitor_is_super_seller', None),
                 "suggestion": suggestion,
                 "suggestion_note": suggestion_note,
                 "has_multiple_offers": has_multiple_offers,
@@ -477,8 +479,14 @@ def recheck_item(item_id):
                 item.competitor_price = Decimal(str(result.cheapest_competitor.price))
                 item.competitor_seller = result.cheapest_competitor.seller
                 item.competitor_url = result.cheapest_competitor.offer_url
+                item.competitor_is_super_seller = getattr(result.cheapest_competitor, 'is_super_seller', None)
                 item.our_position = result.my_position
                 item.total_offers = len(result.competitors) + 1 if result.competitors else 1
+                item.competitors_all_count = getattr(result, 'competitors_all_count', None)
+                
+                # Uzywaj ceny z dialogu dla spojnosci z pozycja
+                if result.my_price:
+                    item.our_price = Decimal(str(result.my_price))
                 
                 if item.our_price:
                     item.is_cheapest = item.our_price <= item.competitor_price
@@ -490,8 +498,10 @@ def recheck_item(item_id):
                 item.competitor_price = None
                 item.competitor_seller = None
                 item.competitor_url = None
+                item.competitor_is_super_seller = None
                 item.our_position = 1
                 item.total_offers = 1
+                item.competitors_all_count = getattr(result, 'competitors_all_count', 0)
                 item.is_cheapest = True
                 item.price_difference = None
                 item.error = None
@@ -561,7 +571,7 @@ def change_price(item_id):
             
             offer_id = item.offer_id
             old_price = item.our_price
-            offer_name = item.name
+            offer_name = item.product_name
         
         # Krok 1: Zmien cene przez API
         result = change_offer_price(offer_id, new_price)
