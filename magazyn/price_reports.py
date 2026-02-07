@@ -172,10 +172,27 @@ def report_detail(report_id: int):
                 
                 if discount_needed <= max_discount:
                     suggestion = {
+                        "type": "decrease",
                         "target_price": round(target_price, 2),
                         "discount_percent": round(discount_needed, 2),
                         "savings": round(float(item.our_price) - target_price, 2),
                     }
+            elif item.is_cheapest and item.competitor_price and item.our_price:
+                # Jestesmy najtansi - sprawdz czy mozna podniesc cene
+                competitor = float(item.competitor_price)
+                our = float(item.our_price)
+                # Cena docelowa: 1 grosz ponizej konkurenta
+                raise_target = round(competitor - 0.01, 2)
+                if raise_target > our:
+                    raise_percent = ((raise_target - our) / our) * 100
+                    # Sugeruj podwyzke tylko jesli zysk >= 1% (zbyt male podwyzki nie maja sensu)
+                    if raise_percent >= 1.0:
+                        suggestion = {
+                            "type": "increase",
+                            "target_price": raise_target,
+                            "raise_percent": round(raise_percent, 2),
+                            "extra_profit": round(raise_target - our, 2),
+                        }
             
             items_data.append({
                 "id": item.id,
@@ -200,10 +217,10 @@ def report_detail(report_id: int):
             })
         
         # Sortowanie custom:
-        # 1. Produkty z sugestiami na poczatku
-        # 2. Produkty z najwyzszym miejscem (nizsza pozycja = wyzej)
-        # 3. Produkty z "inna_aukcja_ok" na koncu sekcji "nie najtanszych"
-        # 4. Najtansi alfabetycznie na koncu
+        # 1. Nie-najtansi z sugestiami obnizki na poczatku
+        # 2. Nie-najtansi z "inna_aukcja_ok" po sugestiach
+        # 3. Najtansi z sugestiami podwyzki
+        # 4. Najtansi bez sugestii na koncu
         def sort_key(item):
             has_suggestion = 1 if item["suggestion"] else 0
             is_cheapest = 1 if item["is_cheapest"] else 0
@@ -225,7 +242,8 @@ def report_detail(report_id: int):
             "total": len(items),
             "cheapest": sum(1 for i in items if i.is_cheapest),
             "not_cheapest": sum(1 for i in items if not i.is_cheapest),
-            "with_suggestion": sum(1 for i in items_data if i.get("suggestion")),
+            "with_suggestion": sum(1 for i in items_data if i.get("suggestion") and i["suggestion"].get("type") == "decrease"),
+            "with_raise_suggestion": sum(1 for i in items_data if i.get("suggestion") and i["suggestion"].get("type") == "increase"),
             "other_offer_ok": sum(1 for i in items_data if i.get("suggestion_note") == "inna_aukcja_ok"),
             "errors": sum(1 for i in items if i.error),
         }
@@ -519,9 +537,23 @@ def recheck_item(item_id):
                 discount_needed = ((float(item.our_price) - target_price) / float(item.our_price)) * 100
                 if discount_needed <= max_discount:
                     suggestion = {
+                        "type": "decrease",
                         "target_price": round(target_price, 2),
                         "discount_percent": round(discount_needed, 2),
                     }
+            elif item.is_cheapest and item.competitor_price and item.our_price:
+                competitor = float(item.competitor_price)
+                our = float(item.our_price)
+                raise_target = round(competitor - 0.01, 2)
+                if raise_target > our:
+                    raise_percent = ((raise_target - our) / our) * 100
+                    if raise_percent >= 1.0:
+                        suggestion = {
+                            "type": "increase",
+                            "target_price": raise_target,
+                            "raise_percent": round(raise_percent, 2),
+                            "extra_profit": round(raise_target - our, 2),
+                        }
             
             return jsonify({
                 "success": True,
