@@ -62,6 +62,14 @@
         </div>
     </div>
     <div class="col">
+        <div class="card text-center border-primary">
+            <div class="card-body text-primary">
+                <h3 class="mb-0">{{ stats.with_raise_suggestion }}</h3>
+                <small>Mozna podniesc cene</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
         <div class="card text-center border-info">
             <div class="card-body text-info">
                 <h3 class="mb-0">{{ stats.other_offer_ok }}</h3>
@@ -166,12 +174,18 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if item.suggestion %}
+                    {% if item.suggestion and item.suggestion.type == 'decrease' %}
                         <span class="badge bg-warning text-dark">
                             <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zl
                         </span>
                         <br>
                         <small class="text-muted">-{{ "%.1f"|format(item.suggestion.discount_percent) }}%</small>
+                    {% elif item.suggestion and item.suggestion.type == 'increase' %}
+                        <span class="badge bg-primary">
+                            <i class="bi bi-arrow-up"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zl
+                        </span>
+                        <br>
+                        <small class="text-muted">+{{ "%.1f"|format(item.suggestion.raise_percent) }}% (+{{ "%.2f"|format(item.suggestion.extra_profit) }} zl)</small>
                     {% elif item.suggestion_note == "inna_aukcja_ok" %}
                         <span class="badge bg-info text-dark" title="Inna aukcja tego produktu jest najtansza - cena ustawiona celowo">
                             <i class="bi bi-link-45deg"></i> Inna aukcja OK
@@ -201,11 +215,12 @@
                         </button>
                         {% if item.suggestion %}
                             <!-- Zmien cene -->
-                            <button type="button" class="btn btn-outline-warning btn-change-price d-inline-flex align-items-center" 
+                            <button type="button" class="btn btn-outline-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-change-price d-inline-flex align-items-center" 
                                     data-item-id="{{ item.id }}"
                                     data-current-price="{{ item.our_price }}"
                                     data-target-price="{{ item.suggestion.target_price }}"
                                     data-product-name="{{ item.product_name[:30] }}"
+                                    data-change-type="{{ item.suggestion.type }}"
                                     title="Zmien cene na {{ item.suggestion.target_price }} zl">
                                 <i class="bi bi-cash-coin"></i>
                             </button>
@@ -244,7 +259,10 @@
                 <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drozsi</span> - Konkurent jest tanszy
             </li>
             <li class="list-inline-item">
-                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-down"></i></span> - Sugerowana cena (obnizka max {{ max_discount }}%)
+                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-down"></i></span> - Sugerowana obnizka (max {{ max_discount }}%)
+            </li>
+            <li class="list-inline-item">
+                <span class="badge bg-primary"><i class="bi bi-arrow-up"></i></span> - Sugerowana podwyzka (mozna podniesc i nadal byc najtanszym)
             </li>
             <li class="list-inline-item">
                 <span class="badge bg-warning">Blad</span> - Nie udalo sie sprawdzic
@@ -279,7 +297,7 @@
                     <p class="mb-1">Czy na pewno chcesz zmienic cene?</p>
                     <p class="mb-0">
                         <strong id="modal-current-price"></strong> zl 
-                        <i class="bi bi-arrow-right"></i> 
+                        <i class="bi bi-arrow-right" id="modal-arrow-icon"></i> 
                         <strong id="modal-target-price"></strong> zl
                     </p>
                 </div>
@@ -372,10 +390,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentPrice = this.dataset.currentPrice;
             currentTargetPrice = this.dataset.targetPrice;
             const productName = this.dataset.productName;
+            const changeType = this.dataset.changeType || 'decrease';
             
             document.getElementById('modal-product-name').textContent = productName;
             document.getElementById('modal-current-price').textContent = currentPrice;
             document.getElementById('modal-target-price').textContent = currentTargetPrice;
+            
+            const arrow = document.getElementById('modal-arrow-icon');
+            if (changeType === 'increase') {
+                arrow.className = 'bi bi-arrow-up text-success';
+                document.getElementById('modal-target-price').className = 'text-success';
+            } else {
+                arrow.className = 'bi bi-arrow-down text-danger';
+                document.getElementById('modal-target-price').className = 'text-danger';
+            }
+            
             document.getElementById('profit-calculation').innerHTML = '<p class="text-muted small mb-1">Ladowanie kalkulacji zysku...</p>';
             
             const modal = new bootstrap.Modal(document.getElementById('changePriceModal'));
