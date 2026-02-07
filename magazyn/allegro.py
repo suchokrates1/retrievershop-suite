@@ -38,6 +38,7 @@ from .allegro_scraper import (
     fetch_competitors_for_offer,
     parse_price_amount,
 )
+from .allegro_helpers import build_inventory_list, format_decimal
 from . import allegro_api
 from requests.exceptions import HTTPError
 
@@ -80,10 +81,8 @@ def _sse_event(event: str, payload: dict[str, object]) -> str:
 
 
 def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
-    """Format decimal value for display."""
-    if value is None:
-        return None
-    return f"{value:.2f}"
+    """Format decimal value for display. Delegacja do allegro_helpers."""
+    return format_decimal(value)
 
 
 def _process_oauth_response() -> dict[str, object]:
@@ -381,74 +380,7 @@ def offers():
             else:
                 unlinked_offers.append(offer_data)
 
-        inventory_rows = (
-            db.query(ProductSize, Product)
-            .join(Product, ProductSize.product_id == Product.id)
-            .order_by(Product.series, Product.category, Product.color, ProductSize.size)
-            .all()
-        )
-        product_rows = db.query(Product).order_by(Product.series, Product.category, Product.color).all()
-        inventory: list[dict] = []
-        product_inventory: list[dict] = []
-        for product in product_rows:
-            name_parts = [product.name]
-            if product.color:
-                name_parts.append(product.color)
-            label = " ".join(name_parts)
-            sizes = list(product.sizes or [])
-            total_quantity = sum(
-                size.quantity or 0 for size in sizes if size.quantity is not None
-            )
-            barcodes = sorted({size.barcode for size in sizes if size.barcode})
-            extra_parts = ["Powiązanie na poziomie produktu"]
-            if barcodes:
-                extra_parts.append(f"EAN: {', '.join(barcodes)}")
-            if sizes:
-                extra_parts.append(f"Stan łączny: {total_quantity}")
-            filter_values = [label, "produkt"]
-            filter_values.extend(barcodes)
-            if total_quantity:
-                filter_values.append(str(total_quantity))
-            product_inventory.append(
-                {
-                    "id": product.id,
-                    "label": label,
-                    "extra": ", ".join(extra_parts),
-                    "filter": " ".join(filter_values).strip().lower(),
-                    "type": "product",
-                    "type_label": "Produkt",
-                }
-            )
-        for size, product in inventory_rows:
-            name_parts = [product.name]
-            if product.color:
-                name_parts.append(product.color)
-            main_label = " ".join(name_parts)
-            label = f"{main_label} – {size.size}"
-            extra_parts = []
-            if size.barcode:
-                extra_parts.append(f"EAN: {size.barcode}")
-            quantity = size.quantity if size.quantity is not None else 0
-            extra_parts.append(f"Stan: {quantity}")
-            filter_text = " ".join(
-                [
-                    label,
-                    size.barcode or "",
-                    str(quantity),
-                    "rozmiar",
-                ]
-            ).strip().lower()
-            inventory.append(
-                {
-                    "id": size.id,
-                    "label": label,
-                    "extra": ", ".join(extra_parts),
-                    "filter": filter_text,
-                    "type": "size",
-                    "type_label": "Rozmiar",
-                }
-            )
-        inventory = product_inventory + inventory
+        inventory = build_inventory_list(db)
     response = make_response(render_template(
         "allegro/offers.html",
         unlinked_offers=unlinked_offers,
@@ -532,74 +464,7 @@ def offers_and_prices():
             offers_data.append(offer_data)
 
         # Build inventory for dropdown
-        inventory_rows = (
-            db.query(ProductSize, Product)
-            .join(Product, ProductSize.product_id == Product.id)
-            .order_by(Product.series, Product.category, Product.color, ProductSize.size)
-            .all()
-        )
-        product_rows = db.query(Product).order_by(Product.series, Product.category, Product.color).all()
-        inventory: list[dict] = []
-        product_inventory: list[dict] = []
-        for product in product_rows:
-            name_parts = [product.name]
-            if product.color:
-                name_parts.append(product.color)
-            label = " ".join(name_parts)
-            sizes = list(product.sizes or [])
-            total_quantity = sum(
-                size.quantity or 0 for size in sizes if size.quantity is not None
-            )
-            barcodes = sorted({size.barcode for size in sizes if size.barcode})
-            extra_parts = ["Powiązanie na poziomie produktu"]
-            if barcodes:
-                extra_parts.append(f"EAN: {', '.join(barcodes)}")
-            if sizes:
-                extra_parts.append(f"Stan łączny: {total_quantity}")
-            filter_values = [label, "produkt"]
-            filter_values.extend(barcodes)
-            if total_quantity:
-                filter_values.append(str(total_quantity))
-            product_inventory.append(
-                {
-                    "id": product.id,
-                    "label": label,
-                    "extra": ", ".join(extra_parts),
-                    "filter": " ".join(filter_values).strip().lower(),
-                    "type": "product",
-                    "type_label": "Produkt",
-                }
-            )
-        for size, product in inventory_rows:
-            name_parts = [product.name]
-            if product.color:
-                name_parts.append(product.color)
-            main_label = " ".join(name_parts)
-            label = f"{main_label} – {size.size}"
-            extra_parts = []
-            if size.barcode:
-                extra_parts.append(f"EAN: {size.barcode}")
-            quantity = size.quantity if size.quantity is not None else 0
-            extra_parts.append(f"Stan: {quantity}")
-            filter_text = " ".join(
-                [
-                    label,
-                    size.barcode or "",
-                    str(quantity),
-                    "rozmiar",
-                ]
-            ).strip().lower()
-            inventory.append(
-                {
-                    "id": size.id,
-                    "label": label,
-                    "extra": ", ".join(extra_parts),
-                    "filter": filter_text,
-                    "type": "size",
-                    "type_label": "Rozmiar",
-                }
-            )
-        inventory = product_inventory + inventory
+        inventory = build_inventory_list(db)
 
     elapsed = time.time() - start_time
     current_app.logger.info(f"REQUEST END [{request_id}] /offers-and-prices - took {elapsed:.2f}s, {len(offers_data)} offers")
@@ -616,11 +481,6 @@ def offers_and_prices():
     response.headers["Expires"] = "0"
     return response
 
-
-def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
-    if value is None:
-        return None
-    return f"{value:.2f}"
 
 
 def fetch_price_via_local_scraper(offer_url: str) -> Optional[Decimal]:
