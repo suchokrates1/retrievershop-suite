@@ -77,6 +77,14 @@ from .refunds import (
     REFUNDABLE_STATUSES,
 )
 
+from .orders import (
+    fetch_allegro_orders,
+    fetch_allegro_order_detail,
+    fetch_all_allegro_orders,
+    parse_allegro_order_to_data,
+    get_allegro_internal_status,
+)
+
 __all__ = [
     # Core
     "AUTH_URL",
@@ -125,4 +133,10 @@ __all__ = [
     "get_refund_status",
     "ALLEGRO_RETURN_STATUS_DELIVERED",
     "REFUNDABLE_STATUSES",
+    # Orders
+    "fetch_allegro_orders",
+    "fetch_allegro_order_detail",
+    "fetch_all_allegro_orders",
+    "parse_allegro_order_to_data",
+    "get_allegro_internal_status",
 ]

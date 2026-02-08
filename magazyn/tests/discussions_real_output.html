@@ -1,7 +1,7 @@
 <html lang="pl"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="ImJjNTM2Y2VmMGZhYjNiMzRjYTU4YjNhOWJmZmYxZGQ3Njg5MzdmYWUi.aWKLGw.kLHZkUy1wWCUzmzjIZJb_mOxn1E">
+    <meta name="csrf-token" content="ImRkYjFiY2YxOGE1NGJmNzExODJjOTAyN2Q0NTFiNGNjNWJmZTA4N2Qi.aYc8sQ.ARyoC1MNtjjWSQeVGhlDSvP2Z_Y">
     <title>Retriever Shop - Magazyn</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
@@ -1054,15 +1054,16 @@
                 </div>
                 
                 <ul class="navbar-nav flex-row flex-nowrap gap-3 d-none d-md-flex align-items-center mt-2">
-                    <li class="nav-item"><a class="nav-link text-white" href="/">Strona główna</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="/">Strona glowna</a></li>
                     <li class="nav-item"><a class="nav-link text-white" href="/items">Przedmioty</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="/orders">Zamówienia</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="/offers-and-prices">Oferty i ceny Allegro</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="/orders">Zamowienia</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="/offers-and-prices">Oferty Allegro</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="/price-reports/">Raporty cenowe</a></li>
                     <li class="nav-item">
                         <a class="nav-link text-white" href="/discussions">
-                            Wiadomości / Dyskusje
+                            Wiadomosci / Dyskusje
                             
-                                <span class="badge bg-danger">28</span>
+                                <span class="badge bg-danger">29</span>
                             
                         </a>
                     </li>
@@ -1073,11 +1074,10 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark">
                             <li><a class="dropdown-item" href="/settings">Ustawienia</a></li>
-                            <li><a class="dropdown-item" href="/sales/settings">Ustawienia sprzedaży</a></li>
-                            <li><a class="dropdown-item" href="/shipping_costs">Koszty wysyłek</a></li>
+                            <li><a class="dropdown-item" href="/sales/settings">Ustawienia sprzedazy</a></li>
                             <li><a class="dropdown-item" href="/logs">Logi</a></li>
-                            <li><a class="dropdown-item" href="/scan_logs">Logi skanów</a></li>
-                            <li><a class="dropdown-item" href="/testprint">Testuj drukarkę</a></li>
+                            <li><a class="dropdown-item" href="/scan_logs">Logi skanow</a></li>
+                            <li><a class="dropdown-item" href="/testprint">Testuj drukarke</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -1092,24 +1092,24 @@
         <button id="mobileMenuClose" class="mobile-close btn btn-link text-white custom-btn" type="button" aria-label="Close">×</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
         <ul class="nav flex-column h-100">
-            <li class="nav-item"><a class="nav-link text-white" href="/">Strona główna</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="/">Strona glowna</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="/items">Przedmioty</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="/orders">Zamówienia</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="/offers-and-prices">Oferty i ceny Allegro</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="/orders">Zamowienia</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="/offers-and-prices">Oferty Allegro</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="/price-reports/">Raporty cenowe</a></li>
             <li class="nav-item">
                 <a class="nav-link text-white" href="/discussions">
-                    Wiadomości / Dyskusje
+                    Wiadomosci / Dyskusje
                     
-                        <span class="badge bg-danger">28</span>
+                        <span class="badge bg-danger">29</span>
                     
                 </a>
             </li>
             <li class="nav-item"><a class="nav-link text-white" href="/settings">Ustawienia</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="/shipping_costs">Koszty wysyłek</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="/logs">Logi</a></li>
-            <li class="nav-item"><a class="nav-link text-white" href="/testprint">Testuj drukarkę</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="/testprint">Testuj drukarke</a></li>
             <li class="nav-item mt-auto text-center">
-                <a class="btn btn-danger w-100 custom-btn" href="/logout">Wyloguj się</a>
+                <a class="btn btn-danger w-100 custom-btn" href="/logout">Wyloguj sie</a>
             </li>
         </ul>
     </div>
@@ -1136,16 +1136,21 @@
                 <input type="text" class="form-control" id="search-threads" placeholder="Szukaj rozmów...">
             </div>
             
+            <div class="autoresponder-badge">
+                <i class="bi bi-robot"></i>
+                Autoresponder aktywny
+            </div>
+            
         </div>
         <div class="threads-list" id="threads-container" data-threads="" role="listbox" aria-label="Lista wątków">
             
-            <div class="thread-item active pill-message" role="button" tabindex="0" aria-selected="true" data-thread-id="VvJlLJygc69iRABYM2bqaP1cvjpG1Oxz9AC3EYfxtIo" data-thread-title="Rozmowa z Client:78034053" data-thread-author="Client:78034053" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-10T13:04:15.000Z" data-thread-preview="" data-thread-last-author="" data-source="messaging" hidden=""></div>
+            <div class="thread-item active pill-message" role="button" tabindex="0" aria-selected="true" data-thread-id="LErgJG1JIB0cFqc6rgZNilYBl95or0cJKoQQp5eIYab" data-thread-title="Rozmowa z mACAY_Am" data-thread-author="mACAY_Am" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-07T13:18:00.000Z" data-thread-preview="" data-thread-last-author="" data-source="messaging" hidden=""></div>
             
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="aSpIgS31fSN8OKp9BKHJLfllh1cRUqEreDKL02SuxDn" data-thread-title="Rozmowa z elawydmuch" data-thread-author="elawydmuch" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-09T20:28:19.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="C8OUkHYSVbI1efYk13ZxjDmEis3FTYkWDbTIAF5irzQ" data-thread-title="Rozmowa z Client:39714594" data-thread-author="Client:39714594" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-07T13:17:54.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
                 <div class="thread-item-header">
                     <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z elawydmuch</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">09/01/2026 20:28</time>
+                        <h6 class="thread-title">Rozmowa z Client:39714594</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">07/02/2026 13:17</time>
                     </div>
                     <div class="thread-item-meta">
                         <span class="thread-author" data-thread-author="">
@@ -1166,11 +1171,686 @@
                 
             </div>
             
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="H7wYfM7IwblurU4mmXIIuiFCUp0boHMAkYxcLkE1ihN" data-thread-title="Rozmowa z miskins" data-thread-author="miskins" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-09T16:40:24.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="AXPU9P8uLXm7hMqdZ644sHgnRblhjJBjcSA6bCgz7jZ" data-thread-title="Rozmowa z natalie9111" data-thread-author="natalie9111" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-07T13:04:18.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z natalie9111</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">07/02/2026 13:04</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="UcneGWQoi8ZgaWo0MxY83pj1WQJscjUEwVd4tjIntiE" data-thread-title="Rozmowa z Client:33618229" data-thread-author="Client:33618229" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-07T13:04:17.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:33618229</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">07/02/2026 13:04</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="YLGMbjZyKE4I9Moo3THGEnd2FoGquGsUr81of2MBSsf" data-thread-title="Rozmowa z tomekmatlak" data-thread-author="tomekmatlak" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-07T04:50:33.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z tomekmatlak</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">07/02/2026 04:50</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="gFKVesjIDqdy2zb1sUWLjk1PvzbzKIxi3whvvypinS0" data-thread-title="Rozmowa z green_waterfall" data-thread-author="green_waterfall" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-06T21:12:42.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z green_waterfall</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">06/02/2026 21:12</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="yb3JFUJDmwFVnSv4PTFQP38QxVdnqJSygVS36QLcaJ7" data-thread-title="Rozmowa z Client:95861034" data-thread-author="Client:95861034" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-05T13:06:31.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:95861034</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">05/02/2026 13:06</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="7qf3a8nkustVhFrrlBMk1luBLMp3KgeKvwoVCgyDsiz" data-thread-title="Rozmowa z Client:84747819" data-thread-author="Client:84747819" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-04T20:29:33.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:84747819</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">04/02/2026 20:29</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="8tL33ZmrQrUBPEOWmNYdpwrA1VmPxB1YisfT335VhZc" data-thread-title="Rozmowa z agrawa_1" data-thread-author="agrawa_1" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-04T17:06:49.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z agrawa_1</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">04/02/2026 17:06</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="RkhagLgGxhqMVKKoPdQqPEIHbebEQpxDSSvPfmV9xRS" data-thread-title="Rozmowa z kowalltz" data-thread-author="kowalltz" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-03T17:09:10.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z kowalltz</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">03/02/2026 17:09</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="Tmfc7hbKhUWoVdSWEPjK9V4obggZTjGQwqiGPOqPB2K" data-thread-title="Rozmowa z Client:73734231" data-thread-author="Client:73734231" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-02-03T13:33:31.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:73734231</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">03/02/2026 13:33</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="k2mgUjTMd3NAw7HNa8XIRMUMVh3qdCOw2qPPRP1fsEZ" data-thread-title="Rozmowa z KATARZYNAKON89" data-thread-author="KATARZYNAKON89" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-31T13:03:50.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z KATARZYNAKON89</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">31/01/2026 13:03</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="3YT8lugdvXSqE0954SImvADNuCS4pE0h0dsjL0WNuBE" data-thread-title="Rozmowa z Anrock" data-thread-author="Anrock" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-30T01:03:59.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Anrock</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">30/01/2026 01:03</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="xIQ9VfWEBzvK8oSSCAJMnYyKEAdaDnrEZEpzyTxN5sA" data-thread-title="Rozmowa z FORMATMarcin" data-thread-author="FORMATMarcin" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-29T20:21:58.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z FORMATMarcin</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">29/01/2026 20:21</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="hvCvdvS5rCajnkkgd3VpBMN4ptlnvfrSWk5ov9uS7x" data-thread-title="Rozmowa z Skladzik_2005" data-thread-author="Skladzik_2005" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-27T20:31:35.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Skladzik_2005</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">27/01/2026 20:31</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="rjDzfACP0JP3bEeaqMfLcpfIA20rGrKjL7SSybn7JHP" data-thread-title="Rozmowa z pianet_pl" data-thread-author="pianet_pl" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-27T17:06:16.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z pianet_pl</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">27/01/2026 17:06</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="HXKu613iEwU8AsvHLLjIpmSqlCPEINJHoZdcJFKX8Fq" data-thread-title="Rozmowa z Mosia24" data-thread-author="Mosia24" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-23T17:04:47.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Mosia24</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">23/01/2026 17:04</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="0fc05e33-6ad0-42a3-af28-785ac72d5ceb" data-thread-title="Dyskusja: Client:27968465 - no refund after returning the product" data-thread-author="Client:27968465" data-thread-type="dyskusja" data-thread-read="true" data-thread-last="2026-01-23T14:54:31.063Z" data-thread-preview="Dzień dobry. Proszę o wyjaśnienie sytuacji." data-thread-last-author="Client:27968465" data-source="issue">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Dyskusja: Client:27968465 - no refund after returning the product</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">23/01/2026 14:54</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            @Client:27968465
+                        </span>
+                        <span class="thread-type-pill pill-discussion" data-thread-type-pill="">
+                            
+                                <i class="bi bi-chat-dots-fill"></i>Dyskusja
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Dzień dobry. Proszę o wyjaśnienie sytuacji.
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="yICsupYcsWO7bmHQdU1cjP3OczpAS40XaJput46qPoe" data-thread-title="Rozmowa z Client:97930942" data-thread-author="Client:97930942" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-23T13:05:31.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:97930942</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">23/01/2026 13:05</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="kMznk6kWWqHI4YAHXUOIDm5Tqaa9F0Ozq5lq6guRGfT" data-thread-title="Rozmowa z Client:65798024" data-thread-author="Client:65798024" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-22T13:28:11.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:65798024</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">22/01/2026 13:28</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="5b6Db3v7sSRylS8HJd9wWWHDyGmmcggfSaUuMZNYp3p" data-thread-title="Rozmowa z Client:27968465" data-thread-author="Client:27968465" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-22T12:10:04.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:27968465</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">22/01/2026 12:10</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="5uetDQuvfqDdQyQc63vqTBQpnNiOsYShlF5EU3Jb9Yd" data-thread-title="Rozmowa z MarekS_SS" data-thread-author="MarekS_SS" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-21T01:05:04.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z MarekS_SS</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">21/01/2026 01:05</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="18b4EEgdSYmNyAWcC4B36ktsXdwp5p08xp9WO2OHUNy" data-thread-title="Rozmowa z czeslaw0105" data-thread-author="czeslaw0105" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-21T01:05:04.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z czeslaw0105</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">21/01/2026 01:05</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="8HHIRuJUB7yadFBUiV8BckqRv0MtS1mfITcsXuYCyqt" data-thread-title="Rozmowa z Client:28781526" data-thread-author="Client:28781526" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-20T17:08:01.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:28781526</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">20/01/2026 17:08</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="WfJ7oz8WTJtR28e52eYLYeiykLQIoX3zouXao1z7o4E" data-thread-title="Rozmowa z InQ1982" data-thread-author="InQ1982" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-20T17:07:55.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z InQ1982</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">20/01/2026 17:07</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="NevSg9tZ9nERBlMM0m1WdrnJaE3zaQW5CHjPJSGBHNg" data-thread-title="Rozmowa z Veritas006" data-thread-author="Veritas006" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-15T13:28:25.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Veritas006</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">15/01/2026 13:28</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="H7wYfM7IwblurU4mmXIIuiFCUp0boHMAkYxcLkE1ihN" data-thread-title="Rozmowa z miskins" data-thread-author="miskins" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-15T13:28:24.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
                 <div class="thread-item-header">
                     <div class="thread-title-row">
                         <h6 class="thread-title">Rozmowa z miskins</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">09/01/2026 16:40</time>
+                        <time class="thread-timestamp" data-thread-timestamp="">15/01/2026 13:28</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="NyoUun0P2AIau1sckUNViI2WBtR2kqAP7ZfNOfmV1Ys" data-thread-title="Rozmowa z Client:46772146" data-thread-author="Client:46772146" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-14T20:30:51.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:46772146</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">14/01/2026 20:30</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="VvJlLJygc69iRABYM2bqaP1cvjpG1Oxz9AC3EYfxtIo" data-thread-title="Rozmowa z Client:78034053" data-thread-author="Client:78034053" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-10T13:04:15.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z Client:78034053</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">10/01/2026 13:04</time>
+                    </div>
+                    <div class="thread-item-meta">
+                        <span class="thread-author" data-thread-author="">
+                            Nieznany nadawca
+                        </span>
+                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
+                            
+                                <i class="bi bi-envelope-fill"></i>Wiadomość
+                            
+                        </span>
+                    </div>
+                </div>
+                <p class="thread-preview" data-thread-preview-text="">
+                    
+                        Kliknij aby zobaczyć wiadomości
+                    
+                </p>
+                
+            </div>
+            
+            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="aSpIgS31fSN8OKp9BKHJLfllh1cRUqEreDKL02SuxDn" data-thread-title="Rozmowa z elawydmuch" data-thread-author="elawydmuch" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-09T20:28:19.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
+                <div class="thread-item-header">
+                    <div class="thread-title-row">
+                        <h6 class="thread-title">Rozmowa z elawydmuch</h6>
+                        <time class="thread-timestamp" data-thread-timestamp="">09/01/2026 20:28</time>
                     </div>
                     <div class="thread-item-meta">
                         <span class="thread-author" data-thread-author="">
@@ -1221,31 +1901,6 @@
                     <div class="thread-title-row">
                         <h6 class="thread-title">Rozmowa z Aga111178</h6>
                         <time class="thread-timestamp" data-thread-timestamp="">09/01/2026 01:05</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="5b6Db3v7sSRylS8HJd9wWWHDyGmmcggfSaUuMZNYp3p" data-thread-title="Rozmowa z Client:27968465" data-thread-author="Client:27968465" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2026-01-08T22:00:24.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:27968465</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">08/01/2026 22:00</time>
                     </div>
                     <div class="thread-item-meta">
                         <span class="thread-author" data-thread-author="">
@@ -5116,1056 +5771,6 @@
                 
             </div>
             
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="NrfM7a92Ab8hv0BiFm76WMVyr4eEAIw0y7c6gktEzgF" data-thread-title="Rozmowa z dagmara_L_Lg" data-thread-author="dagmara_L_Lg" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-09T12:04:43.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z dagmara_L_Lg</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">09/08/2025 12:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="wllU6CznlPsjeHL2eONiKSqqMIS3FhPQjjK0bR1BEXP" data-thread-title="Rozmowa z Client:46272175" data-thread-author="Client:46272175" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-08T19:20:50.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:46272175</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">08/08/2025 19:20</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="83cJA7pcatfzsucLYwkkF2vbaHcCAaUzdDiMSq8RUtf" data-thread-title="Rozmowa z foxy81" data-thread-author="foxy81" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-08T16:06:21.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z foxy81</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">08/08/2025 16:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="8zmYurQq7BDUeX3P1CvdcijB4aXNiuHA9QuoFeCDMPo" data-thread-title="Rozmowa z depeel" data-thread-author="depeel" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-07T19:22:39.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z depeel</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">07/08/2025 19:22</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="QOl0QGQ4Rjdv0Gw2zlL6DSyufwaYyqpRbBEHDH3yNZD" data-thread-title="Rozmowa z zuz89" data-thread-author="zuz89" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-07T00:04:48.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z zuz89</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">07/08/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="ufVFC5BvdtNDgo55fsuIbbNAvE1lXkkx3lL356RaMIw" data-thread-title="Rozmowa z PLAY_SYSTEMS" data-thread-author="PLAY_SYSTEMS" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-06T16:07:13.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z PLAY_SYSTEMS</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">06/08/2025 16:07</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="bXx4iqvm5BevvLOR0BpUBSY3pvOWlxITe2oAD5yg8T8" data-thread-title="Rozmowa z Ochoniusz1" data-thread-author="Ochoniusz1" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-06T12:24:12.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Ochoniusz1</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">06/08/2025 12:24</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="YcWaqMNWBSQcgfZeiBhvrZF5jnWFFTdyidn2XkS9zp0" data-thread-title="Rozmowa z Leciu" data-thread-author="Leciu" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-05T16:08:16.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Leciu</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">05/08/2025 16:08</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="lLL80HePXLL9oYDcVClEjzBDbQDyF6jMAtr75sn5f8" data-thread-title="Rozmowa z nikanika18" data-thread-author="nikanika18" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-05T16:08:13.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z nikanika18</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">05/08/2025 16:08</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="tfr4H86IcjI7e89yPnE4Htt4qtAb4UUTeQJsz7hOuJO" data-thread-title="Rozmowa z elabela5" data-thread-author="elabela5" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-05T16:08:10.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z elabela5</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">05/08/2025 16:08</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="SDfXicAUmLM5R6vFvHbbakxzkCpegEu0ywlUO4CVZ7M" data-thread-title="Rozmowa z Mala-25" data-thread-author="Mala-25" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-04T12:25:54.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Mala-25</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">04/08/2025 12:25</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="HAjDQFS36zO9M3lfV56F554jirP6Fnh53fthS7Mfvd3" data-thread-title="Rozmowa z CamerDisco" data-thread-author="CamerDisco" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-04T00:02:40.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z CamerDisco</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">04/08/2025 00:02</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="GGbScMdMEXcF2C6jB50IxMVZ0w0fqhfDmPzNmzE4pUr" data-thread-title="Rozmowa z bernard222222" data-thread-author="bernard222222" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-01T19:20:32.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z bernard222222</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">01/08/2025 19:20</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="35uPjBkYkEZEI7TAjAYp2prVvlpN0ywLdb2y6frMrTG" data-thread-title="Rozmowa z gosiunia5557" data-thread-author="gosiunia5557" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-01T12:05:50.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z gosiunia5557</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">01/08/2025 12:05</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="OX2WPubOxgsUwcxl3JODd1ZCG9QewO5M8gWRA9Gxnn6" data-thread-title="Rozmowa z gienio96" data-thread-author="gienio96" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-08-01T12:05:49.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z gienio96</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">01/08/2025 12:05</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="vbuekjNBdzQ1yLwaKnrQrwAJqbd1dKwHLRLMBY69cFX" data-thread-title="Rozmowa z gert_2005" data-thread-author="gert_2005" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-31T16:06:09.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z gert_2005</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">31/07/2025 16:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="gC0X1spduTMyd6UnIIXMGbfZpSDHAQpj5xUoTYCAbDo" data-thread-title="Rozmowa z rvrs" data-thread-author="rvrs" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-31T12:06:19.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z rvrs</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">31/07/2025 12:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="dPHTz1NMdgyPtHVaEErCSvQjfedAfppWFexFDNVup8O" data-thread-title="Rozmowa z ona_asia" data-thread-author="ona_asia" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-31T00:04:33.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z ona_asia</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">31/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="wWdyMGeVSnQEUbUmnDOVPG4pPwb4h62EScz6VuaZCJr" data-thread-title="Rozmowa z kasia1_ss" data-thread-author="kasia1_ss" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-31T00:04:32.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z kasia1_ss</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">31/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="thA4lk2fw1TXERwCrDg5t8zyYbM657cq8ZdJIzO1Ooy" data-thread-title="Rozmowa z kasia3111a" data-thread-author="kasia3111a" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-30T19:22:34.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z kasia3111a</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">30/07/2025 19:22</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="jRLRSIKSjxmi927mvqOQwu3MfXe9aqDKpaC3UjO7Gxm" data-thread-title="Rozmowa z czarnydlk" data-thread-author="czarnydlk" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-30T16:06:33.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z czarnydlk</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">30/07/2025 16:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="iXO1uS8Zs4uBl9IqNGemv4KQzyUfPFqoB6pY5i0is89" data-thread-title="Rozmowa z Client:46125115" data-thread-author="Client:46125115" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-30T00:04:44.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:46125115</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">30/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="BBeOTVmQm6ppO8WeHeBQddX8Vs6OBeof4yr87D5qSvv" data-thread-title="Rozmowa z a_switalska" data-thread-author="a_switalska" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-30T00:04:43.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z a_switalska</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">30/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="prYTPp9JukHdVBnwowJ5IMt5vxQ8A2VrtuiXqOAn25z" data-thread-title="Rozmowa z Client:102438448" data-thread-author="Client:102438448" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-30T00:04:43.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:102438448</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">30/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="9nbHGW2mtAUgCubnycfTOFjdL2UNx7fTV620s7MWNts" data-thread-title="Rozmowa z Dzixxxx" data-thread-author="Dzixxxx" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-29T16:07:31.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Dzixxxx</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">29/07/2025 16:07</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="WsW2kPoF4sblpRSJYBtqJngHYc6d2G0QoWzuEWqMn8H" data-thread-title="Rozmowa z Client:42028992" data-thread-author="Client:42028992" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-29T16:07:26.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:42028992</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">29/07/2025 16:07</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="mTfMKQMAFNN3nZalSvO5mBFtIN4Xp8M47SaCns5Bbmr" data-thread-title="Rozmowa z Client:108865445" data-thread-author="Client:108865445" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-29T12:06:46.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:108865445</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">29/07/2025 12:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="9z4STgxVeDzOABGZNvdrS2zfnOZXMmMJWW8SzqPKwIq" data-thread-title="Rozmowa z e_Marat" data-thread-author="e_Marat" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-29T00:04:44.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z e_Marat</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">29/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="U3g2J11C9YOvA0UGu6uL00CuebqT2ZgJqw22qI19XtA" data-thread-title="Rozmowa z Aneta3126" data-thread-author="Aneta3126" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-28T16:07:12.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Aneta3126</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">28/07/2025 16:07</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="DvptDwdrWGt9FuMcuD8r7KBEkweqzO7MDuUkf3qqhIW" data-thread-title="Rozmowa z piotrwasiliewicz" data-thread-author="piotrwasiliewicz" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-26T00:12:38.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z piotrwasiliewicz</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">26/07/2025 00:12</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="HmsNBhPOSneTctX0BlB44YcE7HrkDNGhmUX6qlkLdLi" data-thread-title="Rozmowa z Client:99750486" data-thread-author="Client:99750486" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-24T16:05:57.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:99750486</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">24/07/2025 16:05</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="pxc5XzyHL3kRMbIPdquGXl7mk2qDyuSgxDvZ6sxBTSc" data-thread-title="Rozmowa z krzysiek122399" data-thread-author="krzysiek122399" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-24T00:04:30.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z krzysiek122399</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">24/07/2025 00:04</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="U3xGQ3Eirw1dAKbaIm8gGeFs3SIcVXdBZp95V8xzqpJ" data-thread-title="Rozmowa z Client:101616464" data-thread-author="Client:101616464" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-23T12:06:02.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:101616464</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">23/07/2025 12:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="XFx6XkUC5JdWDUoFhegEdYHEZm0Jgdv6fHqA0CjxJW9" data-thread-title="Rozmowa z margolcia117" data-thread-author="margolcia117" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-23T12:06:02.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z margolcia117</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">23/07/2025 12:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="hmg80rn9DSL9JRr13NmVTpqeS2jDI5K7So4bFjwzUlS" data-thread-title="Rozmowa z Obri24" data-thread-author="Obri24" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-22T16:07:09.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Obri24</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">22/07/2025 16:07</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="uj7oLDrh9y1WT70FjKRXnUcfGmQYdqu9dp9B7kVikoY" data-thread-title="Rozmowa z Client:27145470" data-thread-author="Client:27145470" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-21T08:19:06.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:27145470</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">21/07/2025 08:19</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="Wh0kfA8SetXCkAJZZMkaBuXyqLCMTC15DlsarG0e2hw" data-thread-title="Rozmowa z Client:107350556" data-thread-author="Client:107350556" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-18T16:05:47.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Client:107350556</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">18/07/2025 16:05</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="ZM6GfLaBgLsuFdIT2VQg1E0pYT61N4d1CbLISAjyce7" data-thread-title="Rozmowa z Cajgi" data-thread-author="Cajgi" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-17T08:18:37.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Cajgi</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">17/07/2025 08:18</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="MitdGlMdDGEWZG6wDqA2tDF9DZwyF1Ddg6SFGA1w5Cp" data-thread-title="Rozmowa z baldi02" data-thread-author="baldi02" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-16T00:05:30.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z baldi02</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">16/07/2025 00:05</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="MH5hbvASwsRqHSztZvSsVmYpMQ267iEBMEXVhFJoBjt" data-thread-title="Rozmowa z kwiatuszek_08" data-thread-author="kwiatuszek_08" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-15T19:27:09.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z kwiatuszek_08</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">15/07/2025 19:27</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="aNnlYfgdYf95Tvv6RVXsdzdaPJ2VldGAXq1zPU84L8i" data-thread-title="Rozmowa z Joanna30_Ja" data-thread-author="Joanna30_Ja" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-15T12:08:08.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z Joanna30_Ja</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">15/07/2025 12:08</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
-            <div class="thread-item" role="button" tabindex="0" aria-selected="false" data-thread-id="2xHSMhq5go8qLBMO3e9vtbz0zbKysxXqtcY9yjsBCLS" data-thread-title="Rozmowa z JKasia" data-thread-author="JKasia" data-thread-type="wiadomość" data-thread-read="true" data-thread-last="2025-07-15T08:06:05.000Z" data-thread-preview="Kliknij aby zobaczyć wiadomości" data-thread-last-author="" data-source="messaging">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">Rozmowa z JKasia</h6>
-                        <time class="thread-timestamp" data-thread-timestamp="">15/07/2025 08:06</time>
-                    </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author="">
-                            Nieznany nadawca
-                        </span>
-                        <span class="thread-type-pill pill-message" data-thread-type-pill="">
-                            
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            
-                        </span>
-                    </div>
-                </div>
-                <p class="thread-preview" data-thread-preview-text="">
-                    
-                        Kliknij aby zobaczyć wiadomości
-                    
-                </p>
-                
-            </div>
-            
         </div>
     </aside>
     <section class="conversation-panel">
@@ -6185,14 +5790,14 @@
         <div class="messages-area" id="messages-area"><article class="message-row message-incoming">
             <div class="message-bubble incoming">
                 <div class="message-author">Retriever_Shop</div>
-                <div class="message-content"># Dziękujemy za zakupy w Retriever Shop!<br>Cieszymy się, że wybrałeś nasz sklep, aby zapewnić swojemu pupilowi najlepsze produkty. Twoje zamówienie zostało przetworzone i jest już w drodze do Ciebie. W załączniku znajdziesz swoją fakturę.<br>## Szczegóły zamówienia:<br>Numer zamówienia: 28672425<br>Data zamówienia: 08.01.2026 19:50<br>### Produkty:<br>  * 1. Szelki dla psa Truelove Front Line Premium Cordura XL pomarańczowe - 1 szt. - 299.00 zł<br><br><br>Łączna kwota:&nbsp;299.00 zł<br>Aby śledzić status zamówienia, kliknij poniższy link:<br>Śledź zamówienie<br>retrievershop.pl/zamowienie/28672425/diaq1jzo2g/15178/<br><br><br>Jeśli masz jakiekolwiek pytania dotyczące zamówienia, nasz zespół chętnie Ci pomoże. Możesz się z nami skontaktować, odpowiadając na tę wiadomość lub pisząc na adres kontakt@retrievershop.p.<br>Jeszcze raz dziękujemy za zaufanie i życzymy wielu miłych chwil spędzonych z Twoim pupilem!<br>© 2024 Retriever Shop. Wszelkie prawa zastrzeżone.<br>Śledź nas na:<br><br><br>Wysłano przez Base.com</div>
-                <div class="message-meta">08.01.2026, 20:00</div>
+                <div class="message-content"># Dziękujemy za zakupy w Retriever Shop!<br>Cieszymy się, że wybrałeś nasz sklep, aby zapewnić swojemu pupilowi najlepsze produkty. Twoje zamówienie zostało przetworzone i jest już w drodze do Ciebie. W załączniku znajdziesz swoją fakturę.<br>## Szczegóły zamówienia:<br>Numer zamówienia: 30647827<br>Data zamówienia: 06.02.2026 08:34<br>### Produkty:<br>  * 1. Szelki dla psa Truelove Front Line Premium XL czarne - 1 szt. - 188.10 zł<br><br><br>Łączna kwota:&nbsp;188.10 zł<br>Aby śledzić status zamówienia, kliknij poniższy link:<br>Śledź zamówienie<br>retrievershop.pl/zamowienie/30647827/a9an8i6qeu/15178/<br><br><br>Jeśli masz jakiekolwiek pytania dotyczące zamówienia, nasz zespół chętnie Ci pomoże. Możesz się z nami skontaktować, odpowiadając na tę wiadomość lub pisząc na adres kontakt@retrievershop.p.<br>Jeszcze raz dziękujemy za zaufanie i życzymy wielu miłych chwil spędzonych z Twoim pupilem!<br>© 2024 Retriever Shop. Wszelkie prawa zastrzeżone.<br>Śledź nas na:<br><br><br>Wysłano przez Base.com</div>
+                <div class="message-meta">06.02.2026, 08:40</div>
             </div>
         </article><article class="message-row message-incoming">
             <div class="message-bubble incoming">
                 <div class="message-author">Retriever_Shop</div>
                 <div class="message-content"># Szanowny Kliencie<br>Bardzo dziękuję za dokonanie zakupu w moim sklepie Retriever Shop! Mam nadzieję, że zakupiony produkt spełnił Twoje oczekiwania i przyniesie Ci wiele radości.<br>Będzie mi niezwykle miło, jeśli poświęcisz chwilę na wystawienie oceny mojego sklepu na Allegro oraz w Google.<br>Twoja opinia jest dla mnie bardzo ważna i pomaga mi stale doskonalić moje usługi.<br><br><br>Jeszcze raz dziękuję za zaufanie i zakupy w Retriever Shop!<br><br><br>Zostaw opinię<br>Jeśli masz jakiekolwiek pytania dotyczące zamówienia, nasz zespół chętnie Ci pomoże. Możesz się z nami skontaktować, odpowiadając na tę wiadomość lub pisząc na adres kontakt@retrievershop.p.<br>Jeszcze raz dziękujemy za zaufanie i życzymy wielu miłych chwil spędzonych z Twoim pupilem!<br>© 2025 Retriever Shop. Wszelkie prawa zastrzeżone.<br>Śledź nas na:<br>Wysłano przez Base.com</div>
-                <div class="message-meta">10.01.2026, 14:04</div>
+                <div class="message-meta">07.02.2026, 14:18</div>
             </div>
         </article></div>
         <footer class="composer" id="composer">
@@ -6236,12 +5841,12 @@
         <label for="barcode-scanner-input">Skaner kodów kreskowych</label>
         <input type="text" id="barcode-scanner-input" autocomplete="off" inputmode="none" aria-label="Pole przechwytujące kody kreskowe">
     </div>
-    <input type="hidden" id="barcode-csrf-token" value="ImJjNTM2Y2VmMGZhYjNiMzRjYTU4YjNhOWJmZmYxZGQ3Njg5MzdmYWUi.aWKLGw.kLHZkUy1wWCUzmzjIZJb_mOxn1E">
+    <input type="hidden" id="barcode-csrf-token" value="ImRkYjFiY2YxOGE1NGJmNzExODJjOTAyN2Q0NTFiNGNjNWJmZTA4N2Qi.aYc8sQ.ARyoC1MNtjjWSQeVGhlDSvP2Z_Y">
     <div id="barcode-config" data-barcode-endpoint="/barcode_scan" data-label-endpoint="/label_scan" data-barcode-mode="auto" data-barcode-error="Nie znaleziono produktu o podanym kodzie kreskowym.">
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-    <script src="/static/barcode-scanner.js?v=20251218"></script>
+    <script src="/static/barcode-scanner.js?v=20260110"></script>
     <script>
         const btn = document.getElementById('mobileMenuBtn');
         const menu = document.getElementById('mobileMenu');
@@ -6300,7 +5905,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const username = (layout.dataset.username || '').toLowerCase();
-    const csrfToken = "ImJjNTM2Y2VmMGZhYjNiMzRjYTU4YjNhOWJmZmYxZGQ3Njg5MzdmYWUi.aWKLGw.kLHZkUy1wWCUzmzjIZJb_mOxn1E";
+    const csrfToken = "ImRkYjFiY2YxOGE1NGJmNzExODJjOTAyN2Q0NTFiNGNjNWJmZTA4N2Qi.aYc8sQ.ARyoC1MNtjjWSQeVGhlDSvP2Z_Y";
     const threadsContainer = document.getElementById('threads-container');
     const messagesArea = document.getElementById('messages-area');
     const headerTitle = document.querySelector('[data-thread-title]');
@@ -7053,6 +6658,5 @@ document.addEventListener('DOMContentLoaded', () => {
 </style>
 
     </div>
-<script defer="" src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;21cdcf415ba9456da37dd4d510c59689&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
 
 </body></html>
