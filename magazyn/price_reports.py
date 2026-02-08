@@ -183,7 +183,7 @@ def report_detail(report_id: int):
                 our = float(item.our_price)
                 # Cena docelowa: 1 grosz ponizej konkurenta
                 raise_target = round(competitor - 0.01, 2)
-                if raise_target > our:
+                if raise_target > our and our > 9.99:
                     raise_percent = ((raise_target - our) / our) * 100
                     # Sugeruj podwyzke tylko jesli zysk >= 1% (zbyt male podwyzki nie maja sensu)
                     if raise_percent >= 1.0:
@@ -545,7 +545,7 @@ def recheck_item(item_id):
                 competitor = float(item.competitor_price)
                 our = float(item.our_price)
                 raise_target = round(competitor - 0.01, 2)
-                if raise_target > our:
+                if raise_target > our and our > 9.99:
                     raise_percent = ((raise_target - our) / our) * 100
                     if raise_percent >= 1.0:
                         suggestion = {
