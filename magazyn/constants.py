@@ -63,13 +63,25 @@ KNOWN_COLORS = [
     "pomarańczowa",
     "turkusowy",
     "turkusowe",
+    "granatowy",
+    "granatowe",
+    "granatowa",
+    "szary",
+    "szare",
 ]
 
 # Regex rules used to normalize product titles and alias lookups.  The patterns
 # are applied in order which allows the more specific replacements (e.g. with
 # "Premium") to run before the general ones.
 _PRODUCT_TITLE_REPLACEMENTS = [
+    # Literowki w nazwie marki
+    (re.compile(r"\btruelobve\b", re.IGNORECASE), "Truelove"),
+    (re.compile(r"\btuelove\b", re.IGNORECASE), "Truelove"),
+    (re.compile(r"\btrelove\b", re.IGNORECASE), "Truelove"),
+    # Literowki w "Front"
     (re.compile(r"\bfron\b", re.IGNORECASE), "Front"),
+    (re.compile(r"\bfrone\b", re.IGNORECASE), "Front"),
+    (re.compile(r"\bftont\b", re.IGNORECASE), "Front"),
     (
         re.compile(r"\bfront[\s-]*line\s+premium\b", re.IGNORECASE),
         "Front Line Premium",
