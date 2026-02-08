@@ -45,9 +45,9 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import ProductSize, Product, PurchaseBatch, OrderProduct, Order
+from .models import ProductSize, Product, PurchaseBatch, OrderProduct, Order, AllegroOffer
 from .parsing import parse_product_info
-from sqlalchemy import desc
+from sqlalchemy import desc, or_, func
 
 
 def _extract_model_series(name: str) -> str:
@@ -463,12 +463,32 @@ def product_detail(product_id):
             if ps.barcode:
                 all_eans.append(ps.barcode)
         
-        # Get order history for all sizes (via EAN)
+        # Get order history for all sizes (via product_size_id + EAN fallback)
         order_history = []
+        size_ids = [ps.id for ps in sorted_sizes]
+        
+        # Buduj slownik rozmiarow do szybkiego mapowania
+        size_map_by_id = {ps.id: ps.size for ps in sorted_sizes}
+        size_map_by_ean = {ps.barcode: ps.size for ps in sorted_sizes if ps.barcode}
+        
+        # Oblicz total_sold bez limitu
+        filters = []
+        if size_ids:
+            filters.append(OrderProduct.product_size_id.in_(size_ids))
         if all_eans:
+            filters.append(OrderProduct.ean.in_(all_eans))
+        
+        total_sold = 0
+        if filters:
+            total_sold = (
+                db.query(func.coalesce(func.sum(OrderProduct.quantity), 0))
+                .filter(or_(*filters))
+                .scalar()
+            ) or 0
+            
             order_products = (
                 db.query(OrderProduct)
-                .filter(OrderProduct.ean.in_(all_eans))
+                .filter(or_(*filters))
                 .order_by(desc(OrderProduct.id))
                 .limit(50)
                 .all()
@@ -476,8 +496,19 @@ def product_detail(product_id):
             
             for op in order_products:
                 if op.order:
+                    # Ustal rozmiar - najpierw po product_size_id, potem po EAN
+                    size = None
+                    if op.product_size_id and op.product_size_id in size_map_by_id:
+                        size = size_map_by_id[op.product_size_id]
+                    elif op.ean and op.ean in size_map_by_ean:
+                        size = size_map_by_ean[op.ean]
+                    
+                    # Numer LP zamowienia
+                    lp = op.order.lp if hasattr(op.order, 'lp') and op.order.lp else op.order_id
+                    
                     order_history.append({
                         "order_id": op.order_id,
+                        "lp": lp,
                         "external_order_id": op.order.external_order_id,
                         "date": op.order.date_add,
                         "customer": op.order.customer_name,
@@ -485,7 +516,7 @@ def product_detail(product_id):
                         "quantity": op.quantity,
                         "price": op.price_brutto,
                         "ean": op.ean,
-                        "size": next((s["size"] for s in sizes_data if s["barcode"] == op.ean), None),
+                        "size": size,
                     })
         
         # Get delivery history (purchase batches) with full details
@@ -515,7 +546,7 @@ def product_detail(product_id):
         
         # Calculate totals
         total_in_stock = sum(s["quantity"] for s in sizes_data)
-        total_sold = sum(o["quantity"] for o in order_history)
+        # total_sold juz obliczone wyzej przez SQL (bez limitu 50)
         total_delivered = sum(d["quantity"] for d in deliveries)
         
         # Calculate overall average purchase price
