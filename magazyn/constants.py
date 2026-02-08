@@ -68,6 +68,12 @@ KNOWN_COLORS = [
     "granatowa",
     "szary",
     "szare",
+    "żółty",
+    "żółte",
+    "żółta",
+    "limonkowy",
+    "limonkowe",
+    "limonkowa",
 ]
 
 # Regex rules used to normalize product titles and alias lookups.  The patterns
