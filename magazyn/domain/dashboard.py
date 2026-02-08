@@ -369,28 +369,39 @@ class DashboardService:
         from_timestamp: Optional[int] = None, 
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """Pobiera najlepiej sprzedajace sie produkty."""
-        query = self.db.query(
-            OrderProduct.name.label('order_name'),
-            OrderProduct.ean,
+        """Pobiera najlepiej sprzedajace sie produkty.
+        
+        Grupuje po product_size_id (konkretny wariant: seria/kolor/rozmiar)
+        zamiast po nazwie zamowienia, bo oferty wariantowe Allegro maja
+        ta sama nazwe dla wszystkich wariantow.
+        """
+        date_filter = []
+        if from_timestamp:
+            date_filter.append(Order.date_add >= from_timestamp)
+
+        items = []
+
+        # --- 1. Dopasowane produkty (product_size_id != NULL) ---
+        matched_q = self.db.query(
+            OrderProduct.product_size_id,
             func.sum(OrderProduct.quantity).label('total_qty'),
             func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label('total_revenue'),
             func.count(func.distinct(OrderProduct.order_id)).label('order_count')
-        ).join(Order)
-        
-        if from_timestamp:
-            query = query.filter(Order.date_add >= from_timestamp)
-        
-        results = query.group_by(OrderProduct.name, OrderProduct.ean)\
-            .order_by(desc('total_qty'))\
-            .limit(limit)\
-            .all()
-        
-        items = []
-        for order_name, ean, qty, revenue, orders in results:
-            product_id, series, color, size = self._resolve_product_info(order_name, ean)
-            
-            # Buduj krotka nazwe
+        ).join(Order).filter(
+            OrderProduct.product_size_id.isnot(None),
+            *date_filter
+        ).group_by(OrderProduct.product_size_id).all()
+
+        for ps_id, qty, revenue, order_cnt in matched_q:
+            ps = self.db.query(ProductSize).filter(ProductSize.id == ps_id).first()
+            if not ps:
+                continue
+            prod = self.db.query(Product).filter(Product.id == ps.product_id).first()
+            series = prod.series if prod else None
+            color = prod.color if prod else None
+            size = ps.size
+            product_id = ps.product_id
+
             short_parts = []
             if series:
                 short_parts.append(series)
@@ -398,19 +409,44 @@ class DashboardService:
                 short_parts.append(color)
             if size:
                 short_parts.append(size)
-            short_name = '/'.join(short_parts) if short_parts else (order_name or 'Brak nazwy')[:30]
-            
+            short_name = '/'.join(short_parts) if short_parts else 'Brak nazwy'
+
+            items.append({
+                'name': short_name,
+                'short_name': short_name,
+                'ean': ps.barcode,
+                'quantity': int(qty or 0),
+                'revenue': float(revenue or 0),
+                'orders': int(order_cnt or 0),
+                'product_id': product_id,
+            })
+
+        # --- 2. Niedopasowane produkty (product_size_id IS NULL) ---
+        unmatched_q = self.db.query(
+            OrderProduct.name.label('order_name'),
+            OrderProduct.ean,
+            func.sum(OrderProduct.quantity).label('total_qty'),
+            func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label('total_revenue'),
+            func.count(func.distinct(OrderProduct.order_id)).label('order_count')
+        ).join(Order).filter(
+            OrderProduct.product_size_id.is_(None),
+            *date_filter
+        ).group_by(OrderProduct.name, OrderProduct.ean).all()
+
+        for order_name, ean, qty, revenue, order_cnt in unmatched_q:
             items.append({
                 'name': order_name or 'Brak nazwy',
-                'short_name': short_name,
+                'short_name': (order_name or 'Brak nazwy')[:40],
                 'ean': ean,
                 'quantity': int(qty or 0),
                 'revenue': float(revenue or 0),
-                'orders': int(orders or 0),
-                'product_id': product_id,
+                'orders': int(order_cnt or 0),
+                'product_id': None,
             })
-        
-        return items
+
+        # Sortuj po ilosci i zwroc top N
+        items.sort(key=lambda x: x['quantity'], reverse=True)
+        return items[:limit]
     
     def _resolve_product_info(
         self, 
