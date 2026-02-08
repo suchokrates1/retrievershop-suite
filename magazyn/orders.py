@@ -1,7 +1,9 @@
 """Orders blueprint - view and manage BaseLinker orders."""
 import json
+import re
 import time
 import logging
+import unicodedata
 from datetime import datetime, timedelta
 from typing import Optional
 from decimal import Decimal
@@ -19,6 +21,127 @@ from .services.order_detail_builder import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_diacritics_ord(text: str) -> str:
+    """Usun znaki diakrytyczne z tekstu (a -> a, n -> n, etc.)."""
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+# Mapowanie roznych form kolorow na klucz kanoniczny (ASCII, meski, mianownik)
+_COLOR_CANONICAL_MAP = {
+    "pomaranczowy": "pomaranczowy",
+    "pomaranczowe": "pomaranczowy",
+    "pomaranczowa": "pomaranczowy",
+    "brazowy": "brazowy",
+    "brazowe": "brazowy",
+    "brazowa": "brazowy",
+    "zolty": "zolty",
+    "zolte": "zolty",
+    "zolta": "zolty",
+    "czarny": "czarny",
+    "czarne": "czarny",
+    "czarna": "czarny",
+    "czerwony": "czerwony",
+    "czerwone": "czerwony",
+    "czerwona": "czerwony",
+    "niebieski": "niebieski",
+    "niebieskie": "niebieski",
+    "niebieska": "niebieski",
+    "zielony": "zielony",
+    "zielone": "zielony",
+    "zielona": "zielony",
+    "rozowy": "rozowy",
+    "rozowe": "rozowy",
+    "rozowa": "rozowy",
+    "fioletowy": "fioletowy",
+    "fioletowe": "fioletowy",
+    "fioletowa": "fioletowy",
+    "srebrny": "srebrny",
+    "srebrne": "srebrny",
+    "srebrna": "srebrny",
+    "granatowy": "granatowy",
+    "granatowe": "granatowy",
+    "granatowa": "granatowy",
+    "szary": "szary",
+    "szare": "szary",
+    "szara": "szary",
+    "turkusowy": "turkusowy",
+    "turkusowe": "turkusowy",
+    "turkusowa": "turkusowy",
+    "bialy": "bialy",
+    "biale": "bialy",
+    "biala": "bialy",
+    "blekitny": "blekitny",
+    "blekitne": "blekitny",
+    "blekitna": "blekitny",
+    "limonkowy": "limonkowy",
+    "limonkowe": "limonkowy",
+    "limonkowa": "limonkowy",
+}
+
+
+def _normalize_color_key(color: str) -> str:
+    """Normalizuj kolor do klucza kanonicznego (ASCII, meski, mianownik)."""
+    if not color:
+        return ""
+    stripped = _strip_diacritics_ord(color).lower().strip()
+    return _COLOR_CANONICAL_MAP.get(stripped, stripped)
+
+
+def _extract_series_from_name(product_name: str) -> str:
+    """Wyciagnij nazwe serii z pelnej nazwy produktu."""
+    if not product_name:
+        return ""
+    match = re.search(r'Truelove\s+(.+)', product_name, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return product_name
+
+
+def _match_product_to_warehouse(db, name: str, color: str, size: str):
+    """Dopasuj produkt z zamowienia do ProductSize w magazynie.
+
+    Uzywa ekstrakcji serii z nazwy i normalizacji kolorow
+    (strip diacritics + kanonizacja formy gramatycznej).
+    """
+    series = _extract_series_from_name(name)
+    if not series:
+        return None
+
+    series_norm = _strip_diacritics_ord(series).lower()
+    color_norm = _normalize_color_key(color)
+
+    candidates = (
+        db.query(ProductSize)
+        .join(Product)
+        .filter(ProductSize.size == size)
+        .all()
+    )
+
+    for ps in candidates:
+        product = ps.product
+        db_series = _strip_diacritics_ord(product.series or "").lower()
+        db_color = _normalize_color_key(product.color or "")
+
+        if series_norm == db_series and color_norm == db_color:
+            return ps
+
+    # Fallback: proba dopasowania z contains
+    for ps in candidates:
+        product = ps.product
+        db_series = _strip_diacritics_ord(product.series or "").lower()
+        db_color = _normalize_color_key(product.color or "")
+
+        if (db_series and (db_series in series_norm or series_norm in db_series)
+                and color_norm == db_color):
+            return ps
+
+    return None
+
 
 bp = Blueprint("orders", __name__)
 
@@ -682,26 +805,16 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         if not product_size_id:
             from .parsing import parse_product_info
             name, size, color = parse_product_info(prod)
-            
+
             if name and size and color:
-                # Match by series/color/size
-                ps = (
-                    db.query(ProductSize)
-                    .join(Product)
-                    .filter(
-                        Product.series.ilike(f"%{name}%"),
-                        Product.color.ilike(f"%{color}%"),
-                        ProductSize.size == size
-                    )
-                    .first()
-                )
+                ps = _match_product_to_warehouse(db, name, color, size)
                 if ps:
                     product_size_id = ps.id
-                    current_app.logger.info(f"✅ Matched: {prod.get('name')} -> {name}/{color}/{size} -> product_size_id={ps.id}")
+                    current_app.logger.info(f"Matched: {prod.get('name')} -> {name}/{color}/{size} -> product_size_id={ps.id}")
                 else:
-                    current_app.logger.warning(f"❌ NOT MATCHED: {prod.get('name')} -> parsed: {name}/{color}/{size}")
+                    current_app.logger.warning(f"NOT MATCHED: {prod.get('name')} -> parsed: {name}/{color}/{size}")
             else:
-                current_app.logger.warning(f"❌ NOT MATCHED (parse failed): {prod.get('name')} -> name={name}, size={size}, color={color}")
+                current_app.logger.warning(f"NOT MATCHED (parse failed): {prod.get('name')} -> name={name}, size={size}, color={color}")
         
         order_product = OrderProduct(
             order_id=order_id,
