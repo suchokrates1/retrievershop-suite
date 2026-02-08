@@ -9,7 +9,7 @@ from typing import Optional
 from decimal import Decimal
 
 from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file, jsonify
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, func, or_
 
 from .auth import login_required
 from .db import get_session
@@ -115,10 +115,12 @@ def _match_product_to_warehouse(db, name: str, color: str, size: str):
     series_norm = _strip_diacritics_ord(series).lower()
     color_norm = _normalize_color_key(color)
 
+    # Normalizacja rozmiaru (np. "Xl" -> "XL")
+    size_upper = size.upper() if size else size
     candidates = (
         db.query(ProductSize)
         .join(Product)
-        .filter(ProductSize.size == size)
+        .filter(func.upper(ProductSize.size) == size_upper)
         .all()
     )
 
