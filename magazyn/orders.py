@@ -955,6 +955,97 @@ def sync_all_orders():
     return redirect(url_for(".orders_list"))
 
 
+@bp.route("/orders/sync-allegro", methods=["POST"])
+@login_required
+def sync_allegro_orders():
+    """
+    Synchronizacja zamowien bezposrednio z Allegro REST API.
+    
+    Allegro zwraca zamowienia z ostatnich 12 miesiecy (max).
+    Paginacja: offset/limit, max offset+limit = 10000.
+    Uzywa GET /order/checkout-forms.
+    """
+    try:
+        from .allegro_api.orders import (
+            fetch_all_allegro_orders,
+            parse_allegro_order_to_data,
+            get_allegro_internal_status,
+        )
+
+        current_app.logger.info("Rozpoczynam sync zamowien z Allegro API...")
+
+        # Pobierz wszystkie zamowienia z Allegro
+        checkout_forms = fetch_all_allegro_orders()
+
+        synced = 0
+        updated = 0
+        skipped = 0
+
+        with get_session() as db:
+            for cf in checkout_forms:
+                try:
+                    order_data = parse_allegro_order_to_data(cf)
+                    cf_id = cf.get("id", "")
+
+                    # Sprawdz czy zamowienie juz istnieje (po external_order_id lub order_id)
+                    existing = db.query(Order).filter(
+                        or_(
+                            Order.external_order_id == cf_id,
+                            Order.order_id == f"allegro_{cf_id}",
+                        )
+                    ).first()
+
+                    if existing:
+                        # Zamowienie juz istnieje (zsynchronizowane przez BaseLinker lub wczesniej)
+                        # Zaktualizuj tylko brakujace pola
+                        if not existing.user_login and order_data.get("user_login"):
+                            existing.user_login = order_data["user_login"]
+                        if not existing.email and order_data.get("email"):
+                            existing.email = order_data["email"]
+                        if not existing.phone and order_data.get("phone"):
+                            existing.phone = order_data["phone"]
+                        if not existing.external_order_id:
+                            existing.external_order_id = cf_id
+                        updated += 1
+                    else:
+                        # Nowe zamowienie - dodaj
+                        sync_order_from_data(db, order_data)
+
+                        # Ustaw status na podstawie danych Allegro
+                        internal_status = get_allegro_internal_status(order_data)
+                        allegro_status = order_data.get("_allegro_status", "")
+                        fulfillment = order_data.get("_allegro_fulfillment_status", "")
+                        add_order_status(
+                            db,
+                            order_data["order_id"],
+                            internal_status,
+                            notes=f"Zsynchronizowano z Allegro API (status: {allegro_status}, fulfillment: {fulfillment})",
+                        )
+                        synced += 1
+
+                except Exception as exc:
+                    current_app.logger.warning(
+                        "Blad przetwarzania zamowienia Allegro %s: %s",
+                        cf.get("id", "?"), exc
+                    )
+                    skipped += 1
+
+            db.commit()
+
+        msg = (
+            f"Allegro API: {synced} nowych, {updated} zaktualizowanych, "
+            f"{skipped} pominieto (laczne: {len(checkout_forms)} z API)"
+        )
+        current_app.logger.info(msg)
+        flash(msg, "success")
+
+    except Exception as exc:
+        current_app.logger.error("Blad sync zamowien z Allegro API: %s", exc)
+        flash(f"Blad synchronizacji z Allegro: {exc}", "error")
+
+    return redirect(url_for(".orders_list"))
+
+
 # Synchronizacja statusów przesyłek jest automatyczna (co godzinę w schedulerze)
 # Nie potrzebujemy ręcznej synchronizacji ani osobnego widoku śledzenia
 # Historia wysyłki jest zintegrowana w order_detail.html
