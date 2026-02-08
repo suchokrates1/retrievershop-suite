@@ -360,9 +360,14 @@ def orders_list():
     with get_session() as db:
         query = db.query(Order)
         
-        # Apply search filter
+        # Apply search filter - szuka rowniez w produktach zamowienia
         if search:
             search_pattern = f"%{search}%"
+            # Subquery: zamowienia zawierajace pasujacy produkt
+            product_match_subq = db.query(OrderProduct.order_id).filter(
+                OrderProduct.name.ilike(search_pattern)
+            ).distinct().subquery()
+            
             query = query.filter(
                 or_(
                     Order.order_id.ilike(search_pattern),
@@ -370,12 +375,14 @@ def orders_list():
                     Order.customer_name.ilike(search_pattern),
                     Order.email.ilike(search_pattern),
                     Order.phone.ilike(search_pattern),
+                    Order.delivery_method.ilike(search_pattern),
+                    Order.order_id.in_(product_match_subq),
                 )
             )
         
         # Apply sorting
         if sort_by == "order_id":
-            sort_col = Order.order_id
+            sort_col = Order.date_add  # LP sortuje chronologicznie
         elif sort_by == "amount":
             sort_col = Order.payment_done
         else:  # default: date
@@ -389,6 +396,31 @@ def orders_list():
         # Pagination
         total = query.count()
         orders = query.offset((page - 1) * per_page).limit(per_page).all()
+        
+        # Oblicz LP chronologiczne dla kazdego zamowienia
+        # LP = numer porzadkowy od najstarszego zamowienia (1 = najstarsze)
+        if search:
+            # Przy wyszukiwaniu: LP wzgledem przefiltrowanego zbioru
+            lp_base_q = db.query(Order.order_id)
+            search_pattern_lp = f"%{search}%"
+            product_match_subq_lp = db.query(OrderProduct.order_id).filter(
+                OrderProduct.name.ilike(search_pattern_lp)
+            ).distinct().subquery()
+            lp_base_q = lp_base_q.filter(
+                or_(
+                    Order.order_id.ilike(search_pattern_lp),
+                    Order.external_order_id.ilike(search_pattern_lp),
+                    Order.customer_name.ilike(search_pattern_lp),
+                    Order.email.ilike(search_pattern_lp),
+                    Order.phone.ilike(search_pattern_lp),
+                    Order.delivery_method.ilike(search_pattern_lp),
+                    Order.order_id.in_(product_match_subq_lp),
+                )
+            )
+            lp_ids = [r.order_id for r in lp_base_q.order_by(Order.date_add.asc()).all()]
+        else:
+            lp_ids = [r.order_id for r in db.query(Order.order_id).order_by(Order.date_add.asc()).all()]
+        lp_map = {oid: idx + 1 for idx, oid in enumerate(lp_ids)}
         
         # Convert timestamps and add latest status
         orders_data = []
@@ -424,6 +456,7 @@ def orders_list():
             
             orders_data.append({
                 "order_id": order.order_id,
+                "lp": lp_map.get(order.order_id, 0),
                 "external_order_id": order.external_order_id,
                 "shop_order_id": order.shop_order_id,
                 "customer_name": order.customer_name,
