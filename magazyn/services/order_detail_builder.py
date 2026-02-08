@@ -79,11 +79,17 @@ class OrderDetailBuilder:
             warehouse_product = None
             ps = None
             
-            # 1. Najpierw probuj po EAN
-            if op.ean:
+            # 1. Najpierw probuj po product_size_id (najnowsze FK)
+            if op.product_size_id:
+                ps = self.db.query(ProductSize).filter(
+                    ProductSize.id == op.product_size_id
+                ).first()
+            
+            # 2. Potem probuj po EAN
+            if not ps and op.ean:
                 ps = self.db.query(ProductSize).filter(ProductSize.barcode == op.ean).first()
             
-            # 2. Jesli nie znaleziono, probuj przez auction_id -> AllegroOffer
+            # 3. Jesli nie znaleziono, probuj przez auction_id -> AllegroOffer
             if not ps and op.auction_id:
                 allegro_offer = self.db.query(AllegroOffer).filter(
                     AllegroOffer.offer_id == op.auction_id
