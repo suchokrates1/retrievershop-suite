@@ -54,9 +54,16 @@ with app.app_context():
                     )
                     synced += 1
             except Exception as exc:
+                import traceback
                 cf_id_str = cf.get("id", "?")
                 print("Blad przy {}: {}".format(cf_id_str, exc))
+                traceback.print_exc()
                 skipped += 1
+                if skipped <= 3:
+                    # Pokaz pelny traceback dla pierwszych bledow
+                    pass
+                elif skipped == 4:
+                    print("... kolejne bledy ukryte ...")
         db.commit()
 
     print("Wynik: {} nowych, {} zaktualizowanych, {} pominieto".format(
