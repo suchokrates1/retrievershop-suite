@@ -885,23 +885,29 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         db.add(order_product)
     
     # Check and update status based on BaseLinker status_id
+    # Pomijamy dodawanie statusu jesli nie ma BL status_id (zamowienia z Allegro API
+    # maja status ustawiany osobno w sync_allegro_orders)
     bl_status_id = order_data.get("order_status_id")
-    internal_status = BASELINKER_STATUS_MAP.get(bl_status_id, "pobrano")
-    
-    # Get current status from log
-    current_status_log = db.query(OrderStatusLog).filter(
-        OrderStatusLog.order_id == order_id
-    ).order_by(desc(OrderStatusLog.timestamp)).first()
-    
-    current_status = current_status_log.status if current_status_log else None
-    
-    # Add or update status if changed or new order
-    if is_new_order or current_status != internal_status:
-        status_note = {
-            "w_drodze": "Zsynchronizowano ze statusu Wysłane/W transporcie",
-            "dostarczono": "Zsynchronizowano ze statusu Zakończone",
-        }.get(internal_status, f"Zaktualizowano z BaseLinker (status_id: {bl_status_id})")
-        add_order_status(db, order_id, internal_status, notes=status_note)
+    if bl_status_id is not None:
+        internal_status = BASELINKER_STATUS_MAP.get(bl_status_id, "pobrano")
+        
+        # Get current status from log
+        current_status_log = db.query(OrderStatusLog).filter(
+            OrderStatusLog.order_id == order_id
+        ).order_by(desc(OrderStatusLog.timestamp)).first()
+        
+        current_status = current_status_log.status if current_status_log else None
+        
+        # Add or update status if changed or new order
+        if is_new_order or current_status != internal_status:
+            status_note = {
+                "w_drodze": "Zsynchronizowano ze statusu Wysłane/W transporcie",
+                "dostarczono": "Zsynchronizowano ze statusu Zakończone",
+            }.get(internal_status, f"Zaktualizowano z BaseLinker (status_id: {bl_status_id})")
+            add_order_status(db, order_id, internal_status, notes=status_note)
+    elif is_new_order:
+        # Nowe zamowienie bez BL status_id - dodaj domyslny status "pobrano"
+        add_order_status(db, order_id, "pobrano", notes="Nowe zamowienie")
     
     return order
 
@@ -1160,8 +1166,7 @@ def sync_allegro_orders():
                     ).first()
 
                     if existing:
-                        # Zamowienie juz istnieje (zsynchronizowane przez BaseLinker lub wczesniej)
-                        # Zaktualizuj tylko brakujace pola
+                        # Zamowienie juz istnieje - zaktualizuj brakujace pola
                         if not existing.user_login and order_data.get("user_login"):
                             existing.user_login = order_data["user_login"]
                         if not existing.email and order_data.get("email"):
@@ -1170,6 +1175,22 @@ def sync_allegro_orders():
                             existing.phone = order_data["phone"]
                         if not existing.external_order_id:
                             existing.external_order_id = cf_id
+
+                        # Zaktualizuj status na podstawie fulfillment z Allegro
+                        internal_status = get_allegro_internal_status(order_data)
+                        allegro_status = order_data.get("_allegro_status", "")
+                        fulfillment = order_data.get("_allegro_fulfillment_status", "")
+                        added = add_order_status(
+                            db,
+                            existing.order_id,
+                            internal_status,
+                            notes=f"Aktualizacja z Allegro API (status: {allegro_status}, fulfillment: {fulfillment})",
+                        )
+                        if added:
+                            current_app.logger.info(
+                                "Zaktualizowano status %s -> %s (fulfillment: %s)",
+                                existing.order_id[:30], internal_status, fulfillment,
+                            )
                         updated += 1
                     else:
                         # Nowe zamowienie - dodaj
