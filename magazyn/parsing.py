@@ -27,6 +27,7 @@ COLOR_ALIASES = {
     "pomarańczowa": "pomarańczowy",
     "turkusowe": "turkusowy",
     "granatowe": "granatowy",
+    "granatowa": "granatowy",
     "szare": "szary",
 }
 
@@ -112,6 +113,12 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
         return "", "", ""
 
     name = item.get("name", "") or ""
+
+    # Usun szum z nazwy: znaczniki dlugosci (2m, 1.5m) i slowo "material"
+    name = re.sub(r'\b\d+(?:[.,]\d+)?m\b', '', name).strip()
+    name = re.sub(r'\bmateria[\u0142l]\b', '', name, flags=re.IGNORECASE).strip()
+    name = re.sub(r'\s+', ' ', name)
+
     size = ""
     color = ""
 
