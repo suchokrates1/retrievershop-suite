@@ -311,18 +311,18 @@ def parse_allegro_order_to_data(checkout_form: dict) -> dict:
         Dane zamowienia w formacie wewnetrznym.
     """
     cf_id = checkout_form.get("id", "")
-    buyer = checkout_form.get("buyer", {})
-    delivery = checkout_form.get("delivery", {})
-    delivery_address = delivery.get("address", {})
-    delivery_method = delivery.get("method", {})
-    pickup_point = delivery.get("pickupPoint", {})
-    pickup_address = pickup_point.get("address", {}) if pickup_point else {}
-    payment = checkout_form.get("payment", {})
-    invoice = checkout_form.get("invoice", {})
-    invoice_address = invoice.get("address", {}) if invoice else {}
-    summary = checkout_form.get("summary", {})
-    fulfillment = checkout_form.get("fulfillment", {})
-    line_items = checkout_form.get("lineItems", [])
+    buyer = checkout_form.get("buyer") or {}
+    delivery = checkout_form.get("delivery") or {}
+    delivery_address = delivery.get("address") or {}
+    delivery_method = delivery.get("method") or {}
+    pickup_point = delivery.get("pickupPoint") or {}
+    pickup_address = pickup_point.get("address") or {}
+    payment = checkout_form.get("payment") or {}
+    invoice = checkout_form.get("invoice") or {}
+    invoice_address = invoice.get("address") or {}
+    summary = checkout_form.get("summary") or {}
+    fulfillment = checkout_form.get("fulfillment") or {}
+    line_items = checkout_form.get("lineItems") or []
 
     # Konwersja daty ISO 8601 na Unix timestamp
     def iso_to_unix(iso_str):
@@ -351,15 +351,16 @@ def parse_allegro_order_to_data(checkout_form: dict) -> dict:
 
     # Kwota platnosci
     paid_amount = None
-    if payment.get("paidAmount"):
+    paid_amount_data = payment.get("paidAmount") or {}
+    if paid_amount_data:
         try:
-            paid_amount = float(payment["paidAmount"].get("amount", 0))
+            paid_amount = float(paid_amount_data.get("amount", 0))
         except (ValueError, TypeError):
             pass
 
     # Koszt dostawy
     delivery_price = None
-    delivery_cost = delivery.get("cost", {})
+    delivery_cost = delivery.get("cost") or {}
     if delivery_cost:
         try:
             delivery_price = float(delivery_cost.get("amount", 0))
@@ -372,15 +373,15 @@ def parse_allegro_order_to_data(checkout_form: dict) -> dict:
     customer_name = f"{first_name} {last_name}".strip()
 
     # Invoice
-    invoice_company_data = invoice_address.get("company", {}) if invoice_address else {}
-    want_invoice = invoice.get("required", False) if invoice else False
+    invoice_company_data = (invoice_address.get("company") or {}) if invoice_address else {}
+    want_invoice = (invoice.get("required", False) or False) if invoice else False
 
     # Produkty - konwersja lineItems na format wewnetrzny
     products = []
     for item in line_items:
-        offer = item.get("offer", {})
-        external_data = offer.get("external", {})
-        price_data = item.get("price", {})
+        offer = item.get("offer") or {}
+        external_data = offer.get("external") or {}
+        price_data = item.get("price") or {}
 
         product = {
             "name": offer.get("name", ""),
@@ -459,7 +460,7 @@ def parse_allegro_order_to_data(checkout_form: dict) -> dict:
         "invoice_country": "",
         "want_invoice": want_invoice,
         # Platnosc
-        "currency": summary.get("totalToPay", {}).get("currency", "PLN"),
+        "currency": (summary.get("totalToPay") or {}).get("currency", "PLN"),
         "payment_method": payment_method,
         "payment_method_cod": payment_type == "CASH_ON_DELIVERY",
         "payment_done": paid_amount,
