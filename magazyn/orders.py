@@ -756,16 +756,32 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     """
     Create or update Order from BaseLinker data (last_order_data format).
     Called from print_agent when processing orders.
+    
+    Deduplikacja: jesli zamowienie o danym external_order_id juz istnieje
+    pod innym order_id (np. z Allegro API), nie tworzymy duplikatu.
     """
     order_id = str(order_data.get("order_id"))
+    external_order_id = order_data.get("external_order_id")
     
-    # Check if order exists
+    # Check if order exists by order_id
     order = db.query(Order).filter(Order.order_id == order_id).first()
     is_new_order = False
+    
     if not order:
-        order = Order(order_id=order_id)
-        db.add(order)
-        is_new_order = True
+        # Sprawdz czy zamowienie o tym external_order_id juz istnieje (z innego zrodla)
+        if external_order_id:
+            existing = db.query(Order).filter(
+                Order.external_order_id == external_order_id
+            ).first()
+            if existing:
+                # Zamowienie juz istnieje pod innym ID - aktualizuj istniejace
+                order = existing
+                is_new_order = False
+        
+        if not order:
+            order = Order(order_id=order_id)
+            db.add(order)
+            is_new_order = True
     
     # Update all fields from order_data
     order.external_order_id = order_data.get("external_order_id")
