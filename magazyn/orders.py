@@ -797,6 +797,7 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = None) -> int
     """
     Sync orders from BaseLinker for given status IDs.
     If days is None, fetches ALL orders from archives (no date limit).
+    Obsługuje paginację - BaseLinker zwraca max 100 zamowien na request.
     Returns number of orders synced.
     """
     from .config import settings
@@ -809,87 +810,118 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = None) -> int
     
     for status_id in status_ids:
         try:
-            # Build parameters - omit date_from for full archive sync
-            params_dict = {
-                "status_id": status_id,
-                "include_products": 1,
-            }
+            page_count = 0
+            id_from = 0  # Paginacja: pobieramy zamowienia z ID > id_from
             
-            # Only add date_from if days is specified
-            if days is not None:
-                date_from = int(time.time()) - (days * 24 * 60 * 60)
-                params_dict["date_from"] = date_from
-            
-            params = {
-                "method": "getOrders",
-                "parameters": json.dumps(params_dict)
-            }
-            response = requests.post(api_url, headers=headers, data=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get("status") != "SUCCESS":
-                current_app.logger.warning(
-                    "BaseLinker API error for status %s: %s",
-                    status_id, data.get("error_message", "Unknown error")
-                )
-                continue
+            while True:
+                page_count += 1
+                # Build parameters
+                params_dict = {
+                    "status_id": status_id,
+                    "include_products": 1,
+                }
                 
-            orders = data.get("orders", [])
-            
-            with get_session() as db:
-                for order in orders:
-                    order_data = {
-                        "order_id": order.get("order_id"),
-                        "external_order_id": order.get("external_order_id"),
-                        "shop_order_id": order.get("shop_order_id"),
-                        "customer": order.get("delivery_fullname"),
-                        "email": order.get("email"),
-                        "phone": order.get("phone"),
-                        "user_login": order.get("user_login"),
-                        "platform": order.get("order_source"),
-                        "order_source_id": order.get("order_source_id"),
-                        "order_status_id": order.get("order_status_id"),
-                        "confirmed": order.get("confirmed", False),
-                        "date_add": order.get("date_add"),
-                        "date_confirmed": order.get("date_confirmed"),
-                        "date_in_status": order.get("date_in_status"),
-                        "shipping": order.get("delivery_method"),
-                        "delivery_method_id": order.get("delivery_method_id"),
-                        "delivery_price": order.get("delivery_price"),
-                        "delivery_fullname": order.get("delivery_fullname"),
-                        "delivery_company": order.get("delivery_company"),
-                        "delivery_address": order.get("delivery_address"),
-                        "delivery_city": order.get("delivery_city"),
-                        "delivery_postcode": order.get("delivery_postcode"),
-                        "delivery_country": order.get("delivery_country"),
-                        "delivery_country_code": order.get("delivery_country_code"),
-                        "delivery_point_id": order.get("delivery_point_id"),
-                        "delivery_point_name": order.get("delivery_point_name"),
-                        "delivery_point_address": order.get("delivery_point_address"),
-                        "delivery_point_postcode": order.get("delivery_point_postcode"),
-                        "delivery_point_city": order.get("delivery_point_city"),
-                        "invoice_fullname": order.get("invoice_fullname"),
-                        "invoice_company": order.get("invoice_company"),
-                        "invoice_nip": order.get("invoice_nip"),
-                        "invoice_address": order.get("invoice_address"),
-                        "invoice_city": order.get("invoice_city"),
-                        "invoice_postcode": order.get("invoice_postcode"),
-                        "invoice_country": order.get("invoice_country"),
-                        "want_invoice": order.get("want_invoice"),
-                        "currency": order.get("currency", "PLN"),
-                        "payment_method": order.get("payment_method"),
-                        "payment_method_cod": order.get("payment_method_cod"),
-                        "payment_done": order.get("payment_done"),
-                        "user_comments": order.get("user_comments"),
-                        "admin_comments": order.get("admin_comments"),
-                        "delivery_package_module": order.get("delivery_package_module"),
-                        "delivery_package_nr": order.get("delivery_package_nr"),
-                        "products": order.get("products", []),
-                    }
-                    sync_order_from_data(db, order_data)
-                    synced += 1
-                db.commit()
+                # Paginacja za pomoca id_from
+                if id_from > 0:
+                    params_dict["id_from"] = id_from
+                
+                # Only add date_from if days is specified
+                if days is not None:
+                    date_from = int(time.time()) - (days * 24 * 60 * 60)
+                    params_dict["date_from"] = date_from
+                
+                params = {
+                    "method": "getOrders",
+                    "parameters": json.dumps(params_dict)
+                }
+                response = requests.post(api_url, headers=headers, data=params, timeout=60)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") != "SUCCESS":
+                    current_app.logger.warning(
+                        "BaseLinker API error for status %s: %s",
+                        status_id, data.get("error_message", "Unknown error")
+                    )
+                    break
+                    
+                orders = data.get("orders", [])
+                if not orders:
+                    break
+                
+                current_app.logger.info(
+                    "Status %s strona %d: pobrano %d zamowien (id_from=%d)",
+                    status_id, page_count, len(orders), id_from
+                )
+                
+                with get_session() as db:
+                    for order in orders:
+                        order_data = {
+                            "order_id": order.get("order_id"),
+                            "external_order_id": order.get("external_order_id"),
+                            "shop_order_id": order.get("shop_order_id"),
+                            "customer": order.get("delivery_fullname"),
+                            "email": order.get("email"),
+                            "phone": order.get("phone"),
+                            "user_login": order.get("user_login"),
+                            "platform": order.get("order_source"),
+                            "order_source_id": order.get("order_source_id"),
+                            "order_status_id": order.get("order_status_id"),
+                            "confirmed": order.get("confirmed", False),
+                            "date_add": order.get("date_add"),
+                            "date_confirmed": order.get("date_confirmed"),
+                            "date_in_status": order.get("date_in_status"),
+                            "shipping": order.get("delivery_method"),
+                            "delivery_method_id": order.get("delivery_method_id"),
+                            "delivery_price": order.get("delivery_price"),
+                            "delivery_fullname": order.get("delivery_fullname"),
+                            "delivery_company": order.get("delivery_company"),
+                            "delivery_address": order.get("delivery_address"),
+                            "delivery_city": order.get("delivery_city"),
+                            "delivery_postcode": order.get("delivery_postcode"),
+                            "delivery_country": order.get("delivery_country"),
+                            "delivery_country_code": order.get("delivery_country_code"),
+                            "delivery_point_id": order.get("delivery_point_id"),
+                            "delivery_point_name": order.get("delivery_point_name"),
+                            "delivery_point_address": order.get("delivery_point_address"),
+                            "delivery_point_postcode": order.get("delivery_point_postcode"),
+                            "delivery_point_city": order.get("delivery_point_city"),
+                            "invoice_fullname": order.get("invoice_fullname"),
+                            "invoice_company": order.get("invoice_company"),
+                            "invoice_nip": order.get("invoice_nip"),
+                            "invoice_address": order.get("invoice_address"),
+                            "invoice_city": order.get("invoice_city"),
+                            "invoice_postcode": order.get("invoice_postcode"),
+                            "invoice_country": order.get("invoice_country"),
+                            "want_invoice": order.get("want_invoice"),
+                            "currency": order.get("currency", "PLN"),
+                            "payment_method": order.get("payment_method"),
+                            "payment_method_cod": order.get("payment_method_cod"),
+                            "payment_done": order.get("payment_done"),
+                            "user_comments": order.get("user_comments"),
+                            "admin_comments": order.get("admin_comments"),
+                            "delivery_package_module": order.get("delivery_package_module"),
+                            "delivery_package_nr": order.get("delivery_package_nr"),
+                            "products": order.get("products", []),
+                        }
+                        sync_order_from_data(db, order_data)
+                        synced += 1
+                    db.commit()
+                
+                # Sprawdz czy sa kolejne strony (BaseLinker zwraca max 100)
+                if len(orders) < 100:
+                    break  # Ostatnia strona
+                
+                # Ustaw id_from na ostatnie order_id aby pobrac nastepna strone
+                id_from = orders[-1].get("order_id", 0)
+                
+                # Zabezpieczenie przed nieskonczona petla
+                if page_count > 200:
+                    current_app.logger.warning(
+                        "Status %s: przerwano po %d stronach (limit bezpieczenstwa)",
+                        status_id, page_count
+                    )
+                    break
                 
         except Exception as exc:
             current_app.logger.error(
@@ -897,6 +929,30 @@ def _sync_orders_from_baselinker(status_ids: list[int], days: int = None) -> int
             )
     
     return synced
+
+
+@bp.route("/orders/sync-all", methods=["POST"])
+@login_required
+def sync_all_orders():
+    """Reczne uruchomienie pelnego syncu zamowien z BaseLinker (cala historia)."""
+    try:
+        days_param = request.form.get("days")
+        if days_param:
+            days = int(days_param)
+            current_app.logger.info("Reczny sync zamowien: ostatnie %d dni", days)
+        else:
+            days = None
+            current_app.logger.info("Reczny sync zamowien: PELNY ARCHIWUM (bez limitu dat)")
+        
+        synced = _sync_orders_from_baselinker(ALL_STATUS_IDS, days=days)
+        
+        current_app.logger.info("Reczny sync zamowien zakonczony: %d zamowien zsynchronizowanych", synced)
+        flash(f"Zsynchronizowano {synced} zamowien z BaseLinker", "success")
+    except Exception as exc:
+        current_app.logger.error("Blad recznego syncu zamowien: %s", exc)
+        flash(f"Blad synchronizacji: {exc}", "error")
+    
+    return redirect(url_for(".orders_list"))
 
 
 # Synchronizacja statusów przesyłek jest automatyczna (co godzinę w schedulerze)
