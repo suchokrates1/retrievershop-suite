@@ -54,6 +54,19 @@
     .match-fuzzy {
         color: #ffc107;
     }
+    .match-new {
+        color: #17a2b8;
+        font-weight: bold;
+    }
+    .product-selector .dropdown-item.new-product {
+        color: #17a2b8;
+        border-bottom: 1px solid #444;
+        font-weight: bold;
+    }
+    .product-selector .dropdown-item.new-product:hover {
+        background-color: #17a2b8;
+        color: white;
+    }
 </style>
 
 <h2 class="mb-3 text-center">Potwierdź pozycje faktury</h2>
@@ -128,7 +141,7 @@
                             {% if row.matched_ps_id %}
                                 {{ row.matched_name }}
                             {% else %}
-                                -- Wybierz --
+                                + Nowy produkt
                             {% endif %}
                         </button>
                         <div class="dropdown-menu dropdown-menu-dark">
@@ -136,7 +149,9 @@
                                 <input type="text" class="form-control form-control-sm search-input" 
                                        placeholder="Szukaj produktu..." data-target="{{ loop.index0 }}">
                             </div>
-                            <div class="dropdown-item" data-ps-id="" data-row="{{ loop.index0 }}">-- Brak --</div>
+                            <div class="dropdown-item new-product {% if not row.matched_ps_id %}active{% endif %}" 
+                               data-ps-id="__new__" data-row="{{ loop.index0 }}">+ Nowy produkt</div>
+                            <div class="dropdown-item" data-ps-id="" data-row="{{ loop.index0 }}">-- Brak (pomiń) --</div>
                             {% for ps in product_sizes %}
                             <div class="dropdown-item {% if row.matched_ps_id == ps['ps_id'] %}active{% endif %}" 
                                data-ps-id="{{ ps['ps_id'] }}" data-row="{{ loop.index0 }}"
@@ -148,7 +163,6 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {% if row.matched_ps_id %}
                     <small class="d-block" style="font-size: 0.7rem;">
                         {% if row.match_type == 'ean' %}
                             <span class="match-ean" title="Dopasowano po kodzie EAN - pewne">✓ EAN</span>
@@ -156,9 +170,10 @@
                             <span class="match-ean" title="Dopasowano po SKU TipTop - pewne">✓ SKU</span>
                         {% elif row.match_type == 'fuzzy' %}
                             <span class="match-fuzzy" title="Dopasowano po nazwie - sprawdź!">⚠ Nazwa</span>
+                        {% elif not row.matched_ps_id %}
+                            <span class="match-new" title="Zostanie utworzony nowy produkt">+ Nowy</span>
                         {% endif %}
                     </small>
-                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -169,7 +184,8 @@
         <div class="mb-2">
             <small>
                 <span class="match-ean">✓ EAN</span> / <span class="match-ean">✓ SKU</span> = pewne dopasowanie |
-                <span class="match-fuzzy">⚠ Nazwa</span> = dopasowanie po nazwie (sprawdź!)
+                <span class="match-fuzzy">⚠ Nazwa</span> = dopasowanie po nazwie (sprawdź!) |
+                <span class="match-new">+ Nowy</span> = zostanie utworzony nowy produkt
             </small>
         </div>
         <button type="submit" class="btn btn-primary">Potwierdź import ({{ rows|length }} pozycji)</button>
@@ -194,7 +210,10 @@ document.addEventListener('DOMContentLoaded', function() {
             hiddenInput.value = psId || '';
             
             // Update button text
-            if (psId && this.dataset.name) {
+            if (psId === '__new__') {
+                btn.textContent = '+ Nowy produkt';
+                hiddenInput.value = '';
+            } else if (psId && this.dataset.name) {
                 btn.textContent = this.dataset.name + ' (' + this.dataset.color + ') ' + this.dataset.size;
             } else if (psId) {
                 const strong = this.querySelector('strong');
@@ -204,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     btn.textContent = strong.textContent + (colorMatch ? ' (' + colorMatch[1] + ') ' : ' ') + badge.textContent;
                 }
             } else {
-                btn.textContent = '-- Wybierz --';
+                btn.textContent = '-- Brak (pomiń) --';
             }
             
             // Update active state
@@ -229,7 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             dropdown.querySelectorAll('.dropdown-item').forEach(function(item) {
                 const searchData = item.dataset.search || '';
-                if (searchTerm === '' || searchData.includes(searchTerm) || !item.dataset.psId) {
+                if (searchTerm === '' || searchData.includes(searchTerm) || !item.dataset.psId || item.dataset.psId === '__new__') {
                     item.style.display = '';
                 } else {
                     item.style.display = 'none';
