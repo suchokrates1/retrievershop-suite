@@ -185,6 +185,7 @@ class DashboardService:
         
         # Pobierz koszty kampanii Ads (NSP) za biezacy miesiac
         ads_cost = Decimal("0")
+        ads_daily = []
         if access_token:
             try:
                 from ..allegro_api import get_period_ads_cost
@@ -201,6 +202,10 @@ class DashboardService:
                 )
                 if ads_result.get("success"):
                     ads_cost = ads_result["total_cost"]
+                    ads_daily = [
+                        {"date": d["date"], "amount": float(d["amount"])}
+                        for d in ads_result.get("daily_costs", [])
+                    ]
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Blad pobierania kosztow Ads: {e}")
@@ -228,6 +233,8 @@ class DashboardService:
             'products_sold': summary.products_sold,
             'returned_orders': total_returned_orders,
             'ads_cost': float(ads_cost),
+            'ads_days': len(ads_daily),
+            'ads_daily': ads_daily,
         }
     
     def get_inventory_stats(self) -> InventoryStats:
