@@ -45,8 +45,9 @@
             </td>
             <td>{{ product['color'] }}</td>
             {% for size in ALL_SIZES %}
+            {% set qty = product['sizes'].get(size, 0) %}
             <td>
-                <span class="{% if product['sizes'][size] == 0 %}text-muted{% elif product['sizes'][size] <= 2 %}text-warning{% endif %}">{{ product['sizes'][size] }}</span>
+                <span class="{% if qty == 0 %}text-muted{% elif qty <= 2 %}text-warning{% endif %}">{{ qty }}</span>
             </td>
             {% endfor %}
             <td class="text-center">
