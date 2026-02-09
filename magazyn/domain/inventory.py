@@ -97,6 +97,8 @@ def get_product_sizes():
                 Product.color,
                 ProductSize.size,
                 ProductSize.barcode,
+                Product.category,
+                Product.series,
             )
             .join(Product, ProductSize.product_id == Product.id)
             .all()
