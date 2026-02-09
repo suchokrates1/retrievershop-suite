@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Raport remanentu #{{ stocktake.id }}</h3>
+        <div>
+            {% if stocktake.status == 'finished' %}
+            <form method="POST" action="{{ url_for('stocktake.stocktake_apply', stocktake_id=stocktake.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success me-2" onclick="return confirm('Czy na pewno zastosowac wyniki remanentu? Stany magazynowe zostana zaktualizowane.')">
+                    <i class="bi bi-check2-all me-1"></i>Zastosuj stany
+                </button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('stocktake.stocktake_pdf', stocktake_id=stocktake.id) }}" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-file-pdf me-1"></i>PDF
+            </a>
+            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-1"></i>Lista
+            </a>
+        </div>
+    </div>
+
+    <!-- Informacje -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Rozpoczeto</div>
+                    <div>{{ stocktake.started_at.strftime('%Y-%m-%d %H:%M') if stocktake.started_at else '-' }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Zakonczono</div>
+                    <div>{{ stocktake.finished_at.strftime('%Y-%m-%d %H:%M') if stocktake.finished_at else '-' }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Stan systemowy</div>
+                    <div class="fs-5 fw-bold">{{ total_expected }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Stan faktyczny</div>
+                    <div class="fs-5 fw-bold">{{ total_scanned }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-dark border-{% if total_discrepancies > 0 %}danger{% else %}success{% endif %} text-center">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Rozbieznosci</div>
+                    <div class="fs-5 fw-bold {% if total_discrepancies > 0 %}text-danger{% else %}text-success{% endif %}">{{ total_discrepancies }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if stocktake.status == 'applied' %}
+    <div class="alert alert-success">
+        <i class="bi bi-check-circle me-1"></i>Stany magazynowe zostaly zaktualizowane na podstawie tego remanentu.
+    </div>
+    {% endif %}
+
+    <!-- Filtr -->
+    <div class="mb-3">
+        <select id="filter-status" class="form-select form-select-sm bg-dark text-white" style="width: auto; display: inline-block;">
+            <option value="all">Wszystkie</option>
+            <option value="discrepancy">Tylko rozbieznosci</option>
+            <option value="ok">Tylko zgodne</option>
+            <option value="missing">Tylko braki</option>
+            <option value="surplus">Tylko nadwyzki</option>
+        </select>
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-responsive">
+        <table class="table table-dark table-striped table-sm align-middle" id="report-table">
+            <thead>
+                <tr>
+                    <th>Lp.</th>
+                    <th>Nazwa produktu</th>
+                    <th>Kolor</th>
+                    <th>Rozmiar</th>
+                    <th>EAN</th>
+                    <th class="text-center">Stan systemowy</th>
+                    <th class="text-center">Stan faktyczny</th>
+                    <th class="text-center">Roznica</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr data-status="{{ item.status }}">
+                    <td>{{ loop.index }}</td>
+                    <td>{{ item.series or item.category or item.product_name }}</td>
+                    <td>{{ item.color }}</td>
+                    <td>{{ item.size }}</td>
+                    <td><small class="text-muted">{{ item.barcode }}</small></td>
+                    <td class="text-center">{{ item.expected_qty }}</td>
+                    <td class="text-center">{{ item.scanned_qty }}</td>
+                    <td class="text-center">
+                        {% if item.difference < 0 %}
+                        <span class="text-danger fw-bold">{{ item.difference }}</span>
+                        {% elif item.difference > 0 %}
+                        <span class="text-primary fw-bold">+{{ item.difference }}</span>
+                        {% else %}
+                        <span class="text-success">0</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('filter-status').addEventListener('change', function() {
+    var filter = this.value;
+    var rows = document.querySelectorAll('#report-table tbody tr');
+    rows.forEach(function(row) {
+        var status = row.getAttribute('data-status');
+        if (filter === 'all') {
+            row.style.display = '';
+        } else if (filter === 'discrepancy') {
+            row.style.display = status !== 'ok' ? '' : 'none';
+        } else if (filter === 'missing') {
+            row.style.display = status === 'brak' ? '' : 'none';
+        } else if (filter === 'surplus') {
+            row.style.display = status === 'nadwyzka' ? '' : 'none';
+        } else if (filter === 'ok') {
+            row.style.display = status === 'ok' ? '' : 'none';
+        }
+    });
+});
+</script>
+{% endblock %}
