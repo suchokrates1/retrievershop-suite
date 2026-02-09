@@ -72,6 +72,9 @@ def _extract_model_series(name: str) -> str:
         'blossom',
         'neon',
         'reflective',
+        'dogi',
+        'adventure',
+        'handy',
     ]
     
     for series in model_series:
@@ -93,7 +96,7 @@ def _parse_tiptop_sku(sku: str) -> dict:
         return {}
     
     parts = sku.split('-')
-    if len(parts) < 5:  # Minimum: TL-SZ-series-size-color
+    if len(parts) < 4:  # Minimum: TL-SZ-series-size (kolor opcjonalny - moze byc uciety)
         return {}
     
     # Map TipTop series codes to full names
@@ -101,11 +104,19 @@ def _parse_tiptop_sku(sku: str) -> dict:
         'frolin-prem': 'front line premium',
         'frolin': 'front line',
         'tropic': 'tropical',
+        'tropi': 'tropical',
         'active': 'active',
         'outdoo': 'outdoor',
         'classic': 'classic',
         'comfort': 'comfort',
         'sport': 'sport',
+        'lumen': 'lumen',
+        'dogi': 'dogi',
+        'advent': 'adventure',
+        'blossom': 'blossom',
+        'amor': 'amor',
+        'neon': 'neon',
+        'handy': 'handy',
     }
     
     # Map TipTop color codes to Polish colors
@@ -122,26 +133,46 @@ def _parse_tiptop_sku(sku: str) -> dict:
         'SZA': 'szary',
         'FIO': 'fioletowy',
         'ZOL': 'żółty',
+        'LIM': 'limonkowy',
     }
     
     # Extract components: TL-SZ-{series...}-{size}-{color}
     # Series can be multi-part (frolin-prem) so we parse from the end
-    color_code = parts[-1]
-    size = parts[-2]
-    series_parts = parts[2:-2]  # Everything between TL-SZ- and size-color
+    # SKU moze byc uciety (brak kodu koloru) np. TL-OB-tropi-XXXL
+    
+    # Normalizacja rozmiarow
+    _size_aliases = {'XXL': '2XL', 'XXXL': '3XL'}
+    
+    if len(parts) >= 5:
+        # Pelny format: TL-SZ-series-size-color
+        color_code = parts[-1]
+        size = parts[-2]
+        series_parts = parts[2:-2]
+    elif len(parts) == 4:
+        # Uciety format: TL-SZ-series-size (bez koloru)
+        color_code = ''
+        size = parts[-1]
+        series_parts = parts[2:-1]
+    else:
+        return {}
+    
     series_code = '-'.join(series_parts)
     
     # Resolve series name
     series_name = series_map.get(series_code, '')
     
     # Resolve color
-    color_name = color_map.get(color_code.upper(), '')
+    color_name = color_map.get(color_code.upper(), '') if color_code else ''
+    
+    # Normalizuj rozmiar
+    size_upper = size.upper()
+    size_normalized = _size_aliases.get(size_upper, size_upper)
     
     return {
         'series': series_name,
-        'size': size.upper(),
+        'size': size_normalized,
         'color': color_name,
-        'color_code': color_code.upper(),
+        'color_code': color_code.upper() if color_code else '',
     }
 
 
