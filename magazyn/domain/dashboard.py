@@ -183,6 +183,28 @@ class DashboardService:
             access_token=access_token
         )
         
+        # Pobierz koszty kampanii Ads (NSP) za biezacy miesiac
+        ads_cost = Decimal("0")
+        if access_token:
+            try:
+                from ..allegro_api import get_period_ads_cost
+                
+                month_start_iso = tr.now.replace(
+                    day=1, hour=0, minute=0, second=0, microsecond=0
+                ).strftime("%Y-%m-%dT%H:%M:%S") + "+01:00"
+                now_iso = tr.now.strftime("%Y-%m-%dT%H:%M:%S") + "+01:00"
+                
+                ads_result = get_period_ads_cost(
+                    access_token, 
+                    occurred_at_gte=month_start_iso,
+                    occurred_at_lte=now_iso
+                )
+                if ads_result.get("success"):
+                    ads_cost = ads_result["total_cost"]
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Blad pobierania kosztow Ads: {e}")
+        
         # Policz zwroty
         returned_order_ids = set(
             r.order_id for r in self.db.query(Return.order_id).filter(
@@ -194,13 +216,18 @@ class DashboardService:
             Order.order_id.in_(returned_order_ids)
         ).count() if returned_order_ids else 0
         
+        # Zysk netto po odjeciu kosztow kampanii Ads
+        net_profit_with_ads = summary.net_profit - ads_cost
+        gross_profit_with_ads = summary.gross_profit - ads_cost
+        
         return {
-            'month': float(summary.net_profit),
-            'month_before_fixed': float(summary.gross_profit),
+            'month': float(net_profit_with_ads),
+            'month_before_fixed': float(gross_profit_with_ads),
             'fixed_costs': float(summary.fixed_costs),
             'fixed_costs_list': summary.fixed_costs_list,
             'products_sold': summary.products_sold,
             'returned_orders': total_returned_orders,
+            'ads_cost': float(ads_cost),
         }
     
     def get_inventory_stats(self) -> InventoryStats:

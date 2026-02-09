@@ -146,6 +146,7 @@ class OrderDetailBuilder:
             "shipping_fee": Decimal("0"),
             "promo_fee": Decimal("0"),
             "other_fees": Decimal("0"),
+            "campaign_bonus": Decimal("0"),
             "billing_data_available": False,
             "billing_entries": [],
             "fee_details": [],
@@ -175,6 +176,7 @@ class OrderDetailBuilder:
                     result["shipping_fee"] = billing_summary["shipping_fee"]
                     result["promo_fee"] = billing_summary["promo_fee"]
                     result["other_fees"] = billing_summary["other_fees"]
+                    result["campaign_bonus"] = billing_summary.get("campaign_bonus", Decimal("0"))
                     result["billing_entries"] = billing_summary["entries"]
                     result["fee_details"] = billing_summary.get("fee_details", [])
                     result["estimated_shipping"] = billing_summary.get("estimated_shipping")
@@ -355,13 +357,14 @@ class OrderDetailBuilder:
         # Koszt zakupu
         purchase_cost = self.calculate_purchase_cost(order)
         
-        # Suma oplat Allegro
+        # Suma oplat Allegro (pomniejszona o bonus z kampanii CB2)
         total_allegro_fees = (
             billing["commission"] + 
             billing["listing_fee"] + 
             billing["shipping_fee"] + 
             billing["promo_fee"] + 
-            billing["other_fees"]
+            billing["other_fees"] -
+            billing["campaign_bonus"]
         )
         
         # Zysk
@@ -387,6 +390,7 @@ class OrderDetailBuilder:
             "allegro_shipping_fee": billing["shipping_fee"],
             "promo_fee": billing["promo_fee"],
             "other_fees": billing["other_fees"],
+            "campaign_bonus": billing["campaign_bonus"],
             "total_allegro_fees": total_allegro_fees,
             "billing_data_available": billing["billing_data_available"],
             "billing_entries": billing["billing_entries"],
