@@ -11,11 +11,12 @@
         </div>
         <div>
             <a href="{{ url_for('products.add_item') }}" class="btn btn-success me-2" title="Dodaj przedmiot">
-                <i class="bi bi-plus-circle"></i> +
+                <i class="bi bi-plus-circle"></i>
             </a>
             <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info me-2">Dostawa z faktury</a>
-            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj kod kreskowy</a>
-            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj etykietę paczki</a>
+            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline-secondary me-2"><i class="bi bi-clipboard-check me-1"></i>Remanent</a>
+            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj EAN</a>
+            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj paczke</a>
         </div>
     </div>
 <div class="table-responsive">
@@ -45,12 +46,7 @@
             <td>{{ product['color'] }}</td>
             {% for size in ALL_SIZES %}
             <td>
-                <form method="POST" action="{{ url_for('products.update_quantity', product_id=product['id'], size=size) }}" class="form-inline quantity-form">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" name="action" value="decrease" class="btn btn-danger btn-sm btn-quantity">-</button>
-                    <span class="quantity-value">{{ product['sizes'][size] }}</span>
-                    <button type="submit" name="action" value="increase" class="btn btn-success btn-sm btn-quantity">+</button>
-                </form>
+                <span class="{% if product['sizes'][size] == 0 %}text-muted{% elif product['sizes'][size] <= 2 %}text-warning{% endif %}">{{ product['sizes'][size] }}</span>
             </td>
             {% endfor %}
             <td class="text-center">

@@ -182,12 +182,46 @@ def _check_and_auto_pack():
 
 
 def _load_order_for_barcode(barcode: str):
-    """Load order data for a given barcode (package ID or tracking number)."""
+    """Load order data for a given barcode (package ID or tracking number).
+    
+    Obsluguje rozne formaty kodow etykiet:
+    - InPost: pelny kod tracking (620999696...) 
+    - DHL: krotki tracking (A003RFH916), JJD kod (JJD000030...), 2LPL referencja (2LPL22400+...)
+    - Inne: package_id, delivery_package_nr
+    """
     import sqlite3
     
     matched_order_id = None
     order_data = None
     barcode = barcode.strip()
+
+    def _match_barcode_to_order(data, barcode):
+        """Sprawdz rozne formaty dopasowan kodu do zamowienia."""
+        package_ids = data.get("package_ids") or []
+        tracking_numbers = data.get("tracking_numbers") or []
+        delivery_package_nr = str(data.get("delivery_package_nr") or "").strip()
+        
+        # Bezposrednie dopasowanie
+        if barcode in package_ids or barcode in tracking_numbers:
+            return True
+        
+        # Dopasowanie po delivery_package_nr
+        if delivery_package_nr and barcode == delivery_package_nr:
+            return True
+        
+        # Czesciowe dopasowanie - tracking zawarty w zeskanowanym kodzie lub na odwrot
+        # Przydatne dla DHL: JJD kod moze zawierac numer przesylki wewnatrz 
+        for tn in tracking_numbers:
+            if len(tn) >= 6 and tn in barcode:
+                return True
+            if len(barcode) >= 6 and barcode in tn:
+                return True
+        
+        if delivery_package_nr and len(delivery_package_nr) >= 6:
+            if delivery_package_nr in barcode or barcode in delivery_package_nr:
+                return True
+        
+        return False
 
     with get_session() as db_session:
         direct = db_session.get(PrintedOrder, barcode)
@@ -198,9 +232,7 @@ def _load_order_for_barcode(barcode: str):
         if not order_data:
             for po in db_session.query(PrintedOrder).all():
                 data = _parse_last_order_data(po.last_order_data)
-                package_ids = data.get("package_ids") or []
-                tracking_numbers = data.get("tracking_numbers") or []
-                if barcode in package_ids or barcode in tracking_numbers:
+                if _match_barcode_to_order(data, barcode):
                     matched_order_id = po.order_id
                     order_data = data
                     break
@@ -215,9 +247,7 @@ def _load_order_for_barcode(barcode: str):
             )
             for oid, data_json in cur.fetchall():
                 data = _parse_last_order_data(data_json)
-                package_ids = data.get("package_ids") or []
-                tracking_numbers = data.get("tracking_numbers") or []
-                if barcode == oid or barcode in package_ids or barcode in tracking_numbers:
+                if barcode == oid or _match_barcode_to_order(data, barcode):
                     return oid, data
     except sqlite3.Error:
         pass
