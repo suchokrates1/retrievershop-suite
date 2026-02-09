@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Remanent - inwentaryzacja</h2>
+        <form method="POST" action="{{ url_for('stocktake.stocktake_new') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success"><i class="bi bi-play-circle me-1"></i>Nowy remanent</button>
+        </form>
+    </div>
+
+    {% if stocktakes %}
+    <table class="table table-dark table-striped table-sm align-middle">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Data rozpoczecia</th>
+                <th>Data zakonczenia</th>
+                <th>Status</th>
+                <th>Produktow</th>
+                <th>Rozbieznosci</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for st in stocktakes %}
+            <tr>
+                <td>{{ st.id }}</td>
+                <td>{{ st.started_at.strftime('%Y-%m-%d %H:%M') if st.started_at else '-' }}</td>
+                <td>{{ st.finished_at.strftime('%Y-%m-%d %H:%M') if st.finished_at else '-' }}</td>
+                <td>
+                    {% if st.status == 'in_progress' %}
+                    <span class="badge bg-warning text-dark">W trakcie</span>
+                    {% elif st.status == 'finished' %}
+                    <span class="badge bg-info">Zakonczony</span>
+                    {% elif st.status == 'applied' %}
+                    <span class="badge bg-success">Zastosowany</span>
+                    {% endif %}
+                </td>
+                <td>{{ st.total_items }}</td>
+                <td>
+                    {% if st.discrepancies > 0 %}
+                    <span class="text-danger fw-bold">{{ st.discrepancies }}</span>
+                    {% else %}
+                    <span class="text-success">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if st.status == 'in_progress' %}
+                    <a href="{{ url_for('stocktake.stocktake_scan', stocktake_id=st.id) }}" class="btn btn-primary btn-sm">Kontynuuj</a>
+                    {% else %}
+                    <a href="{{ url_for('stocktake.stocktake_report', stocktake_id=st.id) }}" class="btn btn-outline-info btn-sm">Raport</a>
+                    <a href="{{ url_for('stocktake.stocktake_pdf', stocktake_id=st.id) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-pdf"></i></a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-secondary text-center">
+        Brak remamentow. Kliknij "Nowy remanent" aby rozpoczac inwentaryzacje.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{# Wylaczamy domyslny skaner - remanent ma wlasna obsluge #}
+{% set barcode_mode = 'disabled' %}
+{% endblock %}
+{% block content %}
+<div class="container mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">Remanent #{{ stocktake_id }} - skanowanie</h3>
+        <div>
+            <button id="btn-undo" class="btn btn-warning me-2" title="Cofnij ostatni skan">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Cofnij
+            </button>
+            <button id="btn-finish" class="btn btn-danger" title="Zakoncz remanent">
+                <i class="bi bi-check-circle me-1"></i>Zakoncz
+            </button>
+        </div>
+    </div>
+
+    <!-- Statystyki -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="fs-3 fw-bold" id="stat-scanned-products">{{ scanned_products }}</div>
+                    <div class="text-muted small">produktow zeskanowanych</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="fs-3 fw-bold" id="stat-total-products">{{ total_products }}</div>
+                    <div class="text-muted small">produktow ogolnie</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body py-2">
+                    <div class="fs-3 fw-bold" id="stat-total-scanned">{{ total_scanned }}</div>
+                    <div class="text-muted small">skanow lacznie</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ostatni skan -->
+    <div id="last-scan-card" class="card bg-dark border-success mb-3 d-none">
+        <div class="card-body text-center py-3">
+            <div class="fs-4 fw-bold" id="last-scan-product"></div>
+            <div class="fs-5">
+                <span id="last-scan-scanned" class="text-success fw-bold"></span>
+                <span class="text-muted"> z </span>
+                <span id="last-scan-expected"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Blad -->
+    <div id="scan-error" class="alert alert-danger d-none"></div>
+
+    <!-- Instrukcja -->
+    <div class="text-center text-muted mt-4" id="scan-instruction">
+        <i class="bi bi-upc-scan" style="font-size: 3rem;"></i>
+        <p class="mt-2">Skanuj kody kreskowe produktow. Kazdy skan zostanie automatycznie policzony.</p>
+    </div>
+
+    <!-- Historia skanow -->
+    <div id="scan-history" class="mt-3">
+        <h5 class="text-muted">Ostatnie skany</h5>
+        <ul id="scan-list" class="list-group list-group-flush"></ul>
+    </div>
+</div>
+
+<audio id="beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const STOCKTAKE_ID = {{ stocktake_id }};
+    const SCAN_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/barcode_scan';
+    const UNDO_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/undo';
+    const FINISH_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/finish';
+    const CSRF_TOKEN = document.getElementById('barcode-csrf-token').value;
+    const beep = document.getElementById('beep-sound');
+
+    // TTS
+    function speak(message) {
+        if (!('speechSynthesis' in window) || !message) return;
+        try {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(message);
+            window.speechSynthesis.speak(u);
+        } catch(e) {
+            console.warn('TTS error', e);
+        }
+    }
+
+    function playBeep() {
+        if (!beep) return;
+        try { beep.currentTime = 0; beep.play(); } catch(e) {}
+    }
+
+    // Aktualizacja statystyk
+    function updateStats(data) {
+        if (data.total_products !== undefined) {
+            document.getElementById('stat-total-products').textContent = data.total_products;
+        }
+        if (data.scanned_products !== undefined) {
+            document.getElementById('stat-scanned-products').textContent = data.scanned_products;
+        }
+        if (data.total_scanned !== undefined) {
+            document.getElementById('stat-total-scanned').textContent = data.total_scanned;
+        }
+    }
+
+    // Pokaz wynik skanu
+    function showScanResult(data) {
+        const card = document.getElementById('last-scan-card');
+        const productEl = document.getElementById('last-scan-product');
+        const scannedEl = document.getElementById('last-scan-scanned');
+        const expectedEl = document.getElementById('last-scan-expected');
+        const errorEl = document.getElementById('scan-error');
+
+        errorEl.classList.add('d-none');
+
+        let name = data.series || data.product_name || 'Produkt';
+        if (data.size) name += ' ' + data.size;
+        if (data.color) name += ' ' + data.color;
+
+        productEl.textContent = name;
+        scannedEl.textContent = data.scanned_qty;
+        expectedEl.textContent = data.expected_qty;
+
+        // Kolor ramki w zaleznosci od stanu
+        card.classList.remove('border-success', 'border-warning', 'border-danger');
+        if (data.scanned_qty > data.expected_qty) {
+            card.classList.add('border-danger');
+        } else if (data.scanned_qty === data.expected_qty) {
+            card.classList.add('border-success');
+        } else {
+            card.classList.add('border-warning');
+        }
+
+        card.classList.remove('d-none');
+
+        // Dodaj do historii
+        addToHistory(name, data.scanned_qty, data.expected_qty);
+    }
+
+    function showError(msg) {
+        const errorEl = document.getElementById('scan-error');
+        errorEl.textContent = msg;
+        errorEl.classList.remove('d-none');
+    }
+
+    function addToHistory(name, scanned, expected) {
+        const list = document.getElementById('scan-list');
+        const li = document.createElement('li');
+        li.className = 'list-group-item bg-dark text-white border-secondary py-1 d-flex justify-content-between';
+        
+        const diff = scanned - expected;
+        let badge = '';
+        if (diff > 0) badge = '<span class="badge bg-danger">+' + diff + '</span>';
+        else if (diff === 0) badge = '<span class="badge bg-success">OK</span>';
+        else badge = '<span class="badge bg-warning text-dark">' + scanned + '/' + expected + '</span>';
+
+        li.innerHTML = '<span>' + name + '</span>' + badge;
+        list.insertBefore(li, list.firstChild);
+
+        // Limit historii do 20 pozycji
+        while (list.children.length > 20) {
+            list.removeChild(list.lastChild);
+        }
+    }
+
+    // Skan kodu kreskowego
+    function handleBarcodeScan(barcode) {
+        fetch(SCAN_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: JSON.stringify({ barcode: barcode })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                showError(data.error);
+                speak(data.error);
+            } else {
+                playBeep();
+                showScanResult(data);
+                updateStats(data);
+                speak(data.tts_message);
+            }
+        })
+        .catch(function(err) {
+            showError('Blad polaczenia: ' + err.message);
+            speak('Blad polaczenia');
+        });
+    }
+
+    // Cofnij
+    document.getElementById('btn-undo').addEventListener('click', function() {
+        fetch(UNDO_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                showError(data.error);
+                speak(data.error);
+            } else {
+                updateStats(data);
+                speak(data.tts_message);
+                // Dodaj info do historii
+                const list = document.getElementById('scan-list');
+                const li = document.createElement('li');
+                li.className = 'list-group-item bg-dark text-warning border-secondary py-1';
+                li.textContent = data.message;
+                list.insertBefore(li, list.firstChild);
+            }
+        })
+        .catch(function(err) {
+            showError('Blad: ' + err.message);
+        });
+    });
+
+    // Zakoncz
+    document.getElementById('btn-finish').addEventListener('click', function() {
+        if (!confirm('Czy na pewno chcesz zakonczyc remanent?')) return;
+
+        fetch(FINISH_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.redirect) {
+                window.location.href = data.redirect;
+            }
+        })
+        .catch(function(err) {
+            showError('Blad: ' + err.message);
+        });
+    });
+
+    // Wlasny skaner kodow kreskowych (nie uzywa globalnego)
+    var buffer = '';
+    var lastKeyTime = 0;
+    var clearTimeout_ = null;
+
+    document.addEventListener('keydown', function(e) {
+        var now = Date.now();
+        var timeDiff = now - lastKeyTime;
+
+        if (timeDiff > 50 && buffer.length > 0) {
+            buffer = '';
+        }
+
+        if (e.key === 'Enter' && buffer.length >= 4) {
+            e.preventDefault();
+            e.stopPropagation();
+            var barcode = buffer;
+            buffer = '';
+            lastKeyTime = 0;
+            handleBarcodeScan(barcode);
+            return;
+        }
+
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            buffer += e.key;
+            lastKeyTime = now;
+            clearTimeout(clearTimeout_);
+            clearTimeout_ = setTimeout(function() { buffer = ''; }, 200);
+        }
+    }, true);
+})();
+</script>
+{% endblock %}
