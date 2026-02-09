@@ -31,7 +31,7 @@ from .domain.inventory import (
     record_delivery,
     update_quantity as inventory_update_quantity,
 )
-from .domain.invoice_import import _parse_pdf, import_invoice_rows
+from .domain.invoice_import import _parse_pdf, import_invoice_rows, parse_product_name_to_fields
 from .domain.products import (
     _to_decimal,
     _to_int,
@@ -67,6 +67,11 @@ def _extract_model_series(name: str) -> str:
         'comfort',
         'sport',
         'easy walk',
+        'lumen',
+        'amor',
+        'blossom',
+        'neon',
+        'reflective',
     ]
     
     for series in model_series:
@@ -140,7 +145,23 @@ def _parse_tiptop_sku(sku: str) -> dict:
     }
 
 
-def _match_by_tiptop_sku(sku: str, ps_list) -> tuple:
+def _extract_category(name: str) -> str:
+    """Extract product category from name (Szelki, Obroza, Smycz, Pas)."""
+    if not name:
+        return ""
+    name_lower = name.lower()
+    if "smycz" in name_lower:
+        return "Smycz"
+    if "pas" in name_lower and ("bezpiecz" in name_lower or "samochodow" in name_lower):
+        return "Pas bezpieczeństwa"
+    if "obroża" in name_lower or "obroza" in name_lower or "obrozy" in name_lower:
+        return "Obroża"
+    if "szelki" in name_lower or "szelek" in name_lower:
+        return "Szelki"
+    return ""
+
+
+def _match_by_tiptop_sku(sku: str, ps_list, row_name: str = "") -> tuple:
     """
     Match product by parsing TipTop SKU and finding exact match.
     Returns (ps_id, display_name, match_type) or (None, None, None)
@@ -153,10 +174,18 @@ def _match_by_tiptop_sku(sku: str, ps_list) -> tuple:
     target_size = parsed.get('size', '').upper()
     target_color = parsed.get('color', '').lower()
     
+    # Wyciagnij kategorie z nazwy na fakturze
+    row_category = _extract_category(row_name)
+    
     for ps in ps_list:
         ps_series = _extract_model_series(ps.name)
         ps_size = (ps.size or '').upper()
         ps_color = (ps.color or '').lower()
+        ps_category = getattr(ps, 'category', '') or _extract_category(ps.name)
+        
+        # Kategoria musi sie zgadzac (Szelki != Obroza)
+        if row_category and ps_category and row_category != ps_category:
+            continue
         
         # Series must match exactly
         if ps_series != target_series:
@@ -215,6 +244,7 @@ def _fuzzy_match_product(row_name: str, row_color: str, row_size: str, ps_list) 
     row_size_upper = (row_size or "").upper().strip()
     row_key_words = _normalize_name(row_name)
     row_series = _extract_model_series(row_name)
+    row_category = _extract_category(row_name)
     
     if not row_key_words:
         return None, None, None
@@ -226,6 +256,11 @@ def _fuzzy_match_product(row_name: str, row_color: str, row_size: str, ps_list) 
         ps_color_lower = (ps.color or "").lower().strip()
         ps_size_upper = (ps.size or "").upper().strip()
         ps_series = _extract_model_series(ps.name)
+        ps_category = getattr(ps, 'category', '') or _extract_category(ps.name)
+        
+        # Kategoria MUSI sie zgadzac (Szelki != Obroza != Smycz)
+        if row_category and ps_category and row_category != ps_category:
+            continue
         
         # Size must match exactly if provided
         if row_size_upper and ps_size_upper and row_size_upper != ps_size_upper:
@@ -715,7 +750,9 @@ def import_invoice():
                         row["match_type"] = "ean"
                     # Priority 2: Parse TipTop SKU and match by series+size+color
                     elif sku:
-                        ps_id, match_name, match_type = _match_by_tiptop_sku(sku, ps_list)
+                        ps_id, match_name, match_type = _match_by_tiptop_sku(
+                            sku, ps_list, row.get("Nazwa", "")
+                        )
                         if ps_id:
                             row["matched_ps_id"] = ps_id
                             row["matched_name"] = match_name
