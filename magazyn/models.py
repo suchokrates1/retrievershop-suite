@@ -44,6 +44,16 @@ class Product(Base):
         # Handle legacy 'name' parameter for backward compatibility
         if 'name' in kwargs and 'category' not in kwargs:
             kwargs['_name'] = kwargs.pop('name')
+        # Ensure _name is always populated (NOT NULL constraint in DB)
+        if '_name' not in kwargs or kwargs.get('_name') is None:
+            cat = kwargs.get('category', '')
+            brand = kwargs.get('brand', '')
+            series = kwargs.get('series', '')
+            parts = [p for p in [cat, 'dla psa', brand, series] if p]
+            if parts:
+                kwargs['_name'] = ' '.join(parts)
+            else:
+                kwargs['_name'] = 'Produkt bez nazwy'
         super().__init__(**kwargs)
     
     @hybrid_property
