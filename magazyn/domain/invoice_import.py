@@ -86,6 +86,10 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
         ("classic", "Classic"),
         ("neon", "Neon"),
         ("reflective", "Reflective"),
+        ("dogi", "Dogi"),
+        ("adventure", "Adventure"),
+        ("advent", "Adventure"),
+        ("handy", "Handy"),
     ]
     
     for pattern, series_name in series_patterns:
@@ -219,27 +223,64 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         # Name ... quantity szt. unit_price vat% ... Wariant: SIZE
         # Pattern: (Name) (qty,decimal) szt. (price,decimal) ... Wariant: (size)
         
-        # Extract variant/size and SKU first
-        # Format: Wariant: XL (TL-SZ-frolin-prem-XL-CZA) or Wariant: M, czarny (TL-SZ-active-M-CZA)
+        # --- Ekstrakcja SKU, wariantu, kodu kreskowego ---
+        # Usun znaki nowej linii zeby polaczyc przerwane wpisy
+        entry_joined = entry.replace('\n', ' ')
+        
         size = ""
         color = ""
         sku = ""
-        variant_match = re.search(r'Wariant:\s*([A-Za-z0-9]+)(?:,\s*([A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ]+))?\s*\(([^)]+)\)', entry, re.IGNORECASE)
-        if variant_match:
-            size = variant_match.group(1).strip()
-            if variant_match.group(2):
-                color = variant_match.group(2).strip()
-            if variant_match.group(3):
-                sku = variant_match.group(3).strip()
-        else:
-            # Fallback - variant without SKU
-            variant_match_simple = re.search(r'Wariant:\s*([A-Za-z0-9]+)(?:,\s*([A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ]+))?', entry, re.IGNORECASE)
-            if variant_match_simple:
-                size = variant_match_simple.group(1).strip()
-                if variant_match_simple.group(2):
-                    color = variant_match_simple.group(2).strip()
         
-        # Extract barcode
+        # 1. SKU - szukaj wzorca TL-XX-... (niezaleznie od nawiasow)
+        sku_match = re.search(r'TL-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+', entry_joined)
+        if sku_match:
+            sku = sku_match.group(0).strip()
+        
+        # 2. Wariant - obsluguje oba formaty:
+        #    "Wariant: XL, czarny" (rozmiar pierwszy)
+        #    "Wariant: żółty, XL" (kolor pierwszy - polskie znaki!)
+        #    "Wariant: czarny, L"  (kolor pierwszy - ASCII)
+        #    "Wariant:3XL, limonkowy" (bez spacji po dwukropku)
+        #    "Wariant: XXXL (60-65 cm)" (rozmiar z zakresem cm)
+        _PL = r'A-Za-z0-9żźćńółęąśŻŹĆŃÓŁĘĄŚ'
+        variant_match = re.search(
+            r'Wariant:\s*([' + _PL + r']+)'
+            r'(?:\s*\(\d+-\d+\s*cm\))?'           # opcjonalny (XX-YY cm) - pomijamy
+            r'(?:,\s*([' + _PL + r']+))?',
+            entry_joined, re.IGNORECASE
+        )
+        if variant_match:
+            token1 = variant_match.group(1).strip()
+            token2 = variant_match.group(2).strip() if variant_match.group(2) else ""
+            
+            # Normalizacja rozmiarow: XXL->2XL, XXXL->3XL
+            _size_aliases = {'XXL': '2XL', 'XXXL': '3XL'}
+            token1_norm = _size_aliases.get(token1.upper(), token1.upper())
+            token2_norm = _size_aliases.get(token2.upper(), token2.upper()) if token2 else ""
+            
+            # Wykryj ktory token to rozmiar a ktory kolor
+            if token1_norm in ALL_SIZES:
+                size = token1_norm
+                color = token2
+            elif token2_norm and token2_norm in ALL_SIZES:
+                size = token2_norm
+                color = token1
+            else:
+                # Probuj odczytac rozmiar z SKU
+                if sku:
+                    for part in sku.split('-'):
+                        p_norm = _size_aliases.get(part.upper(), part.upper())
+                        if p_norm in ALL_SIZES:
+                            size = p_norm
+                            # Ustaw kolor na ten token ktory nie jest rozmiarem
+                            color = token1 if token2_norm == p_norm else token2 if token1_norm == p_norm else token1
+                            break
+                if not size:
+                    # Ostatnia szansa - pierwszy token jako rozmiar
+                    size = token1
+                    color = token2
+        
+        # 3. Kod kreskowy
         barcode = ""
         barcode_match = re.search(r'Kod kreskowy:\s*(\d{8,13})', entry)
         if barcode_match:
@@ -268,10 +309,18 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
         name_part = re.sub(r'^\d{1,3}(?=[A-Za-zŻżŹźĆćŁłÓóĄąĘęŚśŃń])', '', name_part).strip()
         
         # Extract color from name if present (last word that's a color)
-        color_words = ['czarne', 'czarny', 'białe', 'biały', 'czerwone', 'czerwony', 
-                       'niebieskie', 'niebieski', 'zielone', 'zielony', 'żółte', 'żółty',
-                       'turkusowe', 'turkusowy', 'różowe', 'różowy', 'szare', 'szary',
-                       'pomarańczowe', 'pomarańczowy', 'fioletowe', 'fioletowy', 'brązowe', 'brązowy']
+        color_words = ['czarne', 'czarny', 'czarna', 'białe', 'biały', 'biała',
+                       'czerwone', 'czerwony', 'czerwona',
+                       'niebieskie', 'niebieski', 'niebieska',
+                       'zielone', 'zielony', 'zielona',
+                       'żółte', 'żółty', 'żółta',
+                       'turkusowe', 'turkusowy', 'turkusowa',
+                       'różowe', 'różowy', 'różowa',
+                       'szare', 'szary', 'szara',
+                       'pomarańczowe', 'pomarańczowy', 'pomarańczowa',
+                       'fioletowe', 'fioletowy', 'fioletowa',
+                       'brązowe', 'brązowy', 'brązowa',
+                       'limonkowe', 'limonkowy', 'limonkowa']
         
         name_words = name_part.split()
         for word in reversed(name_words):
