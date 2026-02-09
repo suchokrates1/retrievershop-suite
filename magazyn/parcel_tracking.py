@@ -149,7 +149,7 @@ def sync_parcel_statuses() -> Dict[str, int]:
                     ),
                 )
                 .filter(
-                    OrderStatusLog.status.in_(["wydrukowano", "w_drodze", "w_punkcie"]),
+                    OrderStatusLog.status.in_(["wydrukowano", "spakowano", "przekazano_kurierowi", "w_drodze", "w_punkcie"]),
                     Order.delivery_package_nr.isnot(None),
                     Order.delivery_package_nr != "",
                 )
