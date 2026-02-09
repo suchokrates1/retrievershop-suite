@@ -158,12 +158,15 @@ PROMO_TYPES = {
     "FEA",   # Oplata za wyroznenie
     "DPG",   # Oplata za promowanie na stronie dzialu
     "PRO",   # Promocja
-    "ADS",   # Reklama
+    "NSP",   # Oplata za kampanie Ads (CPC, dzienna, bez order_id)
+}
+
+CAMPAIGN_BONUS_TYPES = {
+    "CB2",   # Bonus z Kampanii (zwrot ~40% prowizji BRG)
 }
 
 REFUND_TYPES = {
     "REF",   # Zwrot kosztow
-    "CB2",   # Bonus z Kampanii
     "PAD",   # Pobranie oplat z wplywow (dodatnie)
 }
 
@@ -225,6 +228,7 @@ def get_order_billing_summary(
         "other_fees": Decimal("0"),
         "total_fees": Decimal("0"),
         "refunds": Decimal("0"),
+        "campaign_bonus": Decimal("0"),
         "entries": [],
         "fee_details": [],
         "error": None,
@@ -274,6 +278,15 @@ def get_order_billing_summary(
                     result["refunds"] += amount
             elif type_id in PROMO_TYPES:
                 result["promo_fee"] += abs(amount) if amount < 0 else Decimal("0")
+            elif type_id in CAMPAIGN_BONUS_TYPES:
+                if amount > 0:
+                    result["campaign_bonus"] += amount
+                    result["fee_details"].append({
+                        "type_id": type_id,
+                        "name": type_name,
+                        "amount": amount,
+                        "is_bonus": True,
+                    })
             elif type_id in REFUND_TYPES:
                 if amount > 0:
                     result["refunds"] += amount
@@ -291,7 +304,8 @@ def get_order_billing_summary(
             result["listing_fee"] +
             result["shipping_fee"] +
             result["promo_fee"] +
-            result["other_fees"]
+            result["other_fees"] -
+            result["campaign_bonus"]
         )
         
         result["success"] = True
@@ -314,5 +328,68 @@ def get_order_billing_summary(
         result["estimated_shipping"] = None
         result["shipping_fee_estimated"] = None
         result["total_fees_with_estimate"] = result["total_fees"]
+    
+    return result
+
+
+def get_period_ads_cost(
+    access_token: str,
+    occurred_at_gte: str,
+    occurred_at_lte: str,
+) -> dict:
+    """
+    Pobierz koszty kampanii Allegro Ads (NSP) za okres.
+    
+    NSP to dzienna oplata za kampanie CPC, nie ma order_id ani offer_id.
+    Jest naliczana na poziomie konta, wiec nie mozna jej przypisac do zamowien.
+    
+    Args:
+        access_token: Token dostepu Allegro OAuth
+        occurred_at_gte: Data od (ISO 8601)
+        occurred_at_lte: Data do (ISO 8601)
+        
+    Returns:
+        dict z kluczami:
+        - total_cost: Decimal - laczny koszt kampanii (wartosc bezwzgledna)
+        - entries_count: int - liczba wpisow
+        - entries: list - surowe wpisy billingowe
+        - success: bool
+        - error: str lub None
+    """
+    result = {
+        "total_cost": Decimal("0"),
+        "entries_count": 0,
+        "entries": [],
+        "success": False,
+        "error": None,
+    }
+    
+    try:
+        data = fetch_billing_entries(
+            access_token,
+            type_ids=["NSP"],
+            occurred_at_gte=occurred_at_gte,
+            occurred_at_lte=occurred_at_lte,
+            limit=100,
+        )
+        entries = data.get("billingEntries", [])
+        result["entries"] = entries
+        result["entries_count"] = len(entries)
+        
+        for entry in entries:
+            value = entry.get("value", {})
+            amount_str = value.get("amount", "0")
+            try:
+                amount = Decimal(amount_str)
+            except Exception:
+                amount = Decimal("0")
+            
+            if amount < 0:
+                result["total_cost"] += abs(amount)
+        
+        result["success"] = True
+        
+    except Exception as e:
+        result["error"] = str(e)
     
     return result

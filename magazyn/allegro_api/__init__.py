@@ -44,6 +44,7 @@ from .billing import (
     fetch_billing_entries,
     fetch_billing_types,
     get_order_billing_summary,
+    get_period_ads_cost,
 )
 
 from .shipping import (
