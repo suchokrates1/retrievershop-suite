@@ -360,6 +360,7 @@ def get_period_ads_cost(
         "total_cost": Decimal("0"),
         "entries_count": 0,
         "entries": [],
+        "daily_costs": [],
         "success": False,
         "error": None,
     }
@@ -386,6 +387,16 @@ def get_period_ads_cost(
             
             if amount < 0:
                 result["total_cost"] += abs(amount)
+                # Dzienny rozklad - data z pola occurredAt
+                occurred_at = entry.get("occurredAt", "")
+                date_str = occurred_at[:10] if len(occurred_at) >= 10 else "?"
+                result["daily_costs"].append({
+                    "date": date_str,
+                    "amount": abs(amount),
+                })
+        
+        # Sortuj od najstarszego do najnowszego
+        result["daily_costs"].sort(key=lambda x: x["date"])
         
         result["success"] = True
         
