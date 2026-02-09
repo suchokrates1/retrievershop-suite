@@ -431,10 +431,21 @@
                             {% for fee in fee_details %}
                             <p class="mb-1 small">
                                 <strong>{{ fee.name }}:</strong> 
-                                <span class="{% if fee.is_estimate %}text-warning{% else %}text-danger{% endif %}">
-                                    -{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
-                                    {% if fee.is_estimate %}<i class="bi bi-calculator ms-1" title="Szacowany koszt"></i>{% endif %}
+                                {% if fee.is_bonus %}
+                                <span class="text-success">
+                                    +{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
+                                    <i class="bi bi-gift ms-1" title="Bonus z kampanii Allegro Ads"></i>
                                 </span>
+                                {% elif fee.is_estimate %}
+                                <span class="text-warning">
+                                    -{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
+                                    <i class="bi bi-calculator ms-1" title="Szacowany koszt"></i>
+                                </span>
+                                {% else %}
+                                <span class="text-danger">
+                                    -{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
+                                </span>
+                                {% endif %}
                             </p>
                             {% endfor %}
                         {% else %}
@@ -501,8 +512,13 @@
                         <small>
                             <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %} me-1"></i>
                             <strong>{{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznione' }}:</strong>
-                            Prowizja promowana: {{ '%.2f'|format(promoted_commission) }} {{ order.currency or 'PLN' }}
-                            (z lacznej prowizji {{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }})
+                            Prowizja promowana (BRG): {{ '%.2f'|format(promoted_commission) }} {{ order.currency or 'PLN' }}
+                            (dodatkowa do SUC {{ '%.2f'|format(allegro_commission - promoted_commission) }} {{ order.currency or 'PLN' }})
+                            {% if campaign_bonus > 0 %}
+                            <br><i class="bi bi-gift me-1"></i>
+                            Bonus z kampanii (CB2): <span class="text-success">+{{ '%.2f'|format(campaign_bonus) }} {{ order.currency or 'PLN' }}</span>
+                            (zwrot ~{{ '%.0f'|format(campaign_bonus / promoted_commission * 100) }}% BRG)
+                            {% endif %}
                         </small>
                     </div>
                     {% endif %}
