@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block page_vars %}
 {% set full_width = True %}
+{% set wake_lock_default = 'true' %}
 {# Wylaczamy domyslny skaner - remanent ma wlasna obsluge #}
 {% set barcode_mode = 'disabled' %}
 {% endblock %}
