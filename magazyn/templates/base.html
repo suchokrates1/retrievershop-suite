@@ -36,6 +36,9 @@
                     <span class="flex-grow-1 text-center fs-3">Witaj w aplikacji magazynowej</span>
                     {% if show_menu %}
                     <div class="d-flex align-items-center ms-auto">
+                        <button id="wakeLockBtn" class="btn btn-outline-secondary btn-sm ms-2 d-none" type="button" title="Nie wygaszaj ekranu" data-wake-lock-default="{{ wake_lock_default|default('false') }}">
+                            <i class="bi bi-brightness-high" id="wakeLockIcon"></i>
+                        </button>
                         <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3 d-none d-md-inline-block">Wyloguj się</a>
                         <button id="mobileMenuBtn" class="navbar-toggler d-md-none ms-2" type="button">
                             <span class="navbar-toggler-icon"></span>
@@ -216,6 +219,77 @@
             integrity="sha384-/KNQL8Nu5gCHLqwqfQjA689Hhoqgi2S84SNUxC3roTe4EhJ9AfLkp8QiQcU8AMzI" 
             crossorigin="anonymous"></script>
     
+    <!-- Wake Lock -->
+    <script>
+    (function() {
+        const btn = document.getElementById('wakeLockBtn');
+        const icon = document.getElementById('wakeLockIcon');
+        if (!btn || !('wakeLock' in navigator)) return;
+        btn.classList.remove('d-none');
+        let wakeLock = null;
+        let wantActive = false;
+        const autoEnable = btn.dataset.wakeLockDefault === 'true';
+
+        function updateUI(active) {
+            if (active) {
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-warning');
+                icon.className = 'bi bi-brightness-high-fill';
+                btn.title = 'Ekran nie wygasa (kliknij aby wylaczyc)';
+            } else {
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-outline-secondary');
+                icon.className = 'bi bi-brightness-high';
+                btn.title = 'Nie wygaszaj ekranu';
+            }
+        }
+
+        async function requestWakeLock() {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wantActive = true;
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                    updateUI(wantActive);
+                });
+                updateUI(true);
+            } catch (e) {
+                console.warn('Wake Lock nie dostepny:', e);
+                wantActive = false;
+                updateUI(false);
+            }
+        }
+
+        async function releaseWakeLock() {
+            wantActive = false;
+            if (wakeLock) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+            updateUI(false);
+        }
+
+        btn.addEventListener('click', () => {
+            if (wantActive) {
+                releaseWakeLock();
+            } else {
+                requestWakeLock();
+            }
+        });
+
+        // Ponowne uzyskanie wake lock po powrocie na karte
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && wantActive && !wakeLock) {
+                requestWakeLock();
+            }
+        });
+
+        if (autoEnable) {
+            requestWakeLock();
+        }
+    })();
+    </script>
+
     {% block scripts %}{% endblock %}
     </div>
 </body>
