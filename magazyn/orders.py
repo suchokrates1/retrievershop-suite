@@ -825,7 +825,8 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     order.want_invoice = order_data.get("want_invoice") == "1"
     order.currency = order_data.get("currency", "PLN")
     order.payment_method = order_data.get("payment_method")
-    order.payment_method_cod = order_data.get("payment_method_cod") == "1"
+    cod_val = order_data.get("payment_method_cod")
+    order.payment_method_cod = cod_val in ("1", True, 1)
     order.payment_done = order_data.get("payment_done")
     order.user_comments = order_data.get("user_comments")
     order.admin_comments = order_data.get("admin_comments")
@@ -836,6 +837,25 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     # Store raw products JSON
     products_list = order_data.get("products", [])
     order.products_json = json.dumps(products_list) if products_list else None
+
+    # Korekcja payment_done dla zamowien za pobraniem (COD)
+    # BaseLinker/Allegro raportuja payment_done=0 dla COD, bo gotowka nie
+    # przechodzi przez system platnosci online. Jesli zamowienie jest doreczone
+    # (status 91621), klient zaplacil gotowka przy odbiorze - oblicz kwote
+    # z sumy produktow + koszt dostawy.
+    if order.payment_method_cod and float(order.payment_done or 0) == 0:
+        if order.order_status_id and int(order.order_status_id) == 91621:
+            total_products = sum(
+                float(p.get("price_brutto", 0)) * int(p.get("quantity", 1))
+                for p in products_list
+            )
+            delivery = float(order.delivery_price or 0)
+            order.payment_done = total_products + delivery
+            logger.info(
+                "Zamowienie COD %s doreczone - ustawiam payment_done=%.2f "
+                "(produkty=%.2f + dostawa=%.2f)",
+                order_id, order.payment_done, total_products, delivery
+            )
     
     # Sync order products
     # First, remove existing products for this order
