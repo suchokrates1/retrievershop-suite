@@ -783,6 +783,9 @@ def sync_order_from_data(db, order_data: dict) -> Order:
             db.add(order)
             is_new_order = True
     
+    # Po deduplikacji upewnij sie ze order_id odpowiada faktycznemu rekordowi w bazie
+    order_id = order.order_id
+    
     # Update all fields from order_data
     order.external_order_id = order_data.get("external_order_id")
     order.shop_order_id = order_data.get("shop_order_id")
