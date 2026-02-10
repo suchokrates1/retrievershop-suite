@@ -310,7 +310,7 @@ class FinancialCalculator:
         orders = self.db.query(Order).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
-            Order.payment_done.isnot(None),
+            Order.payment_done > 0,  # wyklucz zamowienia bez platnosci (0 lub None)
             ~Order.order_id.in_(return_order_ids)
         ).all()
         
@@ -320,7 +320,7 @@ class FinancialCalculator:
         ).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
-            Order.payment_done.isnot(None),
+            Order.payment_done > 0,
             ~Order.order_id.in_(return_order_ids)
         ).scalar() or 0
         

@@ -155,13 +155,27 @@ class DashboardService:
         )
     
     def get_revenue_stats(self) -> RevenueStats:
-        """Pobiera statystyki przychodow."""
+        """Pobiera statystyki przychodow.
+        
+        Uzywa payment_done (rzeczywiscie zaplacona kwota) zamiast price_brutto,
+        aby byc spojny z kalkulacja zysku. Wyklucza zwroty (completed).
+        """
+        from sqlalchemy import select as sa_select
         tr = self.time_ranges
+        
+        # Wyklucz zamowienia ze zwrotem completed (refundacja zrealizowana)
+        return_order_ids = sa_select(Return.order_id).where(
+            Return.status == 'completed'
+        ).distinct()
         
         def calc_revenue(from_timestamp: int) -> float:
             result = self.db.query(
-                func.sum(OrderProduct.price_brutto * OrderProduct.quantity)
-            ).join(Order).filter(Order.date_add >= from_timestamp).scalar()
+                func.sum(Order.payment_done)
+            ).filter(
+                Order.date_add >= from_timestamp,
+                Order.payment_done > 0,
+                ~Order.order_id.in_(return_order_ids)
+            ).scalar()
             return float(result or 0)
         
         return RevenueStats(
