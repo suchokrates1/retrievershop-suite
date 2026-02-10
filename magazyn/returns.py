@@ -265,6 +265,13 @@ def check_baselinker_order_returns() -> Dict[str, int]:
                         f"Wykryto zwrot w BaseLinker (return_id={bl_return_id}, ref={return_data.get('reference_number')})"
                     )
                     
+                    # Ustaw status zamowienia na 'zwrot'
+                    from .orders import add_order_status
+                    add_order_status(
+                        db, order_id, "zwrot",
+                        notes=f"Wykryto zwrot w BaseLinker (return_id={bl_return_id})"
+                    )
+                    
                     stats["created"] += 1
                     logger.info(f"Utworzono zwrot #{return_record.id} dla zamowienia {order_id}")
                     
@@ -306,13 +313,11 @@ def _map_baselinker_fulfillment_status(fulfillment_status: int) -> str:
 
 def check_allegro_customer_returns() -> Dict[str, int]:
     """
-    [DEPRECATED] Sprawdz zwroty bezposrednio z Allegro Customer Returns API.
+    Sprawdz zwroty bezposrednio z Allegro Customer Returns API.
     
-    UWAGA: Uzywaj check_baselinker_order_returns() zamiast tej funkcji!
-    BaseLinker synchronizuje zwroty z Allegro i udostepnia je przez getOrderReturns.
-    
-    BaseLinker NIE zmienia automatycznie statusu na Zwrot gdy klient
-    zglosi zwrot w Allegro - musimy sprawdzac bezposrednio Allegro API.
+    Uzupelniajace zrodlo danych - BaseLinker nie zawsze synchronizuje
+    zwroty z Allegro. Ta funkcja odpytuje Allegro bezposrednio
+    i tworzy brakujace rekordy Return + ustawia status 'zwrot' na zamowieniu.
     
     Returns:
         Slownik z liczba: created, existing, updated, errors
@@ -422,6 +427,13 @@ def check_allegro_customer_returns() -> Dict[str, int]:
                     _add_return_status_log(
                         db, return_record.id, initial_status,
                         f"Wykryto zwrot w Allegro (ref: {return_data.get('referenceNumber')}, status: {allegro_status})"
+                    )
+                    
+                    # Ustaw status zamowienia na 'zwrot'
+                    from .orders import add_order_status
+                    add_order_status(
+                        db, order.order_id, "zwrot",
+                        notes=f"Wykryto zwrot w Allegro Customer Returns (ref: {return_data.get('referenceNumber')})"
                     )
                     
                     stats["created"] += 1
@@ -862,10 +874,11 @@ def sync_returns() -> Dict[str, Any]:
     Glowna funkcja synchronizacji zwrotow.
     
     Wykonuje:
-    1. Sprawdzenie BaseLinker getOrderReturns API (glowne zrodlo!)
-    2. Wyslanie powiadomien Messenger
-    3. Sprawdzenie statusow paczek zwrotnych (backup tracking)
-    4. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
+    1. Sprawdzenie BaseLinker getOrderReturns API
+    2. Sprawdzenie Allegro Customer Returns API (uzupelniajace zrodlo)
+    3. Wyslanie powiadomien Messenger
+    4. Sprawdzenie statusow paczek zwrotnych (backup tracking)
+    5. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
     
     Returns:
         Slownik ze statystykami wszystkich operacji
@@ -873,7 +886,8 @@ def sync_returns() -> Dict[str, Any]:
     logger.info("Rozpoczynam synchronizacje zwrotow...")
     
     results = {
-        "baselinker_returns": check_baselinker_order_returns(),  # Glowne zrodlo!
+        "baselinker_returns": check_baselinker_order_returns(),
+        "allegro_returns": check_allegro_customer_returns(),
         "notifications": send_pending_return_notifications(),
         "tracking_update": check_and_update_return_statuses(),
         "stock_restore": process_delivered_returns(),
