@@ -34,8 +34,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cups-client \
     curl \
-    chromium \
-    chromium-driver \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /etc/cups \
     && echo "ServerName /var/run/cups/cups.sock" > /etc/cups/client.conf

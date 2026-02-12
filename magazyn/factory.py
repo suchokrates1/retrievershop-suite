@@ -144,11 +144,11 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     _register_shutdown_hook()
 
-    # Initialize SocketIO with gevent (matches gunicorn worker class)
+    # Initialize SocketIO with threading (matches gunicorn sync worker class)
     socketio.init_app(
         app, 
         cors_allowed_origins="*", 
-        async_mode='gevent',
+        async_mode='threading',
         manage_session=False,  # Don't manage sessions (Flask handles this)
         engineio_logger=False,  # Reduce log spam
         logger=False

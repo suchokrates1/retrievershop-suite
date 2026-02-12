@@ -185,34 +185,69 @@
             <div class="card h-100 {% if dashboard.promotions.renewing_tomorrow_count > 0 %}border-warning{% endif %}">
                 <div class="card-header {% if dashboard.promotions.renewing_tomorrow_count > 0 %}bg-warning text-dark{% else %}bg-dark text-white{% endif %}">
                     <i class="bi bi-star-fill me-2"></i>Wyroznienia
-                    {% if dashboard.promotions.renewing_tomorrow_count > 0 %}
-                    <span class="badge bg-danger float-end">{{ dashboard.promotions.renewing_tomorrow_count }} jutro!</span>
-                    {% endif %}
+                    <span class="badge bg-info float-end">{{ dashboard.promotions.active_count }}</span>
                 </div>
-                <div class="card-body d-flex flex-column justify-content-center">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>Aktywne wyroznienia:</span>
-                        <span class="badge bg-info fs-6">{{ dashboard.promotions.active_count }}</span>
+                <div class="card-body p-2">
+                    {% if dashboard.promotions.active_promotions %}
+                    <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0" style="font-size: 0.8rem;">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Oferta</th>
+                                    <th class="text-center">Typ</th>
+                                    <th class="text-end">Koszt</th>
+                                    <th class="text-end">Przedl.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for promo in dashboard.promotions.active_promotions %}
+                                <tr class="{% if promo.days_to_renewal is not none and promo.days_to_renewal <= 1 %}table-warning{% endif %}">
+                                    <td class="text-truncate" style="max-width: 140px;" title="{{ promo.offer_name }}">
+                                        <a href="https://allegro.pl/oferta/{{ promo.offer_id }}" target="_blank" class="text-decoration-none">
+                                            {{ promo.offer_name }}
+                                        </a>
+                                    </td>
+                                    <td class="text-center text-nowrap">
+                                        {% if promo.package_name %}
+                                            {% if '10' in promo.package_name %}
+                                                <span class="badge bg-primary" title="{{ promo.package_name }}">10d</span>
+                                            {% elif 'elast' in promo.package_name|lower %}
+                                                <span class="badge bg-success" title="{{ promo.package_name }}">1d</span>
+                                            {% elif 'dzia' in promo.package_name|lower %}
+                                                <span class="badge bg-secondary" title="{{ promo.package_name }}">dzial</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary" title="{{ promo.package_name }}">{{ promo.package_name[:8] }}</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end text-nowrap">{{ "%.2f"|format(promo.estimated_cost) }} zl</td>
+                                    <td class="text-end text-nowrap">
+                                        {% if promo.next_cycle_date %}
+                                            {% if promo.days_to_renewal is not none and promo.days_to_renewal <= 1 %}
+                                                <span class="text-danger fw-bold" title="{{ promo.next_cycle_date }}">jutro</span>
+                                            {% elif promo.days_to_renewal is not none and promo.days_to_renewal <= 3 %}
+                                                <span class="text-warning" title="{{ promo.next_cycle_date }}">{{ promo.days_to_renewal }}d</span>
+                                            {% else %}
+                                                <span class="text-muted" title="{{ promo.next_cycle_date }}">{{ promo.next_cycle_date[:10] }}</span>
+                                            {% endif %}
+                                        {% elif promo.will_renew %}
+                                            <span class="text-muted">auto</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>Szac. koszt mies.:</span>
-                        <span class="badge bg-secondary fs-6">{{ "%.2f"|format(dashboard.promotions.estimated_monthly_cost) }} zl</span>
-                    </div>
-                    {% if dashboard.promotions.renewing_tomorrow %}
-                    <hr class="my-2">
-                    <small class="text-danger fw-bold mb-1">Przedluzaja sie jutro:</small>
-                    <ul class="list-unstyled small mb-0">
-                        {% for promo in dashboard.promotions.renewing_tomorrow[:3] %}
-                        <li class="text-truncate">
-                            <i class="bi bi-exclamation-triangle text-warning me-1"></i>
-                            {{ promo.offer_name }} ({{ "%.2f"|format(promo.estimated_cost) }} zl)
-                        </li>
-                        {% endfor %}
-                        {% if dashboard.promotions.renewing_tomorrow|length > 3 %}
-                        <li class="text-muted">...i {{ dashboard.promotions.renewing_tomorrow|length - 3 }} wiecej</li>
-                        {% endif %}
-                    </ul>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">Brak aktywnych wyrozien</p>
                     {% endif %}
+                    <div class="d-flex justify-content-between align-items-center mt-2 px-1">
+                        <small class="text-muted">Szac. mies.:</small>
+                        <span class="badge bg-secondary">{{ "%.2f"|format(dashboard.promotions.estimated_monthly_cost) }} zl</span>
+                    </div>
                 </div>
             </div>
         </div>
