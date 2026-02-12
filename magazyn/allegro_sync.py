@@ -301,7 +301,10 @@ def sync_offers():
                     existing.price = price
                     existing.ean = offer_ean
                     existing.publication_status = publication_status
-                    if product_size is not None or existing.product_size_id is None:
+                    if product_size is not None or (
+                        existing.product_size_id is None
+                        and existing.product_id is None
+                    ):
                         existing.product_id = product_id
                         existing.product_size_id = product_size_id
                     existing.synced_at = timestamp
