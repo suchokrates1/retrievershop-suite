@@ -3,12 +3,14 @@
 import threading
 import time
 import logging
+from datetime import datetime
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 _sync_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()
+_last_offer_sync_date: Optional[str] = None  # YYYY-MM-DD - data ostatniego syncu ofert
 
 
 def _sync_allegro_fulfillment(app):
@@ -128,6 +130,8 @@ def _sync_worker(app):
     from .parcel_tracking import sync_parcel_statuses
     from .returns import sync_returns
     
+    global _last_offer_sync_date
+    
     logger.info("Order sync scheduler started - will sync every 1 hour")
     
     while not _stop_event.is_set():
@@ -158,6 +162,35 @@ def _sync_worker(app):
                 logger.info("Starting automatic returns sync")
                 returns_stats = sync_returns()
                 logger.info(f"Returns sync completed: {returns_stats}")
+                
+                # 5. Codzienny sync ofert Allegro (raz dziennie)
+                today = datetime.now().strftime("%Y-%m-%d")
+                if _last_offer_sync_date != today:
+                    logger.info("Starting daily Allegro offer sync")
+                    try:
+                        from .allegro_sync import sync_offers
+                        offer_stats = sync_offers()
+                        _last_offer_sync_date = today
+                        logger.info(f"Daily offer sync completed: {offer_stats}")
+                    except Exception as offer_err:
+                        logger.error(f"Error in daily offer sync: {offer_err}", exc_info=True)
+                    
+                    # 6. Sync wyrozien Allegro (razem z ofertami, raz dziennie)
+                    logger.info("Starting daily promo sync")
+                    try:
+                        from .services.allegro_promotions import get_promotions_summary
+                        promo_summary = get_promotions_summary()
+                        if promo_summary.error:
+                            logger.warning(f"Promo sync warning: {promo_summary.error}")
+                        else:
+                            logger.info(
+                                f"Promo sync completed: active={promo_summary.active_count}, "
+                                f"renewing_tomorrow={len(promo_summary.renewing_tomorrow)}"
+                            )
+                    except Exception as promo_err:
+                        logger.error(f"Error in promo sync: {promo_err}", exc_info=True)
+                else:
+                    logger.debug("Offer sync already done today, skipping")
                 
         except Exception as e:
             logger.error(f"Error in automatic sync: {e}", exc_info=True)
