@@ -147,8 +147,8 @@ def fetch_all_promo_options(access_token: str, limit: int = 5000) -> List[Dict[s
     return all_options
 
 
-def fetch_offer_name(access_token: str, offer_id: str) -> str:
-    """Pobiera nazwę oferty z Allegro API."""
+def fetch_offer_info(access_token: str, offer_id: str) -> Dict[str, str]:
+    """Pobiera nazwe i status publikacji oferty z Allegro API."""
     url = f'{API_BASE_URL}/sale/product-offers/{offer_id}'
     headers = _get_headers(access_token)
     
@@ -156,11 +156,19 @@ def fetch_offer_name(access_token: str, offer_id: str) -> str:
         response = requests.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
         if response.status_code == 200:
             data = response.json()
-            return data.get('name', f'Oferta {offer_id}')
+            return {
+                'name': data.get('name', f'Oferta {offer_id}'),
+                'publication_status': data.get('publication', {}).get('status', 'UNKNOWN'),
+            }
     except requests.RequestException:
         pass
     
-    return f'Oferta {offer_id}'
+    return {'name': f'Oferta {offer_id}', 'publication_status': 'UNKNOWN'}
+
+
+def fetch_offer_name(access_token: str, offer_id: str) -> str:
+    """Pobiera nazwe oferty z Allegro API (kompatybilnosc wsteczna)."""
+    return fetch_offer_info(access_token, offer_id)['name']
 
 
 def get_promotions_summary(access_token: Optional[str] = None) -> PromoSummary:
@@ -191,8 +199,8 @@ def get_promotions_summary(access_token: Optional[str] = None) -> PromoSummary:
         logger.info("Brak aktywnych wyróżnień")
         return summary
     
-    # Cache nazw ofert (pobierane leniwie)
-    offer_names_cache: Dict[str, str] = {}
+    # Cache info ofert (pobierane leniwie): offer_id -> {name, publication_status}
+    offer_info_cache: Dict[str, Dict[str, str]] = {}
     
     for option in all_options:
         offer_id = option.get('offerId')
@@ -215,16 +223,24 @@ def get_promotions_summary(access_token: Optional[str] = None) -> PromoSummary:
         if not is_active:
             continue
         
+        # Pobierz info o ofercie (leniwie) i odfiltuj zakonczone oferty
+        if offer_id not in offer_info_cache:
+            offer_info_cache[offer_id] = fetch_offer_info(access_token, offer_id)
+        
+        offer_info = offer_info_cache[offer_id]
+        if offer_info['publication_status'] == 'ENDED':
+            logger.debug(
+                f"Pomijam wyroznienie dla zakonczonej oferty {offer_id}: "
+                f"{offer_info['name'][:50]}"
+            )
+            continue
+        
         # Czy przedłuży się automatycznie
         will_renew = valid_to is None and next_cycle is not None
         
-        # Pobierz nazwę oferty (leniwie)
-        if offer_id not in offer_names_cache:
-            offer_names_cache[offer_id] = fetch_offer_name(access_token, offer_id)
-        
         promo = PromoOption(
             offer_id=offer_id,
-            offer_name=offer_names_cache[offer_id],
+            offer_name=offer_info['name'],
             package_id=package_id,
             package_name=package_info.get('name', package_id),
             valid_from=valid_from,
