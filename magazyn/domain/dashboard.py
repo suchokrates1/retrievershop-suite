@@ -99,6 +99,7 @@ class PromoStats:
     renewing_tomorrow_count: int = 0
     estimated_monthly_cost: float = 0.0
     renewing_tomorrow: List[Dict[str, Any]] = field(default_factory=list)
+    active_promotions: List[Dict[str, Any]] = field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -324,11 +325,26 @@ class DashboardService:
                 for p in summary.renewing_tomorrow
             ]
             
+            # Pelna lista aktywnych wyrozien
+            active_promotions_list = [
+                {
+                    'offer_id': p.offer_id,
+                    'offer_name': p.offer_name[:60],
+                    'package_name': p.package_name,
+                    'estimated_cost': p.estimated_cost,
+                    'next_cycle_date': p.next_cycle_date.strftime('%Y-%m-%d %H:%M') if p.next_cycle_date else None,
+                    'will_renew': p.will_renew,
+                    'days_to_renewal': p.days_to_renewal,
+                }
+                for p in summary.promotions
+            ]
+            
             return PromoStats(
                 active_count=summary.active_count,
                 renewing_tomorrow_count=len(summary.renewing_tomorrow),
                 estimated_monthly_cost=summary.total_estimated_monthly_cost,
                 renewing_tomorrow=renewing_tomorrow_list,
+                active_promotions=active_promotions_list,
             )
         except Exception as e:
             import logging
@@ -730,6 +746,7 @@ class DashboardService:
                 'renewing_tomorrow_count': promo_stats.renewing_tomorrow_count,
                 'estimated_monthly_cost': promo_stats.estimated_monthly_cost,
                 'renewing_tomorrow': promo_stats.renewing_tomorrow,
+                'active_promotions': promo_stats.active_promotions,
                 'error': promo_stats.error,
             },
             'latest_orders': latest_orders,

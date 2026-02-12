@@ -226,64 +226,22 @@ def test_discussions_page_with_fake_data():
         "dyskusja": "dyskusja" in html_content,
     }
     
-    print("\n✅ Sprawdzenia zawartości:")
+    print("\n Sprawdzenia zawartosci:")
     for name, result in checks.items():
-        status = "✅" if result else "❌"
+        status = "OK" if result else "FAIL"
         print(f"   {status} {name}")
     
-    # Spróbuj zrobić screenshot jeśli selenium jest dostępny
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-        import time
-        
-        print("\n📸 Próbuję zrobić screenshot...")
-        
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--force-device-scale-factor=1")
-        
-        driver = webdriver.Chrome(options=chrome_options)
-        
-        # Załaduj zapisany HTML
-        file_url = output_file.absolute().as_uri()
-        driver.get(file_url)
-        
-        # Poczekaj na załadowanie
-        time.sleep(1)
-        
-        # Zrób screenshot
-        screenshot_file = Path(__file__).parent / "discussions_screenshot.png"
-        driver.save_screenshot(str(screenshot_file))
-        driver.quit()
-        
-        print(f"✅ Zapisano screenshot do: {screenshot_file}")
-        
-        return True
-        
-    except ImportError:
-        print("\n⚠️  Selenium nie zainstalowany - pomijam screenshot")
-        print("   Możesz zainstalować: pip install selenium")
-        print(f"   Lub otwórz plik HTML w przeglądarce: {output_file.absolute()}")
-        return True
-        
-    except Exception as e:
-        print(f"\n⚠️  Nie można zrobić screenshota: {e}")
-        print(f"   Ale możesz otworzyć plik HTML w przeglądarce: {output_file.absolute()}")
-        return True
+    return True
 
 
 if __name__ == "__main__":
-    print("🧪 Test UI strony dyskusji z fakeowymi danymi\n")
+    print("Test UI strony dyskusji z fakeowymi danymi\n")
     print("=" * 60)
     
     success = test_discussions_page_with_fake_data()
     
     print("=" * 60)
     if success:
-        print("\n✅ Test zakończony sukcesem!")
+        print("\nTest zakonczony sukcesem!")
     else:
-        print("\n❌ Test zakończony błędem!")
+        print("\nTest zakonczony bledem!")
