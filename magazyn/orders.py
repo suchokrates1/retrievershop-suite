@@ -142,6 +142,23 @@ def _match_product_to_warehouse(db, name: str, color: str, size: str):
                 and color_norm == db_color):
             return ps
 
+    # Fallback 2: brak koloru w zamowieniu - dopasowanie po serii + nazwie produktu
+    if not color_norm:
+        series_matches = []
+        for ps in candidates:
+            product = ps.product
+            db_series = _strip_diacritics_ord(product.series or "").lower()
+            if db_series and (series_norm == db_series
+                    or db_series in series_norm
+                    or series_norm in db_series):
+                # Dodatkowa weryfikacja: nazwa produktu musi pasowac do nazwy z zamowienia
+                db_name_norm = _strip_diacritics_ord(product.name or "").lower()
+                name_norm = _strip_diacritics_ord(name or "").lower()
+                if db_name_norm == name_norm or db_name_norm in name_norm or name_norm in db_name_norm:
+                    series_matches.append(ps)
+        if len(series_matches) == 1:
+            return series_matches[0]
+
     return None
 
 
