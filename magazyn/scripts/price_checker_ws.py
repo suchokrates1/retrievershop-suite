@@ -32,8 +32,8 @@ from pathlib import Path
 try:
     import websockets
 except ImportError:
-    print("Zainstaluj: pip install websockets")
-    sys.exit(1)
+    websockets = None
+    logging.getLogger(__name__).warning("Brak pakietu websockets - scraping CDP niedostepny")
 
 import urllib.request
 import urllib.parse
@@ -499,6 +499,10 @@ async def check_offer_price(
         success=False,
         my_price=my_price,
     )
+    
+    if websockets is None:
+        result.error = "Brak pakietu websockets - zainstaluj: pip install websockets"
+        return result
     
     url = build_offer_url(offer_id, title)
     
