@@ -146,13 +146,21 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
 
     if not size:
         words = name.strip().split()
+        known_colors_norm = {_strip_diacritics(c.lower()) for c in KNOWN_COLORS}
         if len(words) >= 3:
             maybe_size = words[-1]
             if maybe_size.upper() in {s.upper() for s in ALL_SIZES}:
                 size = maybe_size
                 if not color:
-                    color = words[-2]
-                name = " ".join(words[:-2])
+                    candidate_color = words[-2]
+                    if _strip_diacritics(candidate_color.lower()) in known_colors_norm:
+                        color = candidate_color
+                        name = " ".join(words[:-2])
+                    else:
+                        # Nie jest znanym kolorem - zostaw w nazwie
+                        name = " ".join(words[:-1])
+                else:
+                    name = " ".join(words[:-1])
         if not size and len(words) >= 2:
             maybe_color = words[-1].lower()
             if maybe_color in {c.lower() for c in KNOWN_COLORS}:
