@@ -897,13 +897,13 @@ def sync_order_from_data(db, order_data: dict) -> Order:
             from .parsing import parse_product_info
             name, size, color = parse_product_info(prod)
 
-            if name and size and color:
+            if name and size:
                 ps = _match_product_to_warehouse(db, name, color, size)
                 if ps:
                     product_size_id = ps.id
                     logger.info(f"Matched: {prod.get('name')} -> {name}/{color}/{size} -> product_size_id={ps.id}")
                 else:
-                    logger.warning(f"NOT MATCHED: {prod.get('name')} -> parsed: {name}/{color}/{size}")
+                    logger.warning(f"NOT MATCHED: {prod.get('name')} -> parsed: {name}/{color or '(brak)'}/{size}")
             else:
                 logger.warning(f"NOT MATCHED (parse failed): {prod.get('name')} -> name={name}, size={size}, color={color}")
         
