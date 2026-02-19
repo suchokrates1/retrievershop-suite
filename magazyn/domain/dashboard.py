@@ -690,6 +690,93 @@ class DashboardService:
         activities.sort(key=lambda x: x['timestamp'], reverse=True)
         return activities[:limit]
     
+    def get_fast_dashboard(self) -> Dict[str, Any]:
+        """
+        Pobiera szybkie dane dashboardu (tylko zapytania do bazy, bez API).
+        
+        Ciezkie sekcje (profit, promotions, bestsellers, slow_movers, trends)
+        sa ladowane asynchronicznie przez endpoint /api/dashboard/heavy.
+        """
+        order_stats = self.get_order_stats()
+        revenue_stats = self.get_revenue_stats()
+        inventory_stats = self.get_inventory_stats()
+        allegro_stats = self.get_allegro_stats()
+        
+        latest_orders = self.get_latest_orders(10)
+        latest_deliveries = self.get_latest_deliveries(5)
+        
+        return {
+            'orders': {
+                'today': order_stats.today,
+                'week': order_stats.week,
+                'month': order_stats.month,
+                'pending': order_stats.pending,
+            },
+            'revenue': {
+                'today': revenue_stats.today,
+                'week': revenue_stats.week,
+                'month': revenue_stats.month,
+            },
+            'profit': None,  # ladowane asynchronicznie
+            'current_month_name': self.time_ranges.current_month_name,
+            'inventory': {
+                'total_products': inventory_stats.total_products,
+                'total_stock': inventory_stats.total_stock,
+                'out_of_stock': inventory_stats.out_of_stock,
+                'low_stock_items': inventory_stats.low_stock_items,
+            },
+            'allegro': {
+                'total_offers': allegro_stats.total_offers,
+                'unlinked_offers': allegro_stats.unlinked_offers,
+            },
+            'promotions': None,  # ladowane asynchronicznie
+            'latest_orders': latest_orders,
+            'latest_deliveries': latest_deliveries,
+            'bestsellers': None,  # ladowane asynchronicznie
+            'slow_moving': None,  # ladowane asynchronicznie
+            'trends': None,  # ladowane asynchronicznie
+        }
+    
+    def get_heavy_dashboard(self, access_token: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Pobiera ciezkie dane dashboardu (API + zlozone zapytania).
+        
+        Wywolywane asynchronicznie z frontendu.
+        """
+        profit_stats = self.get_profit_stats(access_token)
+        promo_stats = self.get_promo_stats()
+        trends = self.get_trends()
+        
+        bestsellers_all = self.get_bestsellers(limit=10)
+        bestsellers_month = self.get_bestsellers(self.time_ranges.month_start_ts, limit=10)
+        bestsellers_week = self.get_bestsellers(self.time_ranges.week_start_ts, limit=5)
+        
+        slow_moving = self.get_slow_movers(10)
+        
+        return {
+            'profit': profit_stats,
+            'promotions': {
+                'active_count': promo_stats.active_count,
+                'renewing_tomorrow_count': promo_stats.renewing_tomorrow_count,
+                'estimated_monthly_cost': promo_stats.estimated_monthly_cost,
+                'renewing_tomorrow': promo_stats.renewing_tomorrow,
+                'active_promotions': promo_stats.active_promotions,
+                'error': promo_stats.error,
+            },
+            'bestsellers': {
+                'all_time': bestsellers_all,
+                'month': bestsellers_month,
+                'week': bestsellers_week,
+            },
+            'slow_moving': slow_moving,
+            'trends': {
+                'orders_change': trends.orders_change,
+                'revenue_change': trends.revenue_change,
+                'prev_week_orders': trends.prev_week_orders,
+                'prev_week_revenue': trends.prev_week_revenue,
+            },
+        }
+
     def get_full_dashboard(self, access_token: Optional[str] = None) -> Dict[str, Any]:
         """
         Pobiera kompletne dane dashboardu.
