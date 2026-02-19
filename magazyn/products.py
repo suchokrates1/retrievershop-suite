@@ -368,7 +368,7 @@ def add_item():
             if custom_color and custom_color.strip():
                 color = custom_color.strip()
             else:
-                flash("Proszę wpisać niestandardowy kolor")
+                flash("Proszę wpisać niestandardowy kolor", "error")
                 return render_template("add_item.html", form=form)
         
         sizes = ALL_SIZES
@@ -384,7 +384,7 @@ def add_item():
         try:
             create_product(category, brand, series, color, quantities, barcodes)
         except Exception as e:
-            flash(f"Błąd podczas dodawania przedmiotu: {e}")
+            flash(f"Błąd podczas dodawania przedmiotu: {e}", "error")
         return redirect(url_for("products.items"))
 
     return render_template("add_item.html", form=form)
@@ -410,9 +410,9 @@ def delete_item(item_id):
         flash(f"B\u0142ąd podczas usuwania przedmiotu: {e}")
         return redirect(url_for("products.items"))
     if not deleted:
-        flash("Nie znaleziono produktu o podanym identyfikatorze")
+        flash("Nie znaleziono produktu o podanym identyfikatorze", "error")
         abort(404)
-    flash("Przedmiot został usunięty")
+    flash("Przedmiot został usunięty", "success")
     return redirect(url_for("products.items"))
 
 
@@ -441,21 +441,109 @@ def edit_item(product_id):
                 product_id, category, brand, series, color, quantities, barcodes, purchase_prices
             )
         except Exception as e:
-            flash(f"Błąd podczas aktualizacji przedmiotu: {e}")
+            flash(f"Błąd podczas aktualizacji przedmiotu: {e}", "error")
             return redirect(url_for("products.items"))
         if not updated:
-            flash("Nie znaleziono produktu o podanym identyfikatorze")
+            flash("Nie znaleziono produktu o podanym identyfikatorze", "error")
             abort(404)
-        flash("Przedmiot został zaktualizowany")
+        flash("Przedmiot został zaktualizowany", "success")
         return redirect(url_for("products.items"))
 
     product, product_sizes = get_product_details(product_id)
     if not product:
-        flash("Nie znaleziono produktu o podanym identyfikatorze")
+        flash("Nie znaleziono produktu o podanym identyfikatorze", "error")
         abort(404)
     return render_template(
         "edit_item.html", product=product, product_sizes=product_sizes
     )
+
+
+@bp.route("/api/product/<int:product_id>/history")
+@login_required
+def product_history_api(product_id):
+    """API endpoint do lazy loadingu historii produktu (zamowienia/dostawy)."""
+    from sqlalchemy import func
+    history_type = request.args.get("type", "orders")  # orders | deliveries
+    offset = request.args.get("offset", 0, type=int)
+    limit = request.args.get("limit", 50, type=int)
+    if limit > 200:
+        limit = 200
+
+    with get_session() as db:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return jsonify({"error": "not_found"}), 404
+
+        if history_type == "deliveries":
+            total = db.query(func.count(PurchaseBatch.id)).filter(PurchaseBatch.product_id == product_id).scalar()
+            batches = (
+                db.query(PurchaseBatch)
+                .filter(PurchaseBatch.product_id == product_id)
+                .order_by(desc(PurchaseBatch.purchase_date))
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
+            items = [
+                {
+                    "size": pb.size,
+                    "quantity": pb.quantity,
+                    "remaining": pb.remaining_quantity if pb.remaining_quantity is not None else pb.quantity,
+                    "price": float(pb.price),
+                    "total_value": float(pb.quantity * pb.price),
+                    "date": pb.purchase_date.strftime("%Y-%m-%d") if pb.purchase_date else None,
+                    "invoice_number": pb.invoice_number,
+                    "supplier": pb.supplier,
+                }
+                for pb in batches
+            ]
+            return jsonify({"items": items, "total": total, "offset": offset, "has_more": offset + limit < total})
+
+        else:  # orders
+            sorted_sizes = product.sizes
+            size_ids = [ps.id for ps in sorted_sizes]
+            all_eans = [ps.barcode for ps in sorted_sizes if ps.barcode]
+            size_map_by_id = {ps.id: ps.size for ps in sorted_sizes}
+            size_map_by_ean = {ps.barcode: ps.size for ps in sorted_sizes if ps.barcode}
+
+            filters = []
+            if size_ids:
+                filters.append(OrderProduct.product_size_id.in_(size_ids))
+            if all_eans:
+                filters.append(OrderProduct.ean.in_(all_eans))
+
+            if not filters:
+                return jsonify({"items": [], "total": 0, "offset": offset, "has_more": False})
+
+            total = db.query(func.count(OrderProduct.id)).filter(or_(*filters)).scalar()
+            order_products = (
+                db.query(OrderProduct)
+                .filter(or_(*filters))
+                .order_by(desc(OrderProduct.id))
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
+
+            items = []
+            for op in order_products:
+                if op.order:
+                    size = None
+                    if op.product_size_id and op.product_size_id in size_map_by_id:
+                        size = size_map_by_id[op.product_size_id]
+                    elif op.ean and op.ean in size_map_by_ean:
+                        size = size_map_by_ean[op.ean]
+                    items.append({
+                        "order_id": op.order_id,
+                        "lp": op.order.lp if hasattr(op.order, 'lp') and op.order.lp else op.order_id,
+                        "date": op.order.date_add,
+                        "customer": op.order.customer_name,
+                        "quantity": op.quantity,
+                        "price": float(op.price_brutto) if op.price_brutto else None,
+                        "size": size,
+                    })
+
+            return jsonify({"items": items, "total": total, "offset": offset, "has_more": offset + limit < total})
 
 
 @bp.route("/product/<int:product_id>")
@@ -675,8 +763,45 @@ def product_detail(product_id):
 @bp.route("/items")
 @login_required
 def items():
+    search = request.args.get("search", "").strip()
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+    if per_page not in [25, 50, 100, 200]:
+        per_page = 50
+    
     result = list_products()
-    return render_template("items.html", products=result)
+    
+    # Filtrowanie po nazwie/kolorze/serii/kategorii
+    if search:
+        s = search.lower()
+        result = [
+            p for p in result
+            if s in (p.get("category") or "").lower()
+            or s in (p.get("series") or "").lower()
+            or s in (p.get("color") or "").lower()
+            or s in (p.get("brand") or "").lower()
+            or s in (p.get("name") or "").lower()
+        ]
+    
+    total = len(result)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    
+    start = (page - 1) * per_page
+    paginated = result[start:start + per_page]
+    
+    return render_template(
+        "items.html",
+        products=paginated,
+        search=search,
+        page=page,
+        per_page=per_page,
+        total=total,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+    )
 
 
 # Kod skanowania przeniesiony do blueprints/scanning.py
@@ -820,7 +945,7 @@ def import_invoice():
                     product_sizes=ps_list,
                 )
             except Exception as e:
-                flash(f"Błąd podczas importu faktury: {e}")
+                flash(f"Błąd podczas importu faktury: {e}", "error")
                 return redirect(url_for("products.items"))
         return redirect(url_for("products.items"))
     return render_template("import_invoice.html")
@@ -882,9 +1007,9 @@ def confirm_invoice():
     if confirmed:
         try:
             import_invoice_rows(confirmed, invoice_number=invoice_number, supplier=supplier)
-            flash("Zaimportowano fakture")
+            flash("Zaimportowano fakture", "success")
         except Exception as e:
-            flash(f"Blad podczas importu faktury: {e}")
+            flash(f"Blad podczas importu faktury: {e}", "error")
     pdf_path = session.pop("invoice_pdf", None)
     if pdf_path:
         try:

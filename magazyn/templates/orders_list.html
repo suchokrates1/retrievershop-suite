@@ -14,12 +14,15 @@
             <input type="hidden" name="per_page" value="{{ per_page }}">
             <input type="hidden" name="sort" value="{{ sort_by }}">
             <input type="hidden" name="dir" value="{{ sort_dir }}">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            <input type="hidden" name="date_from" value="{{ date_from }}">
+            <input type="hidden" name="date_to" value="{{ date_to }}">
             <input type="text" id="searchInput" name="search" class="form-control" 
                    placeholder="Wyszukaj (klient, email, telefon, produkt, metoda wysylki)..."
                    value="{{ search }}">
             <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
             {% if search %}
-            <a href="{{ url_for('orders.orders_list', per_page=per_page, sort=sort_by, dir=sort_dir) }}" class="btn btn-outline-secondary" title="Wyczysc"><i class="bi bi-x-lg"></i></a>
+            <a href="{{ url_for('orders.orders_list', per_page=per_page, sort=sort_by, dir=sort_dir, status=status_filter, date_from=date_from, date_to=date_to) }}" class="btn btn-outline-secondary" title="Wyczysc"><i class="bi bi-x-lg"></i></a>
             {% endif %}
         </form>
     </div>
@@ -37,6 +40,42 @@
     </div>
 </div>
 
+{# Status filter and date range #}
+<div class="row mb-3 g-2">
+    <div class="col-md-7">
+        <div class="btn-group btn-group-sm flex-wrap" role="group">
+            {% set base_params = {'search': search, 'per_page': per_page, 'sort': sort_by, 'dir': sort_dir, 'date_from': date_from, 'date_to': date_to} %}
+            <a href="{{ url_for('orders.orders_list', **dict(base_params, status='all')) }}"
+               class="btn btn-outline-secondary {{ 'active' if status_filter == 'all' }}">Wszystkie</a>
+            <a href="{{ url_for('orders.orders_list', **dict(base_params, status='w_realizacji')) }}"
+               class="btn btn-outline-info {{ 'active' if status_filter == 'w_realizacji' }}">W realizacji</a>
+            <a href="{{ url_for('orders.orders_list', **dict(base_params, status='w_transporcie')) }}"
+               class="btn btn-outline-warning {{ 'active' if status_filter == 'w_transporcie' }}">W transporcie</a>
+            <a href="{{ url_for('orders.orders_list', **dict(base_params, status='zakonczone')) }}"
+               class="btn btn-outline-success {{ 'active' if status_filter == 'zakonczone' }}">Zakonczone</a>
+            <a href="{{ url_for('orders.orders_list', **dict(base_params, status='problem')) }}"
+               class="btn btn-outline-danger {{ 'active' if status_filter == 'problem' }}">Problemy</a>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <form method="get" action="{{ url_for('orders.orders_list') }}" class="d-flex align-items-center gap-1 justify-content-end">
+            <input type="hidden" name="search" value="{{ search }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="hidden" name="sort" value="{{ sort_by }}">
+            <input type="hidden" name="dir" value="{{ sort_dir }}">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            <label class="text-nowrap small mb-0">Od:</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" style="width: 140px;" value="{{ date_from }}">
+            <label class="text-nowrap small mb-0">Do:</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" style="width: 140px;" value="{{ date_to }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-funnel"></i></button>
+            {% if date_from or date_to %}
+            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort=sort_by, dir=sort_dir, status=status_filter) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
 {# Orders table - Updated 2026-01-07 19:10 #}
 <div class="table-responsive">
 <table class="table table-striped table-hover table-sm" id="orders-table-v2">
@@ -51,22 +90,23 @@
     </colgroup>
     <thead class="table-dark">
     <tr>
+        {% set sort_params = {'search': search, 'per_page': per_page, 'status': status_filter, 'date_from': date_from, 'date_to': date_to} %}
         <th>
-            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort='order_id', dir='asc' if sort_by=='order_id' and sort_dir=='desc' else 'desc') }}" 
+            <a href="{{ url_for('orders.orders_list', **dict(sort_params, sort='order_id', dir='asc' if sort_by=='order_id' and sort_dir=='desc' else 'desc')) }}" 
                class="text-white text-decoration-none">
                 Lp. {% if sort_by == 'order_id' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
             </a>
         </th>
         <th>
-            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort='date', dir='asc' if sort_by=='date' and sort_dir=='desc' else 'desc') }}" 
+            <a href="{{ url_for('orders.orders_list', **dict(sort_params, sort='date', dir='asc' if sort_by=='date' and sort_dir=='desc' else 'desc')) }}" 
                class="text-white text-decoration-none">
                 Data {% if sort_by == 'date' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
             </a>
         </th>
         <th>Produkty</th>
-        <th>Wysyłka</th>
+        <th>Wysylka</th>
         <th class="text-end">
-            <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort='amount', dir='asc' if sort_by=='amount' and sort_dir=='desc' else 'desc') }}" 
+            <a href="{{ url_for('orders.orders_list', **dict(sort_params, sort='amount', dir='asc' if sort_by=='amount' and sort_dir=='desc' else 'desc')) }}" 
                class="text-white text-decoration-none">
                 Kwota {% if sort_by == 'amount' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
             </a>
@@ -117,8 +157,9 @@
 {% if total_pages > 1 %}
 <nav aria-label="Paginacja zamówień" class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
+        {% set pag_params = {'search': search, 'per_page': per_page, 'sort': sort_by, 'dir': sort_dir, 'status': status_filter, 'date_from': date_from, 'date_to': date_to} %}
         <li class="page-item {% if not has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('orders.orders_list', page=page-1, search=search, per_page=per_page, sort=sort_by, dir=sort_dir) }}">
+            <a class="page-link" href="{{ url_for('orders.orders_list', **dict(pag_params, page=page-1)) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
@@ -126,7 +167,7 @@
         {% for p in range(1, total_pages + 1) %}
             {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
                 <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('orders.orders_list', page=p, search=search, per_page=per_page, sort=sort_by, dir=sort_dir) }}">{{ p }}</a>
+                    <a class="page-link" href="{{ url_for('orders.orders_list', **dict(pag_params, page=p)) }}">{{ p }}</a>
                 </li>
             {% elif p == page - 3 or p == page + 3 %}
                 <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -134,7 +175,7 @@
         {% endfor %}
         
         <li class="page-item {% if not has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('orders.orders_list', page=page+1, search=search, per_page=per_page, sort=sort_by, dir=sort_dir) }}">
+            <a class="page-link" href="{{ url_for('orders.orders_list', **dict(pag_params, page=page+1)) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>

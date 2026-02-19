@@ -13,6 +13,7 @@ from . import print_agent
 from .db import get_session
 from .settings_store import SettingsPersistenceError, settings_store
 from .models import Sale, Product, ShippingThreshold
+from sqlalchemy import or_
 from decimal import Decimal
 
 bp = Blueprint("sales", __name__)
@@ -33,14 +34,80 @@ def calculate_shipping(amount: Decimal) -> Decimal:
 @bp.route("/sales")
 @login_required
 def list_sales():
-    """Display table of recorded sales with profit calculation."""
+    """Display table of recorded sales with profit calculation, pagination and search."""
+    search = request.args.get("search", "").strip()
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 25, type=int)
+    if per_page not in [25, 50, 100]:
+        per_page = 25
+    
     with get_session() as db:
-        rows = (
+        query = db.query(Sale, Product).outerjoin(Product, Sale.product_id == Product.id)
+        
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                db.query(Sale).filter(
+                    Sale.id == Sale.id  # placeholder
+                ).correlate(Sale).exists()
+            )
+            # Filtruj po nazwie produktu
+            query = (
+                db.query(Sale, Product)
+                .outerjoin(Product, Sale.product_id == Product.id)
+                .filter(
+                    or_(
+                        Product.category.ilike(search_pattern),
+                        Product.series.ilike(search_pattern),
+                        Product.color.ilike(search_pattern),
+                        Product.brand.ilike(search_pattern),
+                        Sale.size.ilike(search_pattern),
+                    )
+                )
+            )
+        
+        query = query.order_by(Sale.sale_date.desc())
+        total = query.count()
+        rows = query.offset((page - 1) * per_page).limit(per_page).all()
+        
+        # Oblicz sumy dla calosciowego podsumowania (bez paginacji)
+        all_rows = (
             db.query(Sale, Product)
             .outerjoin(Product, Sale.product_id == Product.id)
-            .order_by(Sale.sale_date.desc())
-            .all()
         )
+        if search:
+            search_pattern = f"%{search}%"
+            all_rows = all_rows.filter(
+                or_(
+                    Product.category.ilike(search_pattern),
+                    Product.series.ilike(search_pattern),
+                    Product.color.ilike(search_pattern),
+                    Product.brand.ilike(search_pattern),
+                    Sale.size.ilike(search_pattern),
+                )
+            )
+        
+        from sqlalchemy import func as sqfunc
+        totals = db.query(
+            sqfunc.sum(Sale.sale_price),
+            sqfunc.sum(Sale.purchase_cost),
+            sqfunc.sum(Sale.commission_fee),
+        ).select_from(Sale)
+        if search:
+            totals = totals.outerjoin(Product, Sale.product_id == Product.id).filter(
+                or_(
+                    Product.category.ilike(search_pattern),
+                    Product.series.ilike(search_pattern),
+                    Product.color.ilike(search_pattern),
+                    Product.brand.ilike(search_pattern),
+                    Sale.size.ilike(search_pattern),
+                )
+            )
+        totals_row = totals.first()
+        total_sale_price = float(totals_row[0] or 0)
+        total_purchase_cost = float(totals_row[1] or 0)
+        total_commission = float(totals_row[2] or 0)
+        
         sales = []
         for sale, product in rows:
             shipping = sale.shipping_cost or calculate_shipping(
@@ -63,14 +130,34 @@ def list_sales():
                 {
                     "date": sale.sale_date,
                     "product": descr,
-                    "purchase_cost": sale.purchase_cost,
-                    "commission": sale.commission_fee,
-                    "shipping": shipping,
-                    "sale_price": sale.sale_price,
-                    "profit": profit,
+                    "purchase_cost": float(sale.purchase_cost),
+                    "commission": float(sale.commission_fee),
+                    "shipping": float(shipping),
+                    "sale_price": float(sale.sale_price),
+                    "profit": float(profit),
                 }
             )
-    return render_template("sales_list.html", sales=sales)
+    
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    total_profit = total_sale_price - total_purchase_cost - total_commission
+    
+    return render_template(
+        "sales_list.html",
+        sales=sales,
+        search=search,
+        page=page,
+        per_page=per_page,
+        total=total,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+        summary={
+            "sale_price": total_sale_price,
+            "purchase_cost": total_purchase_cost,
+            "commission": total_commission,
+            "profit": total_profit,
+        },
+    )
 
 
 def _sales_keys(values):
@@ -97,11 +184,12 @@ def sales_settings():
                 "Failed to persist sales settings", exc_info=exc
             )
             flash(
-                "Nie można zapisać ustawień sprzedaży, ponieważ baza konfiguracji jest w trybie tylko do odczytu."
+                "Nie można zapisać ustawień sprzedaży, ponieważ baza konfiguracji jest w trybie tylko do odczytu.",
+                "error",
             )
             return redirect(url_for("sales.sales_settings"))
         print_agent.reload_config()
-        flash("Zapisano ustawienia.")
+        flash("Zapisano ustawienia.", "success")
         return redirect(url_for("sales.sales_settings"))
 
     settings_list = []

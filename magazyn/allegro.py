@@ -228,7 +228,7 @@ def authorize():
         current_app.logger.warning(
             "Cannot start Allegro authorization: missing client_id or redirect_uri",
         )
-        flash("Uzupełnij konfigurację Allegro, aby rozpocząć autoryzację.")
+        flash("Uzupełnij konfigurację Allegro, aby rozpocząć autoryzację.", "warning")
         return redirect(url_for("settings_page"))
 
     state = secrets.token_urlsafe(16)
@@ -253,7 +253,7 @@ def authorize():
 def allegro_oauth_callback():
     result = _process_oauth_response()
     if message := result.get("message"):
-        flash(message)
+        flash(message, "success" if result.get("ok") else "error")
     return redirect(url_for("settings_page"))
 
 
@@ -262,7 +262,7 @@ def allegro_oauth_callback():
 def allegro_oauth_debug():
     result = _process_oauth_response()
     if message := result.get("message"):
-        flash(message)
+        flash(message, "success" if result.get("ok") else "error")
     return redirect(url_for("settings_page"))
 
 
@@ -400,25 +400,67 @@ def offers_and_prices():
     start_time = time.time()
     request_id = f"{int(start_time * 1000)}"
     current_app.logger.info(f"REQUEST START [{request_id}] /offers-and-prices")
-    
+
+    search = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "all")
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+    if per_page not in (25, 50, 100):
+        per_page = 50
+    if page < 1:
+        page = 1
+
     with get_session() as db:
-        # Count statistics
+        # Count statistics (always on full set)
         total_offers = db.query(AllegroOffer).filter(AllegroOffer.publication_status == 'ACTIVE').count()
         matched_offers = db.query(AllegroOffer).filter(
             AllegroOffer.publication_status == 'ACTIVE',
             (AllegroOffer.product_size_id.isnot(None)) | (AllegroOffer.product_id.isnot(None))
         ).count()
-        
-        # Get all active offers with their linked products
-        rows = (
+
+        # Base query
+        query = (
             db.query(AllegroOffer, ProductSize, Product)
             .filter(AllegroOffer.publication_status == 'ACTIVE')
             .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
             .outerjoin(Product, AllegroOffer.product_id == Product.id)
-            .order_by(
+        )
+
+        # Status filter
+        if status_filter == "linked":
+            query = query.filter(
+                (AllegroOffer.product_size_id.isnot(None)) | (AllegroOffer.product_id.isnot(None))
+            )
+        elif status_filter == "unlinked":
+            query = query.filter(
+                AllegroOffer.product_size_id.is_(None),
+                AllegroOffer.product_id.is_(None),
+            )
+
+        # Search filter
+        if search:
+            search_lower = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    AllegroOffer.title.ilike(search_lower),
+                    AllegroOffer.offer_id.ilike(search_lower),
+                    AllegroOffer.ean.ilike(search_lower),
+                    Product.name.ilike(search_lower),
+                )
+            )
+
+        total_filtered = query.count()
+        total_pages = max(1, (total_filtered + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+
+        rows = (
+            query.order_by(
                 case((AllegroOffer.product_size_id.is_(None), 0), else_=1),
                 AllegroOffer.title,
             )
+            .offset((page - 1) * per_page)
+            .limit(per_page)
             .all()
         )
 
@@ -449,7 +491,7 @@ def offers_and_prices():
                 "ean": "",
                 "is_linked": bool(offer.product_size_id or offer.product_id),
             }
-            
+
             # Fetch EAN only for unlinked offers (where it's actually needed)
             ean_value = offer.ean or ""
             if not ean_value and not (offer.product_size_id or offer.product_id):
@@ -468,13 +510,21 @@ def offers_and_prices():
 
     elapsed = time.time() - start_time
     current_app.logger.info(f"REQUEST END [{request_id}] /offers-and-prices - took {elapsed:.2f}s, {len(offers_data)} offers")
-    
+
     response = make_response(render_template(
         "allegro/offers_and_prices.html",
         offers=offers_data,
         inventory=inventory,
         total_offers=total_offers,
         matched_offers=matched_offers,
+        search=search,
+        status_filter=status_filter,
+        page=page,
+        per_page=per_page,
+        total_filtered=total_filtered,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
     ))
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -703,10 +753,11 @@ def refresh():
         flash(
             "Oferty zaktualizowane (pobrano {fetched}, zaktualizowano {matched})".format(
                 fetched=fetched, matched=matched
-            )
+            ),
+            "success",
         )
     except Exception as e:
-        flash(f"Błąd synchronizacji ofert: {e}")
+        flash(f"Błąd synchronizacji ofert: {e}", "error")
     return redirect(url_for("allegro.offers"))
 
 
@@ -716,7 +767,7 @@ def link_offer(offer_id):
     with get_session() as db:
         offer = db.query(AllegroOffer).filter_by(offer_id=offer_id).first()
         if not offer:
-            flash("Nie znaleziono aukcji")
+            flash("Nie znaleziono aukcji", "error")
             return redirect(url_for("allegro.offers"))
 
         if request.method == "POST":
@@ -729,21 +780,21 @@ def link_offer(offer_id):
                 if product_size:
                     offer.product_size_id = product_size.id
                     offer.product_id = product_size.product_id
-                    flash("Powiązano ofertę z pozycją magazynową")
+                    flash("Powiązano ofertę z pozycją magazynową", "success")
                 else:
-                    flash("Nie znaleziono rozmiaru produktu o podanym ID")
+                    flash("Nie znaleziono rozmiaru produktu o podanym ID", "error")
             elif product_id:
                 product = db.query(Product).filter_by(id=product_id).first()
                 if product:
                     offer.product_id = product.id
                     offer.product_size_id = None
-                    flash("Powiązano aukcję z produktem")
+                    flash("Powiązano aukcję z produktem", "success")
                 else:
-                    flash("Nie znaleziono produktu o podanym ID")
+                    flash("Nie znaleziono produktu o podanym ID", "error")
             else:
                 offer.product_size_id = None
                 offer.product_id = None
-                flash("Usunięto powiązanie z magazynem")
+                flash("Usunięto powiązanie z magazynem", "info")
             return redirect(url_for("allegro.offers"))
 
         offer_data = {

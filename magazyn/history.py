@@ -63,8 +63,8 @@ def reprint_label(order_id):
                 if label_data:
                     print_agent.print_label(label_data, ext, order_id)
             print_agent.mark_as_printed(order_id, printed_data)
-        flash("Etykieta została ponownie wysłana do drukarki.")
+        flash("Etykieta została ponownie wysłana do drukarki.", "success")
     except Exception as exc:
         logger.exception("Reprint failed for %s", order_id)
-        flash(f"Błąd ponownego drukowania: {exc}")
+        flash(f"Błąd ponownego drukowania: {exc}", "error")
     return redirect(url_for(".print_history"))

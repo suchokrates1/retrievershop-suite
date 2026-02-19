@@ -199,8 +199,11 @@
                     </table>
                 </div>
                 {% if delivery_history|length >= 100 %}
-                <div class="card-footer text-muted text-center">
-                    <small>Wyswietlono ostatnie 100 dostaw</small>
+                <div class="card-footer text-center" id="deliveries-footer">
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadMoreHistory('deliveries')">
+                        <i class="bi bi-arrow-down-circle"></i> Zaladuj wiecej dostaw
+                    </button>
+                    <div class="text-muted mt-1"><small>Wyswietlono <span id="deliveries-count">{{ delivery_history|length }}</span> dostaw</small></div>
                 </div>
                 {% endif %}
             </div>
@@ -328,8 +331,11 @@
                     </table>
                 </div>
                 {% if order_history|length >= 50 %}
-                <div class="card-footer text-muted text-center">
-                    <small>Wyświetlono ostatnie 50 zamówień</small>
+                <div class="card-footer text-center" id="orders-footer">
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadMoreHistory('orders')">
+                        <i class="bi bi-arrow-down-circle"></i> Zaladuj wiecej zamowien
+                    </button>
+                    <div class="text-muted mt-1"><small>Wyswietlono <span id="orders-count">{{ order_history|length }}</span> z {{ total_sold }} zamowien</small></div>
                 </div>
                 {% endif %}
             </div>
@@ -345,4 +351,74 @@
     background-color: rgba(0, 0, 0, 0.075) !important;
 }
 </style>
+
+<script>
+const productId = {{ product.id }};
+const loadState = {
+    orders: { offset: {{ order_history|length }}, loading: false },
+    deliveries: { offset: {{ delivery_history|length }}, loading: false }
+};
+
+function loadMoreHistory(type) {
+    const state = loadState[type];
+    if (state.loading) return;
+    state.loading = true;
+
+    const btn = document.querySelector(`#${type}-footer button`);
+    const origText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ladowanie...';
+    btn.disabled = true;
+
+    fetch(`/api/product/${productId}/history?type=${type}&offset=${state.offset}&limit=50`)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = type === 'orders'
+                ? document.querySelector('#orders-footer').closest('.card').querySelector('tbody')
+                : document.querySelector('#deliveries-footer').closest('.card').querySelector('tbody');
+
+            data.items.forEach(item => {
+                const tr = document.createElement('tr');
+                if (type === 'orders') {
+                    tr.innerHTML = `
+                        <td><small>${item.date ? new Date(item.date * 1000).toLocaleDateString('pl-PL') : '-'}</small></td>
+                        <td><small>${item.size || '-'}</small></td>
+                        <td class="text-center"><small>${item.quantity}</small></td>
+                        <td class="text-end"><small>${item.price ? item.price.toFixed(2) + ' PLN' : '-'}</small></td>
+                        <td><small>${item.customer || '-'}</small></td>
+                        <td><a href="/orders/${item.order_id}" class="text-decoration-none"><small>#${item.lp}</small></a></td>
+                    `;
+                } else {
+                    tr.innerHTML = `
+                        <td><small>${item.date || '-'}</small></td>
+                        <td><small>${item.size || '-'}</small></td>
+                        <td class="text-center"><small>${item.quantity}</small></td>
+                        <td class="text-center"><small>${item.remaining}</small></td>
+                        <td class="text-end"><small>${item.price.toFixed(2)} PLN</small></td>
+                        <td><small>${item.invoice_number || '-'}</small></td>
+                    `;
+                }
+                tbody.appendChild(tr);
+            });
+
+            state.offset += data.items.length;
+            const countEl = document.getElementById(`${type}-count`);
+            if (countEl) countEl.textContent = state.offset;
+
+            if (!data.has_more) {
+                document.getElementById(`${type}-footer`).innerHTML =
+                    '<small class="text-muted">Wyswietlono wszystkie rekordy (' + state.offset + ')</small>';
+            } else {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
+            state.loading = false;
+        })
+        .catch(err => {
+            console.error('Blad ladowania historii:', err);
+            btn.innerHTML = origText;
+            btn.disabled = false;
+            state.loading = false;
+        });
+}
+</script>
 {% endblock %}

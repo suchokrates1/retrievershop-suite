@@ -123,13 +123,19 @@
         {% if not full_width %}
         <div class="container">
         {% endif %}
-            {% with messages = get_flashed_messages() %}
+            {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-    <div class="alert alert-info" role="alert">
-      {% for message in messages %}
+    {% for category, message in messages %}
+      {% if category == 'error' %}{% set cat = 'danger' %}{% elif category in ['success','warning','info','danger'] %}{% set cat = category %}{% else %}{% set cat = 'info' %}{% endif %}
+      <div class="alert alert-{{ cat }} alert-dismissible fade show flash-auto-dismiss" role="alert">
+        {% if cat == 'success' %}<i class="bi bi-check-circle-fill me-2"></i>
+        {% elif cat == 'danger' %}<i class="bi bi-exclamation-triangle-fill me-2"></i>
+        {% elif cat == 'warning' %}<i class="bi bi-exclamation-circle-fill me-2"></i>
+        {% else %}<i class="bi bi-info-circle-fill me-2"></i>{% endif %}
         {{ message }}
-      {% endfor %}
-    </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Zamknij"></button>
+      </div>
+    {% endfor %}
   {% endif %}
 {% endwith %}
 
@@ -145,6 +151,16 @@
     <div id="barcode-feedback" class="barcode-feedback">
         <div class="alert alert-success d-none" role="status" data-barcode-result></div>
         <div class="alert alert-danger d-none" role="alert" data-barcode-error></div>
+    </div>
+
+    {# Globalny overlay ladowania #}
+    <div id="loading-overlay" class="loading-overlay d-none">
+        <div class="loading-spinner">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">Ladowanie...</span>
+            </div>
+            <div class="text-light mt-2 small" id="loading-text">Przetwarzanie...</div>
+        </div>
     </div>
 
     <audio id="barcode-beep-sound" src="{{ url_for('static', filename='beep.mp3') }}" preload="auto"></audio>
@@ -290,6 +306,34 @@
     })();
     </script>
 
+    <script>
+    // Auto-dismiss flash messages po 5 sekundach
+    document.querySelectorAll('.flash-auto-dismiss').forEach(function(el) {
+        setTimeout(function() {
+            var alert = bootstrap.Alert.getOrCreateInstance(el);
+            alert.close();
+        }, 5000);
+    });
+
+    // Globalny wskaznik ladowania na submit formularzy
+    (function() {
+        var overlay = document.getElementById('loading-overlay');
+        if (!overlay) return;
+        document.addEventListener('submit', function(e) {
+            var form = e.target;
+            // Pomijaj formularze inline (delete, toggle) i male formularze
+            if (form.classList.contains('d-inline') || form.dataset.noLoader) return;
+            var btn = form.querySelector('button[type="submit"]:not(.btn-sm)');
+            if (btn) {
+                btn.disabled = true;
+                var origHTML = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + origHTML;
+                btn.dataset.origHtml = origHTML;
+            }
+            overlay.classList.remove('d-none');
+        });
+    })();
+    </script>
     {% block scripts %}{% endblock %}
     </div>
 </body>
