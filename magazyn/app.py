@@ -49,6 +49,41 @@ BOOLEAN_KEYS = {
     "FLASK_DEBUG",
 }
 
+# Grupowanie ustawien w sekcje (klucz -> (nazwa_grupy, ikona))
+SETTINGS_GROUPS = {
+    "API_TOKEN": ("API i Integracje", "bi-plug"),
+    "BASELINKER_WEBHOOK_TOKEN": ("API i Integracje", "bi-plug"),
+    "ALLEGRO_SCRAPER_API_URL": ("Allegro", "bi-shop"),
+    "ALLEGRO_PROXY_URL": ("Allegro", "bi-shop"),
+    "COMMISSION_ALLEGRO": ("Allegro", "bi-shop"),
+    "PRICE_MAX_DISCOUNT_PERCENT": ("Allegro", "bi-shop"),
+    "PRINTER_NAME": ("Drukarka", "bi-printer"),
+    "CUPS_SERVER": ("Drukarka", "bi-printer"),
+    "CUPS_PORT": ("Drukarka", "bi-printer"),
+    "POLL_INTERVAL": ("Agent drukujacy", "bi-robot"),
+    "QUIET_HOURS_START": ("Agent drukujacy", "bi-robot"),
+    "QUIET_HOURS_END": ("Agent drukujacy", "bi-robot"),
+    "STATUS_ID": ("Agent drukujacy", "bi-robot"),
+    "PRINTED_EXPIRY_DAYS": ("Agent drukujacy", "bi-robot"),
+    "PAGE_ACCESS_TOKEN": ("Powiadomienia", "bi-bell"),
+    "RECIPIENT_ID": ("Powiadomienia", "bi-bell"),
+    "LOW_STOCK_THRESHOLD": ("Powiadomienia", "bi-bell"),
+    "ALERT_EMAIL": ("Powiadomienia", "bi-bell"),
+    "SMTP_SERVER": ("Powiadomienia", "bi-bell"),
+    "SMTP_PORT": ("Powiadomienia", "bi-bell"),
+    "SMTP_USERNAME": ("Powiadomienia", "bi-bell"),
+    "SMTP_PASSWORD": ("Powiadomienia", "bi-bell"),
+    "ENABLE_WEEKLY_REPORTS": ("Raporty", "bi-bar-chart"),
+    "ENABLE_MONTHLY_REPORTS": ("Raporty", "bi-bar-chart"),
+    "PACKAGING_COST": ("Sprzedaz", "bi-cash"),
+    "LOG_LEVEL": ("System", "bi-gear"),
+    "LOG_FILE": ("System", "bi-gear"),
+    "SECRET_KEY": ("System", "bi-gear"),
+    "FLASK_DEBUG": ("System", "bi-gear"),
+    "FLASK_ENV": ("System", "bi-gear"),
+    "TIMEZONE": ("System", "bi-gear"),
+}
+
 
 bp = Blueprint("main", __name__)
 
@@ -117,9 +152,9 @@ def _make_error_notifier():
     if has_request_context():
         def notifier(message):
             if "Settings template missing" in message:
-                flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.")
+                flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.", "warning")
             else:
-                flash(message)
+                flash(message, "warning")
         return notifier
     return None
 
@@ -195,19 +230,19 @@ def ensure_db_initialized(app_obj=None):
             logger = (app_obj or current_app).logger
             logger.error(f"Database path {db_path} is a directory. Please fix the mount.")
             if has_request_context():
-                flash("Błąd konfiguracji bazy danych.")
+                flash("Błąd konfiguracji bazy danych.", "error")
             raise SystemExit(1)
         if os.path.exists(db_path) and not os.path.isfile(db_path):
             logger = (app_obj or current_app).logger
             logger.error(f"Database path {db_path} is not a file.")
             if has_request_context():
-                flash("Błąd konfiguracji bazy danych.")
+                flash("Błąd konfiguracji bazy danych.", "error")
             raise SystemExit(1)
     except Exception as e:
         logger = (app_obj or current_app).logger
         logger.exception("Database initialization failed: %s", e)
         if has_request_context():
-            flash(f"Błąd inicjalizacji bazy danych: {e}")
+            flash(f"Błąd inicjalizacji bazy danych: {e}", "error")
 
 
 # =============================================================================
@@ -322,7 +357,7 @@ def login():
             session["username"] = username
             return redirect(url_for("home"))
         else:
-            flash("Niepoprawna nazwa użytkownika lub hasło")
+            flash("Niepoprawna nazwa użytkownika lub hasło", "error")
         return redirect(url_for("login"))
 
     return render_template("login.html", form=form, show_menu=False)
@@ -359,7 +394,7 @@ def settings_page():
             try:
                 print_agent.parse_time_str(updates.get(tkey, values.get(tkey, "")))
             except ValueError:
-                flash("Niepoprawny format godziny (hh:mm)")
+                flash("Niepoprawny format godziny (hh:mm)", "error")
                 return redirect(url_for("settings_page"))
         try:
             settings_store.update(updates)
@@ -368,11 +403,12 @@ def settings_page():
                 "Failed to persist settings submitted via the admin panel", exc_info=exc
             )
             flash(
-                "Nie można zapisać ustawień, ponieważ baza konfiguracji jest w trybie tylko do odczytu."
+                "Nie można zapisać ustawień, ponieważ baza konfiguracji jest w trybie tylko do odczytu.",
+                "error",
             )
             return redirect(url_for("settings_page"))
         print_agent.reload_config()
-        flash("Zapisano ustawienia.")
+        flash("Zapisano ustawienia.", "success")
         return redirect(url_for("settings_page"))
     
     settings_list = []
@@ -380,9 +416,19 @@ def settings_page():
         if key in sales_keys:
             continue
         label, desc = ENV_INFO.get(key, (key, None))
+        group_name, group_icon = SETTINGS_GROUPS.get(key, ("Inne", "bi-three-dots"))
         settings_list.append(
-            {"key": key, "label": label, "desc": desc, "value": val}
+            {"key": key, "label": label, "desc": desc, "value": val, "group": group_name, "group_icon": group_icon}
         )
+    
+    # Grupuj ustawienia w sekcje (zachowuj kolejnosc)
+    from collections import OrderedDict as OD
+    grouped_settings = OD()
+    for item in settings_list:
+        gname = item["group"]
+        if gname not in grouped_settings:
+            grouped_settings[gname] = {"icon": item["group_icon"], "items": []}
+        grouped_settings[gname]["items"].append(item)
     
     # Pobierz koszty stale
     from .models import FixedCost
@@ -401,6 +447,7 @@ def settings_page():
     return render_template(
         "settings.html",
         settings=settings_list,
+        grouped_settings=grouped_settings,
         db_path_notice=db_path_notice,
         boolean_keys=BOOLEAN_KEYS,
         fixed_costs=fixed_costs_list,
@@ -420,13 +467,13 @@ def add_fixed_cost():
     description = request.form.get("description", "").strip()
     
     if not name:
-        flash("Nazwa kosztu jest wymagana.")
+        flash("Nazwa kosztu jest wymagana.", "error")
         return redirect(url_for("settings_page"))
     
     try:
         amount = Decimal(amount_str)
     except (InvalidOperation, ValueError):
-        flash("Nieprawidlowa kwota.")
+        flash("Nieprawidlowa kwota.", "error")
         return redirect(url_for("settings_page"))
     
     new_cost = FixedCost(
@@ -439,7 +486,7 @@ def add_fixed_cost():
         db_session.add(new_cost)
         db_session.commit()
     
-    flash(f"Dodano koszt staly: {name} ({amount} PLN)")
+    flash(f"Dodano koszt staly: {name} ({amount} PLN)", "success")
     return redirect(url_for("settings_page"))
 
 
@@ -455,9 +502,9 @@ def toggle_fixed_cost(cost_id):
             cost.is_active = not cost.is_active
             db_session.commit()
             status = "aktywny" if cost.is_active else "nieaktywny"
-            flash(f"Koszt '{cost.name}' jest teraz {status}.")
+            flash(f"Koszt '{cost.name}' jest teraz {status}.", "info")
         else:
-            flash("Nie znaleziono kosztu.")
+            flash("Nie znaleziono kosztu.", "error")
     
     return redirect(url_for("settings_page"))
 
@@ -474,9 +521,9 @@ def delete_fixed_cost(cost_id):
             name = cost.name
             db_session.delete(cost)
             db_session.commit()
-            flash(f"Usunieto koszt staly: {name}")
+            flash(f"Usunieto koszt staly: {name}", "success")
         else:
-            flash("Nie znaleziono kosztu.")
+            flash("Nie znaleziono kosztu.", "error")
     
     return redirect(url_for("settings_page"))
 
@@ -491,7 +538,7 @@ def edit_fixed_cost(cost_id):
     with get_session() as db_session:
         cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
         if not cost:
-            flash("Nie znaleziono kosztu.")
+            flash("Nie znaleziono kosztu.", "error")
             return redirect(url_for("settings_page"))
         
         name = request.form.get("name", "").strip()
@@ -499,13 +546,13 @@ def edit_fixed_cost(cost_id):
         description = request.form.get("description", "").strip()
         
         if not name:
-            flash("Nazwa kosztu jest wymagana.")
+            flash("Nazwa kosztu jest wymagana.", "error")
             return redirect(url_for("settings_page"))
         
         try:
             amount = Decimal(amount_str)
         except (InvalidOperation, ValueError):
-            flash("Nieprawidlowa kwota.")
+            flash("Nieprawidlowa kwota.", "error")
             return redirect(url_for("settings_page"))
         
         cost.name = name
@@ -513,7 +560,7 @@ def edit_fixed_cost(cost_id):
         cost.description = description if description else None
         db_session.commit()
         
-        flash(f"Zaktualizowano koszt staly: {name}")
+        flash(f"Zaktualizowano koszt staly: {name}", "success")
     return redirect(url_for("settings_page"))
 
 

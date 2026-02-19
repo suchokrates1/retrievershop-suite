@@ -5,25 +5,47 @@
 {% block content %}
 
 <div class="container text-center mt-5">
-    <div class="mb-3 d-flex justify-content-between align-items-center">
+    <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="flex-grow-1 me-3">
-            <input type="text" id="searchInput" class="form-control" placeholder="🔍 Wyszukaj produkt (nazwa, kolor)..." onkeyup="filterProducts()">
+            <form id="searchForm" method="get" action="{{ url_for('products.items') }}" class="d-flex gap-2">
+                <input type="hidden" name="per_page" value="{{ per_page }}">
+                <input type="text" id="searchInput" name="search" class="form-control" 
+                       placeholder="Wyszukaj produkt (nazwa, kolor, seria, kategoria)..."
+                       value="{{ search }}">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+                {% if search %}
+                <a href="{{ url_for('products.items', per_page=per_page) }}" class="btn btn-outline-secondary" title="Wyczysc"><i class="bi bi-x-lg"></i></a>
+                {% endif %}
+            </form>
         </div>
-        <div>
-            <a href="{{ url_for('products.add_item') }}" class="btn btn-success me-2" title="Dodaj przedmiot">
+        <div class="d-flex gap-2 align-items-center">
+            <a href="{{ url_for('products.add_item') }}" class="btn btn-success" title="Dodaj przedmiot">
                 <i class="bi bi-plus-circle"></i>
             </a>
-            <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info me-2">Dostawa z faktury</a>
-            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline-secondary me-2"><i class="bi bi-clipboard-check me-1"></i>Remanent</a>
+            <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info">Dostawa z faktury</a>
+            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline-secondary"><i class="bi bi-clipboard-check me-1"></i>Remanent</a>
             <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj EAN</a>
-            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary ms-2">Skanuj paczke</a>
+            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline-primary">Skanuj paczke</a>
         </div>
     </div>
-<div class="table-responsive">
-    {# wrapper adds overflow-x:auto so columns never get cut off #}
 
- <table class="table table-striped table-sm table-dark align-middle">
-    <thead>
+    {# Kontrolki paginacji gora #}
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap small">Na stronie:</label>
+            <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+            </select>
+        </div>
+        <span class="text-muted small">Razem: {{ total }} produktow</span>
+    </div>
+
+<div class="table-responsive">
+ <table class="table table-striped table-hover table-sm align-middle">
+    <thead class="table-dark">
         <tr>
             <th>Kategoria</th>
             <th>Seria</th>
@@ -39,7 +61,7 @@
         <tr>
             <td>{{ product['category'] }}</td>
             <td>
-                <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="text-white text-decoration-none">
+                <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="text-decoration-none">
                     {{ product['series'] or '-' }}
                 </a>
             </td>
@@ -52,43 +74,62 @@
             {% endfor %}
             <td class="text-center">
                 <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
-                <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten przedmiot?');">
+                <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Czy na pewno chcesz usunac ten przedmiot?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button>
                 </form>
             </td>
         </tr>
+        {% else %}
+        <tr>
+            <td colspan="{{ ALL_SIZES|length + 4 }}" class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-1"></i>
+                <p class="mt-2 mb-0">Brak produktow do wyswietlenia</p>
+            </td>
+        </tr>
         {% endfor %}
     </tbody>
 </table>
-
 </div>
+
+{# Paginacja #}
+{% if total_pages > 1 %}
+<nav aria-label="Paginacja produktow" class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('products.items', page=page-1, search=search, per_page=per_page) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('products.items', page=p, search=search, per_page=per_page) }}">{{ p }}</a>
+                </li>
+            {% elif p == page - 3 or p == page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('products.items', page=page+1, search=search, per_page=per_page) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+    <div class="text-center text-muted small">
+        Strona {{ page }} z {{ total_pages }} (wyswietlono {{ products|length }} z {{ total }})
+    </div>
+</nav>
+{% endif %}
+
 </div>
 
 <script>
-function filterProducts() {
-    const searchInput = document.getElementById('searchInput');
-    const filter = searchInput.value.toLowerCase();
-    const table = document.querySelector('.table tbody');
-    const rows = table.getElementsByTagName('tr');
-    
-    for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const nameCell = row.cells[0]; // Nazwa produktu
-        const colorCell = row.cells[1]; // Kolor
-        
-        if (nameCell && colorCell) {
-            const nameText = nameCell.textContent || nameCell.innerText;
-            const colorText = colorCell.textContent || colorCell.innerText;
-            const combinedText = (nameText + ' ' + colorText).toLowerCase();
-            
-            if (combinedText.indexOf(filter) > -1) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        }
-    }
+function changePerPage(value) {
+    var url = new URL(window.location);
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1');
+    window.location = url.toString();
 }
 </script>
 

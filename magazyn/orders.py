@@ -369,6 +369,9 @@ def orders_list():
     search = request.args.get("search", "").strip()
     sort_by = request.args.get("sort", "date")  # date, order_id, status, amount
     sort_dir = request.args.get("dir", "desc")  # asc, desc
+    status_filter = request.args.get("status", "all")
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
     
     # Limit per_page to reasonable values
     if per_page not in [10, 25, 50, 100]:
@@ -396,6 +399,62 @@ def orders_list():
                     Order.order_id.in_(product_match_subq),
                 )
             )
+
+        # Date range filter (date_add jest unix timestamp)
+        if date_from:
+            try:
+                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.filter(Order.date_add >= int(dt_from.timestamp()))
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                dt_to = datetime.strptime(date_to, "%Y-%m-%d")
+                # Koniec dnia = poczatek nastepnego
+                dt_to_end = dt_to + timedelta(days=1)
+                query = query.filter(Order.date_add < int(dt_to_end.timestamp()))
+            except ValueError:
+                pass
+
+        # Status filter - filtruj po ostatnim statusie
+        if status_filter and status_filter != "all":
+            # Subquery: najnowszy status dla kazdego zamowienia
+            latest_status_subq = (
+                db.query(
+                    OrderStatusLog.order_id,
+                    func.max(OrderStatusLog.timestamp).label("max_ts")
+                )
+                .group_by(OrderStatusLog.order_id)
+                .subquery()
+            )
+            # Dolacz najnowszy status
+            query = query.join(
+                latest_status_subq,
+                Order.order_id == latest_status_subq.c.order_id,
+            ).join(
+                OrderStatusLog,
+                (OrderStatusLog.order_id == latest_status_subq.c.order_id) &
+                (OrderStatusLog.timestamp == latest_status_subq.c.max_ts),
+            )
+            if status_filter == "w_realizacji":
+                query = query.filter(OrderStatusLog.status.in_([
+                    "pobrano", "wydrukowano", "spakowano",
+                ]))
+            elif status_filter == "w_transporcie":
+                query = query.filter(OrderStatusLog.status.in_([
+                    "przekazano_kurierowi", "w_drodze", "gotowe_do_odbioru", "awizo",
+                ]))
+            elif status_filter == "zakonczone":
+                query = query.filter(OrderStatusLog.status.in_([
+                    "dostarczono", "zakończono",
+                ]))
+            elif status_filter == "problem":
+                query = query.filter(OrderStatusLog.status.in_([
+                    "niedostarczono", "zwrot", "zagubiono", "anulowano",
+                ]))
+            else:
+                # Bezposredni status
+                query = query.filter(OrderStatusLog.status == status_filter)
         
         # Apply sorting
         if sort_by == "order_id":
@@ -506,6 +565,9 @@ def orders_list():
             search=search,
             sort_by=sort_by,
             sort_dir=sort_dir,
+            status_filter=status_filter,
+            date_from=date_from,
+            date_to=date_to,
         )
 
 

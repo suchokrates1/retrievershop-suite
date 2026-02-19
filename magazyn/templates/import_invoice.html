@@ -1,12 +1,150 @@
 {% extends "base.html" %}
 {% block content %}
-<form action="{{ url_for('products.import_invoice') }}" method="POST" enctype="multipart/form-data" class="row row-cols-1 row-cols-md-2 g-3 col-md-6 mx-auto">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-auto">
-        <input type="file" name="file" required class="form-control">
+<div class="col-md-8 mx-auto">
+    <h2 class="text-center mb-4">Import faktury</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('products.import_invoice') }}" method="POST" enctype="multipart/form-data" id="invoiceForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                {# Strefa drag-and-drop #}
+                <div id="dropZone" class="drop-zone text-center p-5 mb-3" tabindex="0">
+                    <i class="bi bi-cloud-arrow-up fs-1 text-muted"></i>
+                    <p class="mt-2 mb-1">Przeciagnij plik tutaj lub kliknij aby wybrac</p>
+                    <small class="text-muted">Obslugiwane formaty: PDF, XLSX, XLS</small>
+                    <input type="file" name="file" required class="d-none" id="fileInput" accept=".pdf,.xlsx,.xls">
+                </div>
+                
+                {# Informacja o wybranym pliku #}
+                <div id="fileInfo" class="alert alert-secondary d-none mb-3">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="bi bi-file-earmark me-2"></i>
+                            <strong id="fileName"></strong>
+                            <small class="text-muted ms-2" id="fileSize"></small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="clearFile" title="Usun plik">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                        <i class="bi bi-upload me-2"></i>Zaimportuj
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-    <div class="col-12 form-actions text-center">
-        <button type="submit" class="btn btn-primary">Zaimportuj</button>
+    
+    <div class="card">
+        <div class="card-header"><i class="bi bi-info-circle me-2"></i>Informacje o importie</div>
+        <div class="card-body">
+            <h6>Formaty plikow:</h6>
+            <ul class="mb-3">
+                <li><strong>PDF</strong> - Faktury z TipTop (automatyczne rozpoznawanie produktow, numerow faktur i dostawcow)</li>
+                <li><strong>XLSX/XLS</strong> - Arkusz z kolumnami: Nazwa, Kolor, Rozmiar, Ilosc, Cena, Barcode/EAN (opcjonalnie)</li>
+            </ul>
+            <h6>Jak to dziala:</h6>
+            <ol class="mb-0">
+                <li>Wybierz plik faktury</li>
+                <li>System automatycznie dopasuje produkty z faktury do magazynu (EAN, SKU, fuzzy)</li>
+                <li>Na nastepnym ekranie zweryfikujesz dopasowania i zatwierdzisz import</li>
+            </ol>
+        </div>
     </div>
-</form>
+</div>
+
+<style>
+.drop-zone {
+    border: 2px dashed #555;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+    background: rgba(255,255,255,0.03);
+}
+.drop-zone:hover, .drop-zone.drag-over {
+    border-color: #0d6efd;
+    background: rgba(13, 110, 253, 0.08);
+}
+.drop-zone.has-file {
+    border-color: #198754;
+    background: rgba(25, 135, 84, 0.08);
+}
+</style>
+
+<script>
+(function() {
+    var dropZone = document.getElementById('dropZone');
+    var fileInput = document.getElementById('fileInput');
+    var fileInfo = document.getElementById('fileInfo');
+    var fileName = document.getElementById('fileName');
+    var fileSize = document.getElementById('fileSize');
+    var clearFile = document.getElementById('clearFile');
+    var submitBtn = document.getElementById('submitBtn');
+
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function showFile(file) {
+        fileName.textContent = file.name;
+        fileSize.textContent = formatSize(file.size);
+        fileInfo.classList.remove('d-none');
+        dropZone.classList.add('has-file');
+        submitBtn.disabled = false;
+    }
+
+    function clearSelection() {
+        fileInput.value = '';
+        fileInfo.classList.add('d-none');
+        dropZone.classList.remove('has-file');
+        submitBtn.disabled = true;
+    }
+
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+    dropZone.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) showFile(this.files[0]);
+    });
+
+    clearFile.addEventListener('click', function(e) {
+        e.stopPropagation();
+        clearSelection();
+    });
+
+    // Drag and drop
+    ['dragenter', 'dragover'].forEach(function(evt) {
+        dropZone.addEventListener(evt, function(e) {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+    });
+    ['dragleave', 'drop'].forEach(function(evt) {
+        dropZone.addEventListener(evt, function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+        });
+    });
+    dropZone.addEventListener('drop', function(e) {
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+            var ext = files[0].name.split('.').pop().toLowerCase();
+            if (['pdf', 'xlsx', 'xls'].indexOf(ext) === -1) {
+                alert('Nieobslugiwany format pliku. Uzyj PDF, XLSX lub XLS.');
+                return;
+            }
+            fileInput.files = files;
+            showFile(files[0]);
+        }
+    });
+})();
+</script>
 {% endblock %}

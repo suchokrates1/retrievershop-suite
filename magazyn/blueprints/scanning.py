@@ -287,7 +287,7 @@ def barcode_scan():
         return jsonify(result)
     
     _log_scan('product', barcode, False, error_message="Nie znaleziono produktu")
-    flash("Nie znaleziono produktu o podanym kodzie kreskowym")
+    flash("Nie znaleziono produktu o podanym kodzie kreskowym", "error")
     return ("", 400)
 
 
