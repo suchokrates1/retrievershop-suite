@@ -267,16 +267,15 @@ def api_eans():
 @bp.route("/")
 @login_required
 def home():
-    """Strona glowna - dashboard z podsumowaniem."""
+    """Strona glowna - dashboard z podsumowaniem (szybki load)."""
     from .domain.dashboard import DashboardService
     from .settings_store import settings_store as ss
     
     username = session["username"]
-    access_token = ss.get("ALLEGRO_ACCESS_TOKEN")
     
     with get_session() as db:
         service = DashboardService(db, ss)
-        dashboard = service.get_full_dashboard(access_token)
+        dashboard = service.get_fast_dashboard()
         
         # Dodaj aktywnosc (wymaga url_for)
         dashboard['activities'] = service.get_recent_activity(
@@ -287,6 +286,23 @@ def home():
         )
     
     return render_template("home.html", username=username, dashboard=dashboard)
+
+
+@bp.route("/api/dashboard/heavy")
+@login_required
+def dashboard_heavy():
+    """Endpoint API dla ciezkich danych dashboardu (lazy loading)."""
+    from flask import jsonify
+    from .domain.dashboard import DashboardService
+    from .settings_store import settings_store as ss
+    
+    access_token = ss.get("ALLEGRO_ACCESS_TOKEN")
+    
+    with get_session() as db:
+        service = DashboardService(db, ss)
+        heavy_data = service.get_heavy_dashboard(access_token)
+    
+    return jsonify(heavy_data)
 
 
 @bp.route("/login", methods=["GET", "POST"])

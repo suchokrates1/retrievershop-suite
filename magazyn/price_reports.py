@@ -184,9 +184,10 @@ def report_detail(report_id: int):
                 # Cena docelowa: 1 grosz ponizej konkurenta
                 raise_target = round(competitor - 0.01, 2)
                 if raise_target > our and our > 9.99:
+                    extra_profit = round(raise_target - our, 2)
                     raise_percent = ((raise_target - our) / our) * 100
-                    # Sugeruj podwyzke tylko jesli zysk >= 1% (zbyt male podwyzki nie maja sensu)
-                    if raise_percent >= 1.0:
+                    # Sugeruj podwyzke tylko jesli roznica >= 9.99 zl (mniejsze nie maja sensu)
+                    if extra_profit >= 9.99:
                         suggestion = {
                             "type": "increase",
                             "target_price": raise_target,
@@ -219,7 +220,7 @@ def report_detail(report_id: int):
         # Sortowanie custom:
         # 1. Nie-najtansi z sugestiami obnizki na poczatku
         # 2. Nie-najtansi z "inna_aukcja_ok" po sugestiach
-        # 3. Najtansi z sugestiami podwyzki
+        # 3. Najtansi z sugestiami podwyzki (od najwiekszych podwyzek)
         # 4. Najtansi bez sugestii na koncu
         def sort_key(item):
             has_suggestion = 1 if item["suggestion"] else 0
@@ -228,13 +229,19 @@ def report_detail(report_id: int):
             position = item["our_position"] if item["our_position"] else 999
             name = item["product_name"].lower() if item["product_name"] else ""
             
+            # Dla podwyzek sortuj od najwiekszego extra_profit (malejaco)
+            extra_profit = 0
+            if item["suggestion"] and item["suggestion"].get("type") == "increase":
+                extra_profit = item["suggestion"].get("extra_profit", 0)
+            
             # Zwracamy tuple:
             # - is_cheapest (0 dla nie najtanszych, 1 dla najtanszych)
             # - other_is_ok (0 dla wymagajacych uwagi, 1 dla "inna aukcja OK")
             # - has_suggestion odwrotnie (0 dla z sugestia, 1 dla bez)
+            # - extra_profit malejaco (ujemne = wieksze na poczatku)
             # - position (rosnaco)
             # - name (alfabetycznie)
-            return (is_cheapest, other_is_ok, -has_suggestion, position, name)
+            return (is_cheapest, other_is_ok, -has_suggestion, -extra_profit, position, name)
         
         items_data.sort(key=sort_key)
         
