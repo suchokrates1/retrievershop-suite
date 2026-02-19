@@ -137,16 +137,15 @@
                                 <small class="text-muted">Przychod</small>
                             </div>
                         </div>
-                        <div class="col-3">
-                            <div class="border-end" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" 
-                                title="Zysk brutto: {{ '%.0f'|format(dashboard.profit.month_before_fixed + dashboard.profit.ads_cost|default(0)) }} zl{% if dashboard.profit.ads_cost|default(0) > 0 %}<br>Koszty kampanii Ads: -{{ '%.2f'|format(dashboard.profit.ads_cost) }} zl ({{ dashboard.profit.ads_days|default(0) }} dni){% for ad in dashboard.profit.ads_daily|default([]) %}<br>&nbsp;&nbsp;- {{ ad.date[8:] }}.{{ ad.date[5:7] }}: -{{ '%.2f'|format(ad.amount) }} zl{% endfor %}{% endif %}{% if dashboard.profit.returned_orders %}<br>Pominietych zwrotow: {{ dashboard.profit.returned_orders }}{% endif %}{% if dashboard.profit.fixed_costs_list %}<br>Koszty stale: -{{ '%.0f'|format(dashboard.profit.fixed_costs) }} zl{% for fc in dashboard.profit.fixed_costs_list %}<br>&nbsp;&nbsp;- {{ fc.name }}: {{ '%.0f'|format(fc.amount) }} zl{% endfor %}{% endif %}">
-                                <h3 class="{% if dashboard.profit.month > 0 %}text-success{% else %}text-danger{% endif %} mb-1">{{ "%.0f"|format(dashboard.profit.month) }} zl</h3>
+                        <div class="col-3" id="profit-section">
+                            <div class="border-end">
+                                <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
                                 <small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>
                             </div>
                         </div>
-                        <div class="col-3">
+                        <div class="col-3" id="sold-section">
                             <div>
-                                <h3 class="text-info mb-1">{{ dashboard.profit.products_sold }}</h3>
+                                <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
                                 <small class="text-muted">Sprzedanych szt.</small>
                             </div>
                         </div>
@@ -158,100 +157,39 @@
             <div class="card h-100">
                 <div class="card-header bg-dark text-white">
                     <i class="bi bi-shop me-2"></i>Allegro
+                    <span class="badge bg-success float-end ms-1">{{ dashboard.allegro.total_offers }} ofert</span>
                 </div>
-                <div class="card-body d-flex flex-column justify-content-center">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>Aktywne oferty:</span>
-                        <span class="badge bg-success fs-6">{{ dashboard.allegro.total_offers }}</span>
+                <div class="card-body p-2">
+                    <!-- Statystyki ofert -->
+                    <div class="d-flex justify-content-between align-items-center mb-1 px-1">
+                        <small>Aktywne oferty:</small>
+                        <span class="badge bg-success">{{ dashboard.allegro.total_offers }}</span>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>Niepowiązane:</span>
-                        <span class="badge {% if dashboard.allegro.unlinked_offers > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %} fs-6">
+                    <div class="d-flex justify-content-between align-items-center px-1">
+                        <small>Niepowiazane:</small>
+                        <span class="badge {% if dashboard.allegro.unlinked_offers > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
                             {{ dashboard.allegro.unlinked_offers }}
                         </span>
                     </div>
                     {% if dashboard.allegro.unlinked_offers > 0 %}
-                    <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-outline-warning btn-sm mt-3">
-                        <i class="bi bi-link me-1"></i>Powiaz oferty
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <!-- Wyroznienia Allegro -->
-        {% if dashboard.promotions and not dashboard.promotions.error %}
-        <div class="col-md-4">
-            <div class="card h-100 {% if dashboard.promotions.renewing_tomorrow_count > 0 %}border-warning{% endif %}">
-                <div class="card-header {% if dashboard.promotions.renewing_tomorrow_count > 0 %}bg-warning text-dark{% else %}bg-dark text-white{% endif %}">
-                    <i class="bi bi-star-fill me-2"></i>Wyroznienia
-                    <span class="badge bg-info float-end">{{ dashboard.promotions.active_count }}</span>
-                </div>
-                <div class="card-body p-2">
-                    {% if dashboard.promotions.active_promotions %}
-                    <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
-                        <table class="table table-sm table-hover mb-0" style="font-size: 0.8rem;">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>Oferta</th>
-                                    <th class="text-center">Typ</th>
-                                    <th class="text-end">Koszt</th>
-                                    <th class="text-end">Przedl.</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for promo in dashboard.promotions.active_promotions %}
-                                <tr class="{% if promo.days_to_renewal is not none and promo.days_to_renewal <= 1 %}table-warning{% endif %}">
-                                    <td class="text-truncate" style="max-width: 140px;" title="{{ promo.offer_name }}">
-                                        <a href="https://allegro.pl/oferta/{{ promo.offer_id }}" target="_blank" class="text-decoration-none">
-                                            {{ promo.offer_name }}
-                                        </a>
-                                    </td>
-                                    <td class="text-center text-nowrap">
-                                        {% if promo.package_name %}
-                                            {% if '10' in promo.package_name %}
-                                                <span class="badge bg-primary" title="{{ promo.package_name }}">10d</span>
-                                            {% elif 'elast' in promo.package_name|lower %}
-                                                <span class="badge bg-success" title="{{ promo.package_name }}">1d</span>
-                                            {% elif 'dzia' in promo.package_name|lower %}
-                                                <span class="badge bg-secondary" title="{{ promo.package_name }}">dzial</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary" title="{{ promo.package_name }}">{{ promo.package_name[:8] }}</span>
-                                            {% endif %}
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end text-nowrap">{{ "%.2f"|format(promo.estimated_cost) }} zl</td>
-                                    <td class="text-end text-nowrap">
-                                        {% if promo.next_cycle_date %}
-                                            {% if promo.days_to_renewal is not none and promo.days_to_renewal <= 1 %}
-                                                <span class="text-danger fw-bold" title="{{ promo.next_cycle_date }}">jutro</span>
-                                            {% elif promo.days_to_renewal is not none and promo.days_to_renewal <= 3 %}
-                                                <span class="text-warning" title="{{ promo.next_cycle_date }}">{{ promo.days_to_renewal }}d</span>
-                                            {% else %}
-                                                <span class="text-muted" title="{{ promo.next_cycle_date }}">{{ promo.next_cycle_date[:10] }}</span>
-                                            {% endif %}
-                                        {% elif promo.will_renew %}
-                                            <span class="text-muted">auto</span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="px-1 mt-1">
+                        <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-outline-warning btn-sm w-100">
+                            <i class="bi bi-link me-1"></i>Powiaz oferty
+                        </a>
                     </div>
-                    {% else %}
-                    <p class="text-muted text-center mb-0">Brak aktywnych wyrozien</p>
                     {% endif %}
-                    <div class="d-flex justify-content-between align-items-center mt-2 px-1">
-                        <small class="text-muted">Szac. mies.:</small>
-                        <span class="badge bg-secondary">{{ "%.2f"|format(dashboard.promotions.estimated_monthly_cost) }} zl</span>
+                    
+                    <!-- Wyroznienia - ladowane asynchronicznie -->
+                    <div id="promotions-section">
+                        <hr class="my-2">
+                        <div class="text-center py-2">
+                            <span class="spinner-border spinner-border-sm text-muted"></span>
+                            <small class="text-muted ms-1">Ladowanie wyroznien...</small>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
 
     <!-- Main Content Row -->
@@ -263,11 +201,11 @@
                     <span><i class="bi bi-activity me-2"></i>Ostatnia aktywność</span>
                 </div>
                 <div class="card-body p-0">
-                    <div class="list-group list-group-flush">
+                    <div class="list-group list-group-flush" style="max-height: 320px; overflow-y: auto;">
                         {% for activity in dashboard.activities %}
-                        <a href="{{ activity.link }}" class="list-group-item list-group-item-action">
+                        <a href="{{ activity.link }}" class="list-group-item list-group-item-action py-2">
                             <div class="d-flex align-items-start">
-                                <div class="me-3">
+                                <div class="me-2">
                                     <span class="badge bg-{{ activity.color }} rounded-circle p-2">
                                         <i class="bi {{ activity.icon }}"></i>
                                     </span>
@@ -490,296 +428,60 @@
     {% endif %}
 
     <!-- ================================================================= -->
-    <!-- TRENDY I BESTSELLERY - Nowa sekcja analityczna -->
+    <!-- TRENDY I BESTSELLERY - ladowane asynchronicznie -->
     <!-- ================================================================= -->
     
-    <!-- Trend tygodniowy - porownanie do poprzedniego tygodnia -->
-    <div class="row mt-4 g-3">
+    <!-- Trend tygodniowy -->
+    <div class="row mt-4 g-3" id="trends-section">
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                     <i class="bi bi-graph-up-arrow me-2"></i>Trend tygodniowy (porownanie do poprzedniego tygodnia)
                 </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center justify-content-center">
-                                <div>
-                                    <h5 class="mb-1">Zamowienia</h5>
-                                    <h3 class="mb-0">
-                                        {{ dashboard.orders.week }}
-                                        <small class="{% if dashboard.trends.orders_change >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                            {% if dashboard.trends.orders_change >= 0 %}
-                                                <i class="bi bi-arrow-up"></i>
-                                            {% else %}
-                                                <i class="bi bi-arrow-down"></i>
-                                            {% endif %}
-                                            {{ dashboard.trends.orders_change }}%
-                                        </small>
-                                    </h3>
-                                    <small class="text-muted">poprzedni tydzien: {{ dashboard.trends.prev_week_orders }}</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center justify-content-center">
-                                <div>
-                                    <h5 class="mb-1">Przychod</h5>
-                                    <h3 class="mb-0">
-                                        {{ "%.0f"|format(dashboard.revenue.week) }} zł
-                                        <small class="{% if dashboard.trends.revenue_change >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                            {% if dashboard.trends.revenue_change >= 0 %}
-                                                <i class="bi bi-arrow-up"></i>
-                                            {% else %}
-                                                <i class="bi bi-arrow-down"></i>
-                                            {% endif %}
-                                            {{ dashboard.trends.revenue_change }}%
-                                        </small>
-                                    </h3>
-                                    <small class="text-muted">poprzedni tydzien: {{ "%.0f"|format(dashboard.trends.prev_week_revenue) }} zł</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="card-body text-center py-4">
+                    <span class="spinner-border text-muted"></span>
+                    <p class="text-muted mt-2 mb-0">Ladowanie trendow...</p>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Bestsellery - 3 kolumny -->
-    <div class="row mt-4 g-3">
-        <!-- Bestsellery tygodnia (Trendy) -->
+    <!-- Bestsellery -->
+    <div class="row mt-4 g-3" id="bestsellers-section">
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header bg-danger text-white">
                     <i class="bi bi-fire me-2"></i>Trendy tygodnia (Top 5)
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Produkt</th>
-                                    <th class="text-center">Szt.</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in dashboard.bestsellers.week %}
-                                <tr>
-                                    <td>
-                                        {% if loop.index == 1 %}
-                                            <span class="badge bg-warning text-dark">1</span>
-                                        {% elif loop.index == 2 %}
-                                            <span class="badge bg-secondary">2</span>
-                                        {% elif loop.index == 3 %}
-                                            <span class="badge bg-dark">3</span>
-                                        {% else %}
-                                            <span class="text-muted">{{ loop.index }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="small">
-                                        {% if item.product_id %}
-                                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
-                                           class="text-decoration-none" title="{{ item.name }}">
-                                            {{ item.short_name }}
-                                        </a>
-                                        {% else %}
-                                        <span title="{{ item.name }}">{{ item.short_name }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-danger">{{ item.quantity }}</span>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr><td colspan="3" class="text-center text-muted py-3">Brak danych</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="card-body text-center py-4">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
                 </div>
             </div>
         </div>
-        
-        <!-- Bestsellery miesiaca -->
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header bg-success text-white">
                     <i class="bi bi-trophy me-2"></i>Bestsellery miesiaca (Top 10)
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                        <table class="table table-sm table-hover mb-0">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Produkt</th>
-                                    <th class="text-center">Szt.</th>
-                                    <th class="text-end">Przychod</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in dashboard.bestsellers.month %}
-                                <tr>
-                                    <td>
-                                        {% if loop.index == 1 %}
-                                            <span class="badge bg-warning text-dark">1</span>
-                                        {% elif loop.index == 2 %}
-                                            <span class="badge bg-secondary">2</span>
-                                        {% elif loop.index == 3 %}
-                                            <span class="badge bg-dark">3</span>
-                                        {% else %}
-                                            <span class="text-muted">{{ loop.index }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="small">
-                                        {% if item.product_id %}
-                                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
-                                           class="text-decoration-none" title="{{ item.name }}">
-                                            {{ item.short_name }}
-                                        </a>
-                                        {% else %}
-                                        <span title="{{ item.name }}">{{ item.short_name }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-success">{{ item.quantity }}</span>
-                                    </td>
-                                    <td class="text-end small text-success fw-semibold">{{ "%.0f"|format(item.revenue) }} zł</td>
-                                </tr>
-                                {% else %}
-                                <tr><td colspan="4" class="text-center text-muted py-3">Brak danych</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="card-body text-center py-4">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
                 </div>
             </div>
         </div>
-        
-        <!-- Bestsellery wszechczasow -->
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header bg-primary text-white">
                     <i class="bi bi-star-fill me-2"></i>Bestsellery wszechczasow
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                        <table class="table table-sm table-hover mb-0">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Produkt</th>
-                                    <th class="text-center">Szt.</th>
-                                    <th class="text-end">Przychod</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in dashboard.bestsellers.all_time %}
-                                <tr>
-                                    <td>
-                                        {% if loop.index == 1 %}
-                                            <span class="badge bg-warning text-dark">1</span>
-                                        {% elif loop.index == 2 %}
-                                            <span class="badge bg-secondary">2</span>
-                                        {% elif loop.index == 3 %}
-                                            <span class="badge bg-dark">3</span>
-                                        {% else %}
-                                            <span class="text-muted">{{ loop.index }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="small">
-                                        {% if item.product_id %}
-                                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
-                                           class="text-decoration-none" title="{{ item.name }}">
-                                            {{ item.short_name }}
-                                        </a>
-                                        {% else %}
-                                        <span title="{{ item.name }}">{{ item.short_name }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary">{{ item.quantity }}</span>
-                                    </td>
-                                    <td class="text-end small text-success fw-semibold">{{ "%.0f"|format(item.revenue) }} zł</td>
-                                </tr>
-                                {% else %}
-                                <tr><td colspan="4" class="text-center text-muted py-3">Brak danych</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="card-body text-center py-4">
+                    <span class="spinner-border spinner-border-sm text-muted"></span>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Produkty wolnoobrotowe - do promocji -->
-    {% if dashboard.slow_moving %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card border-warning">
-                <div class="card-header bg-warning text-dark">
-                    <i class="bi bi-exclamation-triangle me-2"></i>Produkty wolnoobrotowe - rozważ promocję
-                    <small class="float-end">(stan >= 5 szt., sprzedaz < 2 szt. w 30 dni)</small>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Produkt</th>
-                                    <th>Kolor</th>
-                                    <th>Rozmiar</th>
-                                    <th class="text-center">Stan</th>
-                                    <th class="text-center">Sprzedaz 30d</th>
-                                    <th class="text-center">Rotacja</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in dashboard.slow_moving %}
-                                <tr>
-                                    <td>{{ item.name|truncate(40) }}</td>
-                                    <td class="small text-muted">{{ item.color or '-' }}</td>
-                                    <td>{{ item.size }}</td>
-                                    <td class="text-center">
-                                        <span class="badge bg-info">{{ item.stock }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-danger">{{ item.sold_30d }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        {% if item.sold_30d > 0 %}
-                                            {% set rotation = (item.stock / item.sold_30d) * 30 %}
-                                        {% else %}
-                                            {% set rotation = 9999 %}
-                                        {% endif %}
-                                        {% if rotation > 180 %}
-                                            <span class="badge bg-danger">{{ "%.0f"|format(rotation) }} dni</span>
-                                        {% elif rotation > 90 %}
-                                            <span class="badge bg-warning text-dark">{{ "%.0f"|format(rotation) }} dni</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">{{ "%.0f"|format(rotation) }} dni</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="card-footer bg-light">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Rotacja = szacowany czas wyprzedania przy aktualnym tempie sprzedaży. 
-                        Produkty z rotacją > 180 dni powinny być objęte promocją lub wyprzedażą.
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
+    <!-- Produkty wolnoobrotowe -->
+    <div id="slow-moving-section"></div>
 </div>
 
 <style>
@@ -843,11 +545,252 @@ document.addEventListener('DOMContentLoaded', function() {
         const detector = new GlobalBarcodeDetector({
             endpoint: '{{ label_barcode_endpoint }}',
             onSuccess: function(data) {
-                // Reload page after successful scan to refresh stats
                 window.location.reload();
             }
         });
-        console.log('Global barcode detector initialized for home page');
+    }
+    
+    // =============================================
+    // Lazy loading ciezkich danych dashboardu
+    // =============================================
+    const ordersWeek = {{ dashboard.orders.week }};
+    const revenueWeek = {{ "%.0f"|format(dashboard.revenue.week) }};
+    
+    fetch('/api/dashboard/heavy')
+        .then(r => r.json())
+        .then(data => {
+            renderProfit(data.profit);
+            renderPromotions(data.promotions);
+            renderTrends(data.trends);
+            renderBestsellers(data.bestsellers);
+            renderSlowMoving(data.slow_moving);
+        })
+        .catch(err => {
+            console.error('Blad ladowania danych:', err);
+            document.getElementById('profit-section').querySelector('.border-end').innerHTML =
+                '<h3 class="text-danger mb-1">Blad</h3><small class="text-muted">Realny zysk</small>';
+        });
+    
+    function renderProfit(profit) {
+        if (!profit) return;
+        const color = profit.month > 0 ? 'text-success' : 'text-danger';
+        
+        let tooltip = `Zysk brutto: ${Math.round(profit.month_before_fixed + (profit.ads_cost || 0))} zl`;
+        if (profit.ads_cost > 0) {
+            tooltip += `<br>Koszty kampanii Ads: -${profit.ads_cost.toFixed(2)} zl`;
+        }
+        if (profit.returned_orders) {
+            tooltip += `<br>Pominietych zwrotow: ${profit.returned_orders}`;
+        }
+        if (profit.fixed_costs_list && profit.fixed_costs_list.length > 0) {
+            tooltip += `<br>Koszty stale: -${Math.round(profit.fixed_costs)} zl`;
+            profit.fixed_costs_list.forEach(fc => {
+                tooltip += `<br>&nbsp;&nbsp;- ${fc.name}: ${Math.round(fc.amount)} zl`;
+            });
+        }
+        
+        const profitEl = document.getElementById('profit-section');
+        profitEl.querySelector('.border-end').setAttribute('data-bs-toggle', 'tooltip');
+        profitEl.querySelector('.border-end').setAttribute('data-bs-placement', 'bottom');
+        profitEl.querySelector('.border-end').setAttribute('data-bs-html', 'true');
+        profitEl.querySelector('.border-end').setAttribute('title', tooltip);
+        profitEl.querySelector('.border-end').innerHTML =
+            `<h3 class="${color} mb-1">${Math.round(profit.month)} zl</h3>` +
+            `<small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>`;
+        
+        const soldEl = document.getElementById('sold-section');
+        soldEl.querySelector('div').innerHTML =
+            `<h3 class="text-info mb-1">${profit.products_sold}</h3>` +
+            `<small class="text-muted">Sprzedanych szt.</small>`;
+        
+        // Reinicjalizacja tooltipow
+        new bootstrap.Tooltip(profitEl.querySelector('[data-bs-toggle="tooltip"]'));
+    }
+    
+    function renderPromotions(promos) {
+        const section = document.getElementById('promotions-section');
+        if (!promos || promos.error) {
+            section.innerHTML = '<hr class="my-2"><p class="text-muted text-center small mb-0">Brak danych wyroznien</p>';
+            return;
+        }
+        
+        // Dodaj badge z liczba do headera karty
+        const cardHeader = section.closest('.card').querySelector('.card-header');
+        const existingBadge = cardHeader.querySelector('.badge.bg-info');
+        if (!existingBadge) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-info float-end';
+            badge.textContent = promos.active_count + ' wyroz.';
+            cardHeader.appendChild(badge);
+        }
+        
+        // Podswietl karte jesli jutro przedluzenie
+        if (promos.renewing_tomorrow_count > 0) {
+            const card = section.closest('.card');
+            card.classList.add('border-warning');
+            cardHeader.className = 'card-header bg-warning text-dark';
+        }
+        
+        let html = '<hr class="my-2">';
+        if (promos.active_promotions && promos.active_promotions.length > 0) {
+            html += '<div class="table-responsive" style="max-height: 180px; overflow-y: auto;">';
+            html += '<table class="table table-sm table-hover mb-0" style="font-size: 0.78rem;">';
+            html += '<thead class="table-light sticky-top"><tr><th>Oferta</th><th class="text-center">Typ</th><th class="text-end">Koszt</th><th class="text-end">Przedl.</th></tr></thead><tbody>';
+            
+            promos.active_promotions.forEach(p => {
+                const rowClass = (p.days_to_renewal !== null && p.days_to_renewal <= 1) ? 'table-warning' : '';
+                let typeBadge = '';
+                if (p.package_name) {
+                    if (p.package_name.includes('10')) typeBadge = '<span class="badge bg-primary">10d</span>';
+                    else if (p.package_name.toLowerCase().includes('elast')) typeBadge = '<span class="badge bg-success">1d</span>';
+                    else if (p.package_name.toLowerCase().includes('dzia')) typeBadge = '<span class="badge bg-secondary">dzial</span>';
+                    else typeBadge = `<span class="badge bg-secondary">${p.package_name.substring(0,8)}</span>`;
+                }
+                let renewal = '-';
+                if (p.next_cycle_date) {
+                    if (p.days_to_renewal !== null && p.days_to_renewal <= 1) renewal = `<span class="text-danger fw-bold">jutro</span>`;
+                    else if (p.days_to_renewal !== null && p.days_to_renewal <= 3) renewal = `<span class="text-warning">${p.days_to_renewal}d</span>`;
+                    else renewal = `<span class="text-muted">${p.next_cycle_date.substring(0,10)}</span>`;
+                } else if (p.will_renew) {
+                    renewal = '<span class="text-muted">auto</span>';
+                }
+                
+                html += `<tr class="${rowClass}">`;
+                html += `<td class="text-truncate" style="max-width: 120px;" title="${p.offer_name}"><a href="https://allegro.pl/oferta/${p.offer_id}" target="_blank" class="text-decoration-none">${p.offer_name}</a></td>`;
+                html += `<td class="text-center text-nowrap">${typeBadge}</td>`;
+                html += `<td class="text-end text-nowrap">${p.estimated_cost.toFixed(2)} zl</td>`;
+                html += `<td class="text-end text-nowrap">${renewal}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+        } else {
+            html += '<p class="text-muted text-center small mb-0">Brak aktywnych wyroznien</p>';
+        }
+        html += `<div class="d-flex justify-content-between align-items-center mt-1 px-1">`;
+        html += `<small class="text-muted">Szac. mies.:</small>`;
+        html += `<span class="badge bg-secondary">${promos.estimated_monthly_cost.toFixed(2)} zl</span></div>`;
+        
+        section.innerHTML = html;
+    }
+    
+    function renderTrends(trends) {
+        if (!trends) return;
+        const section = document.getElementById('trends-section');
+        const card = section.querySelector('.card-body');
+        
+        const ocArrow = trends.orders_change >= 0 ? '<i class="bi bi-arrow-up"></i>' : '<i class="bi bi-arrow-down"></i>';
+        const ocColor = trends.orders_change >= 0 ? 'text-success' : 'text-danger';
+        const rcArrow = trends.revenue_change >= 0 ? '<i class="bi bi-arrow-up"></i>' : '<i class="bi bi-arrow-down"></i>';
+        const rcColor = trends.revenue_change >= 0 ? 'text-success' : 'text-danger';
+        
+        card.innerHTML = `
+            <div class="row text-center">
+                <div class="col-md-6">
+                    <h5 class="mb-1">Zamowienia</h5>
+                    <h3 class="mb-0">${ordersWeek} <small class="${ocColor}">${ocArrow} ${trends.orders_change}%</small></h3>
+                    <small class="text-muted">poprzedni tydzien: ${trends.prev_week_orders}</small>
+                </div>
+                <div class="col-md-6">
+                    <h5 class="mb-1">Przychod</h5>
+                    <h3 class="mb-0">${revenueWeek} zl <small class="${rcColor}">${rcArrow} ${trends.revenue_change}%</small></h3>
+                    <small class="text-muted">poprzedni tydzien: ${Math.round(trends.prev_week_revenue)} zl</small>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderBestsellerTable(items, badgeColor) {
+        if (!items || items.length === 0) {
+            return '<tr><td colspan="4" class="text-center text-muted py-3">Brak danych</td></tr>';
+        }
+        return items.map((item, i) => {
+            const idx = i + 1;
+            let numBadge;
+            if (idx === 1) numBadge = '<span class="badge bg-warning text-dark">1</span>';
+            else if (idx === 2) numBadge = '<span class="badge bg-secondary">2</span>';
+            else if (idx === 3) numBadge = '<span class="badge bg-dark">3</span>';
+            else numBadge = `<span class="text-muted">${idx}</span>`;
+            
+            const nameHtml = item.product_id
+                ? `<a href="/products/${item.product_id}" class="text-decoration-none" title="${item.name}">${item.short_name}</a>`
+                : `<span title="${item.name}">${item.short_name}</span>`;
+            
+            const revCol = item.revenue !== undefined ? `<td class="text-end small text-success fw-semibold">${Math.round(item.revenue)} zl</td>` : '';
+            
+            return `<tr><td>${numBadge}</td><td class="small">${nameHtml}</td><td class="text-center"><span class="badge bg-${badgeColor}">${item.quantity}</span></td>${revCol}</tr>`;
+        }).join('');
+    }
+    
+    function renderBestsellers(bestsellers) {
+        if (!bestsellers) return;
+        const section = document.getElementById('bestsellers-section');
+        const cards = section.querySelectorAll('.card');
+        
+        // Trendy tygodnia
+        const weekCols = '<tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th></tr>';
+        cards[0].querySelector('.card-body').innerHTML =
+            `<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead class="table-light">${weekCols}</thead><tbody>${renderBestsellerTable(bestsellers.week, 'danger')}</tbody></table></div>`;
+        
+        // Miesiaca
+        const monthCols = '<tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th><th class="text-end">Przychod</th></tr>';
+        cards[1].querySelector('.card-body').innerHTML =
+            `<div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top">${monthCols}</thead><tbody>${renderBestsellerTable(bestsellers.month, 'success')}</tbody></table></div>`;
+        
+        // Wszechczasow
+        cards[2].querySelector('.card-body').innerHTML =
+            `<div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top">${monthCols}</thead><tbody>${renderBestsellerTable(bestsellers.all_time, 'primary')}</tbody></table></div>`;
+    }
+    
+    function renderSlowMoving(items) {
+        if (!items || items.length === 0) return;
+        const section = document.getElementById('slow-moving-section');
+        
+        let rows = items.map(item => {
+            let rotation = item.sold_30d > 0 ? (item.stock / item.sold_30d) * 30 : 9999;
+            let rotBadge;
+            if (rotation > 180) rotBadge = `<span class="badge bg-danger">${Math.round(rotation)} dni</span>`;
+            else if (rotation > 90) rotBadge = `<span class="badge bg-warning text-dark">${Math.round(rotation)} dni</span>`;
+            else rotBadge = `<span class="badge bg-secondary">${Math.round(rotation)} dni</span>`;
+            
+            return `<tr>
+                <td>${(item.name || '').substring(0, 40)}</td>
+                <td class="small text-muted">${item.color || '-'}</td>
+                <td>${item.size}</td>
+                <td class="text-center"><span class="badge bg-info">${item.stock}</span></td>
+                <td class="text-center"><span class="badge bg-danger">${item.sold_30d}</span></td>
+                <td class="text-center">${rotBadge}</td>
+            </tr>`;
+        }).join('');
+        
+        section.innerHTML = `
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Produkty wolnoobrotowe - rozwaz promocje
+                        <small class="float-end">(stan >= 5 szt., sprzedaz < 2 szt. w 30 dni)</small>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr><th>Produkt</th><th>Kolor</th><th>Rozmiar</th><th class="text-center">Stan</th><th class="text-center">Sprzedaz 30d</th><th class="text-center">Rotacja</th></tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Rotacja = szacowany czas wyprzedania przy aktualnym tempie sprzedazy. 
+                            Produkty z rotacja > 180 dni powinny byc objete promocja lub wyprzedaza.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>`;
     }
 });
 </script>
