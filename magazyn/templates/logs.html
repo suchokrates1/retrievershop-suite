@@ -1,7 +1,57 @@
 {% extends "base.html" %}
 {% block content %}
 <h2 class="text-center">Logi</h2>
-<div class="log-container mx-auto">
-    <div class="log-content">{{ logs|safe }}</div>
+
+<div class="d-flex gap-2 mb-3 justify-content-center flex-wrap">
+    <button class="btn btn-sm btn-outline-light log-filter active" data-level="all">Wszystkie</button>
+    <button class="btn btn-sm btn-outline-danger log-filter" data-level="ERROR">ERROR</button>
+    <button class="btn btn-sm btn-outline-warning log-filter" data-level="WARNING">WARNING</button>
+    <button class="btn btn-sm btn-outline-info log-filter" data-level="INFO">INFO</button>
+    <button class="btn btn-sm btn-outline-secondary log-filter" data-level="DEBUG">DEBUG</button>
 </div>
+
+<div class="log-container mx-auto">
+    <div class="log-content" id="logContent">{{ logs|safe }}</div>
+</div>
+
+<script>
+(function() {
+    var content = document.getElementById('logContent');
+    var html = content.innerHTML;
+    // Koloruj linie logów wg poziomu
+    var lines = html.split('<br>');
+    var colored = lines.map(function(line) {
+        var cls = 'log-line';
+        if (/\bERROR\b/.test(line)) cls += ' log-error';
+        else if (/\bWARNING\b/.test(line)) cls += ' log-warning';
+        else if (/\bINFO\b/.test(line)) cls += ' log-info';
+        else if (/\bDEBUG\b/.test(line)) cls += ' log-debug';
+        return '<div class="' + cls + '">' + line + '</div>';
+    });
+    content.innerHTML = colored.join('');
+
+    // Filtrowanie wg poziomu
+    document.querySelectorAll('.log-filter').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.log-filter').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            var level = btn.dataset.level;
+            content.querySelectorAll('.log-line').forEach(function(el) {
+                if (level === 'all') { el.style.display = ''; return; }
+                el.style.display = el.classList.contains('log-' + level.toLowerCase()) ? '' : 'none';
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}
+
+{% block styles %}
+<style>
+.log-error { color: #ff6b6b; }
+.log-warning { color: #ffc107; }
+.log-info { color: #17a2b8; }
+.log-debug { color: #6c757d; }
+.log-line { padding: 1px 0; }
+</style>
 {% endblock %}

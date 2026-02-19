@@ -1,17 +1,85 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="text-center mb-3">Sprzedaż</h2>
+<h2 class="text-center mb-3">Sprzedaz</h2>
+
+{# Wyszukiwarka i kontrolki #}
+<div class="row mb-3">
+    <div class="col-md-8">
+        <form method="get" action="{{ url_for('sales.list_sales') }}" class="d-flex gap-2">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="text" name="search" class="form-control" 
+                   placeholder="Wyszukaj (produkt, kolor, rozmiar)..."
+                   value="{{ search }}">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+            {% if search %}
+            <a href="{{ url_for('sales.list_sales', per_page=per_page) }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="d-flex align-items-center justify-content-end gap-2">
+            <label class="mb-0 text-nowrap small">Na stronie:</label>
+            <select class="form-select form-select-sm" style="width: auto;" onchange="location.href='{{ url_for('sales.list_sales') }}?per_page='+this.value+'&search={{ search }}'">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+            <span class="text-muted text-nowrap small">Razem: {{ total }}</span>
+        </div>
+    </div>
+</div>
+
+{# Podsumowanie #}
+{% if summary %}
+<div class="row mb-3 g-2">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-2">
+                <div class="text-muted small">Wartosc sprzedazy</div>
+                <div class="fw-bold">{{ '%.2f'|format(summary.sale_price) }} PLN</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-2">
+                <div class="text-muted small">Koszty zakupu</div>
+                <div class="fw-bold text-danger">{{ '%.2f'|format(summary.purchase_cost) }} PLN</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-2">
+                <div class="text-muted small">Prowizje</div>
+                <div class="fw-bold text-warning">{{ '%.2f'|format(summary.commission) }} PLN</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-2">
+                <div class="text-muted small">Zysk</div>
+                <div class="fw-bold {{ 'text-success' if summary.profit >= 0 else 'text-danger' }}">
+                    {{ '%.2f'|format(summary.profit) }} PLN
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="table-responsive">
-<table class="table table-striped table-sm mx-auto">
-    <thead>
+<table class="table table-striped table-hover table-sm mx-auto">
+    <thead class="table-dark">
     <tr>
         <th>Data</th>
         <th>Produkt</th>
-        <th>Koszt zakupu</th>
-        <th>Prowizja</th>
-        <th>Wysyłka</th>
-        <th>Cena sprzedaży</th>
-        <th>Zysk</th>
+        <th class="text-end">Koszt zakupu</th>
+        <th class="text-end">Prowizja</th>
+        <th class="text-end">Wysylka</th>
+        <th class="text-end">Cena sprzedazy</th>
+        <th class="text-end">Zysk</th>
     </tr>
     </thead>
     <tbody>
@@ -19,14 +87,53 @@
     <tr>
         <td>{{ s.date | format_dt }}</td>
         <td>{{ s.product }}</td>
-        <td>{{ '%.2f'|format(s.purchase_cost) }}</td>
-        <td>{{ '%.2f'|format(s.commission) }}</td>
-        <td>{{ '%.2f'|format(s.shipping) }}</td>
-        <td>{{ '%.2f'|format(s.sale_price) }}</td>
-        <td>{{ '%.2f'|format(s.profit) }}</td>
+        <td class="text-end">{{ '%.2f'|format(s.purchase_cost) }}</td>
+        <td class="text-end">{{ '%.2f'|format(s.commission) }}</td>
+        <td class="text-end">{{ '%.2f'|format(s.shipping) }}</td>
+        <td class="text-end">{{ '%.2f'|format(s.sale_price) }}</td>
+        <td class="text-end fw-bold {{ 'text-success' if s.profit >= 0 else 'text-danger' }}">
+            {{ '%.2f'|format(s.profit) }}
+        </td>
+    </tr>
+    {% else %}
+    <tr>
+        <td colspan="7" class="text-center text-muted py-4">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mt-2 mb-0">Brak sprzedazy do wyswietlenia</p>
+        </td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
 </div>
+
+{# Paginacja #}
+{% if total_pages > 1 %}
+<nav aria-label="Paginacja sprzedazy" class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('sales.list_sales', page=page-1, search=search, per_page=per_page) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('sales.list_sales', page=p, search=search, per_page=per_page) }}">{{ p }}</a>
+                </li>
+            {% elif p == page - 3 or p == page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('sales.list_sales', page=page+1, search=search, per_page=per_page) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+    <div class="text-center text-muted small">
+        Strona {{ page }} z {{ total_pages }} (wyswietlono {{ sales|length }} z {{ total }})
+    </div>
+</nav>
+{% endif %}
 {% endblock %}
