@@ -427,8 +427,8 @@ def settings_page():
     for item in settings_list:
         gname = item["group"]
         if gname not in grouped_settings:
-            grouped_settings[gname] = {"icon": item["group_icon"], "items": []}
-        grouped_settings[gname]["items"].append(item)
+            grouped_settings[gname] = {"icon": item["group_icon"], "entries": []}
+        grouped_settings[gname]["entries"].append(item)
     
     # Pobierz koszty stale
     from .models import FixedCost
@@ -568,7 +568,7 @@ def edit_fixed_cost(cost_id):
 @login_required
 def agent_logs():
     try:
-        with open(print_agent.LOG_FILE, "r") as f:
+        with open(print_agent.LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()[-200:]
         log_text = "<br>".join(line.rstrip() for line in lines[::-1])
     except Exception as e:

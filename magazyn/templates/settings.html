@@ -19,7 +19,7 @@
                         data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}" 
                         aria-expanded="{{ 'true' if loop.first else 'false' }}">
                     <i class="{{ group_data.icon }} me-2"></i>{{ group_name }}
-                    <span class="badge bg-secondary ms-2">{{ group_data.items|length }}</span>
+                    <span class="badge bg-secondary ms-2">{{ group_data.entries|length }}</span>
                 </button>
             </h2>
             <div id="group-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" 
@@ -27,7 +27,7 @@
                 <div class="accordion-body p-0">
                     <table class="table table-striped table-hover table-sm mb-0">
                         <tbody>
-                        {% for item in group_data.items %}
+                        {% for item in group_data.entries %}
                         <tr>
                             <th scope="row" style="width: 40%;">
                                 {{ item.label }}
