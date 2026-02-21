@@ -217,31 +217,27 @@ def report_detail(report_id: int):
                 "error": item.error,
             })
         
-        # Sortowanie custom:
-        # 1. Nie-najtansi z sugestiami obnizki na poczatku
-        # 2. Nie-najtansi z "inna_aukcja_ok" po sugestiach
-        # 3. Najtansi z sugestiami podwyzki (od najwiekszych podwyzek)
-        # 4. Najtansi bez sugestii na koncu
+        # Sortowanie wg roznicy cen:
+        # 1. Drozsi o niewiele (male dodatnie price_difference)
+        # 2. Drozsi o coraz wiecej (duze dodatnie)
+        # 3. Tansi o duzo (duze ujemne, np. -50)
+        # 4. Tansi o najmniej (male ujemne, np. -1)
+        # Pozycje bez price_difference (bledy) na koncu
         def sort_key(item):
-            has_suggestion = 1 if item["suggestion"] else 0
-            is_cheapest = 1 if item["is_cheapest"] else 0
-            other_is_ok = 1 if item.get("suggestion_note") == "inna_aukcja_ok" else 0
-            position = item["our_position"] if item["our_position"] else 999
+            diff = item.get("price_difference")
             name = item["product_name"].lower() if item["product_name"] else ""
             
-            # Dla podwyzek sortuj od najwiekszego extra_profit (malejaco)
-            extra_profit = 0
-            if item["suggestion"] and item["suggestion"].get("type") == "increase":
-                extra_profit = item["suggestion"].get("extra_profit", 0)
+            if diff is None:
+                # Bledy / brak danych - na koncu
+                return (2, 0, name)
             
-            # Zwracamy tuple:
-            # - is_cheapest (0 dla nie najtanszych, 1 dla najtanszych)
-            # - other_is_ok (0 dla wymagajacych uwagi, 1 dla "inna aukcja OK")
-            # - has_suggestion odwrotnie (0 dla z sugestia, 1 dla bez)
-            # - extra_profit malejaco (ujemne = wieksze na poczatku)
-            # - position (rosnaco)
-            # - name (alfabetycznie)
-            return (is_cheapest, other_is_ok, -has_suggestion, -extra_profit, position, name)
+            diff = float(diff)
+            if diff > 0:
+                # Drozsi - grupa 0, sortuj rosnaco (niewiele -> duzo)
+                return (0, diff, name)
+            else:
+                # Tansi (lub rowni) - grupa 1, sortuj malejaco (duzo tansi -> malo tansi)
+                return (1, diff, name)
         
         items_data.sort(key=sort_key)
         
