@@ -17,6 +17,8 @@ services:
     env_file: .env
     environment:
       - CUPS_SERVER=/var/run/cups/cups.sock
+      - CDP_HOST=192.168.31.147
+      - CDP_PORT=9223
     user: root
     ports:
       - "9222:9222"
