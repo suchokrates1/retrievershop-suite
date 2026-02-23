@@ -37,13 +37,16 @@ except ImportError:
 
 import urllib.request
 import urllib.parse
+import os
 
 # Dodaj katalog magazyn do sciezki
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Konfiguracja
-CDP_HOST = "192.168.31.147"  # minipc
-CDP_PORT = 9223
+# Chrome DevTools wymaga IP lub localhost w Host header - hostname (np. "price-checker-chrome")
+# powoduje HTTP 500: "Host header is specified and is not an IP address or localhost."
+CDP_HOST = os.environ.get("CDP_HOST", "192.168.31.147")  # minipc
+CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 MY_SELLER = "Retriever_Shop"
 MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa (chinczycy)
 
@@ -579,9 +582,7 @@ async def check_offer_price(
             result.success = True
             
     except Exception as e:
-        import traceback
         logger.error(f"Blad podczas sprawdzania oferty {offer_id}: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
         result.error = str(e)
     
     return result
