@@ -518,6 +518,26 @@ def _import_invoice_df(
             elif barcode and not ps.barcode:
                 ps.barcode = barcode
 
+            # Sprawdz czy taki batch juz istnieje (ochrona przed duplikatami)
+            existing_batch = (
+                db.query(PurchaseBatch)
+                .filter_by(
+                    product_id=product.id,
+                    size=size,
+                    quantity=quantity,
+                    price=price,
+                    purchase_date=delivery_date,
+                    invoice_number=invoice_number,
+                )
+                .first()
+            )
+            if existing_batch:
+                logger.info(
+                    f"Pomijam duplikat batcha: product={product.id} "
+                    f"size={size} qty={quantity} invoice={invoice_number}"
+                )
+                continue
+
             db.add(
                 PurchaseBatch(
                     product_id=product.id,
