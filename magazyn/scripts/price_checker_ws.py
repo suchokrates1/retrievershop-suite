@@ -579,7 +579,9 @@ async def check_offer_price(
             result.success = True
             
     except Exception as e:
+        import traceback
         logger.error(f"Blad podczas sprawdzania oferty {offer_id}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         result.error = str(e)
     
     return result
