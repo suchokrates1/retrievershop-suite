@@ -373,10 +373,28 @@ def import_purchase_batches(matched, session, dry_run=True):
     if dry_run:
         print("\n[DRY RUN] Partie nie zostaly zapisane. Uzyj --import aby zapisac.")
     else:
+        created = 0
+        skipped = 0
         for batch, _ in batches_to_create:
+            existing = (
+                session.query(PurchaseBatch)
+                .filter_by(
+                    product_id=batch.product_id,
+                    size=batch.size,
+                    quantity=batch.quantity,
+                    price=batch.price,
+                    purchase_date=batch.purchase_date,
+                    invoice_number=batch.invoice_number,
+                )
+                .first()
+            )
+            if existing:
+                skipped += 1
+                continue
             session.add(batch)
+            created += 1
         session.commit()
-        print(f"\nZapisano {len(batches_to_create)} partii zakupu.")
+        print(f"\nZapisano {created} partii zakupu (pominieto {skipped} duplikatow).")
     
     return batches_to_create
 
