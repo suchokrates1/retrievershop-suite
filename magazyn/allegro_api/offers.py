@@ -384,6 +384,59 @@ def get_offer_price(offer_id: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def change_offer_name(offer_id: str, new_name: str) -> dict:
+    """
+    Zmienia nazwe (tytul) oferty na Allegro.
+
+    Parameters
+    ----------
+    offer_id : str
+        ID oferty Allegro.
+    new_name : str
+        Nowa nazwa oferty.
+
+    Returns
+    -------
+    dict
+        Odpowiedz z Allegro API lub slownik z bledem.
+    """
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not token:
+        return {"success": False, "error": "Brak tokenu Allegro"}
+
+    url = f"{API_BASE_URL}/sale/product-offers/{offer_id}"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+        "Content-Type": "application/vnd.allegro.public.v1+json",
+    }
+
+    payload = {
+        "name": new_name
+    }
+
+    try:
+        response = _request_with_retry(
+            requests.patch,
+            url,
+            endpoint="change-name",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        return {"success": True, "data": response.json()}
+    except requests.exceptions.HTTPError as e:
+        error_detail = _extract_allegro_error_details(e.response)
+        return {
+            "success": False,
+            "error": error_detail.get("message", str(e)),
+            "details": error_detail
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def change_offer_price(offer_id: str, new_price: Decimal) -> dict:
     """
     Zmienia cene oferty na Allegro.
