@@ -589,7 +589,12 @@ def import_invoice_file(file, invoice_number: str = None, supplier: str = None):
     if ext in {"xlsx", "xls"}:
         df = pd.read_excel(file)
     elif ext == "pdf":
-        df = _parse_pdf(file)
+        df, pdf_invoice_number, pdf_supplier = _parse_pdf(file)
+        # Użyj danych z PDF jeśli nie podano nadpisania
+        if not invoice_number:
+            invoice_number = pdf_invoice_number
+        if not supplier:
+            supplier = pdf_supplier
     else:
         raise ValueError("Nieobsługiwany format pliku")
 
