@@ -6,6 +6,7 @@ import unicodedata
 from .constants import (
     ALL_SIZES,
     KNOWN_COLORS,
+    SINGLE_SIZE_KEYWORDS,
     normalize_product_title_fragment,
     resolve_product_alias,
 )
@@ -65,6 +66,16 @@ PRODUCT_KEYWORDS: list[tuple[str, str, int]] = [
     ("blossom", "Szelki dla psa Truelove Blossom", 2),
     ("front line premium", "Szelki dla psa Truelove Front Line Premium", 1),
     ("front line", "Szelki dla psa Truelove Front Line", 0),
+    # Smycze
+    ("handy", "Smycz dla psa Truelove Handy", 2),
+    ("smycz automatyczna", "Smycz dla psa Truelove Handy", 1),
+    # Pasy i akcesoria bez rozmiarow
+    ("pas samochodowy", "Pas samochodowy dla psa Truelove Premium", 2),
+    ("amortyzator do smyczy", "Amortyzator do smyczy Truelove Premium", 2),
+    ("amortyaator do smyczy", "Amortyzator do smyczy Truelove Premium", 2),
+    ("pas trekkingowy", "Pas trekkingowy Truelove Trek Go", 2),
+    ("pas do biegania", "Pas trekkingowy Truelove Trek Go", 1),
+    ("dogtrekking", "Pas trekkingowy Truelove Trek Go", 1),
 ]
 
 
@@ -208,6 +219,9 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
     if not title:
         return "", "", "Uniwersalny"
 
+    # Usun oznaczenia długości smyczy (np. "5 metrów") - nie są rozmiarem
+    title = re.sub(r'\b\d+(?:[.,]\d+)?\s*metr\w*\b', '', title, flags=re.IGNORECASE).strip()
+
     words = [word for word in (title or "").strip().split() if word]
     size_lookup = {size.upper(): size for size in ALL_SIZES}
     normalized_known_colors = [
@@ -251,6 +265,12 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
         name = resolve_product_alias(name)
 
     if not size:
+        size = "Uniwersalny"
+
+    # Produkty z kategorii bez rozmiarów (pasy, amortyzatory, smycze Handy)
+    # zawsze mają 1 SKU - wymuszamy Uniwersalny niezależnie od tego co było w tytule
+    title_lower = title.lower()
+    if any(kw in title_lower for kw in SINGLE_SIZE_KEYWORDS):
         size = "Uniwersalny"
 
     return name, color, size
