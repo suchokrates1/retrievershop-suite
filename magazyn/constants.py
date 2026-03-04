@@ -5,6 +5,17 @@ import unicodedata
 
 ALL_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "Uniwersalny"]
 
+# Slowa kluczowe tytułów produktów które zawsze mają jeden rozmiar (Uniwersalny).
+# Gdy tytuł oferty zawiera któreś z tych słów kluczowych, rozmiar jest
+# ustawiany na "Uniwersalny" niezależnie od liter mogących imitować rozmiar.
+SINGLE_SIZE_KEYWORDS = [
+    "pas samochodowy",
+    "amortyzator",
+    "pas trekkingowy",
+    "pas do biegania",
+    "handy",
+]
+
 # Product categories
 PRODUCT_CATEGORIES = [
     "Szelki",
