@@ -90,8 +90,6 @@ KNOWN_COLORS = [
     "limonkowy",
     "limonkowe",
     "limonkowa",
-    "khaki",
-    "zielony-khaki",
     "fiolet",
     "stalowy rozowy",
     "stalowa roz",

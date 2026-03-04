@@ -335,6 +335,12 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                     color = word
                 name_words.remove(word)
                 break
+        # Normalizuj kolory zlozone -> prosty kolor
+        _color_normalize = {
+            'zielony-khaki': 'zielony', 'khaki': 'zielony',
+            'stalowa roz': 'rozowy', 'stalowa rozowa': 'rozowy',
+        }
+        color = _color_normalize.get(color.lower(), color)
         
         name = ' '.join(name_words).strip()
         
