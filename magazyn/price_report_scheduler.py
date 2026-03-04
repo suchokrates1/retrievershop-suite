@@ -35,8 +35,11 @@ SUNDAY_END_HOUR = 16    # Niedziela 16:00
 NIGHT_PAUSE_START = 2   # Przerwa nocna od 02:00
 NIGHT_PAUSE_END = 6     # Przerwa nocna do 06:00
 BATCH_SIZE = 5          # Ofert w partii
-MIN_BATCH_DELAY = 30 * 60    # Min 30 min miedzy partiami
-MAX_BATCH_DELAY = 90 * 60    # Max 90 min miedzy partiami
+MIN_BATCH_DELAY = 30 * 60    # Min 30 min miedzy partiami (tryb automatyczny)
+MAX_BATCH_DELAY = 90 * 60    # Max 90 min miedzy partiami (tryb automatyczny)
+# Tryb reczny - raport ma byc gotowy w ~8h
+MANUAL_MIN_BATCH_DELAY = 3 * 60   # Min 3 min miedzy partiami
+MANUAL_MAX_BATCH_DELAY = 6 * 60   # Max 6 min miedzy partiami
 
 
 def is_night_pause() -> bool:
@@ -354,40 +357,44 @@ def send_report_notification(report_id: int):
         logger.error(f"Blad wysylania powiadomienia: {e}", exc_info=True)
 
 
-def _report_worker(app, report_id: int, schedule: List[datetime]):
-    """Worker przetwarzajacy raport."""
+def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: bool = False):
+    """Worker przetwarzajacy raport.
+    
+    fast_mode=True: tryb reczny - pomija pauze nocna i czeka losowo
+    MANUAL_MIN_BATCH_DELAY..MANUAL_MAX_BATCH_DELAY minut miedzy partiami.
+    """
     import asyncio
     from .scripts.price_checker_ws import CDP_HOST, CDP_PORT
     
-    logger.info(f"Rozpoczynam przetwarzanie raportu #{report_id}, {len(schedule)} partii")
+    mode_label = "reczny" if fast_mode else "automatyczny"
+    logger.info(f"Rozpoczynam przetwarzanie raportu #{report_id}, {len(schedule)} partii (tryb: {mode_label})")
     
     batch_idx = 0
     
     while not _stop_event.is_set() and batch_idx < len(schedule):
-        # Czekaj na zaplanowany czas
-        target_time = schedule[batch_idx]
-        now = datetime.now()
-        
-        if now < target_time:
-            wait_seconds = (target_time - now).total_seconds()
-            logger.info(f"Czekam {wait_seconds/60:.1f} min do partii {batch_idx + 1}")
-            
-            # Czekaj z mozliwoscia przerwania
-            if _stop_event.wait(wait_seconds):
-                logger.info("Przerwano oczekiwanie")
-                break
-        
-        # Sprawdz czy nie jest przerwa nocna
-        if is_night_pause():
-            logger.info("Przerwa nocna - czekam do 06:00")
-            # Oblicz czas do 06:00
+        if not fast_mode:
+            # Czekaj na zaplanowany czas (tylko tryb automatyczny)
+            target_time = schedule[batch_idx]
             now = datetime.now()
-            wake_time = now.replace(hour=NIGHT_PAUSE_END, minute=0, second=0)
-            if now.hour >= NIGHT_PAUSE_END:
-                wake_time += timedelta(days=1)
-            wait_seconds = (wake_time - now).total_seconds()
-            _stop_event.wait(wait_seconds)
-            continue
+            
+            if now < target_time:
+                wait_seconds = (target_time - now).total_seconds()
+                logger.info(f"Czekam {wait_seconds/60:.1f} min do partii {batch_idx + 1}")
+                
+                if _stop_event.wait(wait_seconds):
+                    logger.info("Przerwano oczekiwanie")
+                    break
+            
+            # Sprawdz czy nie jest przerwa nocna (tylko tryb automatyczny)
+            if is_night_pause():
+                logger.info("Przerwa nocna - czekam do 06:00")
+                now = datetime.now()
+                wake_time = now.replace(hour=NIGHT_PAUSE_END, minute=0, second=0)
+                if now.hour >= NIGHT_PAUSE_END:
+                    wake_time += timedelta(days=1)
+                wait_seconds = (wake_time - now).total_seconds()
+                _stop_event.wait(wait_seconds)
+                continue
         
         try:
             with app.app_context():
@@ -437,6 +444,13 @@ def _report_worker(app, report_id: int, schedule: List[datetime]):
             logger.error(f"Blad partii {batch_idx + 1}: {e}", exc_info=True)
         
         batch_idx += 1
+        
+        # Tryb reczny: losowe opoznienie miedzy partiami (3-6 min)
+        # Zapobiega wykryciu przez Allegro, celuje w ~8h dla calego raportu
+        if fast_mode and not _stop_event.is_set() and batch_idx < len(schedule):
+            delay = random.uniform(MANUAL_MIN_BATCH_DELAY, MANUAL_MAX_BATCH_DELAY)
+            logger.info(f"Tryb reczny: czekam {delay/60:.1f} min do nastepnej partii")
+            _stop_event.wait(delay)
     
     # Finalizuj raport
     with app.app_context():
@@ -551,10 +565,11 @@ def stop_price_report_scheduler():
 def start_price_report_now() -> int:
     """Reczne uruchomienie raportu cenowego (poza harmonogramem).
     
-    Dla recznego uruchomienia:
-    - Synchronizacja ofert z Allegro
-    - Pierwsza partia startuje natychmiast
-    - Pozostale partie rozlozone rownomiernie na 48h z losowoscia
+    Tryb szybki (fast_mode=True):
+    - Wszystkie partie startuja natychmiast (bez czekania na harmonogram)
+    - Brak pauzy nocnej
+    - Losowe opoznienie 3-6 min miedzy partiami (anti-ban Allegro)
+    - Celowal czas: ~8h dla ~400 ofert
     """
     from flask import current_app
     
@@ -567,26 +582,22 @@ def start_price_report_now() -> int:
     total_offers = get_active_offers_count()
     num_batches = (total_offers + BATCH_SIZE - 1) // BATCH_SIZE
     
+    # Harmonogram: wszystkie partie "od zaraz" - faktyczne opoznienie
+    # zarzadza _report_worker przez MANUAL_MIN/MAX_BATCH_DELAY
     now = datetime.now()
-    end_time = now + timedelta(hours=48)
+    schedule = [now] * max(num_batches, 1)
     
-    # Oblicz harmonogram dla pozostalych partii (bez pierwszej)
-    remaining_schedule = calculate_schedule(
-        total_offers - BATCH_SIZE,  # Pomijamy pierwsza partie
-        now + timedelta(minutes=5),  # Zaczynamy 5 min od teraz
-        end_time
+    logger.info(
+        f"Reczny raport #{report_id}: {num_batches} partii dla {total_offers} ofert "
+        f"(tryb szybki, opoznienie {MANUAL_MIN_BATCH_DELAY//60}-{MANUAL_MAX_BATCH_DELAY//60} min miedzy partiami)"
     )
     
-    # Pierwsza partia od razu, reszta wedlug harmonogramu
-    schedule = [now] + remaining_schedule
-    
-    logger.info(f"Reczny raport #{report_id}: {len(schedule)} partii dla {total_offers} ofert (pierwsza natychmiast, reszta na 48h)")
-    
-    # Uruchom worker
+    # Uruchom worker w trybie szybkim
     app = current_app._get_current_object()
     worker = threading.Thread(
         target=_report_worker,
         args=(app, report_id, schedule),
+        kwargs={"fast_mode": True},
         daemon=True,
         name=f"PriceReportWorker-{report_id}"
     )
