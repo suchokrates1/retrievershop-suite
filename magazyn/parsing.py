@@ -43,6 +43,13 @@ COLOR_ALIASES = {
     "żółta": "żółty",
     "limonkowe": "limonkowy",
     "limonkowa": "limonkowy",
+    "khaki": "khaki",
+    "zielony-khaki": "khaki",
+    "zielony khaki": "khaki",
+    "fiolet": "fioletowy",
+    "stalowa roz": "stalowy rozowy",
+    "stalowa roza": "stalowy rozowy",
+    "stalowa rozowa": "stalowy rozowy",
 }
 
 # Mapping of normalized product keywords to canonical product names.  The
@@ -50,7 +57,9 @@ COLOR_ALIASES = {
 # present in the offer title.
 PRODUCT_KEYWORDS: list[tuple[str, str, int]] = [
     ("tropical", "Szelki dla psa Truelove Tropical", 2),
+    ("adventure soft", "Szelki dla psa Truelove Adventure Soft", 3),
     ("adventure dog", "Szelki dla psa Truelove Adventure Dog", 2),
+    ("adventure", "Szelki dla psa Truelove Adventure", 1),
     ("safe hiking", "Szelki dla psa Truelove Safe Hiking", 2),
     ("lumen", "Szelki dla psa Truelove Lumen", 1),
     ("blossom", "Szelki dla psa Truelove Blossom", 2),

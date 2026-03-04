@@ -33,6 +33,12 @@ PRODUCT_SERIES = [
     "Classic",
     "Neon",
     "Reflective",
+    "Adventure",
+    "Adventure Soft",
+    "Adventure Dog",
+    "Safe Hiking",
+    "Handy",
+    "Dogi",
 ]
 
 # Common color names that may appear in product titles.  They are stored in
@@ -84,6 +90,11 @@ KNOWN_COLORS = [
     "limonkowy",
     "limonkowe",
     "limonkowa",
+    "khaki",
+    "zielony-khaki",
+    "fiolet",
+    "stalowy rozowy",
+    "stalowa roz",
 ]
 
 # Regex rules used to normalize product titles and alias lookups.  The patterns

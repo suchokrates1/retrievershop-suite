@@ -87,13 +87,17 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
         ("neon", "Neon"),
         ("reflective", "Reflective"),
         ("dogi", "Dogi"),
+        ("adventure soft", "Adventure Soft"),
+        ("advsoft", "Adventure Soft"),
         ("adventure", "Adventure"),
         ("advent", "Adventure"),
         ("handy", "Handy"),
     ]
     
     for pattern, series_name in series_patterns:
-        if pattern in name_lower:
+        # Sprawdzaj całe wyrazy (word boundary), żeby "amor" nie trafił w "amortyzatorem"
+        import re as _re
+        if _re.search(r'(?<![a-z0-9])' + _re.escape(pattern) + r'(?![a-z0-9])', name_lower):
             series = series_name
             break
     
@@ -318,9 +322,11 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                        'różowe', 'różowy', 'różowa',
                        'szare', 'szary', 'szara',
                        'pomarańczowe', 'pomarańczowy', 'pomarańczowa',
-                       'fioletowe', 'fioletowy', 'fioletowa',
+                       'fioletowe', 'fioletowy', 'fioletowa', 'fiolet',
                        'brązowe', 'brązowy', 'brązowa',
-                       'limonkowe', 'limonkowy', 'limonkowa']
+                       'limonkowe', 'limonkowy', 'limonkowa',
+                       'khaki', 'zielony-khaki',
+                       'stalowa róż', 'stalowa różowa']
         
         name_words = name_part.split()
         for word in reversed(name_words):
