@@ -256,12 +256,29 @@
         });
     });
 
-    // Deleguj wykrywanie kodow do globalnego skanera (barcode-scanner.js)
-    // barcode_mode='disabled' sprawia ze globalny skaner odpala barcode:detected zamiast /barcode_scan
-    document.addEventListener('barcode:detected', function(e) {
-        var barcode = e.detail && e.detail.barcode;
-        if (barcode) handleBarcodeScan(barcode);
-    });
+    // Wlasny detektor kodow - niezalezny od globalnego skanera
+    var _buffer = '';
+    var _lastKey = 0;
+    var _clearTimer = null;
+    document.addEventListener('keydown', function(e) {
+        var now = Date.now();
+        if (now - _lastKey > 50 && _buffer.length > 0) { _buffer = ''; }
+        if (e.key === 'Enter' && _buffer.length >= 4) {
+            e.preventDefault();
+            e.stopPropagation();
+            var code = _buffer;
+            _buffer = '';
+            _lastKey = 0;
+            handleBarcodeScan(code);
+            return;
+        }
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            _buffer += e.key;
+            _lastKey = now;
+            clearTimeout(_clearTimer);
+            _clearTimer = setTimeout(function() { _buffer = ''; }, 200);
+        }
+    }, true);
 })();
 </script>
 {% endblock %}
