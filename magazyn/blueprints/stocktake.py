@@ -161,6 +161,7 @@ def stocktake_barcode_scan(stocktake_id):
             .first()
         )
         if not ps:
+            logger.info("[STOCKTAKE_SCAN] id=%s EAN: %s -> Nie znaleziono", stocktake_id, barcode)
             return jsonify({
                 "error": f"Nie znaleziono produktu o kodzie {barcode}"
             }), 404
@@ -224,6 +225,8 @@ def stocktake_barcode_scan(stocktake_id):
             .scalar() or 0
         )
 
+        logger.info("[STOCKTAKE_SCAN] id=%s EAN: %s -> %s %s %s, scanned=%s expected=%s",
+                    stocktake_id, barcode, product.series or product.name, ps.size or "", product.color or "", scanned, expected)
         return jsonify({
             "success": True,
             "tts_message": tts_message,

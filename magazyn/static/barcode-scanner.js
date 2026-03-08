@@ -387,26 +387,29 @@
         }, true); // Use capture phase to intercept before other handlers
 
         // Keep hidden input for backward compatibility and explicit scanning
-        focusScannerInput(hiddenInput);
-        if (hiddenInput) {
-            hiddenInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    submitBarcode(hiddenInput.value.trim(), {
-                        csrfToken,
-                        input: hiddenInput,
-                        beepElement
-                    });
-                }
-            });
-            // Reduced aggressiveness - only refocus after longer delay and if nothing else focused
-            hiddenInput.addEventListener('blur', () => {
-                setTimeout(() => {
-                    if (!globalDetector.isInputElement(document.activeElement)) {
-                        focusScannerInput(hiddenInput);
+        // W trybie disabled strona ma wlasna obsluge - nie uzywaj hidden input
+        if (BARCODE_MODE !== 'disabled') {
+            focusScannerInput(hiddenInput);
+            if (hiddenInput) {
+                hiddenInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        submitBarcode(hiddenInput.value.trim(), {
+                            csrfToken,
+                            input: hiddenInput,
+                            beepElement
+                        });
                     }
-                }, 500);
-            });
+                });
+                // Reduced aggressiveness - only refocus after longer delay and if nothing else focused
+                hiddenInput.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        if (!globalDetector.isInputElement(document.activeElement)) {
+                            focusScannerInput(hiddenInput);
+                        }
+                    }, 500);
+                });
+            }
         }
 
         document.querySelectorAll('[data-barcode-source="manual"]').forEach((input) => {
