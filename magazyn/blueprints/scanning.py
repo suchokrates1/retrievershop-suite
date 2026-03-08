@@ -270,7 +270,7 @@ def barcode_scan():
     
     result = find_by_barcode(barcode)
     if result:
-        current_app.logger.info(f"[BARCODE_SCAN] EAN: {barcode} -> Result: {json.dumps(result, ensure_ascii=False)}")
+        current_app.logger.info(f"[BARCODE_SCAN] EAN: {barcode} -> Referer: {request.headers.get('Referer', 'brak')} -> Result: {json.dumps(result, ensure_ascii=False)}")
         
         _log_scan('product', barcode, True, result)
         
