@@ -137,6 +137,7 @@ def stocktake_scan(stocktake_id):
         scanned_products=scanned_products,
         total_scanned=total_scanned,
         barcode_endpoint=url_for('stocktake.stocktake_barcode_scan', stocktake_id=stocktake_id),
+        barcode_mode='product',
     )
 
 
