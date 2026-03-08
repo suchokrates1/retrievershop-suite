@@ -269,6 +269,7 @@ def stocktake_undo(stocktake_id):
             return jsonify({"error": "Brak skanow do cofniecia"}), 400
 
         last_item.scanned_qty -= 1
+        db.flush()
 
         ps = db.query(ProductSize).get(last_item.product_size_id)
         product = ps.product if ps else None
