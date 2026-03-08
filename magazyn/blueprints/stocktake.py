@@ -136,6 +136,7 @@ def stocktake_scan(stocktake_id):
         total_products=total_products,
         scanned_products=scanned_products,
         total_scanned=total_scanned,
+        barcode_mode='disabled',
     )
 
 
