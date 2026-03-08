@@ -482,6 +482,21 @@
     
     <!-- Produkty wolnoobrotowe -->
     <div id="slow-moving-section"></div>
+
+    <!-- Zwroty miesiaca -->
+    <div class="row g-3 mt-1">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-arrow-return-left me-2"></i>Zwroty w tym miesiacu</span>
+                    <span class="spinner-border spinner-border-sm text-muted" id="returns-spinner"></span>
+                </div>
+                <div class="card-body p-2" id="returns-section">
+                    <p class="text-muted text-center small mb-0">Ladowanie...</p>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -599,10 +614,33 @@ document.addEventListener('DOMContentLoaded', function() {
             `<small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>`;
         
         const soldEl = document.getElementById('sold-section');
+        const returnsHtml = (profit.returns_count > 0)
+            ? `<small class="text-warning d-block mt-1"><i class="bi bi-arrow-return-left me-1"></i>${profit.returns_count} zwrot${profit.returns_count === 1 ? '' : (profit.returns_count < 5 ? 'y' : 'ow')} (${profit.returned_qty} szt.)</small>`
+            : `<small class="text-secondary d-block mt-1">Brak zwrotow</small>`;
         soldEl.querySelector('div').innerHTML =
             `<h3 class="text-info mb-1">${profit.products_sold}</h3>` +
-            `<small class="text-muted">Sprzedanych szt.</small>`;
-        
+            `<small class="text-muted">Sprzedanych szt.</small>` +
+            returnsHtml;
+
+        // Sekcja zwrotow miesiaca (jesli sa)
+        const returnsSection = document.getElementById('returns-section');
+        const returnsSpinner = document.getElementById('returns-spinner');
+        if (returnsSpinner) returnsSpinner.style.display = 'none';
+        if (returnsSection) {
+            if (profit.returns_count > 0 && profit.returns_list && profit.returns_list.length > 0) {
+                let rowsHtml = profit.returns_list.map(r => {
+                    const itemNames = r.items.map(i => `${i.name} (${i.quantity} szt.)`).join(', ');
+                    return `<tr><td class="small">${r.order_id || ''}</td><td class="small">${r.customer_name || ''}</td><td class="small">${itemNames}</td><td class="small text-center">${r.updated_at || ''}</td></tr>`;
+                }).join('');
+                returnsSection.innerHTML =
+                    `<div class="table-responsive"><table class="table table-sm table-dark mb-0">` +
+                    `<thead><tr><th class="small">Zamowienie</th><th class="small">Klient</th><th class="small">Produkty</th><th class="small text-center">Data zwrotu</th></tr></thead>` +
+                    `<tbody>${rowsHtml}</tbody></table></div>`;
+            } else {
+                returnsSection.innerHTML = '<p class="text-muted text-center small mb-0">Brak zwrotow w tym miesiacu</p>';
+            }
+        }
+
         // Reinicjalizacja tooltipow
         new bootstrap.Tooltip(profitEl.querySelector('[data-bs-toggle="tooltip"]'));
     }
