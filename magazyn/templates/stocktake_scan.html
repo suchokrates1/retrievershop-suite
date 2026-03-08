@@ -296,6 +296,26 @@
                 showError(data.error);
             } else {
                 updateStats(data);
+                // Zaktualizuj lub schowaj karte ostatniego skanu
+                var card = document.getElementById('last-scan-card');
+                if (data.scanned_qty !== undefined) {
+                    if (data.scanned_qty <= 0) {
+                        card.classList.add('d-none');
+                        document.getElementById('scan-instruction').classList.remove('d-none');
+                    } else {
+                        document.getElementById('last-scan-scanned').textContent = data.scanned_qty;
+                        card.classList.remove('danger', 'warning', 'ok');
+                        var scannedEl = document.getElementById('last-scan-scanned');
+                        scannedEl.classList.remove('danger', 'warning');
+                        if (data.scanned_qty > data.expected_qty) {
+                            card.classList.add('danger'); scannedEl.classList.add('danger');
+                        } else if (data.scanned_qty === data.expected_qty) {
+                            card.classList.add('ok');
+                        } else {
+                            card.classList.add('warning'); scannedEl.classList.add('warning');
+                        }
+                    }
+                }
                 if (data.tts_message && window.speechSynthesis) {
                     window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.tts_message));
                 }
