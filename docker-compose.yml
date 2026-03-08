@@ -1,5 +1,6 @@
 services:
   magazyn_app:
+    container_name: retrievershop-magazyn
     build:
       context: .
       dockerfile: magazyn/Dockerfile
@@ -33,6 +34,8 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    dns_opt:
+      - use-vc
     networks:
       - proxy
     labels:
