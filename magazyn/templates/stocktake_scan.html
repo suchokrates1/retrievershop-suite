@@ -262,22 +262,63 @@
         errorEl.classList.remove('d-none');
     }
 
-    function addToHistory(name, scanned, expected) {
-        const list = document.getElementById('scan-list');
-        const div = document.createElement('div');
-        div.className = 'st-history-item';
+    const HISTORY_KEY = 'stocktake_history_' + STOCKTAKE_ID;
 
+    function buildBadge(scanned, expected) {
         const diff = scanned - expected;
-        var badge = '';
-        if (diff > 0)      badge = '<span class="badge bg-danger">+' + diff + '</span>';
-        else if (diff === 0) badge = '<span class="badge bg-success">OK</span>';
-        else               badge = '<span class="badge bg-warning text-dark">' + scanned + '/' + expected + '</span>';
-
-        div.innerHTML = '<span>' + name + '</span>' + badge;
-        list.insertBefore(div, list.firstChild);
-
-        while (list.children.length > 20) list.removeChild(list.lastChild);
+        if (diff > 0)       return '<span class="badge bg-danger">+' + diff + ' (' + scanned + '/' + expected + ')</span>';
+        else if (diff === 0) return '<span class="badge bg-success">' + scanned + '/' + expected + ' OK</span>';
+        else                return '<span class="badge bg-warning text-dark">' + scanned + '/' + expected + '</span>';
     }
+
+    function saveHistory(items) {
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch(e) {}
+    }
+
+    function loadHistory() {
+        try {
+            var raw = localStorage.getItem(HISTORY_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch(e) { return []; }
+    }
+
+    function renderHistory(items) {
+        const list = document.getElementById('scan-list');
+        list.innerHTML = '';
+        items.forEach(function(item) {
+            const div = document.createElement('div');
+            div.className = 'st-history-item';
+            div.dataset.name = item.name;
+            div.innerHTML = '<span>' + item.name + '</span>' + buildBadge(item.scanned, item.expected);
+            list.appendChild(div);
+        });
+    }
+
+    function addToHistory(name, scanned, expected) {
+        var items = loadHistory();
+        var idx = items.findIndex(function(it) { return it.name === name; });
+        if (idx !== -1) {
+            items[idx].scanned = scanned;
+            items[idx].expected = expected;
+            // Przesuń na góre
+            var updated = items.splice(idx, 1)[0];
+            items.unshift(updated);
+        } else {
+            items.unshift({ name: name, scanned: scanned, expected: expected });
+            if (items.length > 50) items = items.slice(0, 50);
+        }
+        saveHistory(items);
+        renderHistory(items);
+    }
+
+    // Przywróc historie po refresh
+    (function() {
+        var items = loadHistory();
+        if (items.length > 0) {
+            renderHistory(items);
+            document.getElementById('scan-instruction').classList.add('d-none');
+        }
+    })();
 
     // Skan - obslugiwany przez globalny skaner (barcode_endpoint -> stocktake)
 
@@ -316,15 +357,13 @@
                         }
                     }
                 }
+                if (data.tts_name && data.scanned_qty !== undefined) {
+                    addToHistory(data.tts_name, data.scanned_qty, data.expected_qty);
+                }
                 if (data.tts_message && window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
                     window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.tts_message));
                 }
-                // Dodaj info do historii
-                const list = document.getElementById('scan-list');
-                const div = document.createElement('div');
-                div.className = 'st-history-item undo-item';
-                div.textContent = data.message || 'Cofnieto skan';
-                list.insertBefore(div, list.firstChild);
             }
         })
         .catch(function(err) {

@@ -97,6 +97,10 @@
     };
 
     const buildProductSpeechText = (data) => {
+        // tts_message zawiera pelny komunikat z kontekstem (np. remanent: "Produkt. 3 z 5")
+        if (data.tts_message) {
+            return data.tts_message;
+        }
         // Uzyj tts_name jesli dostepne (krotszy format dla produktow Uniwersalnych)
         // np. "Pas samochodowy rozowy", "Amortyzator czarny"
         if (data.tts_name) {
