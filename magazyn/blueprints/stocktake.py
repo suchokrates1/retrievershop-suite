@@ -277,6 +277,20 @@ def stocktake_undo(stocktake_id):
         size = ps.size if ps else ""
         color = product.color if product else ""
 
+        tts_parts = []
+        if product and product.series:
+            tts_parts.append(product.series)
+        elif product and product.category:
+            tts_parts.append(product.category)
+        if size and size != "Uniwersalny":
+            tts_parts.append(size)
+        if color:
+            tts_parts.append(color)
+        tts_name = " ".join(tts_parts) if tts_parts else product_name
+
+        scanned = last_item.scanned_qty
+        expected = last_item.expected_qty
+
         # Podsumowanie
         total_products = db.query(StocktakeItem).filter_by(stocktake_id=stocktake_id).count()
         scanned_products = (
@@ -294,9 +308,10 @@ def stocktake_undo(stocktake_id):
         return jsonify({
             "success": True,
             "message": f"Cofnieto skan: {product_name} {size} {color}",
-            "tts_message": f"Cofnieto. {product_name}",
-            "scanned_qty": last_item.scanned_qty,
-            "expected_qty": last_item.expected_qty,
+            "tts_message": f"Cofnieto. {tts_name}. {scanned} z {expected}",
+            "tts_name": tts_name,
+            "scanned_qty": scanned,
+            "expected_qty": expected,
             "total_products": total_products,
             "scanned_products": scanned_products,
             "total_scanned": total_scanned,
