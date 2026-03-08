@@ -30,6 +30,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
       - proxy
     labels:
