@@ -136,7 +136,7 @@ def stocktake_scan(stocktake_id):
         total_products=total_products,
         scanned_products=scanned_products,
         total_scanned=total_scanned,
-        barcode_mode='disabled',
+        barcode_endpoint=url_for('stocktake.stocktake_barcode_scan', stocktake_id=stocktake_id),
     )
 
 
@@ -188,6 +188,7 @@ def stocktake_barcode_scan(stocktake_id):
 
         item.scanned_qty += 1
         item.scanned_at = datetime.now()
+        db.flush()
 
         scanned = item.scanned_qty
         expected = item.expected_qty
@@ -230,7 +231,8 @@ def stocktake_barcode_scan(stocktake_id):
                     stocktake_id, barcode, product.series or product.name, ps.size or "", product.color or "", scanned, expected)
         return jsonify({
             "success": True,
-            "tts_message": tts_message,
+            "tts_name": tts_name,
+            "name": product.name,
             "product_name": product.name,
             "color": product.color or "",
             "size": ps.size or "",

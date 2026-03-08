@@ -80,28 +80,9 @@
 <script>
 (function() {
     const STOCKTAKE_ID = {{ stocktake_id }};
-    const SCAN_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/barcode_scan';
     const UNDO_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/undo';
     const FINISH_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/finish';
     const CSRF_TOKEN = document.getElementById('barcode-csrf-token').value;
-    const beep = document.getElementById('beep-sound');
-
-    // TTS
-    function speak(message) {
-        if (!('speechSynthesis' in window) || !message) return;
-        try {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(message);
-            window.speechSynthesis.speak(u);
-        } catch(e) {
-            console.warn('TTS error', e);
-        }
-    }
-
-    function playBeep() {
-        if (!beep) return;
-        try { beep.currentTime = 0; beep.play(); } catch(e) {}
-    }
 
     // Aktualizacja statystyk
     function updateStats(data) {
@@ -176,33 +157,7 @@
         }
     }
 
-    // Skan kodu kreskowego
-    function handleBarcodeScan(barcode) {
-        fetch(SCAN_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': CSRF_TOKEN
-            },
-            body: JSON.stringify({ barcode: barcode })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.error) {
-                showError(data.error);
-                speak(data.error);
-            } else {
-                playBeep();
-                showScanResult(data);
-                updateStats(data);
-                speak(data.tts_message);
-            }
-        })
-        .catch(function(err) {
-            showError('Blad polaczenia: ' + err.message);
-            speak('Blad polaczenia');
-        });
-    }
+    // Skan - obslugiwany przez globalny skaner (barcode_endpoint -> stocktake)
 
     // Cofnij
     document.getElementById('btn-undo').addEventListener('click', function() {
@@ -217,10 +172,11 @@
         .then(function(data) {
             if (data.error) {
                 showError(data.error);
-                speak(data.error);
             } else {
                 updateStats(data);
-                speak(data.tts_message);
+                if (data.tts_message && window.speechSynthesis) {
+                    window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.tts_message));
+                }
                 // Dodaj info do historii
                 const list = document.getElementById('scan-list');
                 const li = document.createElement('li');
@@ -256,29 +212,15 @@
         });
     });
 
-    // Wlasny detektor kodow - niezalezny od globalnego skanera
-    var _buffer = '';
-    var _lastKey = 0;
-    var _clearTimer = null;
-    document.addEventListener('keydown', function(e) {
-        var now = Date.now();
-        if (now - _lastKey > 50 && _buffer.length > 0) { _buffer = ''; }
-        if (e.key === 'Enter' && _buffer.length >= 4) {
-            e.preventDefault();
-            e.stopPropagation();
-            var code = _buffer;
-            _buffer = '';
-            _lastKey = 0;
-            handleBarcodeScan(code);
-            return;
+    // Globalny skaner wysyla POST do stocktake endpoint (barcode_endpoint w base.html)
+    // Po udanym skanie odpala barcode:scanned - aktualizujemy liczniki
+    document.addEventListener('barcode:scanned', function(e) {
+        var data = e.detail || {};
+        if (data.scanned_qty !== undefined) {
+            updateStats(data);
+            showScanResult(data);
         }
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            _buffer += e.key;
-            _lastKey = now;
-            clearTimeout(_clearTimer);
-            _clearTimer = setTimeout(function() { _buffer = ''; }, 200);
-        }
-    }, true);
+    });
 })();
 </script>
 {% endblock %}
