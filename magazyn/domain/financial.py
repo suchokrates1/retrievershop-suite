@@ -8,9 +8,11 @@ Centralizuje logike obliczania:
 - Podsumowania okresowego
 """
 
+import json as _json
+from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -53,7 +55,10 @@ class PeriodSummary:
     fixed_costs: Decimal
     net_profit: Decimal
     fixed_costs_list: List[Dict[str, Any]]
-    
+    returns_count: int = 0
+    returned_qty: int = 0
+    returns_list: List[Dict[str, Any]] = field(default_factory=list)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'orders_count': self.orders_count,
@@ -66,6 +71,9 @@ class PeriodSummary:
             'fixed_costs': float(self.fixed_costs),
             'net_profit': float(self.net_profit),
             'fixed_costs_list': self.fixed_costs_list,
+            'returns_count': self.returns_count,
+            'returned_qty': self.returned_qty,
+            'returns_list': self.returns_list,
         }
 
 
@@ -299,30 +307,55 @@ class FinancialCalculator:
         """
         from ..models import Order, OrderProduct, Return, FixedCost
         from sqlalchemy import func, select
-        
+
         # Pobierz zamowienia z wykluczonymi zwrotami (tylko te ze statusem 'completed')
         # completed = refundacja zrealizowana (COMMISSION_REFUNDED/FINISHED w Allegro)
         # Zwroty in_transit/pending/delivered nie sa wykluczane - jeszcze nie zwrocono pieniedzy
         return_order_ids = select(Return.order_id).where(
             Return.status == 'completed'
         ).distinct()
-        
+
         orders = self.db.query(Order).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
             Order.payment_done > 0,  # wyklucz zamowienia bez platnosci (0 lub None)
             ~Order.order_id.in_(return_order_ids)
         ).all()
-        
-        # Zlicz produkty
+
+        # Zlicz produkty - BEZ filtra zwrotow (jak Allegro: sprzedane = sprzedane)
         products_sold = self.db.query(func.sum(OrderProduct.quantity)).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
             Order.payment_done > 0,
-            ~Order.order_id.in_(return_order_ids)
         ).scalar() or 0
+
+        # Zwroty zakonczone w tym okresie (wg updated_at - kiedy status zmieniono na completed)
+        start_dt_str = datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        end_dt_str = datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        returns_in_period = self.db.query(Return).filter(
+            Return.status == 'completed',
+            Return.updated_at >= start_dt_str,
+            Return.updated_at < end_dt_str,
+        ).all()
+        returns_count = len(returns_in_period)
+        returned_qty = 0
+        returns_list = []
+        for ret in returns_in_period:
+            items = _json.loads(ret.items_json or '[]')
+            ret_qty = sum(item.get('quantity', 1) for item in items)
+            returned_qty += ret_qty
+            returns_list.append({
+                'order_id': ret.order_id,
+                'customer_name': ret.customer_name or '',
+                'items': [
+                    {'name': i.get('name', ''), 'quantity': i.get('quantity', 1)}
+                    for i in items
+                ],
+                'qty': ret_qty,
+                'updated_at': str(ret.updated_at)[:10] if ret.updated_at else '',
+            })
         
         # Kalkuluj dla kazdego zamowienia
         total_revenue = Decimal("0")
@@ -369,7 +402,10 @@ class FinancialCalculator:
             gross_profit=gross_profit,
             fixed_costs=fixed_costs,
             net_profit=net_profit,
-            fixed_costs_list=fixed_costs_list
+            fixed_costs_list=fixed_costs_list,
+            returns_count=returns_count,
+            returned_qty=returned_qty,
+            returns_list=returns_list,
         )
 
 
