@@ -177,6 +177,8 @@
         // TTS - tylko krotki format (tts_name lub series+size+color)
         const speechMessage = asLabel ? buildLabelSpeechText(data) : buildProductSpeechText(data);
         speak(speechMessage);
+        // Powiadom strony ktore chca reagowac na wynik skanu (np. remanent)
+        document.dispatchEvent(new CustomEvent('barcode:scanned', { detail: data }));
     };
 
     const showError = (message) => {
