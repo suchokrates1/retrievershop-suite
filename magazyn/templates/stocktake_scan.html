@@ -2,9 +2,8 @@
 {% block page_vars %}
 {% set full_width = True %}
 {% set wake_lock_default = 'true' %}
-{# Wylaczamy domyslny skaner - remanent ma wlasna obsluge #}
-{% set barcode_mode = 'disabled' %}
 {% endblock %}
+{% block barcode_mode %}disabled{% endblock %}
 {% block content %}
 <div class="container mt-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
