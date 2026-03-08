@@ -367,10 +367,9 @@
             maxTimeBetweenKeys: 50,
             minBarcodeLength: 4,
             onScan: (barcode) => {
-                console.log('[Scanner] Detected barcode:', barcode);
+                console.log('[Scanner] Detected barcode:', barcode, 'mode:', BARCODE_MODE);
                 if (BARCODE_MODE === 'disabled') {
-                    // Strona ma własną obsługę (np. remanent) - przekaż kod przez zdarzenie
-                    document.dispatchEvent(new CustomEvent('barcode:detected', { detail: { barcode } }));
+                    // Strona ma wlasny handler - globalny skaner nie robi nic
                     return;
                 }
                 submitBarcode(barcode, {
