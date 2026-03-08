@@ -258,36 +258,12 @@
         });
     });
 
-    // Wlasny skaner kodow kreskowych (nie uzywa globalnego)
-    var buffer = '';
-    var lastKeyTime = 0;
-    var clearTimeout_ = null;
-
-    document.addEventListener('keydown', function(e) {
-        var now = Date.now();
-        var timeDiff = now - lastKeyTime;
-
-        if (timeDiff > 50 && buffer.length > 0) {
-            buffer = '';
-        }
-
-        if (e.key === 'Enter' && buffer.length >= 4) {
-            e.preventDefault();
-            e.stopPropagation();
-            var barcode = buffer;
-            buffer = '';
-            lastKeyTime = 0;
-            handleBarcodeScan(barcode);
-            return;
-        }
-
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            buffer += e.key;
-            lastKeyTime = now;
-            clearTimeout(clearTimeout_);
-            clearTimeout_ = setTimeout(function() { buffer = ''; }, 200);
-        }
-    }, true);
+    // Deleguj wykrywanie kodow do globalnego skanera (barcode-scanner.js)
+    // barcode_mode='disabled' sprawia ze globalny skaner odpala barcode:detected zamiast /barcode_scan
+    document.addEventListener('barcode:detected', function(e) {
+        var barcode = e.detail && e.detail.barcode;
+        if (barcode) handleBarcodeScan(barcode);
+    });
 })();
 </script>
 {% endblock %}

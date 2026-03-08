@@ -368,6 +368,11 @@
             minBarcodeLength: 4,
             onScan: (barcode) => {
                 console.log('[Scanner] Detected barcode:', barcode);
+                if (BARCODE_MODE === 'disabled') {
+                    // Strona ma własną obsługę (np. remanent) - przekaż kod przez zdarzenie
+                    document.dispatchEvent(new CustomEvent('barcode:detected', { detail: { barcode } }));
+                    return;
+                }
                 submitBarcode(barcode, {
                     csrfToken,
                     input: hiddenInput,
