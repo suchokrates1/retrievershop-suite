@@ -317,17 +317,17 @@
                 const barcode = this.buffer;
                 this.buffer = '';
                 this.lastKeyTime = 0;
-                
-                // If we're in an input field and it was scanner speed, prevent normal submit
-                if (inInputField && isScannerSpeed) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    // Clear the input field that received scanner input
-                    if (document.activeElement.value) {
-                        document.activeElement.value = document.activeElement.value.slice(0, -barcode.length);
-                    }
+
+                // Always block propagation when we have a barcode to process.
+                // Without this, the hidden input keydown handler also fires if Enter
+                // arrives >50ms after the last character (common on some scanners),
+                // causing a double POST and scanned_qty += 2.
+                event.preventDefault();
+                event.stopPropagation();
+                if (inInputField && document.activeElement.value) {
+                    document.activeElement.value = '';
                 }
-                
+
                 this.onScan(barcode);
                 return;
             }
