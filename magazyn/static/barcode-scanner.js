@@ -54,18 +54,6 @@
         }
     };
 
-    const playBeep = (audioElement) => {
-        if (!audioElement) {
-            return;
-        }
-        try {
-            audioElement.currentTime = 0;
-            void audioElement.play();
-        } catch (error) {
-            console.warn('Nie udało się odtworzyć dźwięku', error);
-        }
-    };
-
     const focusScannerInput = (input) => {
         if (!input) {
             return;
@@ -170,14 +158,13 @@
         return `${deliveryMethod} zawiera: ${productTexts.join(', ')}`;
     };
 
-    const showSuccess = (data, beepElement, asLabel) => {
+    const showSuccess = (data, asLabel) => {
         const info = asLabel ? buildLabelInfoText(data) : buildProductInfoText(data);
         const message = asLabel
             ? (info || 'Znaleziono paczkę.')
             : (info ? `Znaleziono produkt: ${info}` : 'Znaleziono produkt.');
         getResultElements().forEach((element) => showElement(element, message, SUCCESS_CLASS));
         getErrorElements().forEach((element) => hideElement(element));
-        playBeep(beepElement);
         // TTS - tylko krotki format (tts_name lub series+size+color)
         const speechMessage = asLabel ? buildLabelSpeechText(data) : buildProductSpeechText(data);
         speak(speechMessage);
@@ -222,7 +209,7 @@
     };
 
     const submitBarcode = (barcode, options) => {
-        const { csrfToken, input, beepElement } = options || {};
+        const { csrfToken, input } = options || {};
         if (!barcode) {
             showError('Wprowadź kod kreskowy.');
             if (input) {
@@ -268,7 +255,7 @@
             const { url, asLabel } = endpoints[index];
             fetchBarcode(url, barcode, csrfToken)
                 .then((data) => {
-                    showSuccess(data, beepElement, asLabel);
+                    showSuccess(data, asLabel);
                     if (input) {
                         input.value = '';
                         focusScannerInput(input);
@@ -364,7 +351,6 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         const hiddenInput = document.getElementById('barcode-scanner-input');
-        const beepElement = document.getElementById('barcode-beep-sound');
         const csrfElement = document.getElementById('barcode-csrf-token');
         const csrfToken = csrfElement ? csrfElement.value : '';
 
@@ -380,8 +366,7 @@
                 }
                 submitBarcode(barcode, {
                     csrfToken,
-                    input: hiddenInput,
-                    beepElement
+                    input: hiddenInput
                 });
             }
         });
@@ -401,8 +386,7 @@
                         event.preventDefault();
                         submitBarcode(hiddenInput.value.trim(), {
                             csrfToken,
-                            input: hiddenInput,
-                            beepElement
+                            input: hiddenInput
                         });
                     }
                 });
@@ -424,8 +408,7 @@
                     event.preventDefault();
                     submitBarcode(input.value.trim(), {
                         csrfToken,
-                        input,
-                        beepElement
+                        input
                     });
                 });
             } else {
@@ -434,8 +417,7 @@
                         event.preventDefault();
                         submitBarcode(input.value.trim(), {
                             csrfToken,
-                            input,
-                            beepElement
+                            input
                         });
                     }
                 });
@@ -451,8 +433,7 @@
             }
             submitBarcode(barcode, {
                 csrfToken,
-                input: hiddenInput,
-                beepElement
+                input: hiddenInput
             });
         });
     });
