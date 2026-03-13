@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 _scheduler_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()
 _current_report_id: Optional[int] = None
+_worker_lock = threading.Lock()          # zapobiega rownoleglosci workerow
+_active_worker_thread: Optional[threading.Thread] = None
 
 
 # Konfiguracja czasowa
@@ -356,6 +358,25 @@ def send_report_notification(report_id: int):
         logger.error(f"Blad wysylania powiadomienia: {e}", exc_info=True)
 
 
+def _start_worker(app, report_id: int, schedule: List[datetime], fast_mode: bool = True) -> bool:
+    """Uruchamia workera jesli zaden inny nie jest aktywny. Zwraca True jesli uruchomiono."""
+    global _active_worker_thread
+    with _worker_lock:
+        if _active_worker_thread is not None and _active_worker_thread.is_alive():
+            logger.warning(f"Worker juz dziala ({_active_worker_thread.name}) - pomijam uruchomienie dla raportu #{report_id}")
+            return False
+        worker = threading.Thread(
+            target=_report_worker,
+            args=(app, report_id, schedule),
+            kwargs={"fast_mode": fast_mode},
+            daemon=True,
+            name=f"PriceReportWorker-{report_id}"
+        )
+        _active_worker_thread = worker
+        worker.start()
+        return True
+
+
 def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: bool = False):
     """Worker przetwarzajacy raport.
     
@@ -509,14 +530,7 @@ def _scheduler_main(app):
                         logger.info(f"Automatyczny raport #{report_id}: {num_batches} partii dla {total_offers} ofert (tryb szybki)")
                         
                         # Uruchom worker w trybie szybkim (identycznie jak recznie)
-                        worker = threading.Thread(
-                            target=_report_worker,
-                            args=(app, report_id, schedule),
-                            kwargs={"fast_mode": True},
-                            daemon=True,
-                            name=f"PriceReportWorker-{report_id}"
-                        )
-                        worker.start()
+                        _start_worker(app, report_id, schedule, fast_mode=True)
             
             # Czekaj godzine zeby nie uruchamiac ponownie
             _stop_event.wait(3600)
@@ -591,14 +605,8 @@ def start_price_report_now() -> int:
     
     # Uruchom worker w trybie szybkim
     app = current_app._get_current_object()
-    worker = threading.Thread(
-        target=_report_worker,
-        args=(app, report_id, schedule),
-        kwargs={"fast_mode": True},
-        daemon=True,
-        name=f"PriceReportWorker-{report_id}"
-    )
-    worker.start()
+    if not _start_worker(app, report_id, schedule, fast_mode=True):
+        raise RuntimeError("Worker jest juz aktywny - poczekaj na zakonczenie biezacego raportu")
     
     return report_id
 
@@ -658,14 +666,7 @@ def resume_price_report(report_id: int = None) -> int:
     
     # Uruchom worker
     app = current_app._get_current_object()
-    worker = threading.Thread(
-        target=_report_worker,
-        args=(app, report_id, schedule),
-        kwargs={"fast_mode": True},
-        daemon=True,
-        name=f"PriceReportWorker-{report_id}"
-    )
-    worker.start()
+    _start_worker(app, report_id, schedule, fast_mode=True)
     
     return report_id
 
@@ -739,14 +740,7 @@ def restart_price_report(report_id: int) -> dict:
     
     # Uruchom worker
     app = current_app._get_current_object()
-    worker = threading.Thread(
-        target=_report_worker,
-        args=(app, report_id, schedule),
-        kwargs={"fast_mode": True},
-        daemon=True,
-        name=f"PriceReportWorker-{report_id}"
-    )
-    worker.start()
+    _start_worker(app, report_id, schedule, fast_mode=True)
     
     return {
         "success": True,
