@@ -35,11 +35,10 @@ SUNDAY_END_HOUR = 16    # Niedziela 16:00
 NIGHT_PAUSE_START = 2   # Przerwa nocna od 02:00
 NIGHT_PAUSE_END = 6     # Przerwa nocna do 06:00
 BATCH_SIZE = 5          # Ofert w partii
-MIN_BATCH_DELAY = 30 * 60    # Min 30 min miedzy partiami (tryb automatyczny)
-MAX_BATCH_DELAY = 90 * 60    # Max 90 min miedzy partiami (tryb automatyczny)
-# Tryb reczny - raport ma byc gotowy w ~8h
-MANUAL_MIN_BATCH_DELAY = 3 * 60   # Min 3 min miedzy partiami
-MANUAL_MAX_BATCH_DELAY = 6 * 60   # Max 6 min miedzy partiami
+MIN_BATCH_DELAY = 3 * 60   # Min 3 min miedzy partiami
+MAX_BATCH_DELAY = 6 * 60   # Max 6 min miedzy partiami
+MANUAL_MIN_BATCH_DELAY = MIN_BATCH_DELAY
+MANUAL_MAX_BATCH_DELAY = MAX_BATCH_DELAY
 
 
 def is_night_pause() -> bool:
@@ -366,7 +365,7 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
     import asyncio
     from .scripts.price_checker_ws import CDP_HOST, CDP_PORT
     
-    mode_label = "reczny" if fast_mode else "automatyczny"
+    mode_label = "reczny" if fast_mode else "wolny"
     logger.info(f"Rozpoczynam przetwarzanie raportu #{report_id}, {len(schedule)} partii (tryb: {mode_label})")
     
     batch_idx = 0
@@ -503,19 +502,17 @@ def _scheduler_main(app):
                         # Utworz nowy raport
                         report_id = create_new_report()
                         
-                        # Oblicz harmonogram
-                        start_time = now
-                        end_time = now + timedelta(days=2)  # Do niedzieli 16:00
-                        
                         total_offers = get_active_offers_count()
-                        schedule = calculate_schedule(total_offers, start_time, end_time)
+                        num_batches = (total_offers + BATCH_SIZE - 1) // BATCH_SIZE
+                        schedule = [now] * max(num_batches, 1)
                         
-                        logger.info(f"Zaplanowano {len(schedule)} partii dla {total_offers} ofert")
+                        logger.info(f"Automatyczny raport #{report_id}: {num_batches} partii dla {total_offers} ofert (tryb szybki)")
                         
-                        # Uruchom worker w osobnym watku
+                        # Uruchom worker w trybie szybkim (identycznie jak recznie)
                         worker = threading.Thread(
                             target=_report_worker,
                             args=(app, report_id, schedule),
+                            kwargs={"fast_mode": True},
                             daemon=True,
                             name=f"PriceReportWorker-{report_id}"
                         )
@@ -654,17 +651,17 @@ def resume_price_report(report_id: int = None) -> int:
     
     # Oblicz harmonogram dla pozostalych ofert
     now = datetime.now()
-    end_time = now + timedelta(hours=24)  # 24h na dokonczenie
+    num_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
+    schedule = [now] * max(num_batches, 1)
     
-    schedule = calculate_schedule(remaining, now, end_time)
-    
-    logger.info(f"Wznowienie raportu #{report_id}: {len(schedule)} partii dla {remaining} pozostalych ofert")
+    logger.info(f"Wznowienie raportu #{report_id}: {num_batches} partii dla {remaining} pozostalych ofert (tryb szybki)")
     
     # Uruchom worker
     app = current_app._get_current_object()
     worker = threading.Thread(
         target=_report_worker,
         args=(app, report_id, schedule),
+        kwargs={"fast_mode": True},
         daemon=True,
         name=f"PriceReportWorker-{report_id}"
     )
@@ -733,23 +730,19 @@ def restart_price_report(report_id: int) -> dict:
             "message": "Raport zakonczony - brak ofert do sprawdzenia"
         }
     
-    # Oblicz harmonogram - szybszy dla restartu (6h zamiast 24h)
+    # Oblicz harmonogram
     now = datetime.now()
-    end_time = now + timedelta(hours=6)
+    num_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
+    schedule = [now] * max(num_batches, 1)
     
-    schedule = calculate_schedule(remaining, now, end_time)
-    
-    # Pierwsza partia natychmiast
-    if schedule:
-        schedule[0] = now
-    
-    logger.info(f"Restart raportu #{report_id}: {len(schedule)} partii dla {remaining} ofert (pierwsza natychmiast)")
+    logger.info(f"Restart raportu #{report_id}: {num_batches} partii dla {remaining} ofert (tryb szybki)")
     
     # Uruchom worker
     app = current_app._get_current_object()
     worker = threading.Thread(
         target=_report_worker,
         args=(app, report_id, schedule),
+        kwargs={"fast_mode": True},
         daemon=True,
         name=f"PriceReportWorker-{report_id}"
     )
