@@ -292,15 +292,23 @@ def save_report_item(report_id: int, result: dict):
 def finalize_report(report_id: int):
     """Oznacza raport jako zakonczony."""
     from .db import get_session
-    from .models import PriceReport
+    from .models import PriceReport, PriceReportItem
     
     with get_session() as session:
         report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
         if report:
-            report.status = "completed"
+            error_count = session.query(PriceReportItem).filter(
+                PriceReportItem.report_id == report_id,
+                PriceReportItem.error != None
+            ).count()
+            if error_count > 0:
+                report.status = "completed_with_errors"
+                logger.warning(f"Raport #{report_id} zakonczony z {error_count} bledami - status: completed_with_errors")
+            else:
+                report.status = "completed"
             report.completed_at = datetime.now()
             session.commit()
-            logger.info(f"Raport #{report_id} zakonczony")
+            logger.info(f"Raport #{report_id} zakonczony (bledy: {error_count})")
 
 
 def send_report_notification(report_id: int):

@@ -58,6 +58,8 @@
                 <td>
                     {% if report.status == 'completed' %}
                         <span class="badge bg-success">Zakonczony</span>
+                    {% elif report.status == 'completed_with_errors' %}
+                        <span class="badge bg-warning text-dark">Zakonczony z bledami</span>
                     {% elif report.status == 'running' %}
                         <span class="badge bg-primary">W toku</span>
                     {% elif report.status == 'pending' %}
