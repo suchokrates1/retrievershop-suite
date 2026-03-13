@@ -38,6 +38,13 @@ def post_worker_init(worker):
         _start_promo_scheduler()
         worker.log.info(f"Promo scheduler started in worker {worker.pid}")
         
+        # Auto-resume incomplete price reports (tylko w jednym workerze)
+        if _app_instance:
+            with _app_instance.app_context():
+                from magazyn.price_report_scheduler import auto_resume_incomplete_reports
+                auto_resume_incomplete_reports()
+                worker.log.info(f"Auto-resume incomplete reports done in worker {worker.pid}")
+        
     except (OSError, IOError):
         # Lock already held by another worker - skip scheduler initialization
         worker.log.info(f"Worker {worker.pid} skipped scheduler (already running in another worker)")

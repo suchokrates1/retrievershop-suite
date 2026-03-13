@@ -11,6 +11,8 @@
             {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}
             {% if report.status == 'completed' %}
                 <span class="badge bg-success ms-2">Zakonczony</span>
+            {% elif report.status == 'completed_with_errors' %}
+                <span class="badge bg-warning text-dark ms-2">Zakonczony z bledami</span>
             {% elif report.status == 'running' %}
                 <span class="badge bg-primary ms-2">W toku ({{ report.items_checked }}/{{ report.items_total }})</span>
             {% endif %}
