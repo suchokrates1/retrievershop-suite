@@ -40,15 +40,24 @@ def is_excluded(title):
     return any(s in t for s in EXCLUDED_SERIES)
 
 
+def normalize_title(title):
+    """Popraw znane literowki w tytule przed dalszym przetwarzaniem."""
+    t = title
+    t = re.sub(r'XLczarne', 'XL czarne', t)
+    t = re.sub(r'XLCzarne', 'XL Czarne', t, flags=re.IGNORECASE)
+    return t
+
+
 def extract_size(title):
     """Wyciagnij rozmiar z tytulu oferty."""
+    t = normalize_title(title)
     # Najpierw wieloznakowe (kolejnosc: najdluzsze pierwsze)
     for s in ["XXL", "XL", "XS"]:
-        if re.search(rf'\b{s}\b', title, re.IGNORECASE):
+        if re.search(rf'\b{s}\b', t, re.IGNORECASE):
             return s.upper()
     # Jednoznakowe - tylko uppercase, nie wewnatrz slow
     for s in ["L", "M", "S"]:
-        if re.search(rf'(?<![a-zA-Z]){s}(?![a-zA-Z])', title):
+        if re.search(rf'(?<![a-zA-Z]){s}(?![a-zA-Z])', t):
             return s
     return None
 
