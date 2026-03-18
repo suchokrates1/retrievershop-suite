@@ -514,6 +514,20 @@ def _import_invoice_df(
                     db.add(product)
                     db.flush()
 
+            # Jesli size jest pusty, probuj znalezc jedyny ProductSize dla tego produktu
+            if not size and product:
+                sole_ps = (
+                    db.query(ProductSize)
+                    .filter_by(product_id=product.id)
+                    .all()
+                )
+                if len(sole_ps) == 1:
+                    size = sole_ps[0].size
+                    logger.info(
+                        "Uzupelniono pusty rozmiar na '%s' dla product_id=%s",
+                        size, product.id,
+                    )
+
             ps = (
                 db.query(ProductSize)
                 .filter_by(product_id=product.id, size=size)
