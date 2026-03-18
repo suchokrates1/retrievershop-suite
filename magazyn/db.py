@@ -329,6 +329,30 @@ def consume_stock(
             .all()
         )
 
+        # Fallback: jesli nie znaleziono partii po size, szukaj po barcode
+        # (obsluguje przypadek gdy purchase_batch ma size="" a product_size "Uniwersalny")
+        if not any(b.remaining_quantity and b.remaining_quantity > 0 for b in batches):
+            if ps and ps.barcode:
+                fallback_batches = (
+                    session.query(PurchaseBatch)
+                    .filter(
+                        PurchaseBatch.product_id == product_id,
+                        PurchaseBatch.barcode == ps.barcode,
+                        PurchaseBatch.size != size,
+                    )
+                    .order_by(
+                        PurchaseBatch.purchase_date.asc(),
+                        PurchaseBatch.id.asc(),
+                    )
+                    .all()
+                )
+                if fallback_batches:
+                    logger.info(
+                        "FIFO fallback: dopasowanie po barcode %s dla product_id=%s size=%s",
+                        ps.barcode, product_id, size,
+                    )
+                    batches = fallback_batches
+
         remaining = to_consume
         purchase_cost = Decimal("0.00")
         for batch in batches:
