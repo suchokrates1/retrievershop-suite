@@ -170,7 +170,24 @@ class WFirmaClient:
             # Sprawdz bledy w odpowiedzi
             status = result.get("status", {})
             if isinstance(status, dict) and status.get("code") == "ERROR":
-                error_msg = status.get("message", "Nieznany blad wFirma")
+                error_msg = status.get("message") or ""
+                # Wyciagnij szczegoly walidacji z odpowiedzi
+                if not error_msg:
+                    for key, entries in result.items():
+                        if key == "status" or not isinstance(entries, list):
+                            continue
+                        for entry in entries:
+                            if not isinstance(entry, dict):
+                                continue
+                            for obj in entry.values():
+                                if isinstance(obj, dict) and "errors" in obj:
+                                    for err in obj["errors"]:
+                                        if isinstance(err, dict):
+                                            for field_errors in err.values():
+                                                if isinstance(field_errors, list):
+                                                    error_msg = "; ".join(field_errors)
+                if not error_msg:
+                    error_msg = "Nieznany blad wFirma"
                 raise WFirmaError(
                     error_msg,
                     code=status.get("code"),
