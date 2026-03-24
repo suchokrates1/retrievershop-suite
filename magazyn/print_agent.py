@@ -38,6 +38,16 @@ from .allegro_api import (
     send_discussion_message,
     send_thread_message,
 )
+from .allegro_api.shipment_management import (
+    create_shipment,
+    get_delivery_services,
+    get_shipment_details,
+    get_shipment_label,
+)
+from .allegro_api.fulfillment import (
+    add_shipment_tracking,
+    update_fulfillment_status,
+)
 from .agent.allegro_sync import AllegroSyncService
 from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
@@ -817,40 +827,355 @@ class LabelAgent:
         return {}
 
     def get_orders(self) -> List[Dict[str, Any]]:
-        marker = self.load_last_success_marker()
-        params: Dict[str, Any] = {
-            "status_id": self.config.status_id,
-            "include_products": 1,
-        }
-        if marker.order_id:
-            params["last_success_order_id"] = marker.order_id
-        if marker.timestamp:
-            params["last_success_timestamp"] = marker.timestamp
-        response = self.call_api("getOrders", params, raise_on_error=True)
-        orders = response.get("orders", [])
-        last_seen = marker.order_id
-        for order in orders:
-            order_id = order.get("order_id")
-            if order_id is not None:
-                last_seen = str(order_id)
-        self.update_last_success_marker(last_seen)
+        """Pobierz zamowienia gotowe do druku z lokalnej bazy danych.
+
+        Szuka zamowien w statusie 'pobrano' (nowe z Allegro Events API),
+        ktore nie zostaly jeszcze wydrukowane.
+        """
+        from .db import get_session
+        from .models import Order, OrderStatusLog, OrderProduct
+        from sqlalchemy import desc
+
+        orders = []
+        try:
+            with get_session() as db:
+                # Pobierz zamowienia z ostatnich 7 dni
+                week_ago = int((datetime.now() - timedelta(days=7)).timestamp())
+
+                recent_orders = (
+                    db.query(Order)
+                    .filter(Order.date_add >= week_ago)
+                    .all()
+                )
+
+                for order in recent_orders:
+                    # Sprawdz aktualny status
+                    latest = (
+                        db.query(OrderStatusLog)
+                        .filter(OrderStatusLog.order_id == order.order_id)
+                        .order_by(desc(OrderStatusLog.timestamp))
+                        .first()
+                    )
+                    current_status = latest.status if latest else "pobrano"
+
+                    # Interesuja nas tylko zamowienia w statusie 'pobrano'
+                    if current_status != "pobrano":
+                        continue
+
+                    # Pobierz produkty
+                    products_list = []
+                    for op in order.products:
+                        products_list.append({
+                            "name": op.name or "",
+                            "quantity": op.quantity or 1,
+                            "price_brutto": str(op.price_brutto) if op.price_brutto else "0",
+                            "auction_id": op.auction_id or "",
+                            "sku": op.sku or "",
+                            "ean": op.ean or "",
+                            "attributes": op.attributes or "",
+                        })
+
+                    orders.append({
+                        "order_id": order.order_id,
+                        "external_order_id": order.external_order_id or "",
+                        "shop_order_id": order.shop_order_id,
+                        "delivery_fullname": order.delivery_fullname or "",
+                        "email": order.email or "",
+                        "phone": order.phone or "",
+                        "user_login": order.user_login or "",
+                        "order_source": order.platform or "allegro",
+                        "order_source_id": order.order_source_id,
+                        "order_status_id": order.order_status_id,
+                        "confirmed": order.confirmed,
+                        "date_add": order.date_add,
+                        "date_confirmed": order.date_confirmed,
+                        "date_in_status": order.date_in_status,
+                        "delivery_method": order.delivery_method or "",
+                        "delivery_method_id": order.delivery_method_id,
+                        "delivery_price": float(order.delivery_price) if order.delivery_price else 0,
+                        "delivery_company": order.delivery_company or "",
+                        "delivery_address": order.delivery_address or "",
+                        "delivery_city": order.delivery_city or "",
+                        "delivery_postcode": order.delivery_postcode or "",
+                        "delivery_country": order.delivery_country or "",
+                        "delivery_country_code": order.delivery_country_code or "",
+                        "delivery_point_id": order.delivery_point_id or "",
+                        "delivery_point_name": order.delivery_point_name or "",
+                        "delivery_point_address": order.delivery_point_address or "",
+                        "delivery_point_postcode": order.delivery_point_postcode or "",
+                        "delivery_point_city": order.delivery_point_city or "",
+                        "invoice_fullname": order.invoice_fullname or "",
+                        "invoice_company": order.invoice_company or "",
+                        "invoice_nip": order.invoice_nip or "",
+                        "invoice_address": order.invoice_address or "",
+                        "invoice_city": order.invoice_city or "",
+                        "invoice_postcode": order.invoice_postcode or "",
+                        "invoice_country": order.invoice_country or "",
+                        "want_invoice": order.want_invoice or "0",
+                        "currency": order.currency or "PLN",
+                        "payment_method": order.payment_method or "",
+                        "payment_method_cod": order.payment_method_cod or "0",
+                        "payment_done": order.payment_done,
+                        "user_comments": order.user_comments or "",
+                        "admin_comments": order.admin_comments or "",
+                        "courier_code": order.courier_code or "",
+                        "delivery_package_module": order.delivery_package_module or "",
+                        "delivery_package_nr": order.delivery_package_nr or "",
+                        "products": products_list,
+                    })
+
+                self.logger.debug("Znaleziono %d zamowien do druku", len(orders))
+        except Exception as exc:
+            self.logger.error("Blad pobierania zamowien z bazy: %s", exc)
+            raise ApiError(str(exc)) from exc
+
         return orders
 
     def get_order_packages(self, order_id: str) -> List[Dict[str, Any]]:
-        response = self.call_api(
-            "getOrderPackages",
-            {"order_id": order_id},
-            raise_on_error=True,
+        """Pobierz przesylki dla zamowienia z Allegro Shipment Management API.
+
+        Jezeli przesylka nie istnieje, tworzy ja automatycznie
+        przez create_shipment().
+        """
+        # Wyciagnij checkout_form_id z order_id (format: allegro_{uuid})
+        checkout_form_id = order_id
+        if order_id.startswith("allegro_"):
+            checkout_form_id = order_id[len("allegro_"):]
+
+        # Najpierw sprawdz czy przesylka juz istnieje w Allegro
+        from .allegro_api.fulfillment import get_shipment_tracking_numbers
+        try:
+            existing = get_shipment_tracking_numbers(checkout_form_id)
+            if existing:
+                # Przesylka juz istnieje - zwroc dane
+                packages = []
+                for ship in existing:
+                    packages.append({
+                        "shipment_id": ship.get("id"),
+                        "waybill": ship.get("waybill"),
+                        "carrier_id": ship.get("carrierId"),
+                        "courier_code": ship.get("carrierId", ""),
+                        "courier_package_nr": ship.get("waybill", ""),
+                    })
+                return packages
+        except Exception as exc:
+            self.logger.debug(
+                "Nie mozna sprawdzic istniejacych przesylek dla %s: %s",
+                order_id, exc,
+            )
+
+        # Przesylka nie istnieje - utworz nowa przez Shipment Management
+        return self._create_allegro_shipment(order_id, checkout_form_id)
+
+    def _create_allegro_shipment(
+        self, order_id: str, checkout_form_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Utworz przesylke w Allegro Shipment Management i zwroc dane."""
+        order_data = self.last_order_data
+        if not order_data or order_data.get("order_id") != order_id:
+            self.logger.error("Brak danych zamowienia %s do utworzenia przesylki", order_id)
+            return []
+
+        # Mapuj metode dostawy na delivery_service_id
+        delivery_method = order_data.get("delivery_method", "") or order_data.get("shipping", "")
+        delivery_service_id = self._resolve_delivery_service_id(delivery_method)
+
+        if not delivery_service_id:
+            self.logger.error(
+                "Nie mozna ustalic delivery_service_id dla metody '%s' (zamowienie %s)",
+                delivery_method, order_id,
+            )
+            return []
+
+        # Dane nadawcy z ustawien
+        from .settings_store import settings_store
+        sender = {
+            "name": settings_store.get("SENDER_NAME") or "Retriever Shop",
+            "street": settings_store.get("SENDER_STREET") or "",
+            "city": settings_store.get("SENDER_CITY") or "",
+            "zipCode": settings_store.get("SENDER_ZIPCODE") or "",
+            "countryCode": "PL",
+            "phone": settings_store.get("SENDER_PHONE") or "",
+            "email": settings_store.get("SENDER_EMAIL") or "",
+        }
+
+        # Dane odbiorcy z zamowienia
+        receiver = {
+            "name": order_data.get("delivery_fullname", ""),
+            "street": order_data.get("delivery_address", ""),
+            "city": order_data.get("delivery_city", ""),
+            "zipCode": order_data.get("delivery_postcode", ""),
+            "countryCode": order_data.get("delivery_country_code", "PL"),
+            "phone": order_data.get("phone", ""),
+            "email": order_data.get("email", ""),
+        }
+
+        # Punkt odbioru (paczkomat itp.)
+        point_id = order_data.get("delivery_point_id", "")
+        if point_id:
+            receiver["pickupPointId"] = point_id
+
+        # Domyslna paczka
+        packages = [
+            {
+                "weight": {"value": 1.0, "unit": "KILOGRAM"},
+                "dimensions": {
+                    "length": {"value": 30, "unit": "CENTIMETER"},
+                    "width": {"value": 20, "unit": "CENTIMETER"},
+                    "height": {"value": 10, "unit": "CENTIMETER"},
+                },
+            }
+        ]
+
+        try:
+            result = create_shipment(
+                checkout_form_id=checkout_form_id,
+                delivery_service_id=delivery_service_id,
+                sender=sender,
+                receiver=receiver,
+                packages=packages,
+            )
+
+            shipment_id = result.get("id")
+            waybill = ""
+            # Wyciagnij waybill z packages
+            for pkg in result.get("packages", []):
+                waybill = pkg.get("waybill", "")
+                if waybill:
+                    break
+
+            # Dodaj tracking do zamowienia w Allegro
+            carrier_id = self._resolve_carrier_id(delivery_method)
+            if waybill and carrier_id:
+                try:
+                    add_shipment_tracking(
+                        checkout_form_id,
+                        carrier_id=carrier_id,
+                        waybill=waybill,
+                    )
+                except Exception as track_exc:
+                    self.logger.warning(
+                        "Nie mozna dodac trackingu %s do zamowienia %s: %s",
+                        waybill, order_id, track_exc,
+                    )
+
+            # Zmien status fulfillment na PROCESSING
+            try:
+                update_fulfillment_status(checkout_form_id, "PROCESSING")
+            except Exception as ful_exc:
+                self.logger.warning(
+                    "Nie mozna zmienic statusu fulfillment dla %s: %s",
+                    order_id, ful_exc,
+                )
+
+            self.logger.info(
+                "Utworzono przesylke %s (waybill: %s) dla zamowienia %s",
+                shipment_id, waybill, order_id,
+            )
+
+            return [{
+                "shipment_id": shipment_id,
+                "waybill": waybill,
+                "carrier_id": carrier_id or "",
+                "courier_code": carrier_id or "",
+                "courier_package_nr": waybill,
+            }]
+
+        except Exception as exc:
+            self.logger.error(
+                "Blad tworzenia przesylki dla zamowienia %s: %s", order_id, exc,
+            )
+            return []
+
+    def _resolve_delivery_service_id(self, delivery_method: str) -> Optional[str]:
+        """Mapuj nazwe metody dostawy Allegro na delivery_service_id."""
+        if not delivery_method:
+            return None
+
+        method_lower = delivery_method.lower()
+
+        try:
+            services = get_delivery_services()
+        except Exception as exc:
+            self.logger.error("Blad pobierania delivery services: %s", exc)
+            return None
+
+        # Szukaj dokladnego dopasowania po nazwie
+        for svc in services:
+            svc_name = (svc.get("name") or "").lower()
+            if svc_name == method_lower:
+                return svc.get("id")
+
+        # Szukaj czesciowego dopasowania
+        for svc in services:
+            svc_name = (svc.get("name") or "").lower()
+            if method_lower in svc_name or svc_name in method_lower:
+                return svc.get("id")
+
+        self.logger.warning(
+            "Nie znaleziono delivery_service_id dla '%s' "
+            "wsrod %d dostepnych uslug", delivery_method, len(services),
         )
-        return response.get("packages", [])
+        return None
+
+    def _resolve_carrier_id(self, delivery_method: str) -> Optional[str]:
+        """Mapuj nazwe metody dostawy na carrier_id Allegro."""
+        if not delivery_method:
+            return None
+
+        method_lower = delivery_method.lower()
+
+        carrier_map = {
+            "inpost": "INPOST",
+            "paczkomat": "INPOST",
+            "dhl": "DHL",
+            "dpd": "DPD",
+            "poczta": "POCZTA_POLSKA",
+            "pocztex": "POCZTA_POLSKA",
+            "ups": "UPS",
+            "gls": "GLS",
+            "fedex": "FEDEX",
+            "orlen": "ALLEGRO",
+            "allegro one": "ALLEGRO",
+            "allegro kurier": "ALLEGRO",
+            "allegro automat": "ALLEGRO",
+        }
+
+        for key, carrier_id in carrier_map.items():
+            if key in method_lower:
+                return carrier_id
+
+        return "OTHER"
 
     def get_label(self, courier_code: str, package_id: str) -> Tuple[str, str]:
-        response = self.call_api(
-            "getLabel",
-            {"courier_code": courier_code, "package_id": package_id},
-            raise_on_error=True,
-        )
-        return response.get("label"), response.get("extension", "pdf")
+        """Pobierz etykiete przesylki z Allegro Shipment Management API.
+
+        Args:
+            courier_code: Nieuzywane (kompatybilnosc wsteczna).
+            package_id: ID przesylki (shipment_id) z Allegro.
+
+        Returns:
+            Tuple (base64_label_data, extension).
+        """
+        if not package_id:
+            raise ApiError("Brak ID przesylki do pobrania etykiety")
+
+        try:
+            label_bytes = get_shipment_label(package_id, label_format="PDF")
+            label_b64 = base64.b64encode(label_bytes).decode("ascii")
+            return label_b64, "pdf"
+        except RuntimeError as exc:
+            # Etykieta nie gotowa - sprobuj ponownie po chwili
+            self.logger.warning("Etykieta nie gotowa dla %s: %s", package_id, exc)
+            time.sleep(3)
+            try:
+                label_bytes = get_shipment_label(package_id, label_format="PDF")
+                label_b64 = base64.b64encode(label_bytes).decode("ascii")
+                return label_b64, "pdf"
+            except Exception as retry_exc:
+                raise ApiError(f"Etykieta niedostepna: {retry_exc}") from retry_exc
+        except Exception as exc:
+            raise ApiError(f"Blad pobierania etykiety: {exc}") from exc
 
     def print_label(self, base64_data: str, extension: str, order_id: str) -> None:
         file_path = f"/tmp/label_{order_id}.{extension}"
@@ -989,131 +1314,143 @@ class LabelAgent:
             self.logger.error("Błąd wysyłania wiadomości: %s", exc)
 
     # ------------------------------------------------------------------
-    # Tracking status updates
+    # Tracking status updates (Allegro API)
     # ------------------------------------------------------------------
-    # BaseLinker tracking_status codes mapping to our status names
-    TRACKING_STATUS_MAP = {
-        0: None,  # Unknown - don't update
-        1: "wydrukowano",  # Courier label created
-        2: "przekazano_kurierowi",  # Shipped
-        3: "niedostarczono",  # Not delivered
-        4: "w_drodze",  # Out for delivery
-        5: "dostarczono",  # Delivered
-        6: "zwrot",  # Return
-        7: "awizo",  # Aviso
-        8: "gotowe_do_odbioru",  # Waiting at point / ready to pickup
-        9: "zagubiono",  # Lost
-        10: "anulowano",  # Canceled
-        11: "w_drodze",  # On the way
+    # Allegro tracking event type -> our internal status
+    ALLEGRO_TRACKING_STATUS_MAP = {
+        "DELIVERED": "dostarczono",
+        "READY_FOR_PICKUP": "gotowe_do_odbioru",
+        "PICKED_UP": "dostarczono",
+        "SENT": "przekazano_kurierowi",
+        "PICKED_UP_BY_CARRIER": "przekazano_kurierowi",
+        "IN_TRANSIT": "w_drodze",
+        "OUT_FOR_DELIVERY": "w_drodze",
+        "RETURNED": "zwrot",
+        "RETURNED_TO_SENDER": "zwrot",
+        "CANCELLED": "anulowano",
+        "LOST": "zagubiono",
+        "FAILED_DELIVERY": "niedostarczono",
+        "LABEL_CREATED": "wydrukowano",
     }
 
     def _check_tracking_statuses(self) -> None:
-        """Check and update tracking statuses for recent orders."""
+        """Sprawdz i zaktualizuj statusy przesylek przez Allegro Tracking API."""
         try:
             from .orders import add_order_status
             from .db import get_session
             from .models import Order, OrderStatusLog
+            from .allegro_api.tracking import fetch_parcel_tracking
+            from .settings_store import settings_store
             from sqlalchemy import desc
-            
+
+            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+            if not access_token:
+                self.logger.debug("Brak tokenu Allegro - pomijam sprawdzanie trackingu")
+                return
+
             with get_session() as db:
-                # Get orders that are not yet delivered (check last 7 days)
                 from datetime import datetime, timedelta
                 week_ago = int((datetime.now() - timedelta(days=7)).timestamp())
-                
+
                 orders_to_check = (
                     db.query(Order)
                     .filter(Order.date_add >= week_ago)
                     .all()
                 )
-                
+
                 if not orders_to_check:
                     return
-                
-                self.logger.debug("Sprawdzam statusy dla %d zamówień", len(orders_to_check))
-                
+
+                # Zbierz zamowienia z waybill pogrupowane po carrier
+                carrier_waybills: Dict[str, List[Tuple[Order, str, str]]] = {}
                 for order in orders_to_check:
-                    try:
-                        # Get latest status for this order
-                        latest_status = (
-                            db.query(OrderStatusLog)
-                            .filter(OrderStatusLog.order_id == order.order_id)
-                            .order_by(desc(OrderStatusLog.timestamp))
-                            .first()
-                        )
-                        
-                        current_status = latest_status.status if latest_status else "niewydrukowano"
-                        
-                        # Skip if already delivered or final status
-                        if current_status in ("dostarczono", "zwrot", "zagubiono", "anulowano"):
+                    latest_status = (
+                        db.query(OrderStatusLog)
+                        .filter(OrderStatusLog.order_id == order.order_id)
+                        .order_by(desc(OrderStatusLog.timestamp))
+                        .first()
+                    )
+                    current_status = latest_status.status if latest_status else "niewydrukowano"
+
+                    if current_status in ("dostarczono", "zwrot", "zagubiono", "anulowano", "zakończono"):
+                        continue
+
+                    waybill = order.delivery_package_nr
+                    if not waybill:
+                        continue
+
+                    carrier_id = self._resolve_carrier_id(
+                        order.delivery_method or order.delivery_package_module or ""
+                    ) or "OTHER"
+
+                    carrier_waybills.setdefault(carrier_id, []).append(
+                        (order, waybill, current_status)
+                    )
+
+                self.logger.debug(
+                    "Sprawdzam tracking dla %d zamowien (%d przewoznikow)",
+                    sum(len(v) for v in carrier_waybills.values()),
+                    len(carrier_waybills),
+                )
+
+                # Odpytaj Allegro Tracking API per carrier (max 20 waybilli per request)
+                for carrier_id, order_items in carrier_waybills.items():
+                    waybill_to_order = {item[1]: (item[0], item[2]) for item in order_items}
+                    waybill_list = list(waybill_to_order.keys())
+
+                    # Podziel na batche po 20
+                    for i in range(0, len(waybill_list), 20):
+                        batch = waybill_list[i:i + 20]
+                        try:
+                            tracking_data = fetch_parcel_tracking(
+                                access_token, carrier_id, batch
+                            )
+                        except Exception as exc:
+                            self.logger.warning(
+                                "Blad pobierania trackingu %s: %s", carrier_id, exc
+                            )
                             continue
-                        
-                        # Get packages from BaseLinker
-                        packages = self.get_order_packages(order.order_id)
-                        
-                        if not packages:
-                            continue
-                        
-                        # Use the most advanced status from all packages
-                        best_tracking_status = 0
-                        best_tracking_number = None
-                        best_courier_code = None
-                        best_tracking_url = None
-                        
-                        for pkg in packages:
-                            # Ensure tracking_status is an integer (API may return string)
-                            raw_status = pkg.get("tracking_status", 0)
-                            try:
-                                tracking_status = int(raw_status) if raw_status else 0
-                            except (ValueError, TypeError):
-                                tracking_status = 0
-                            if tracking_status > best_tracking_status:
-                                best_tracking_status = tracking_status
-                                best_tracking_number = pkg.get("courier_package_nr")
-                                best_courier_code = pkg.get("courier_code")
-                                best_tracking_url = pkg.get("tracking_url")
-                        
-                        # Map to our status
-                        new_status = self.TRACKING_STATUS_MAP.get(best_tracking_status)
-                        
-                        if not new_status:
-                            continue
-                        
-                        # Check if status changed
-                        if new_status != current_status:
+
+                        for wb_data in tracking_data.get("waybills", []):
+                            waybill = wb_data.get("waybill", "")
+                            if waybill not in waybill_to_order:
+                                continue
+
+                            order_obj, current_status = waybill_to_order[waybill]
+                            events = wb_data.get("events", [])
+                            if not events:
+                                continue
+
+                            # Najnowszy event (pierwszy na liscie)
+                            latest_event = events[0]
+                            event_type = latest_event.get("type", "")
+                            new_status = self.ALLEGRO_TRACKING_STATUS_MAP.get(event_type)
+
+                            if not new_status or new_status == current_status:
+                                continue
+
                             self.logger.info(
-                                "📦 Zmiana statusu zamówienia %s: %s -> %s",
-                                order.order_id, current_status, new_status
+                                "Zmiana statusu zamowienia %s: %s -> %s (event: %s)",
+                                order_obj.order_id, current_status, new_status, event_type,
                             )
-                            
-                            # Add status log
-                            add_order_status(
-                                db, order.order_id, new_status,
-                                tracking_number=best_tracking_number,
-                                courier_code=best_courier_code,
-                                notes=f"Auto-update z BaseLinker (tracking_url: {best_tracking_url})" if best_tracking_url else "Auto-update z BaseLinker"
-                            )
-                            
-                            # Update order tracking info
-                            if best_tracking_number:
-                                order.delivery_package_nr = best_tracking_number
-                            if best_courier_code:
-                                order.courier_code = best_courier_code
-                            
-                            db.commit()
-                            
-                    except ApiError as exc:
-                        self.logger.debug(
-                            "Nie można pobrać paczek dla zamówienia %s: %s",
-                            order.order_id, exc
-                        )
-                    except Exception as exc:
-                        self.logger.warning(
-                            "Błąd sprawdzania statusu zamówienia %s: %s",
-                            order.order_id, exc
-                        )
-                        
+
+                            try:
+                                add_order_status(
+                                    db, order_obj.order_id, new_status,
+                                    tracking_number=waybill,
+                                    courier_code=carrier_id,
+                                    notes=f"Auto-update z Allegro Tracking ({event_type})",
+                                )
+                                db.commit()
+                            except Exception as status_exc:
+                                self.logger.warning(
+                                    "Blad aktualizacji statusu %s: %s",
+                                    order_obj.order_id, status_exc,
+                                )
+                                db.rollback()
+
         except Exception as exc:
-            self.logger.warning("Błąd sprawdzania statusów przesyłek: %s", exc)
+            self.logger.warning("Blad sprawdzania statusow przesylek: %s", exc)
 
     # ------------------------------------------------------------------
     # Agent loop
@@ -1425,19 +1762,6 @@ class LabelAgent:
                         "tracking_numbers": [],
                     }
 
-                    # Sync order to database for orders view
-                    try:
-                        from .orders import sync_order_from_data
-                        from .db import get_session
-                        with get_session() as db:
-                            sync_order_from_data(db, self.last_order_data)
-                            db.commit()
-                    except Exception as sync_exc:
-                        self.logger.warning(
-                            "Could not sync order %s to database: %s",
-                            order_id, sync_exc
-                        )
-
                     if order_id in printed:
                         continue
 
@@ -1465,31 +1789,31 @@ class LabelAgent:
                     tracking_numbers: List[str] = []
 
                     for package in packages:
-                        package_id = package.get("package_id")
-                        code = package.get("courier_code")
-                        tracking_number = package.get("tracking_number") or package.get("courier_package_nr") or package.get("courier_inner_number")
+                        shipment_id = package.get("shipment_id")
+                        code = package.get("carrier_id") or package.get("courier_code")
+                        tracking_number = package.get("waybill") or package.get("courier_package_nr")
                         if code and not courier_code:
                             courier_code = code
-                        if package_id:
-                            package_ids.append(str(package_id))
+                        if shipment_id:
+                            package_ids.append(str(shipment_id))
                         if tracking_number:
                             tracking_numbers.append(str(tracking_number))
-                        if not package_id or not code:
-                            self.logger.warning("  Brak danych: package_id lub courier_code")
+                        if not shipment_id:
+                            self.logger.warning("  Brak shipment_id dla zamowienia %s", order_id)
                             continue
                         try:
                             label_data, ext = self._retry(
                                 self.get_label,
                                 courier_code,
-                                package_id,
+                                shipment_id,
                                 stage="label",
                                 retry_exceptions=(ApiError,),
                             )
                         except ApiError as exc:
                             self.logger.error(
-                                "Błąd pobierania etykiety %s/%s: %s",
+                                "Blad pobierania etykiety %s/%s: %s",
                                 courier_code,
-                                package_id,
+                                shipment_id,
                                 exc,
                             )
                             PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
@@ -1503,6 +1827,8 @@ class LabelAgent:
                         self.last_order_data["package_ids"] = list(dict.fromkeys(package_ids))
                     if tracking_numbers:
                         self.last_order_data["tracking_numbers"] = list(dict.fromkeys(tracking_numbers))
+                        # delivery_package_nr uzywany przez mark_as_printed
+                        self.last_order_data["delivery_package_nr"] = tracking_numbers[0]
 
                     if labels:
                         if self.is_quiet_time():
@@ -1565,9 +1891,9 @@ class LabelAgent:
                             # Zawsze wysyłaj wiadomość - z info o statusie drukowania
                             self._notify_messenger(self.last_order_data, print_success=print_success)
                     else:
-                        # Brak etykiety z Baselinkera - poinformuj i nie oznaczaj jako wydrukowane
+                        # Brak etykiety - nie mozna utworzyc przesylki w Allegro
                         self.logger.error(
-                            "Brak etykiety dla zamówienia %s (Baselinker nie zwrócił danych)",
+                            "Brak etykiety dla zamowienia %s (Allegro nie zwrocilo danych)",
                             order_id,
                         )
                         PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
