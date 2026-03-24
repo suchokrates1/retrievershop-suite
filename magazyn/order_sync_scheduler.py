@@ -13,6 +13,164 @@ _stop_event = threading.Event()
 _last_offer_sync_date: Optional[str] = None  # YYYY-MM-DD - data ostatniego syncu ofert
 
 
+def _sync_from_allegro_events(app):
+    """Synchronizuj zamowienia z Allegro przez Events API (inkrementalnie).
+
+    Mechanizm event-driven polling:
+    1. Wczytaj ALLEGRO_LAST_EVENT_ID z settings_store
+    2. Pobierz zdarzenia od tego ID (GET /order/events?from=...)
+    3. Dla READY_FOR_PROCESSING: pobierz szczegoly -> sync_order_from_data()
+    4. Dla BUYER_CANCELLED / AUTO_CANCELLED: aktualizuj status
+    5. Zapisz nowy last_event_id
+
+    Tryb dual-run: dziala obok BaseLinker sync, loguje roznice.
+    """
+    from .db import get_session
+    from .orders import sync_order_from_data, add_order_status
+    from .allegro_api.events import fetch_order_events, fetch_event_stats
+    from .allegro_api.orders import (
+        fetch_allegro_order_detail,
+        parse_allegro_order_to_data,
+    )
+    from .settings_store import settings_store
+
+    stats = {
+        "events_fetched": 0,
+        "orders_synced": 0,
+        "orders_cancelled": 0,
+        "orders_skipped": 0,
+        "errors": 0,
+    }
+
+    try:
+        last_event_id = settings_store.get("ALLEGRO_LAST_EVENT_ID")
+
+        # Przy pierwszym uruchomieniu - inicjalizuj kursor na najnowszym zdarzeniu
+        if not last_event_id:
+            logger.info("Allegro Events: brak kursora, inicjalizacja na najnowszym zdarzeniu")
+            try:
+                event_stats = fetch_event_stats()
+                latest = event_stats.get("latestEvent", {})
+                last_event_id = latest.get("id")
+                if last_event_id:
+                    settings_store.update({"ALLEGRO_LAST_EVENT_ID": last_event_id})
+                    logger.info(f"Allegro Events: kursor zainicjalizowany na {last_event_id}")
+                else:
+                    logger.warning("Allegro Events: brak zdarzen do inicjalizacji")
+                return stats
+            except Exception as exc:
+                logger.error(f"Allegro Events: blad inicjalizacji kursora: {exc}")
+                stats["errors"] += 1
+                return stats
+
+        # Pobierz zdarzenia inkrementalnie
+        all_events = []
+        current_from = last_event_id
+        max_pages = 10  # zabezpieczenie przed nieskonczonym pollingiem
+
+        for _ in range(max_pages):
+            try:
+                result = fetch_order_events(from_event_id=current_from, limit=1000)
+            except Exception as exc:
+                logger.error(f"Allegro Events: blad pobierania zdarzen: {exc}")
+                stats["errors"] += 1
+                break
+
+            events = result.get("events", [])
+            if not events:
+                break
+
+            all_events.extend(events)
+            current_from = events[-1].get("id")
+
+            # Jesli mniej niz limit - to ostatnia strona
+            if len(events) < 1000:
+                break
+
+        stats["events_fetched"] = len(all_events)
+
+        if not all_events:
+            logger.debug("Allegro Events: brak nowych zdarzen")
+            return stats
+
+        logger.info(f"Allegro Events: pobrano {len(all_events)} nowych zdarzen")
+
+        # Przetwarzaj zdarzenia
+        with app.app_context():
+            with get_session() as db:
+                seen_checkout_forms = set()
+
+                for event in all_events:
+                    event_type = event.get("type", "")
+                    order_info = event.get("order", {})
+                    checkout_form_id = order_info.get("checkoutForm", {}).get("id")
+
+                    if not checkout_form_id:
+                        continue
+
+                    # Deduplikacja - jedno zamowienie moze miec wiele zdarzen
+                    event_key = (checkout_form_id, event_type)
+                    if event_key in seen_checkout_forms:
+                        stats["orders_skipped"] += 1
+                        continue
+                    seen_checkout_forms.add(event_key)
+
+                    if event_type == "READY_FOR_PROCESSING":
+                        try:
+                            detail = fetch_allegro_order_detail(checkout_form_id)
+                            order_data = parse_allegro_order_to_data(detail)
+                            sync_order_from_data(db, order_data)
+                            stats["orders_synced"] += 1
+                            logger.info(
+                                f"Allegro Events: zsynchronizowano zamowienie "
+                                f"{checkout_form_id}"
+                            )
+                        except Exception as exc:
+                            logger.error(
+                                f"Allegro Events: blad syncu zamowienia "
+                                f"{checkout_form_id}: {exc}"
+                            )
+                            stats["errors"] += 1
+
+                    elif event_type in ("BUYER_CANCELLED", "AUTO_CANCELLED"):
+                        try:
+                            order_id = f"allegro_{checkout_form_id}"
+                            add_order_status(
+                                db,
+                                order_id,
+                                "anulowano",
+                                notes=f"Allegro event: {event_type}",
+                            )
+                            stats["orders_cancelled"] += 1
+                            logger.info(
+                                f"Allegro Events: anulowano zamowienie "
+                                f"{checkout_form_id} ({event_type})"
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                f"Allegro Events: blad anulowania "
+                                f"{checkout_form_id}: {exc}"
+                            )
+                            stats["errors"] += 1
+
+                    else:
+                        stats["orders_skipped"] += 1
+
+                db.commit()
+
+        # Zapisz kursor na ostatnim przetworzonym zdarzeniu
+        new_last_id = all_events[-1].get("id")
+        if new_last_id:
+            settings_store.update({"ALLEGRO_LAST_EVENT_ID": new_last_id})
+            logger.info(f"Allegro Events: kursor zaktualizowany na {new_last_id}")
+
+    except Exception as exc:
+        logger.error(f"Allegro Events: krytyczny blad: {exc}", exc_info=True)
+        stats["errors"] += 1
+
+    return stats
+
+
 def _sync_allegro_fulfillment(app):
     """Synchronizuj statusy realizacji zamowien z Allegro API (fulfillment.status).
     
@@ -137,7 +295,16 @@ def _sync_worker(app):
     while not _stop_event.is_set():
         try:
             with app.app_context():
-                # 1. Sync orders from BaseLinker
+                # 0. Sync zamowien z Allegro Events API (nowy, inkrementalny)
+                logger.info("Starting Allegro Events sync")
+                ev_stats = _sync_from_allegro_events(app)
+                logger.info(
+                    f"Allegro Events sync completed: events={ev_stats['events_fetched']}, "
+                    f"synced={ev_stats['orders_synced']}, cancelled={ev_stats['orders_cancelled']}, "
+                    f"errors={ev_stats['errors']}"
+                )
+
+                # 1. Sync orders from BaseLinker (dual-run - do usuniecia po migracji)
                 logger.info("Starting automatic order sync (last 30 days, all statuses)")
                 synced = _sync_orders_from_baselinker(ALL_STATUS_IDS, days=30)
                 logger.info(f"Automatic order sync completed: {synced} orders synced")
