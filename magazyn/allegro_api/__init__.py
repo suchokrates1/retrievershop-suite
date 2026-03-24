@@ -96,6 +96,13 @@ from .invoices import (
     upload_invoice_to_allegro,
 )
 
+from .fulfillment import (
+    update_fulfillment_status,
+    add_shipment_tracking,
+    get_shipment_tracking_numbers,
+    VALID_FULFILLMENT_STATUSES,
+)
+
 __all__ = [
     # Core
     "AUTH_URL",
@@ -156,4 +163,9 @@ __all__ = [
     "get_allegro_internal_status",
     # Invoices
     "upload_invoice_to_allegro",
+    # Fulfillment
+    "update_fulfillment_status",
+    "add_shipment_tracking",
+    "get_shipment_tracking_numbers",
+    "VALID_FULFILLMENT_STATUSES",
 ]
