@@ -13,6 +13,7 @@ from flask import Blueprint, render_template, abort, request, flash, redirect, u
 from sqlalchemy import desc, func, or_
 
 from .auth import login_required
+from .config import settings
 from .db import get_session
 from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog, AllegroOffer
 from .settings_store import settings_store
