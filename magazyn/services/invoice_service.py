@@ -203,3 +203,84 @@ def _was_email_sent(order, email_type: str) -> bool:
         return sent.get(email_type, False)
     except (json.JSONDecodeError, TypeError):
         return False
+
+
+def generate_correction_invoice(order_id: str, reason: str = "") -> dict:
+    """
+    Wystaw korekte zerujaca do faktury zamowienia.
+
+    Returns
+    -------
+    dict
+        {"success": bool, "invoice_number": str, "errors": list[str]}
+    """
+    from ..wfirma_api import WFirmaClient
+    from ..wfirma_api.invoices import create_correction_invoice, download_invoice_pdf
+    from .email_service import send_invoice_correction
+
+    result = {"success": False, "invoice_number": None, "errors": []}
+
+    with get_session() as db:
+        order = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order:
+            result["errors"].append(f"Zamowienie {order_id} nie znalezione")
+            return result
+
+        if not order.wfirma_invoice_id:
+            result["errors"].append(
+                f"Zamowienie {order_id} nie ma wystawionej faktury wFirma"
+            )
+            return result
+
+        try:
+            client = WFirmaClient.from_settings()
+        except Exception as exc:
+            result["errors"].append(f"Blad inicjalizacji klienta wFirma: {exc}")
+            return result
+
+        description = reason or f"Korekta zerujaca do zamowienia {order_id}"
+
+        try:
+            inv = create_correction_invoice(
+                client,
+                original_invoice_id=int(order.wfirma_invoice_id),
+                description=description,
+            )
+            invoice_id = inv["invoice_id"]
+            invoice_number = inv["invoice_number"]
+            result["invoice_number"] = invoice_number
+        except Exception as exc:
+            result["errors"].append(f"Blad wystawienia korekty wFirma: {exc}")
+            return result
+
+        # Pobierz PDF korekty
+        pdf_data = None
+        try:
+            pdf_data = download_invoice_pdf(client, invoice_id)
+        except Exception as exc:
+            result["errors"].append(f"Blad pobierania PDF korekty: {exc}")
+
+        # Wyslij email z korekta
+        if pdf_data:
+            safe_nr = invoice_number.replace("/", "_").replace("\\", "_")
+            pdf_filename = f"{safe_nr}.pdf"
+            try:
+                send_invoice_correction(
+                    order,
+                    reason=description,
+                    refund_amount=abs(inv["total"]),
+                    pdf_data=pdf_data,
+                    pdf_filename=pdf_filename,
+                )
+                _mark_email_sent(db, order, "correction")
+                db.commit()
+            except Exception as exc:
+                result["errors"].append(f"Blad wysylki korekty emailem: {exc}")
+
+        result["success"] = True
+        logger.info(
+            "Korekta %s wystawiona dla zamowienia %s (wFirma id=%s)",
+            invoice_number, order_id, invoice_id,
+        )
+
+    return result
