@@ -553,7 +553,7 @@ unmatched = sum(1 for o in orders for p in o.get("products", []) if not p.get("p
 if unmatched > total_products * 0.3:
     recommendations.append(
         f"PROBLEM Z MATCHINGIEM PRODUKTOW: {unmatched}/{total_products} produktow nie "
-        f"dopasowanych do magazynu. Popraw nazwy/EAN w BaseLinker lub dodaj brakujące produkty."
+        f"dopasowanych do magazynu. Popraw nazwy/EAN w ofercie Allegro lub dodaj brakujące produkty."
     )
 
 # 10. Darmowa dostawa

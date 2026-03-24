@@ -1,5 +1,5 @@
 """
-Serwis etykiet - zastepuje BaseLinker getPackages/getLabel.
+Serwis etykiet - tworzenie przesylek i pobieranie etykiet z Allegro API.
 
 Flow:
 1. Pobierz delivery_services (cachowane)
@@ -157,10 +157,7 @@ def _wait_for_confirmation(shipment_id: str) -> dict:
 
 
 class AllegroLabelService:
-    """Serwis do tworzenia przesylek i pobierania etykiet z Allegro.
-
-    Zastepuje BaseLinker get_order_packages() + get_label().
-    """
+    """Serwis do tworzenia przesylek i pobierania etykiet z Allegro."""
 
     def create_and_get_label(
         self,

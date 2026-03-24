@@ -177,11 +177,15 @@ def consume_order_stock(products: List[dict]):
         name, size, color = parse_product_info(item)
         price = _to_decimal(item.get("price_brutto", 0))
         shipping_cost = _calculate_shipping(price)
-        commission_fee = (
-            price
-            * Decimal(str(settings.COMMISSION_ALLEGRO))
-            / Decimal("100")
-        ).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+        # Uzyj pre-kalkulowanej prowizji z zamowienia recznego, jesli dostepna
+        if "commission_fee" in item and item["commission_fee"] is not None:
+            commission_fee = _to_decimal(item["commission_fee"])
+        else:
+            commission_fee = (
+                price
+                * Decimal(str(settings.COMMISSION_ALLEGRO))
+                / Decimal("100")
+            ).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
         size = size or None
         color = color or None
 

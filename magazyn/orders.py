@@ -1140,6 +1140,48 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
 
 
 
+@bp.route("/orders/api/products/search")
+@login_required
+def api_product_search():
+    """API wyszukiwania produktow do formularza recznego zamowienia."""
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+
+    with get_session() as db:
+        from .models import Product, ProductSize
+        query = (
+            db.query(ProductSize)
+            .join(Product, Product.id == ProductSize.product_id)
+            .filter(ProductSize.quantity > 0)
+        )
+
+        # Szukaj po barcode, nazwie, kolorze, serii
+        like_q = f"%{q}%"
+        query = query.filter(
+            (ProductSize.barcode.ilike(like_q))
+            | (Product._name.ilike(like_q))
+            | (Product.color.ilike(like_q))
+            | (Product.series.ilike(like_q))
+            | (Product.category.ilike(like_q))
+            | (Product.brand.ilike(like_q))
+        )
+
+        results = []
+        for ps in query.limit(20).all():
+            product = ps.product
+            label = f"{product.name} | {product.color or '-'} | {ps.size} | EAN: {ps.barcode or '-'} | Stan: {ps.quantity}"
+            results.append({
+                "name": f"{product.name} - {product.color or ''} - {ps.size}".strip(" -"),
+                "ean": ps.barcode or "",
+                "size": ps.size,
+                "stock": ps.quantity,
+                "label": label,
+            })
+
+    return jsonify(results)
+
+
 @bp.route("/orders/add", methods=["GET", "POST"])
 @login_required
 def add_order():
@@ -1152,23 +1194,38 @@ def add_order():
     order_id = f"manual_{int(time.time())}_{secrets.token_hex(4)}"
     now_ts = int(time.time())
 
+    # Prowizja
+    commission_type = f.get("commission_type", "percent")
+    try:
+        commission_value = float(f.get("commission_value") or 0)
+    except (ValueError, TypeError):
+        commission_value = 0.0
+
     # Zbierz produkty z formularza
     names = request.form.getlist("prod_name[]")
     eans = request.form.getlist("prod_ean[]")
     qtys = request.form.getlist("prod_qty[]")
     prices = request.form.getlist("prod_price[]")
-    auctions = request.form.getlist("prod_auction[]")
 
     products = []
     for i, name in enumerate(names):
         if not name.strip():
             continue
+        price = float(prices[i]) if i < len(prices) and prices[i] else 0
+        # Oblicz prowizje per produkt
+        if commission_type == "percent" and commission_value > 0:
+            comm_fee = round(price * commission_value / 100, 2)
+        elif commission_type == "amount" and commission_value > 0:
+            comm_fee = commission_value
+        else:
+            comm_fee = 0.0
+
         products.append({
             "name": name.strip(),
             "ean": eans[i].strip() if i < len(eans) else "",
             "quantity": int(qtys[i]) if i < len(qtys) and qtys[i] else 1,
-            "price_brutto": float(prices[i]) if i < len(prices) and prices[i] else 0,
-            "auction_id": auctions[i].strip() if i < len(auctions) else "",
+            "price_brutto": price,
+            "commission_fee": comm_fee,
         })
 
     if not products:
