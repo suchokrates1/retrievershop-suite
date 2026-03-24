@@ -1,20 +1,14 @@
-import importlib
 from pathlib import Path
 from sqlalchemy.sql import text
 from magazyn.models import Product, ProductSize
-
-
-def load_services():
-    srv = importlib.import_module("magazyn.services")
-    return importlib.reload(srv)
+from magazyn.domain.invoice_import import import_invoice_file
 
 
 def test_import_invoice_file_real(app_mod):
-    services = load_services()
     pdf_path = Path("magazyn/samples/sample_invoice.pdf")
     with pdf_path.open("rb") as f:
         f.filename = "sample_invoice.pdf"
-        services.import_invoice_file(f)
+        import_invoice_file(f)
 
     expected = [
         {

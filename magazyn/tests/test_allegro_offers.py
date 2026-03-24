@@ -337,7 +337,7 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
             )
         return ([], [])
 
-    monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
+    monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", fake_competitors)
 
     response = client.get("/allegro/price-check")
     assert response.status_code == 200
@@ -443,7 +443,7 @@ def test_price_check_product_level_aggregates_barcodes(client, login, monkeypatc
             )
         return ([], [])
 
-    monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
+    monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", fake_competitors)
 
     json_response = client.get("/allegro/price-check?format=json")
     assert json_response.status_code == 200
@@ -504,11 +504,12 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
             "expires_in": 3600,
         }
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
-    monkeypatch.setattr("magazyn.allegro_api.refresh_token", fake_refresh)
+    monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.offers.refresh_token", fake_refresh)
     persisted = []
 
-    original_update = allegro_api.update_allegro_tokens
+    from magazyn.allegro_api import offers as _offers_mod
+    original_update = _offers_mod.update_allegro_tokens
 
     def capture_tokens(
         access_token=None, refresh_token=None, expires_in=None, metadata=None
@@ -523,7 +524,7 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
         original_update(access_token, refresh_token, expires_in, metadata)
 
     monkeypatch.setattr(
-        "magazyn.allegro_api.update_allegro_tokens", capture_tokens
+        "magazyn.allegro_api.offers.update_allegro_tokens", capture_tokens
     )
 
     offers = fetch_product_listing("1234567890123")
@@ -573,7 +574,7 @@ def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(
         calls.append({"headers": headers.copy(), "params": params.copy()})
         return responses.pop(0)
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
 
     with pytest.raises(RuntimeError, match="please re-authorize"):
         fetch_product_listing("1234567890123")
@@ -613,9 +614,9 @@ def test_fetch_product_listing_clears_tokens_when_refresh_fails(
     def failing_refresh(refresh_value):
         raise requests.exceptions.HTTPError(response=FakeResponse(400, {}))
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
-    monkeypatch.setattr("magazyn.allegro_api.refresh_token", failing_refresh)
-    monkeypatch.setattr("magazyn.allegro_api.clear_allegro_tokens", fake_clear)
+    monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.offers.refresh_token", failing_refresh)
+    monkeypatch.setattr("magazyn.allegro_api.offers.clear_allegro_tokens", fake_clear)
 
     with pytest.raises(RuntimeError, match="please re-authorize"):
         fetch_product_listing("1234567890123")
@@ -662,7 +663,7 @@ def test_fetch_product_listing_debug_logs_include_allegro_error_code(
     def fake_get(url, headers, params, timeout):
         return responses.pop(0)
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
 
     debug_calls: list[tuple[str, object]] = []
 

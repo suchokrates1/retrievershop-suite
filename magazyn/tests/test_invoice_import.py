@@ -14,7 +14,7 @@ def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
                 "Rozmiar": "M",
                 "Ilość": 2,
                 "Cena": 5.5,
-                "Barcode": "inv-123",
+                "Barcode": "1234567890128",
             }
         ]
     )
@@ -35,7 +35,7 @@ def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
         "size_0": "M",
         "quantity_0": "2",
         "price_0": "5.5",
-        "barcode_0": "inv-123",
+        "barcode_0": "1234567890128",
         "accept_0": "y",
     }
     resp = client.post("/confirm_invoice", data=confirm)
@@ -53,7 +53,7 @@ def test_import_invoice_creates_products(app_mod, client, login, tmp_path):
             .first()
         )
         assert ps.quantity == 2
-        assert ps.barcode == "inv-123"
+        assert ps.barcode == "1234567890128"
         batch = db.execute(
             text(
                 "SELECT quantity, price FROM purchase_batches WHERE product_id=:pid AND size='M'"
@@ -73,7 +73,7 @@ def test_import_invoice_with_spaces(app_mod, client, login, tmp_path):
                 "Rozmiar": "L",
                 "Ilość": "1 234",
                 "Cena": "2 345,67",
-                "Barcode": "sp-456",
+                "Barcode": "4567890123456",
             }
         ]
     )
@@ -93,7 +93,7 @@ def test_import_invoice_with_spaces(app_mod, client, login, tmp_path):
         "size_0": "L",
         "quantity_0": "1 234",
         "price_0": "2 345,67",
-        "barcode_0": "sp-456",
+        "barcode_0": "4567890123456",
         "accept_0": "y",
     }
     resp = client.post("/confirm_invoice", data=confirm)
@@ -310,7 +310,7 @@ def test_import_invoice_rows_updates_existing_by_barcode(app_mod):
         db.flush()
         db.add(
             ProductSize(
-                product_id=product.id, size="M", quantity=1, barcode="inv-1"
+                product_id=product.id, size="M", quantity=1, barcode="7890123456789"
             )
         )
 
@@ -322,7 +322,7 @@ def test_import_invoice_rows_updates_existing_by_barcode(app_mod):
                 "Rozmiar": "M",
                 "Ilość": 2,
                 "Cena": "5.50",
-                "Barcode": "inv-1",
+                "Barcode": "7890123456789",
             }
         ]
     )

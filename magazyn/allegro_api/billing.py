@@ -159,6 +159,7 @@ PROMO_TYPES = {
     "DPG",   # Oplata za promowanie na stronie dzialu
     "PRO",   # Promocja
     "NSP",   # Oplata za kampanie Ads (CPC, dzienna, bez order_id)
+    "ADS",   # Oplata za reklame Ads
 }
 
 CAMPAIGN_BONUS_TYPES = {
