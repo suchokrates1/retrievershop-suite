@@ -103,6 +103,23 @@ from .fulfillment import (
     VALID_FULFILLMENT_STATUSES,
 )
 
+from .shipment_management import (
+    get_delivery_services,
+    create_shipment,
+    get_shipment_details,
+    get_shipment_label,
+    cancel_shipment,
+    invalidate_delivery_services_cache,
+)
+
+from .carriers import (
+    fetch_carriers,
+    resolve_carrier_id,
+    DELIVERY_METHOD_TO_CARRIER,
+    TRACKING_TO_INTERNAL,
+    invalidate_carriers_cache,
+)
+
 __all__ = [
     # Core
     "AUTH_URL",
@@ -168,4 +185,17 @@ __all__ = [
     "add_shipment_tracking",
     "get_shipment_tracking_numbers",
     "VALID_FULFILLMENT_STATUSES",
+    # Shipment Management
+    "get_delivery_services",
+    "create_shipment",
+    "get_shipment_details",
+    "get_shipment_label",
+    "cancel_shipment",
+    "invalidate_delivery_services_cache",
+    # Carriers
+    "fetch_carriers",
+    "resolve_carrier_id",
+    "DELIVERY_METHOD_TO_CARRIER",
+    "TRACKING_TO_INTERNAL",
+    "invalidate_carriers_cache",
 ]
