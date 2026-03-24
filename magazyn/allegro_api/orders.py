@@ -414,7 +414,7 @@ def parse_allegro_order_to_data(checkout_form: dict) -> dict:
     payment_method = payment_method_map.get(payment_type, payment_type)
 
     return {
-        # ID: uzyj "allegro_{uuid}" jako order_id (aby nie kolidowac z BaseLinker)
+        # ID: uzyj "allegro_{uuid}" jako order_id
         "order_id": f"allegro_{cf_id}",
         "external_order_id": cf_id,
         "shop_order_id": None,

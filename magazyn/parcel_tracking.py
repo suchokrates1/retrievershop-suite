@@ -52,7 +52,7 @@ ALLEGRO_STATUS_MAP = {
     "OTHER": None,  # Inny status - nie zmieniamy
 }
 
-# Przewoźnicy - mapowanie nazw BaseLinker/Allegro na ID API
+# Przewoźnicy - mapowanie nazw na ID API Allegro
 CARRIER_ID_MAP = {
     "inpost": "INPOST",
     "poczta polska": "POCZTA_POLSKA",
@@ -72,7 +72,7 @@ def get_carrier_id(delivery_method: Optional[str]) -> Optional[str]:
     Mapuj nazwę metody dostawy na ID przewoźnika w Allegro API.
     
     Args:
-        delivery_method: Nazwa metody dostawy z BaseLinker
+        delivery_method: Nazwa metody dostawy z zamowienia
         
     Returns:
         ID przewoźnika lub None jeśli nie rozpoznano
