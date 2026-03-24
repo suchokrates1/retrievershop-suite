@@ -92,6 +92,10 @@ from .orders import (
     get_allegro_internal_status,
 )
 
+from .invoices import (
+    upload_invoice_to_allegro,
+)
+
 __all__ = [
     # Core
     "AUTH_URL",
@@ -150,4 +154,6 @@ __all__ = [
     "fetch_all_allegro_orders",
     "parse_allegro_order_to_data",
     "get_allegro_internal_status",
+    # Invoices
+    "upload_invoice_to_allegro",
 ]
