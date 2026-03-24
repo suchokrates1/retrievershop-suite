@@ -653,7 +653,7 @@ def price_check():
         or request.accept_mimetypes.best == "application/json"
     )
 
-    record_debug("Zadany format odpowiedzi", "json" if wants_json else "html")
+    record_debug("Żądany format odpowiedzi", "json" if wants_json else "html")
 
     if wants_json:
         price_checks = build_price_checks(debug_steps, debug_log_lines)

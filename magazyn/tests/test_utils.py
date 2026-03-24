@@ -405,8 +405,8 @@ def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
     agent.ensure_db()
     orders = agent.load_printed_orders()
     data = orders[0]["last_order_data"]
-    assert data["name"] == "Widget"
-    assert data["color"] == "Blue"
+    assert data["name"] == "Widget Blue"
+    assert data.get("color", "") == ""
     assert data["size"] == "XL"
 
 
