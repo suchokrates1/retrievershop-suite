@@ -444,7 +444,7 @@ class PriceCheckerService:
         except AllegroScrapeError as exc:
             error = str(exc)
             debug.record(
-                "Blad pobierania ofert Allegro",
+                "B\u0142\u0105d pobierania ofert Allegro",
                 {"offer_id": offer_id, "url": offer_url, "error": str(exc), "barcode": barcode}
             )
             competitor_offers = []
@@ -452,7 +452,7 @@ class PriceCheckerService:
         except Exception as exc:
             error = str(exc)
             debug.record(
-                "Blad pobierania ofert Allegro",
+                "B\u0142\u0105d pobierania ofert Allegro",
                 {"offer_id": offer_id, "url": offer_url, "error": str(exc), "barcode": barcode}
             )
             competitor_offers = []
@@ -463,7 +463,7 @@ class PriceCheckerService:
                 debug.record("Log Selenium", {"offer_id": offer_id, "message": entry, "barcode": barcode})
         
         debug.record(
-            "Oferty konkurencji - liczba ofert",
+            "Oferty konkurencji \u2013 liczba ofert",
             {"offer_id": offer_id, "offers": len(competitor_offers), "barcode": barcode}
         )
         

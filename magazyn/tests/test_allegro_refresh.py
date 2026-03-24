@@ -310,6 +310,7 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
                     "href": "https://api.allegro.pl/sale/offers?offset=2&limit=2"
                 }
             },
+            "totalCount": 3,
         },
         {
             "items": {
@@ -354,7 +355,7 @@ def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
     assert isinstance(result["trend_report"], list)
     assert len(calls) == 2
     assert calls[0] == {"offset": 0, "limit": 100}
-    assert calls[1] == {"offset": 2, "limit": 2}
+    assert calls[1] == {"offset": 100, "limit": 100}
 
     with get_session() as session:
         offers = (
@@ -1208,7 +1209,7 @@ def test_refresh_token_uses_settings_store_even_if_env_present(monkeypatch):
         assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}
         return DummyResponse()
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.post", fake_post)
+    monkeypatch.setattr("magazyn.allegro_api.auth.requests.post", fake_post)
 
     try:
         result = api_refresh_token("refresh-token")
@@ -1252,7 +1253,7 @@ def test_refresh_token_uses_settings_store_when_env_missing(monkeypatch):
         assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}
         return DummyResponse()
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.post", fake_post)
+    monkeypatch.setattr("magazyn.allegro_api.auth.requests.post", fake_post)
 
     try:
         result = api_refresh_token("refresh-token")
@@ -1310,7 +1311,7 @@ def test_price_check_uses_selenium_listing(client, login, monkeypatch, allegro_t
             ["log"],
         )
 
-    monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
+    monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", fake_competitors)
 
     response = client.get("/allegro/price-check?format=json")
 

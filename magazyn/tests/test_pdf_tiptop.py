@@ -1,14 +1,12 @@
 from pathlib import Path
 import io
-from magazyn import services
-
-_parse_pdf = services._parse_pdf
+from magazyn.domain.invoice_import import _parse_pdf
 
 
 def test_parse_tiptop_invoice():
     pdf_path = Path("magazyn/samples/sample_invoice.pdf")
     with pdf_path.open("rb") as fh:
-        df = _parse_pdf(fh)
+        df, invoice_number, supplier_name = _parse_pdf(fh)
 
     assert len(df) == 10
     first = df.iloc[0]
@@ -45,7 +43,8 @@ def _run_fake_pdf(texts, monkeypatch):
     from magazyn.domain import invoice_import
 
     monkeypatch.setattr(invoice_import, "PdfReader", FakePdfReader)
-    return _parse_pdf(io.BytesIO(b"dummy"))
+    df, _invoice_number, _supplier_name = _parse_pdf(io.BytesIO(b"dummy"))
+    return df
 
 
 def test_parse_tiptop_invoice_extra_spaces(monkeypatch):

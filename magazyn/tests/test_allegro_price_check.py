@@ -75,7 +75,7 @@ class TestAllegroPriceCheckDebug:
                 ["Testowy listing"],
             )
 
-        monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
+        monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", fake_competitors)
 
         response = client.get("/allegro/price-check?format=json")
         assert response.status_code == 200
@@ -125,7 +125,7 @@ class TestAllegroPriceCheckDebug:
                 ["Start Selenium", "Zamykanie przeglądarki Selenium"],
             )
 
-        monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", failing_competitors)
+        monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", failing_competitors)
 
         response = client.get("/allegro/price-check?format=json")
         assert response.status_code == 200
@@ -181,7 +181,7 @@ class TestAllegroPriceCheckDebug:
                 ["Stream log"],
             )
 
-        monkeypatch.setattr("magazyn.allegro.fetch_competitors_for_offer", fake_competitors)
+        monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", fake_competitors)
 
         response = client.get("/allegro/price-check/stream")
         assert response.status_code == 200

@@ -37,8 +37,8 @@ def test_fetch_offers_retries_on_rate_limit(monkeypatch):
         calls.append(kwargs)
         return responses[len(calls) - 1]
 
-    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
-    monkeypatch.setattr("magazyn.allegro_api.time.sleep", lambda value: sleeps.append(value))
+    monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.core.time.sleep", lambda value: sleeps.append(value))
 
     error_metric = ALLEGRO_API_ERRORS_TOTAL.labels(endpoint="offers", status="429")
     retry_metric = ALLEGRO_API_RETRIES_TOTAL.labels(endpoint="offers")
@@ -86,8 +86,8 @@ def test_fetch_product_listing_retries_and_preserves_headers(
         return responses[len(calls) - 1]
 
     allegro_tokens("token")
-    monkeypatch.setattr("magazyn.allegro_api.requests.get", fake_get)
-    monkeypatch.setattr("magazyn.allegro_api.time.sleep", lambda value: sleeps.append(value))
+    monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
+    monkeypatch.setattr("magazyn.allegro_api.core.time.sleep", lambda value: sleeps.append(value))
 
     retry_metric = ALLEGRO_API_RETRIES_TOTAL.labels(endpoint="listing")
     before_retry = retry_metric._value.get()

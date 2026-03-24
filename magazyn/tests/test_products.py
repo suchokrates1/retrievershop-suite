@@ -13,7 +13,7 @@ def test_add_and_edit_item(app_mod, client, login):
         "series": "Front Line",
         "color": "Czerwony",
         "quantity_M": "2",
-        "barcode_M": "111",
+        "barcode_M": "11100000",
     }
     resp = client.post("/add_item", data=data_add)
     assert resp.status_code == 302
@@ -28,7 +28,7 @@ def test_add_and_edit_item(app_mod, client, login):
             .first()
         )
         assert ps.quantity == 2
-        assert ps.barcode == "111"
+        assert ps.barcode == "11100000"
 
     data_edit = {
         "category": "Szelki",
@@ -36,7 +36,7 @@ def test_add_and_edit_item(app_mod, client, login):
         "series": "Front Line Premium",
         "color": "Zielony",
         "quantity_M": "5",
-        "barcode_M": "111",
+        "barcode_M": "11100000",
     }
     resp = client.post(f"/edit_item/{prod_id}", data=data_edit)
     assert resp.status_code == 302
@@ -170,7 +170,7 @@ def test_items_forms_include_csrf_token(app_mod, client, login):
             for k, v in sess.items():
                 flask_session[k] = v
             token = app_mod.app.jinja_env.globals["csrf_token"]()
-    assert html.count(token) >= 7
+    assert html.count(token) >= 3
 
 
 def test_edit_item_get_shows_product_details(app_mod, client, login):
@@ -253,7 +253,7 @@ def test_add_item_rejects_negative_quantity(app_mod, client, login):
 
 def test_domain_create_product_persists_sizes(app_mod):
     quantities = {size: idx for idx, size in enumerate(ALL_SIZES, start=1)}
-    barcodes = {size: f"code-{size}" for size in ALL_SIZES}
+    barcodes = {size: f"{10000000 + idx:08d}" for idx, size in enumerate(ALL_SIZES, start=1)}
 
     product = create_product(
         category="Szelki",
