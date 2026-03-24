@@ -1,0 +1,22 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Zamowienie dostarczone - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Twoje zamowienie zostalo dostarczone!</h2>
+<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
+    Zamowienie <strong>#{{ order_id }}</strong> zostalo pomyslnie dostarczone.
+    Dziekujemy za zakupy w Retriever Shop!
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#d1e7dd;border-radius:8px;margin-bottom:20px;">
+    <tr>
+        <td style="padding:20px;text-align:center;">
+            <p style="margin:0 0 4px;font-size:32px;">&#10004;</p>
+            <p style="margin:0;font-size:15px;font-weight:bold;color:#0f5132;">Przesylka dostarczona</p>
+        </td>
+    </tr>
+</table>
+
+<p style="margin:0;font-size:13px;color:#888;line-height:1.6;">
+    Jesli masz pytania dotyczace zamowienia, skontaktuj sie z nami przez wiadomosci na Allegro.
+</p>
+{% endblock %}

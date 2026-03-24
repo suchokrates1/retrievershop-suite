@@ -1,0 +1,42 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Faktura - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Faktura do zamowienia</h2>
+<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
+    Do zamowienia <strong>#{{ order_id }}</strong> wystawiona zostala faktura.
+    Znajdziesz ja w zalaczniku do tej wiadomosci.
+</p>
+
+{% if invoice_data %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;margin-bottom:20px;">
+    <tr>
+        <td style="padding:20px;">
+            <p style="margin:0 0 4px;font-size:13px;color:#888;">Nabywca:</p>
+            {% if invoice_data.company %}
+            <p style="margin:0 0 4px;font-size:14px;font-weight:bold;color:#333;">{{ invoice_data.company }}</p>
+            {% endif %}
+            {% if invoice_data.nip %}
+            <p style="margin:0 0 4px;font-size:13px;color:#555;">NIP: {{ invoice_data.nip }}</p>
+            {% endif %}
+            {% if invoice_data.name and invoice_data.name != invoice_data.company %}
+            <p style="margin:0 0 4px;font-size:13px;color:#555;">{{ invoice_data.name }}</p>
+            {% endif %}
+            <p style="margin:0;font-size:13px;color:#555;">
+                {{ invoice_data.address or '' }}, {{ invoice_data.postcode or '' }} {{ invoice_data.city or '' }}
+            </p>
+        </td>
+    </tr>
+</table>
+{% endif %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;border-collapse:collapse;">
+    <tr>
+        <td style="padding:8px 0;font-size:14px;color:#555;">Kwota:</td>
+        <td style="padding:8px 0;font-size:14px;font-weight:bold;color:#333;text-align:right;">{{ '%.2f'|format(order_total) }} zl</td>
+    </tr>
+</table>
+
+<p style="margin:0;font-size:13px;color:#888;">
+    Faktura w formacie PDF zostala dolaczona do tej wiadomosci.
+</p>
+{% endblock %}

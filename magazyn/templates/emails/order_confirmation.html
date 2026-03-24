@@ -1,0 +1,45 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Potwierdzenie zamowienia - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Dziekujemy za zamowienie!</h2>
+<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
+    Twoje zamowienie <strong>#{{ order_id }}</strong> zostalo przyjete do realizacji.
+    Poinformujemy Cie, gdy przesylka zostanie nadana.
+</p>
+
+{# Lista produktow #}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;border-collapse:collapse;">
+    <tr>
+        <td style="padding:8px 0;border-bottom:2px solid #dee2e6;font-size:13px;font-weight:bold;color:#333;">Produkt</td>
+        <td style="padding:8px 0;border-bottom:2px solid #dee2e6;font-size:13px;font-weight:bold;color:#333;text-align:center;">Ilosc</td>
+        <td style="padding:8px 0;border-bottom:2px solid #dee2e6;font-size:13px;font-weight:bold;color:#333;text-align:right;">Cena</td>
+    </tr>
+    {% for p in products %}
+    <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;">{{ p.name }}{% if p.attributes %}<br><span style="color:#999;font-size:12px;">{{ p.attributes }}</span>{% endif %}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;text-align:center;">{{ p.quantity }}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;text-align:right;">{{ '%.2f'|format(p.price * p.quantity) }} zl</td>
+    </tr>
+    {% endfor %}
+    <tr>
+        <td colspan="2" style="padding:8px 0;font-size:13px;color:#333;">Produkty</td>
+        <td style="padding:8px 0;font-size:13px;color:#333;text-align:right;">{{ '%.2f'|format(products_total) }} zl</td>
+    </tr>
+    {% if delivery_cost > 0 %}
+    <tr>
+        <td colspan="2" style="padding:4px 0;font-size:13px;color:#999;">Wysylka</td>
+        <td style="padding:4px 0;font-size:13px;color:#999;text-align:right;">{{ '%.2f'|format(delivery_cost) }} zl</td>
+    </tr>
+    {% endif %}
+    <tr>
+        <td colspan="2" style="padding:8px 0;font-size:15px;font-weight:bold;color:#1a1a2e;border-top:2px solid #dee2e6;">Razem</td>
+        <td style="padding:8px 0;font-size:15px;font-weight:bold;color:#1a1a2e;text-align:right;border-top:2px solid #dee2e6;">{{ '%.2f'|format(order_total) }} zl</td>
+    </tr>
+</table>
+
+{% if delivery_method %}
+<p style="margin:0;font-size:13px;color:#888;">
+    Metoda dostawy: <strong>{{ delivery_method }}</strong>
+</p>
+{% endif %}
+{% endblock %}

@@ -73,6 +73,8 @@ SETTINGS_GROUPS = {
     "SMTP_PORT": ("Powiadomienia", "bi-bell"),
     "SMTP_USERNAME": ("Powiadomienia", "bi-bell"),
     "SMTP_PASSWORD": ("Powiadomienia", "bi-bell"),
+    "EMAIL_FROM_NAME": ("Powiadomienia", "bi-bell"),
+    "APP_BASE_URL": ("Powiadomienia", "bi-bell"),
     "ENABLE_WEEKLY_REPORTS": ("Raporty", "bi-bar-chart"),
     "ENABLE_MONTHLY_REPORTS": ("Raporty", "bi-bar-chart"),
     "PACKAGING_COST": ("Sprzedaz", "bi-cash"),
