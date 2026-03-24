@@ -1,8 +1,8 @@
 """
-System oblugi zwrotow produktow.
+System obslugi zwrotow produktow.
 
 Ten modul odpowiada za:
-- Wykrywanie zamowien ze statusem Zwrot w BaseLinkerze
+- Wykrywanie zwrotow przez Allegro Customer Returns API
 - Tworzenie rekordow zwrotow w bazie
 - Wysylanie powiadomien Messenger o nowych zwrotach
 - Sledzenie paczek zwrotnych
@@ -24,9 +24,6 @@ from .notifications import send_messenger
 from . import allegro_api
 
 logger = logging.getLogger(__name__)
-
-# Status zwrotu w BaseLinker
-BASELINKER_RETURN_STATUS_ID = 91623
 
 # Statusy zwrotu
 RETURN_STATUS_PENDING = "pending"        # Zgloszony zwrot
@@ -140,184 +137,12 @@ def create_return_from_order(order: Order, tracking_number: str = None, allegro_
         return return_record
 
 
-def check_baselinker_order_returns() -> Dict[str, int]:
-    """
-    Sprawdz zwroty przez BaseLinker getOrderReturns API.
-    
-    To jest glowne zrodlo danych o zwrotach - BaseLinker synchronizuje
-    zwroty z Allegro automatycznie i udostepnia je przez to API.
-    
-    Returns:
-        Slownik z liczba: created, existing, updated, errors
-    """
-    stats = {"created": 0, "existing": 0, "updated": 0, "errors": 0}
-    
-    try:
-        api_url = "https://api.baselinker.com/connector.php"
-        headers = {"X-BLToken": settings.API_TOKEN}
-        
-        # Pobierz zwroty z ostatnich 30 dni
-        from datetime import datetime, timedelta
-        date_from = int((datetime.now() - timedelta(days=30)).timestamp())
-        
-        params = {
-            "method": "getOrderReturns",
-            "parameters": json.dumps({
-                "date_from": date_from,
-            })
-        }
-        
-        response = requests.post(api_url, headers=headers, data=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get("status") != "SUCCESS":
-            logger.error(f"Blad BaseLinker getOrderReturns: {data.get('error_message', 'Nieznany blad')}")
-            return stats
-        
-        returns_data = data.get("returns", [])
-        logger.info(f"Znaleziono {len(returns_data)} zwrotow w BaseLinker")
-        
-        with get_session() as db:
-            for return_data in returns_data:
-                bl_return_id = return_data.get("return_id")
-                order_id = str(return_data.get("order_id"))
-                
-                try:
-                    # Sprawdz czy zwrot juz istnieje
-                    existing = db.query(Return).filter(
-                        Return.order_id == order_id
-                    ).first()
-                    
-                    if existing:
-                        # Aktualizuj status jesli sie zmienil
-                        # ALE nie cofaj statusu delivered/completed na nizszy!
-                        fulfillment_status = return_data.get("fulfillment_status", 0)
-                        new_status = _map_baselinker_fulfillment_status(fulfillment_status)
-                        
-                        # Nie cofaj statusu delivered/completed
-                        status_order = [RETURN_STATUS_PENDING, RETURN_STATUS_IN_TRANSIT, 
-                                       RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]
-                        current_idx = status_order.index(existing.status) if existing.status in status_order else -1
-                        new_idx = status_order.index(new_status) if new_status in status_order else -1
-                        
-                        # Aktualizuj tylko jesli nowy status jest "wyzszy" lub to anulowanie
-                        if new_status == RETURN_STATUS_CANCELLED or (new_idx > current_idx and current_idx >= 0):
-                            old_status = existing.status
-                            existing.status = new_status
-                            
-                            # Aktualizuj numer sledzenia jesli pojawil sie nowy
-                            if return_data.get("delivery_package_nr") and not existing.return_tracking_number:
-                                existing.return_tracking_number = return_data.get("delivery_package_nr")
-                                existing.return_carrier = return_data.get("delivery_package_module")
-                            
-                            _add_return_status_log(
-                                db, existing.id, new_status,
-                                f"Aktualizacja z BaseLinker (fulfillment_status={fulfillment_status})"
-                            )
-                            stats["updated"] += 1
-                            logger.info(f"Zaktualizowano zwrot #{existing.id}: {old_status} -> {new_status}")
-                        else:
-                            # Tylko aktualizuj numer sledzenia jesli brakuje
-                            if return_data.get("delivery_package_nr") and not existing.return_tracking_number:
-                                existing.return_tracking_number = return_data.get("delivery_package_nr")
-                                existing.return_carrier = return_data.get("delivery_package_module")
-                            stats["existing"] += 1
-                        continue
-                    
-                    # Sprawdz czy zamowienie istnieje w bazie
-                    order = db.query(Order).filter(Order.order_id == order_id).first()
-                    if not order:
-                        logger.debug(f"Zamowienie {order_id} nie istnieje w bazie - pomijam zwrot")
-                        continue
-                    
-                    # Pobierz produkty
-                    items = []
-                    for product in return_data.get("products", []):
-                        items.append({
-                            "ean": product.get("ean"),
-                            "name": product.get("name"),
-                            "quantity": product.get("quantity", 1),
-                            "reason_id": product.get("return_reason_id"),
-                        })
-                    
-                    # Okresl status na podstawie fulfillment_status
-                    fulfillment_status = return_data.get("fulfillment_status", 0)
-                    initial_status = _map_baselinker_fulfillment_status(fulfillment_status)
-                    
-                    # Utworz rekord zwrotu
-                    return_record = Return(
-                        order_id=order_id,
-                        status=initial_status,
-                        customer_name=return_data.get("delivery_fullname") or order.customer_name,
-                        items_json=json.dumps(items, ensure_ascii=False),
-                        return_tracking_number=return_data.get("delivery_package_nr"),
-                        return_carrier=return_data.get("delivery_package_module"),
-                        allegro_return_id=return_data.get("external_order_id"),  # Allegro return ID
-                        notes=f"BaseLinker return_id: {bl_return_id}, ref: {return_data.get('reference_number')}"
-                    )
-                    db.add(return_record)
-                    db.flush()
-                    
-                    # Dodaj wpis do historii
-                    _add_return_status_log(
-                        db, return_record.id, initial_status,
-                        f"Wykryto zwrot w BaseLinker (return_id={bl_return_id}, ref={return_data.get('reference_number')})"
-                    )
-                    
-                    # Ustaw status zamowienia na 'zwrot'
-                    from .orders import add_order_status
-                    add_order_status(
-                        db, order_id, "zwrot",
-                        notes=f"Wykryto zwrot w BaseLinker (return_id={bl_return_id})"
-                    )
-                    
-                    stats["created"] += 1
-                    logger.info(f"Utworzono zwrot #{return_record.id} dla zamowienia {order_id}")
-                    
-                except Exception as e:
-                    logger.error(f"Blad przetwarzania zwrotu BL#{bl_return_id}: {e}")
-                    stats["errors"] += 1
-            
-            db.commit()
-        
-    except Exception as e:
-        logger.error(f"Blad sprawdzania BaseLinker getOrderReturns: {e}")
-        stats["errors"] += 1
-    
-    return stats
-
-
-def _map_baselinker_fulfillment_status(fulfillment_status: int) -> str:
-    """
-    Mapuj BaseLinker fulfillment_status na wewnetrzny status zwrotu.
-    
-    BaseLinker fulfillment_status:
-    0 - active (nowy zwrot, paczka jeszcze nie nadana)
-    5 - accepted (zaakceptowany zwrot, paczka moze byc w drodze)
-    1 - done (zakonczony - refund wyslany)
-    2 - canceled (anulowany)
-    
-    UWAGA: fulfillment_status=5 (accepted) NIE oznacza ze paczka fizycznie dotarla!
-    To tylko oznacza ze sprzedawca zaakceptowal zwrot.
-    Status delivered ustawiamy tylko na podstawie trackingu paczki.
-    """
-    status_map = {
-        0: RETURN_STATUS_PENDING,     # active - nowy zwrot
-        5: RETURN_STATUS_IN_TRANSIT,  # accepted - w drodze (NIE delivered!)
-        1: RETURN_STATUS_COMPLETED,   # done - zakonczony
-        2: RETURN_STATUS_CANCELLED,   # canceled
-    }
-    return status_map.get(fulfillment_status, RETURN_STATUS_PENDING)
-
-
 def check_allegro_customer_returns() -> Dict[str, int]:
     """
     Sprawdz zwroty bezposrednio z Allegro Customer Returns API.
     
-    Uzupelniajace zrodlo danych - BaseLinker nie zawsze synchronizuje
-    zwroty z Allegro. Ta funkcja odpytuje Allegro bezposrednio
-    i tworzy brakujace rekordy Return + ustawia status 'zwrot' na zamowieniu.
+    Odpytuje Allegro Customer Returns API i synchronizuje rekordy
+    zwrotow do lokalnej bazy.
     
     Returns:
         Slownik z liczba: created, existing, updated, errors
@@ -467,101 +292,6 @@ def _map_allegro_return_status(allegro_status: str) -> str:
         "REJECTED": RETURN_STATUS_CANCELLED,
     }
     return status_map.get(allegro_status, RETURN_STATUS_PENDING)
-
-
-def check_baselinker_returns() -> Dict[str, int]:
-    """
-    Sprawdz zamowienia ze statusem Zwrot w BaseLinker i utworz rekordy zwrotow.
-    
-    Returns:
-        Slownik z liczba: created, existing, errors
-    """
-    stats = {"created": 0, "existing": 0, "errors": 0}
-    
-    try:
-        api_url = "https://api.baselinker.com/connector.php"
-        headers = {"X-BLToken": settings.API_TOKEN}
-        
-        params = {
-            "method": "getOrders",
-            "parameters": json.dumps({
-                "status_id": BASELINKER_RETURN_STATUS_ID,
-                "get_unconfirmed_orders": False,
-            })
-        }
-        
-        response = requests.post(api_url, headers=headers, data=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get("status") != "SUCCESS":
-            logger.error(f"Blad BaseLinker API: {data.get('error_message', 'Nieznany blad')}")
-            return stats
-        
-        orders_data = data.get("orders", [])
-        logger.info(f"Znaleziono {len(orders_data)} zamowien ze statusem Zwrot")
-        
-        with get_session() as db:
-            for order_data in orders_data:
-                order_id = str(order_data.get("order_id"))
-                
-                try:
-                    # Sprawdz czy zwrot juz istnieje
-                    existing = db.query(Return).filter(Return.order_id == order_id).first()
-                    if existing:
-                        stats["existing"] += 1
-                        continue
-                    
-                    # Pobierz zamowienie z naszej bazy
-                    order = db.query(Order).filter(Order.order_id == order_id).first()
-                    if not order:
-                        logger.warning(f"Zamowienie {order_id} nie istnieje w bazie - pomijam")
-                        stats["errors"] += 1
-                        continue
-                    
-                    # Pobierz produkty
-                    items = []
-                    for product in order_data.get("products", []):
-                        items.append({
-                            "ean": product.get("ean"),
-                            "name": product.get("name"),
-                            "quantity": product.get("quantity", 1),
-                        })
-                    
-                    # Utworz rekord zwrotu
-                    return_record = Return(
-                        order_id=order_id,
-                        status=RETURN_STATUS_PENDING,
-                        customer_name=order_data.get("delivery_fullname") or order.customer_name,
-                        items_json=json.dumps(items, ensure_ascii=False),
-                        return_tracking_number=order_data.get("delivery_package_nr"),
-                        return_carrier=order_data.get("delivery_package_module"),
-                    )
-                    db.add(return_record)
-                    db.flush()
-                    
-                    # Dodaj wpis do historii
-                    _add_return_status_log(
-                        db, 
-                        return_record.id, 
-                        RETURN_STATUS_PENDING,
-                        f"Wykryto zwrot w BaseLinker (status_id={BASELINKER_RETURN_STATUS_ID})"
-                    )
-                    
-                    stats["created"] += 1
-                    logger.info(f"Utworzono zwrot #{return_record.id} dla zamowienia {order_id}")
-                    
-                except Exception as e:
-                    logger.error(f"Blad przetwarzania zamowienia {order_id}: {e}")
-                    stats["errors"] += 1
-            
-            db.commit()
-        
-    except Exception as e:
-        logger.error(f"Blad sprawdzania zwrotow w BaseLinker: {e}")
-        stats["errors"] += 1
-    
-    return stats
 
 
 def send_pending_return_notifications() -> Dict[str, int]:
@@ -874,11 +604,10 @@ def sync_returns() -> Dict[str, Any]:
     Glowna funkcja synchronizacji zwrotow.
     
     Wykonuje:
-    1. Sprawdzenie BaseLinker getOrderReturns API
-    2. Sprawdzenie Allegro Customer Returns API (uzupelniajace zrodlo)
-    3. Wyslanie powiadomien Messenger
-    4. Sprawdzenie statusow paczek zwrotnych (backup tracking)
-    5. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
+    1. Sprawdzenie Allegro Customer Returns API
+    2. Wyslanie powiadomien Messenger
+    3. Sprawdzenie statusow paczek zwrotnych (tracking)
+    4. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
     
     Returns:
         Slownik ze statystykami wszystkich operacji
@@ -886,7 +615,6 @@ def sync_returns() -> Dict[str, Any]:
     logger.info("Rozpoczynam synchronizacje zwrotow...")
     
     results = {
-        "baselinker_returns": check_baselinker_order_returns(),
         "allegro_returns": check_allegro_customer_returns(),
         "notifications": send_pending_return_notifications(),
         "tracking_update": check_and_update_return_statuses(),

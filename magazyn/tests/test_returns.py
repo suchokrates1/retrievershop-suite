@@ -8,7 +8,7 @@ from datetime import datetime
 # Importy beda dzialac w kontekscie testow
 # from magazyn.returns import (
 #     create_return_from_order,
-#     check_baselinker_returns,
+#     check_allegro_customer_returns,
 #     restore_stock_for_return,
 #     sync_returns,
 #     RETURN_STATUS_PENDING,
@@ -37,11 +37,21 @@ class TestReturnsSystem:
         assert RETURN_STATUS_COMPLETED == "completed"
         assert RETURN_STATUS_CANCELLED == "cancelled"
     
-    def test_baselinker_return_status_id(self):
-        """Test ID statusu zwrotu w BaseLinker."""
-        from magazyn.returns import BASELINKER_RETURN_STATUS_ID
+    def test_return_status_constants_complete(self):
+        """Test kompletnosci stalych statusow zwrotu."""
+        from magazyn.returns import (
+            RETURN_STATUS_PENDING,
+            RETURN_STATUS_IN_TRANSIT,
+            RETURN_STATUS_DELIVERED,
+            RETURN_STATUS_COMPLETED,
+            RETURN_STATUS_CANCELLED,
+        )
         
-        assert BASELINKER_RETURN_STATUS_ID == 91623
+        # Sprawdz ze statusy sa unikalne
+        statuses = [RETURN_STATUS_PENDING, RETURN_STATUS_IN_TRANSIT,
+                    RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED,
+                    RETURN_STATUS_CANCELLED]
+        assert len(statuses) == len(set(statuses))
     
     def test_carrier_mapping(self):
         """Test mapowania przewoznikow na Allegro API."""
@@ -168,11 +178,11 @@ class TestReturnIntegration:
         # Funkcja powinna byc callable
         assert callable(sync_returns)
     
-    def test_check_baselinker_returns_structure(self):
-        """Test struktury check_baselinker_returns."""
-        from magazyn.returns import check_baselinker_returns
+    def test_check_allegro_customer_returns_structure(self):
+        """Test struktury check_allegro_customer_returns."""
+        from magazyn.returns import check_allegro_customer_returns
         
-        assert callable(check_baselinker_returns)
+        assert callable(check_allegro_customer_returns)
     
     def test_restore_stock_for_return_structure(self):
         """Test struktury restore_stock_for_return."""

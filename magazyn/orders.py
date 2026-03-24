@@ -1,4 +1,4 @@
-"""Orders blueprint - view and manage BaseLinker orders."""
+"""Orders blueprint - zarzadzanie zamowieniami."""
 import json
 import re
 import secrets
@@ -171,7 +171,7 @@ bp = Blueprint("orders", __name__)
 # Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → w_punkcie → gotowe_do_odbioru → dostarczono → zakończono
 VALID_STATUSES = [
     # Etap wewnętrzny (magazyn)
-    "pobrano",              # Pobrano z BaseLinker
+    "pobrano",              # Pobrano zamowienie
     "niewydrukowano",       # Niewydrukowano (legacy)
     "wydrukowano",          # Wydrukowano etykietę
     "spakowano",            # Spakowano
@@ -214,43 +214,7 @@ STATUS_HIERARCHY = {
     "anulowano": 999,
 }
 
-# Status IDs - ALL statuses for complete archive
-ALL_STATUS_IDS = [
-    91615,  # Nowe zamówienie
-    91616,  # Oczekujące
-    91617,  # W realizacji
-    91618,  # Gotowe do wysyłki
-    91619,  # Wysłane
-    91620,  # W transporcie
-    91621,  # Zakończone
-    91622,  # Anulowane
-    91623,  # Zwrot
-]
-
-# Active status IDs - only non-completed orders for regular sync
-ACTIVE_STATUS_IDS = [
-    91615,  # Nowe zamówienie
-    91616,  # Oczekujące
-    91617,  # W realizacji
-    91618,  # Gotowe do wysyłki
-    91619,  # Wysłane
-    91620,  # W transporcie
-    # Excluded: 91621 (Zakończone), 91622 (Anulowane), 91623 (Zwrot)
-]
-
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
-# Map BaseLinker status_id to our internal status
-BASELINKER_STATUS_MAP = {
-    91615: "pobrano",           # Nowe zamówienie
-    91616: "niewydrukowano",    # Oczekujące
-    91617: "wydrukowano",       # W realizacji
-    91618: "wydrukowano",       # Gotowe do wysyłki - NIE ustawiamy "spakowano" automatycznie, tylko przez skanowanie
-    91619: "w_drodze",          # Wysłane
-    91620: "w_drodze",          # W transporcie
-    91621: "dostarczono",       # Zakończone
-    91622: "anulowano",         # Anulowane
-    91623: "zwrot",             # Zwrot
-}
 
 
 def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
@@ -900,11 +864,11 @@ def download_label(order_id: str):
 
 def sync_order_from_data(db, order_data: dict) -> Order:
     """
-    Create or update Order from BaseLinker data (last_order_data format).
-    Called from print_agent when processing orders.
+    Tworzy lub aktualizuje zamowienie na podstawie slownika danych.
+    Uzywane przy synchronizacji z Allegro API oraz recznym dodawaniu zamowien.
     
     Deduplikacja: jesli zamowienie o danym external_order_id juz istnieje
-    pod innym order_id (np. z Allegro API), nie tworzymy duplikatu.
+    pod innym order_id, nie tworzymy duplikatu.
     """
     order_id = str(order_data.get("order_id"))
     external_order_id = order_data.get("external_order_id")
@@ -986,10 +950,8 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     order.products_json = json.dumps(products_list) if products_list else None
 
     # Korekcja payment_done dla zamowien za pobraniem (COD)
-    # BaseLinker/Allegro raportuja payment_done=0 dla COD, bo gotowka nie
-    # przechodzi przez system platnosci online. Jesli zamowienie jest doreczone
-    # (status 91621), klient zaplacil gotowka przy odbiorze - oblicz kwote
-    # z sumy produktow + koszt dostawy.
+    # Allegro raportuje payment_done=0 dla COD, bo gotowka nie przechodzi
+    # przez system platnosci online.
     if order.payment_method_cod and float(order.payment_done or 0) == 0:
         if order.order_status_id and int(order.order_status_id) == 91621:
             total_products = sum(
@@ -1054,29 +1016,8 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         )
         db.add(order_product)
     
-    # Check and update status based on BaseLinker status_id
-    # Pomijamy dodawanie statusu jesli nie ma BL status_id (zamowienia z Allegro API
-    # maja status ustawiany osobno w sync_allegro_orders)
-    bl_status_id = order_data.get("order_status_id")
-    if bl_status_id is not None:
-        internal_status = BASELINKER_STATUS_MAP.get(bl_status_id, "pobrano")
-        
-        # Get current status from log
-        current_status_log = db.query(OrderStatusLog).filter(
-            OrderStatusLog.order_id == order_id
-        ).order_by(desc(OrderStatusLog.timestamp)).first()
-        
-        current_status = current_status_log.status if current_status_log else None
-        
-        # Add or update status if changed or new order
-        if is_new_order or current_status != internal_status:
-            status_note = {
-                "w_drodze": "Zsynchronizowano ze statusu Wysłane/W transporcie",
-                "dostarczono": "Zsynchronizowano ze statusu Zakończone",
-            }.get(internal_status, f"Zaktualizowano z BaseLinker (status_id: {bl_status_id})")
-            add_order_status(db, order_id, internal_status, notes=status_note)
-    elif is_new_order:
-        # Nowe zamowienie bez BL status_id - dodaj domyslny status "pobrano"
+    # Dodaj domyslny status dla nowego zamowienia
+    if is_new_order:
         add_order_status(db, order_id, "pobrano", notes="Nowe zamowienie")
     
     return order
@@ -1198,161 +1139,112 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
     return log
 
 
-def _sync_orders_from_baselinker(status_ids: list[int], days: int = None) -> int:
-    """
-    Sync orders from BaseLinker for given status IDs.
-    If days is None, fetches ALL orders from archives (no date limit).
-    Obsługuje paginację - BaseLinker zwraca max 100 zamowien na request.
-    Returns number of orders synced.
-    """
-    from .config import settings
-    import requests
-    
-    synced = 0
-    
-    api_url = "https://api.baselinker.com/connector.php"
-    headers = {"X-BLToken": settings.API_TOKEN}
-    
-    for status_id in status_ids:
-        try:
-            page_count = 0
-            id_from = 0  # Paginacja: pobieramy zamowienia z ID > id_from
-            
-            while True:
-                page_count += 1
-                # Build parameters
-                params_dict = {
-                    "status_id": status_id,
-                    "include_products": 1,
-                }
-                
-                # Paginacja za pomoca id_from
-                if id_from > 0:
-                    params_dict["id_from"] = id_from
-                
-                # Only add date_from if days is specified
-                if days is not None:
-                    date_from = int(time.time()) - (days * 24 * 60 * 60)
-                    params_dict["date_from"] = date_from
-                
-                params = {
-                    "method": "getOrders",
-                    "parameters": json.dumps(params_dict)
-                }
-                response = requests.post(api_url, headers=headers, data=params, timeout=60)
-                response.raise_for_status()
-                data = response.json()
-                
-                if data.get("status") != "SUCCESS":
-                    current_app.logger.warning(
-                        "BaseLinker API error for status %s: %s",
-                        status_id, data.get("error_message", "Unknown error")
-                    )
-                    break
-                    
-                orders = data.get("orders", [])
-                if not orders:
-                    break
-                
-                current_app.logger.info(
-                    "Status %s strona %d: pobrano %d zamowien (id_from=%d)",
-                    status_id, page_count, len(orders), id_from
-                )
-                
-                with get_session() as db:
-                    for order in orders:
-                        order_data = {
-                            "order_id": order.get("order_id"),
-                            "external_order_id": order.get("external_order_id"),
-                            "shop_order_id": order.get("shop_order_id"),
-                            "customer": order.get("delivery_fullname"),
-                            "email": order.get("email"),
-                            "phone": order.get("phone"),
-                            "user_login": order.get("user_login"),
-                            "platform": order.get("order_source"),
-                            "order_source_id": order.get("order_source_id"),
-                            "order_status_id": order.get("order_status_id"),
-                            "confirmed": order.get("confirmed", False),
-                            "date_add": order.get("date_add"),
-                            "date_confirmed": order.get("date_confirmed"),
-                            "date_in_status": order.get("date_in_status"),
-                            "shipping": order.get("delivery_method"),
-                            "delivery_method_id": order.get("delivery_method_id"),
-                            "delivery_price": order.get("delivery_price"),
-                            "delivery_fullname": order.get("delivery_fullname"),
-                            "delivery_company": order.get("delivery_company"),
-                            "delivery_address": order.get("delivery_address"),
-                            "delivery_city": order.get("delivery_city"),
-                            "delivery_postcode": order.get("delivery_postcode"),
-                            "delivery_country": order.get("delivery_country"),
-                            "delivery_country_code": order.get("delivery_country_code"),
-                            "delivery_point_id": order.get("delivery_point_id"),
-                            "delivery_point_name": order.get("delivery_point_name"),
-                            "delivery_point_address": order.get("delivery_point_address"),
-                            "delivery_point_postcode": order.get("delivery_point_postcode"),
-                            "delivery_point_city": order.get("delivery_point_city"),
-                            "invoice_fullname": order.get("invoice_fullname"),
-                            "invoice_company": order.get("invoice_company"),
-                            "invoice_nip": order.get("invoice_nip"),
-                            "invoice_address": order.get("invoice_address"),
-                            "invoice_city": order.get("invoice_city"),
-                            "invoice_postcode": order.get("invoice_postcode"),
-                            "invoice_country": order.get("invoice_country"),
-                            "want_invoice": order.get("want_invoice"),
-                            "currency": order.get("currency", "PLN"),
-                            "payment_method": order.get("payment_method"),
-                            "payment_method_cod": order.get("payment_method_cod"),
-                            "payment_done": order.get("payment_done"),
-                            "user_comments": order.get("user_comments"),
-                            "admin_comments": order.get("admin_comments"),
-                            "delivery_package_module": order.get("delivery_package_module"),
-                            "delivery_package_nr": order.get("delivery_package_nr"),
-                            "products": order.get("products", []),
-                        }
-                        sync_order_from_data(db, order_data)
-                        synced += 1
-                    db.commit()
-                
-                # Sprawdz czy sa kolejne strony (BaseLinker zwraca max 100)
-                if len(orders) < 100:
-                    break  # Ostatnia strona
-                
-                # Ustaw id_from na ostatnie order_id aby pobrac nastepna strone
-                id_from = orders[-1].get("order_id", 0)
-                
-                # Zabezpieczenie przed nieskonczona petla
-                if page_count > 200:
-                    current_app.logger.warning(
-                        "Status %s: przerwano po %d stronach (limit bezpieczenstwa)",
-                        status_id, page_count
-                    )
-                    break
-                
-        except Exception as exc:
-            current_app.logger.error(
-                "Error syncing orders from status %s: %s", status_id, exc
-            )
-    
-    return synced
+
+@bp.route("/orders/add", methods=["GET", "POST"])
+@login_required
+def add_order():
+    """Dodaj zamowienie reczne (OLX, sklep, inne platformy)."""
+    if request.method == "GET":
+        return render_template("add_order.html")
+
+    # POST - tworzenie zamowienia
+    f = request.form
+    order_id = f"manual_{int(time.time())}_{secrets.token_hex(4)}"
+    now_ts = int(time.time())
+
+    # Zbierz produkty z formularza
+    names = request.form.getlist("prod_name[]")
+    eans = request.form.getlist("prod_ean[]")
+    qtys = request.form.getlist("prod_qty[]")
+    prices = request.form.getlist("prod_price[]")
+    auctions = request.form.getlist("prod_auction[]")
+
+    products = []
+    for i, name in enumerate(names):
+        if not name.strip():
+            continue
+        products.append({
+            "name": name.strip(),
+            "ean": eans[i].strip() if i < len(eans) else "",
+            "quantity": int(qtys[i]) if i < len(qtys) and qtys[i] else 1,
+            "price_brutto": float(prices[i]) if i < len(prices) and prices[i] else 0,
+            "auction_id": auctions[i].strip() if i < len(auctions) else "",
+        })
+
+    if not products:
+        flash("Dodaj co najmniej jeden produkt.", "danger")
+        return render_template("add_order.html")
+
+    order_data = {
+        "order_id": order_id,
+        "external_order_id": f.get("external_order_id", "").strip() or None,
+        "platform": f.get("platform", "olx"),
+        "customer": f.get("customer_name", "").strip(),
+        "delivery_fullname": f.get("delivery_fullname", "").strip() or f.get("customer_name", "").strip(),
+        "email": f.get("email", "").strip() or None,
+        "phone": f.get("phone", "").strip() or None,
+        "delivery_company": f.get("delivery_company", "").strip() or None,
+        "delivery_address": f.get("delivery_address", "").strip(),
+        "delivery_postcode": f.get("delivery_postcode", "").strip() or None,
+        "delivery_city": f.get("delivery_city", "").strip(),
+        "delivery_country": "Polska",
+        "delivery_country_code": "PL",
+        "delivery_method": f.get("delivery_method", ""),
+        "delivery_price": float(f.get("delivery_price") or 0),
+        "delivery_package_nr": f.get("delivery_package_nr", "").strip() or None,
+        "delivery_point_id": f.get("delivery_point_id", "").strip() or None,
+        "delivery_point_address": f.get("delivery_point_address", "").strip() or None,
+        "delivery_point_city": f.get("delivery_point_city", "").strip() or None,
+        "payment_method": f.get("payment_method", "przelew"),
+        "payment_method_cod": "1" if f.get("payment_method") == "za_pobraniem" else "0",
+        "payment_done": float(f.get("payment_done") or 0),
+        "want_invoice": "1" if f.get("want_invoice") else "0",
+        "invoice_fullname": f.get("invoice_fullname", "").strip() or None,
+        "invoice_company": f.get("invoice_company", "").strip() or None,
+        "invoice_nip": f.get("invoice_nip", "").strip() or None,
+        "invoice_address": f.get("invoice_address", "").strip() or None,
+        "invoice_postcode": f.get("invoice_postcode", "").strip() or None,
+        "invoice_city": f.get("invoice_city", "").strip() or None,
+        "invoice_country": "Polska",
+        "user_comments": f.get("user_comments", "").strip() or None,
+        "admin_comments": f.get("admin_comments", "").strip() or None,
+        "currency": "PLN",
+        "confirmed": True,
+        "date_add": now_ts,
+        "date_confirmed": now_ts,
+        "products": products,
+    }
+
+    with get_session() as db:
+        order = sync_order_from_data(db, order_data)
+        add_order_status(db, order.order_id, "pobrano",
+                         notes=f"Zamowienie reczne ({order_data['platform']})")
+        db.commit()
+        flash(f"Zamowienie {order.order_id} zostalo utworzone.", "success")
+        return redirect(url_for("orders.order_detail", order_id=order.order_id))
 
 
 @bp.route("/orders/sync-all", methods=["POST"])
 @login_required
 def sync_all_orders():
-    """Reczne uruchomienie pelnego syncu zamowien z BaseLinker (cala historia)."""
+    """Reczne uruchomienie syncu zamowien z Allegro Events API."""
     try:
-        days_param = request.form.get("days")
-        if days_param:
-            days = int(days_param)
-            current_app.logger.info("Reczny sync zamowien: ostatnie %d dni", days)
-        else:
-            days = None
-            current_app.logger.info("Reczny sync zamowien: PELNY ARCHIWUM (bez limitu dat)")
+        from .order_sync_scheduler import _sync_from_allegro_events
+        from flask import current_app as app
+
+        current_app.logger.info("Reczny sync zamowien z Allegro Events API")
+        ev_stats = _sync_from_allegro_events(app._get_current_object())
         
-        synced = _sync_orders_from_baselinker(ALL_STATUS_IDS, days=days)
-        
-        current_app.logger.info("Reczny sync zamowien zakonczony: %d zamowien zsynchronizowanych", synced)
-        flash(f"Zsynchronizowano {synced} zamowien z BaseLinker", "success")
+        synced = ev_stats.get("orders_synced", 0)
+        cancelled = ev_stats.get("orders_cancelled", 0)
+        current_app.logger.info(
+            "Reczny sync zakonczony: %d zsynchronizowanych, %d anulowanych",
+            synced, cancelled,
+        )
+        flash(
+            f"Zsynchronizowano {synced} zamowien z Allegro (anulowane: {cancelled})",
+            "success",
+        )
     except Exception as exc:
         current_app.logger.error("Blad recznego syncu zamowien: %s", exc)
         flash(f"Blad synchronizacji: {exc}", "error")
