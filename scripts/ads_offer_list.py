@@ -1,0 +1,59 @@
+"""Skrypt generujacy liste ofert do reklamowania z rekomendowanymi stawkami CPC."""
+import sqlite3
+
+DB_PATH = "/app/data/database.db"
+
+conn = sqlite3.connect(DB_PATH)
+c = conn.cursor()
+
+# Aktywne oferty z sprzedaza w lutym 2026
+c.execute("""
+    SELECT ao.offer_id, ao.title, ao.price,
+           COUNT(DISTINCT op.order_id) as zamowienia,
+           COALESCE(SUM(op.quantity), 0) as sztuki,
+           COALESCE(SUM(op.quantity * op.price_brutto), 0) as przychod
+    FROM allegro_offers ao
+    LEFT JOIN order_products op ON ao.offer_id = op.auction_id
+    LEFT JOIN orders o ON op.order_id = o.order_id AND o.created_at >= '2026-02-01'
+    WHERE ao.publication_status = 'ACTIVE'
+    GROUP BY ao.offer_id
+    ORDER BY przychod DESC
+""")
+
+rows = c.fetchall()
+
+# Wszystkie oferty z przychodem
+print("=== OFERTY Z SPRZEDAZA W LUTYM 2026 ===")
+print("offer_id|tytul|cena|zamowienia|sztuki|przychod")
+for r in rows:
+    if r[3] > 0:  # ma zamowienia
+        title = (r[1] or "?")[:90]
+        print("{}|{}|{}|{}|{}|{}".format(r[0], title, r[2], r[3], r[4], r[5]))
+
+print("\n=== WSZYSTKIE AKTYWNE OFERTY (bez sprzedazy tez) ===")
+print("offer_id|tytul|cena|zamowienia")
+for r in rows:
+    title = (r[1] or "?")[:90]
+    print("{}|{}|{}|{}".format(r[0], title, r[2], r[3]))
+
+# Produkty pogrupowane po nazwie bazowej
+c.execute("""
+    SELECT p.name, COUNT(ao.id) as oferty, 
+           SUM(CASE WHEN o.created_at >= '2026-02-01' THEN op.quantity ELSE 0 END) as sprzedaz_feb,
+           SUM(CASE WHEN o.created_at >= '2026-02-01' THEN op.quantity * op.price_brutto ELSE 0 END) as przychod_feb
+    FROM products p
+    JOIN product_sizes ps ON ps.product_id = p.id
+    JOIN allegro_offers ao ON ao.product_size_id = ps.id
+    LEFT JOIN order_products op ON ao.offer_id = op.auction_id
+    LEFT JOIN orders o ON op.order_id = o.order_id
+    WHERE ao.publication_status = 'ACTIVE'
+    GROUP BY p.name
+    ORDER BY przychod_feb DESC
+""")
+
+print("\n=== PRODUKTY POGRUPOWANE ===")
+print("produkt|oferty|sprzedaz_feb|przychod_feb")
+for r in c.fetchall():
+    print("{}|{}|{}|{}".format(r[0], r[1], r[2], r[3]))
+
+conn.close()
