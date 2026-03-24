@@ -593,6 +593,43 @@ def order_detail(order_id: str):
             order.delivery_package_nr, 
             order.delivery_method
         )
+
+        # Komunikacja z klientem - log emaili
+        import json as _json
+        emails_sent = {}
+        if order.emails_sent:
+            try:
+                emails_sent = _json.loads(order.emails_sent)
+            except (ValueError, TypeError):
+                pass
+
+        email_types_map = {
+            "confirmation": "Potwierdzenie zamowienia",
+            "shipment": "Nadanie przesylki",
+            "invoice": "Faktura",
+            "delivery": "Potwierdzenie dostawy",
+            "correction": "Korekta faktury",
+        }
+        email_log = [
+            {"type": k, "label": email_types_map.get(k, k), "sent": True}
+            for k in email_types_map
+            if emails_sent.get(k)
+        ]
+        context["email_log"] = email_log
+        context["emails_sent"] = emails_sent
+
+        # Faktura wFirma
+        context["wfirma_invoice_id"] = order.wfirma_invoice_id
+        context["wfirma_invoice_number"] = order.wfirma_invoice_number
+
+        # Link do strony zamowienia klienta
+        customer_page_url = ""
+        if order.customer_token:
+            base = getattr(settings, "APP_BASE_URL", "") or ""
+            base = base.rstrip("/")
+            if base:
+                customer_page_url = f"{base}/zamowienie/{order.customer_token}"
+        context["customer_page_url"] = customer_page_url
         
         rendered = render_template("order_detail.html", **context)
         
@@ -601,6 +638,34 @@ def order_detail(order_id: str):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         return response
+
+
+@bp.route("/order/<order_id>/invoice-pdf")
+@login_required
+def download_invoice_pdf(order_id: str):
+    """Pobierz PDF faktury z wFirma."""
+    with get_session() as db:
+        order = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order or not order.wfirma_invoice_id:
+            abort(404)
+
+        try:
+            from .wfirma_api import WFirmaClient
+            from .wfirma_api import download_invoice_pdf as wfirma_download
+            client = WFirmaClient.from_settings()
+            pdf_data = wfirma_download(client, order.wfirma_invoice_id)
+        except Exception as exc:
+            logger.error("Blad pobierania PDF faktury %s: %s", order.wfirma_invoice_number, exc)
+            flash("Blad pobierania PDF faktury", "error")
+            return redirect(url_for(".order_detail", order_id=order_id))
+
+        safe_nr = (order.wfirma_invoice_number or "faktura").replace("/", "_").replace("\\", "_")
+        from flask import Response
+        return Response(
+            pdf_data,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"inline; filename={safe_nr}.pdf"},
+        )
 
 
 @bp.route("/order/<order_id>/update_status", methods=["POST"])
