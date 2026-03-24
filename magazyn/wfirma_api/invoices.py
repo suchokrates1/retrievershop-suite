@@ -2,9 +2,10 @@
 Tworzenie faktur VAT w wFirma i pobieranie PDF.
 
 Endpointy:
-- POST /invoices/add - tworzenie faktury
+- POST /invoices/add - tworzenie faktury (w tym korekt)
 - GET /invoices/download/{id} - pobieranie PDF
 - GET /invoices/find - wyszukiwanie faktur
+- GET /invoices/get/{id} - pobranie pelnych danych faktury
 """
 import logging
 from datetime import date
@@ -209,3 +210,148 @@ def find_invoice(client: WFirmaClient, invoice_number: str) -> Optional[dict]:
     # Pierwszy wynik (klucz "0")
     first_key = next(k for k in sorted(invoices) if k != "parameters")
     return invoices[first_key].get("invoice")
+
+
+def get_invoice(client: WFirmaClient, invoice_id: int) -> dict:
+    """
+    Pobierz pelne dane faktury (z pozycjami).
+
+    Parameters
+    ----------
+    client : WFirmaClient
+        Klient API.
+    invoice_id : int
+        ID faktury w wFirma.
+
+    Returns
+    -------
+    dict
+        Dane faktury wraz z invoicecontents.
+    """
+    result = client.request(f"invoices/get/{invoice_id}")
+    invoices = result.get("invoices", {})
+
+    first_key = next((k for k in sorted(invoices) if k != "parameters"), None)
+    if first_key is None:
+        raise WFirmaError(f"Nie znaleziono faktury id={invoice_id}")
+
+    return invoices[first_key].get("invoice", {})
+
+
+def create_correction_invoice(
+    client: WFirmaClient,
+    *,
+    original_invoice_id: int,
+    corrected_items: Optional[list[dict]] = None,
+    description: str = "",
+    payment_method: str = "transfer",
+) -> dict:
+    """
+    Wystaw korekte do faktury/rachunku w wFirma.
+
+    Jesli corrected_items jest None, tworzy korekte zerujaca
+    (wszystkie pozycje na count=0).
+
+    Parameters
+    ----------
+    client : WFirmaClient
+        Klient API.
+    original_invoice_id : int
+        ID oryginalnej faktury do skorygowania.
+    corrected_items : list[dict], optional
+        Lista skorygowanych pozycji. Kazdy element:
+        {"original_content_id": int, "count": int/float}
+        Jesli None - korekta zerujaca (count=0 dla kazdej pozycji).
+    description : str
+        Opis korekty (np. "Zwrot pelny zamowienia #12345").
+    payment_method : str
+        Metoda platnosci. Domyslnie "transfer".
+
+    Returns
+    -------
+    dict
+        {"invoice_id": int, "invoice_number": str, "total": float}
+    """
+    original = get_invoice(client, original_invoice_id)
+    original_type = original.get("type", "bill")
+
+    # Typ korekty odpowiada typowi oryginalu
+    correction_type = original_type if original_type in ("bill", "normal") else "bill"
+
+    # Buduj pozycje korekty
+    contents_data = original.get("invoicecontents", {})
+    original_contents = []
+    for k in sorted(contents_data):
+        if k == "parameters":
+            continue
+        content = contents_data[k].get("invoicecontent", {})
+        if content:
+            original_contents.append(content)
+
+    if not original_contents:
+        raise WFirmaError(
+            f"Faktura id={original_invoice_id} nie ma pozycji do korekty"
+        )
+
+    # Mapowanie zmian: original_content_id -> nowy count
+    count_map = {}
+    if corrected_items is not None:
+        for item in corrected_items:
+            count_map[int(item["original_content_id"])] = item["count"]
+
+    invoice_contents = []
+    for content in original_contents:
+        content_id = int(content["id"])
+        new_count = count_map.get(content_id, 0) if corrected_items is not None else 0
+
+        invoice_contents.append({
+            "invoicecontent": {
+                "name": content["name"],
+                "count": new_count,
+                "price": content["price"],
+                "unit": content.get("unit", "szt."),
+                "vat_code": content.get("vat_code", {"id": 233}),
+                "parent": {"id": content_id},
+            }
+        })
+
+    invoice_data = {
+        "invoices": [{
+            "invoice": {
+                "type": "correction",
+                "correction_type": correction_type,
+                "paymentmethod": payment_method,
+                "description": description,
+                "schema": "normal",
+                "parent": {"id": original_invoice_id},
+                "invoicecontents": invoice_contents,
+            }
+        }]
+    }
+
+    result = client.request("invoices/add", data=invoice_data)
+    invoices = result.get("invoices", {})
+    if not invoices:
+        raise WFirmaError("wFirma nie zwrocil danych korekty", details=result)
+
+    # Odpowiedz moze miec klucz "0" lub byc lista
+    if isinstance(invoices, list):
+        inv = invoices[0].get("invoice", {})
+    else:
+        first_key = next((k for k in sorted(invoices) if k != "parameters"), None)
+        inv = invoices[first_key].get("invoice", {}) if first_key else {}
+
+    invoice_id = inv.get("id")
+    invoice_number = inv.get("fullnumber", "")
+    total = inv.get("total", 0.0)
+
+    logger.info(
+        "Utworzono korekte wFirma: %s (id=%s, total=%.2f, do faktury id=%s)",
+        invoice_number, invoice_id, float(total), original_invoice_id,
+    )
+
+    return {
+        "invoice_id": invoice_id,
+        "invoice_number": invoice_number,
+        "total": float(total),
+    }
