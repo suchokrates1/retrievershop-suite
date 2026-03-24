@@ -430,6 +430,11 @@ class Order(Base):
     # Token dostepu klienta do strony zamowienia (bez logowania)
     customer_token = Column(String, nullable=True, unique=True, index=True)
 
+    # Faktura wFirma
+    wfirma_invoice_id = Column(Integer, nullable=True)
+    wfirma_invoice_number = Column(String, nullable=True)
+    emails_sent = Column(Text, nullable=True)  # JSON: {"confirmation": true, ...}
+
     # Timestamps
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

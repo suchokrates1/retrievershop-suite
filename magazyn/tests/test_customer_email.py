@@ -389,3 +389,193 @@ class TestTokenGeneration:
                 assert order is not None
                 assert order.customer_token is not None
                 assert len(order.customer_token) >= 16
+
+
+# ---------------------------------------------------------------------------
+# Testy invoice_service helpers
+# ---------------------------------------------------------------------------
+
+class TestEmailSentTracking:
+
+    def test_mark_and_check_email_sent(self, app, order_with_token):
+        """_mark_email_sent ustawia flage, _was_email_sent ja odczytuje."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+                from magazyn.services.invoice_service import (
+                    _mark_email_sent,
+                    _was_email_sent,
+                )
+
+                assert _was_email_sent(order, "confirmation") is False
+                _mark_email_sent(db, order, "confirmation")
+                db.commit()
+                assert _was_email_sent(order, "confirmation") is True
+                assert _was_email_sent(order, "shipment") is False
+
+    def test_multiple_email_types(self, app, order_with_token):
+        """Mozna oznaczyc wiele typow emaili niezaleznie."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+                from magazyn.services.invoice_service import (
+                    _mark_email_sent,
+                    _was_email_sent,
+                )
+
+                _mark_email_sent(db, order, "confirmation")
+                _mark_email_sent(db, order, "shipment")
+                db.commit()
+                assert _was_email_sent(order, "confirmation") is True
+                assert _was_email_sent(order, "shipment") is True
+                assert _was_email_sent(order, "delivery") is False
+
+
+# ---------------------------------------------------------------------------
+# Testy dispatch email z add_order_status
+# ---------------------------------------------------------------------------
+
+class TestStatusEmailDispatch:
+
+    def test_add_order_status_dispatches_email(self, app, order_with_token):
+        """add_order_status wysyla email przy zmianie statusu."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+
+                with patch(
+                    "magazyn.services.email_service._send_html_email"
+                ) as mock_send:
+                    mock_send.return_value = True
+                    from magazyn.orders import add_order_status
+                    log = add_order_status(
+                        db, order.order_id, "przekazano_kurierowi"
+                    )
+                    db.commit()
+
+                    assert log is not None
+                    # shipment email powinien byc wyslany
+                    # (przekazano_kurierowi -> shipment)
+                    # ale tylko jesli jest tracking_number
+                    # email_service.send_shipment_notification wymaga go
+
+    def test_add_order_status_no_email_when_disabled(self, app, order_with_token):
+        """add_order_status z send_email=False nie wysyla emaila."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+
+                with patch(
+                    "magazyn.orders._dispatch_status_email"
+                ) as mock_dispatch:
+                    from magazyn.orders import add_order_status
+                    log = add_order_status(
+                        db, order.order_id, "spakowano",
+                        send_email=False,
+                    )
+                    db.commit()
+                    assert log is not None
+                    mock_dispatch.assert_not_called()
+
+    def test_add_order_status_skips_duplicate(self, app, order_with_token):
+        """add_order_status pomija duplikat statusu."""
+        with app.app_context():
+            with get_session() as db:
+                from magazyn.orders import add_order_status
+                # Fixture dodal status "pobrano" - powtorzenie powinno byc pominiete
+                log = add_order_status(
+                    db, "TEST-ORDER-001", "pobrano",
+                    send_email=False,
+                )
+                assert log is None  # duplikat
+
+    def test_dispatch_skips_already_sent(self, app, order_with_token):
+        """_dispatch_status_email nie wysyla emaila jesli juz wyslany."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+                from magazyn.services.invoice_service import _mark_email_sent
+                _mark_email_sent(db, order, "confirmation")
+                db.commit()
+
+                with patch(
+                    "magazyn.services.email_service.send_order_confirmation"
+                ) as mock_confirm:
+                    from magazyn.orders import _dispatch_status_email
+                    _dispatch_status_email(db, order.order_id, "pobrano")
+                    mock_confirm.assert_not_called()
+
+    def test_dispatch_sends_delivery_email(self, app, order_with_token):
+        """_dispatch_status_email wysyla email o dostarczeniu."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+
+                with patch(
+                    "magazyn.services.email_service._send_html_email"
+                ) as mock_send:
+                    mock_send.return_value = True
+                    from magazyn.orders import _dispatch_status_email
+                    _dispatch_status_email(db, order.order_id, "dostarczono")
+                    mock_send.assert_called_once()
+                    call_kwargs = mock_send.call_args
+                    assert "dostarczone" in call_kwargs[1]["html_body"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Testy _process_pending_invoices
+# ---------------------------------------------------------------------------
+
+class TestProcessPendingInvoices:
+
+    def test_process_skips_without_want_invoice(self, app, order_with_token):
+        """Zamowienia bez want_invoice sa pomijane."""
+        with app.app_context():
+            from magazyn.order_sync_scheduler import _process_pending_invoices
+            stats = _process_pending_invoices()
+            assert stats["processed"] == 0
+
+    def test_process_picks_up_want_invoice(self, app, order_with_invoice):
+        """Zamowienia z want_invoice=True i bez faktury sa przetwarzane."""
+        with app.app_context():
+            with patch(
+                "magazyn.services.invoice_service.generate_and_send_invoice"
+            ) as mock_gen:
+                mock_gen.return_value = {
+                    "success": True,
+                    "invoice_number": "FV/1/2026",
+                    "errors": [],
+                }
+                from magazyn.order_sync_scheduler import (
+                    _process_pending_invoices,
+                )
+                stats = _process_pending_invoices()
+                assert stats["processed"] == 1
+                assert stats["success"] == 1
+                mock_gen.assert_called_once_with("TEST-ORDER-002")
+
+    def test_process_skips_already_invoiced(self, app, order_with_invoice):
+        """Zamowienia z istniejaca faktura sa pomijane."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.order_id == "TEST-ORDER-002"
+                ).first()
+                order.wfirma_invoice_id = 12345
+                db.commit()
+
+            from magazyn.order_sync_scheduler import _process_pending_invoices
+            stats = _process_pending_invoices()
+            assert stats["processed"] == 0

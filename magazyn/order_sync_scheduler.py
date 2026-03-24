@@ -282,6 +282,63 @@ def _sync_allegro_fulfillment(app):
     return stats
 
 
+def _process_pending_invoices():
+    """Automatyczne wystawianie faktur dla zamowien z want_invoice=True.
+
+    Szuka zamowien ktore:
+    - maja want_invoice=True
+    - nie maja jeszcze wystawionej faktury (wfirma_invoice_id IS NULL)
+    - maja przynajmniej jeden produkt
+
+    Returns
+    -------
+    dict
+        {"processed": int, "success": int, "errors": int}
+    """
+    from .db import get_session
+    from .models import Order
+    from .services.invoice_service import generate_and_send_invoice
+
+    stats = {"processed": 0, "success": 0, "errors": 0}
+
+    with get_session() as db:
+        orders = (
+            db.query(Order)
+            .filter(
+                Order.want_invoice.is_(True),
+                Order.wfirma_invoice_id.is_(None),
+            )
+            .all()
+        )
+
+        for order in orders:
+            if not order.products:
+                continue
+            stats["processed"] += 1
+            try:
+                result = generate_and_send_invoice(order.order_id)
+                if result["success"]:
+                    stats["success"] += 1
+                    logger.info(
+                        "Faktura %s wystawiona automatycznie dla %s",
+                        result["invoice_number"], order.order_id,
+                    )
+                else:
+                    stats["errors"] += 1
+                    logger.warning(
+                        "Blad wystawiania faktury dla %s: %s",
+                        order.order_id, result["errors"],
+                    )
+            except Exception as exc:
+                stats["errors"] += 1
+                logger.error(
+                    "Wyjatek przy wystawianiu faktury dla %s: %s",
+                    order.order_id, exc,
+                )
+
+    return stats
+
+
 def _sync_worker(app):
     """Background worker that syncs orders and parcel statuses every hour."""
     from .orders import _sync_orders_from_baselinker, ALL_STATUS_IDS
@@ -329,6 +386,17 @@ def _sync_worker(app):
                 logger.info("Starting automatic returns sync")
                 returns_stats = sync_returns()
                 logger.info(f"Returns sync completed: {returns_stats}")
+
+                # 4b. Automatyczne wystawianie faktur dla zamowien z want_invoice
+                try:
+                    inv_stats = _process_pending_invoices()
+                    if inv_stats["processed"] > 0:
+                        logger.info(
+                            f"Invoice processing: processed={inv_stats['processed']}, "
+                            f"success={inv_stats['success']}, errors={inv_stats['errors']}"
+                        )
+                except Exception as inv_err:
+                    logger.error(f"Error in invoice processing: {inv_err}", exc_info=True)
                 
                 # 5. Codzienny sync ofert Allegro (raz dziennie)
                 today = datetime.now().strftime("%Y-%m-%d")

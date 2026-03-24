@@ -31,3 +31,4 @@ allegro_cookies*.json
 tokens.json
 database.db
 magazyn.db
+.claude/

@@ -1016,7 +1016,66 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     return order
 
 
-def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, allow_backwards: bool = False, **kwargs) -> Optional[OrderStatusLog]:
+# Mapowanie statusow na typy emaili
+_STATUS_EMAIL_MAP = {
+    "pobrano": "confirmation",
+    "przekazano_kurierowi": "shipment",
+    "w_drodze": "shipment",
+    "dostarczono": "delivery",
+    "zwrot": "correction",
+}
+
+
+def _dispatch_status_email(db, order_id: str, status: str):
+    """Wyslij email do klienta odpowiedni dla danego statusu.
+
+    Sprawdza czy email danego typu nie zostal juz wyslany (deduplikacja).
+    Bledy wysylki sa logowane ale nie przerywaja flow.
+    """
+    email_type = _STATUS_EMAIL_MAP.get(status)
+    if not email_type:
+        return
+
+    from .services.invoice_service import _was_email_sent, _mark_email_sent
+
+    order = db.query(Order).filter(Order.order_id == order_id).first()
+    if not order or not order.email:
+        return
+
+    if _was_email_sent(order, email_type):
+        return
+
+    try:
+        from .services.email_service import (
+            send_order_confirmation,
+            send_shipment_notification,
+            send_delivery_confirmation,
+            send_invoice_correction,
+        )
+
+        sent = False
+        if email_type == "confirmation":
+            sent = send_order_confirmation(order)
+        elif email_type == "shipment":
+            sent = send_shipment_notification(order)
+        elif email_type == "delivery":
+            sent = send_delivery_confirmation(order)
+        elif email_type == "correction":
+            sent = send_invoice_correction(order)
+
+        if sent:
+            _mark_email_sent(db, order, email_type)
+            logger.info(
+                "Email '%s' wyslany dla zamowienia %s", email_type, order_id
+            )
+    except Exception as exc:
+        logger.error(
+            "Blad wysylki emaila '%s' dla zamowienia %s: %s",
+            email_type, order_id, exc,
+        )
+
+
+def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, allow_backwards: bool = False, send_email: bool = True, **kwargs) -> Optional[OrderStatusLog]:
     """
     Add a status log entry for an order.
     
@@ -1026,6 +1085,7 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
         status: Nowy status
         skip_if_same: Jeśli True, nie dodaje statusu jeśli ostatni status jest taki sam (domyślnie True)
         allow_backwards: Jeśli True, pozwala na cofanie statusów (domyślnie False)
+        send_email: Jeśli True, wysyła email do klienta przy zmianie statusu (domyślnie True)
         **kwargs: tracking_number, courier_code, notes
     
     Returns:
@@ -1064,6 +1124,11 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
         notes=kwargs.get("notes"),
     )
     db.add(log)
+
+    # Wyslij email do klienta przy zmianie statusu
+    if send_email:
+        _dispatch_status_email(db, order_id, status)
+
     return log
 
 
