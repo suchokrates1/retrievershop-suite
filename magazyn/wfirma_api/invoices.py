@@ -25,9 +25,11 @@ def create_invoice(
     payment_date: Optional[str] = None,
     invoice_date: Optional[str] = None,
     series_id: Optional[int] = None,
+    invoice_type: str = "bill",
+    description: Optional[str] = None,
 ) -> dict:
     """
-    Utworz fakture VAT w wFirma.
+    Utworz fakture/rachunek w wFirma.
 
     Parameters
     ----------
@@ -50,6 +52,11 @@ def create_invoice(
         Data wystawienia (YYYY-MM-DD). Domyslnie dzisiejsza.
     series_id : int, optional
         ID serii numeracji faktur.
+    invoice_type : str
+        Typ dokumentu: "bill" (rachunek, nie-VAT), "normal" (faktura VAT),
+        "proforma". Domyslnie "bill".
+    description : str, optional
+        Opis na fakturze (np. numer zamowienia).
 
     Returns
     -------
@@ -91,17 +98,21 @@ def create_invoice(
             }
         })
 
+    invoice = {
+        "paymentmethod": payment_method,
+        "paymentdate": payment_date,
+        "date": invoice_date,
+        "type": invoice_type,
+        "price_type": "brutto",
+        "contractor": contractor,
+        "invoicecontents": invoice_contents,
+    }
+    if description:
+        invoice["description"] = description
+
     invoice_data = {
         "invoices": [{
-            "invoice": {
-                "paymentmethod": payment_method,
-                "paymentdate": payment_date,
-                "date": invoice_date,
-                "type": "normal",
-                "price_type": "brutto",
-                "contractor": contractor,
-                "invoicecontents": invoice_contents,
-            }
+            "invoice": invoice,
         }]
     }
 
