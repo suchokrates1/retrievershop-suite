@@ -46,7 +46,7 @@ This repository contains the code for the RetrieverShop warehouse application wi
    ```bash
    chmod 600 .env
    ```
-3. Edit `.env` and provide your API credentials. The printing agents require values such as `API_TOKEN`, `PAGE_ACCESS_TOKEN` and `RECIPIENT_ID`.
+3. Edit `.env` and provide your API credentials. The printing agents require values such as `PAGE_ACCESS_TOKEN` and `RECIPIENT_ID`.
 4. Configure CUPS access. When mounting the host's CUPS socket you should leave
    the variables empty:
    ```env
@@ -62,7 +62,6 @@ This repository contains the code for the RetrieverShop warehouse application wi
 
 | Key | Purpose |
 | --- | --- |
-| `API_TOKEN` | BaseLinker API token used to fetch new orders |
 | `PAGE_ACCESS_TOKEN` | Messenger page token for sending notifications |
 | `RECIPIENT_ID` | Messenger recipient ID that receives alerts |
 | `STATUS_ID` | Order status ID to filter orders for printing |

@@ -155,7 +155,7 @@ class TestCustomerOrderPage:
         with app.test_client() as client:
             resp = client.get(f"/zamowienie/{order_with_token}")
             html = resp.data.decode("utf-8")
-            assert "Przyjete do realizacji" in html
+            assert "Przyjęte do realizacji" in html
 
     def test_invoice_data_shown(self, app, order_with_invoice):
         """Dane do faktury sa widoczne gdy want_invoice=True."""

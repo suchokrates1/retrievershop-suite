@@ -21,9 +21,9 @@ bp = Blueprint("customer_order", __name__)
 
 # Mapowanie statusow na czytelne opisy dla klienta
 CUSTOMER_STATUS_MAP = {
-    "pobrano": ("Przyjete do realizacji", "info", "bi-check-circle"),
+    "pobrano": ("Przyjęte do realizacji", "info", "bi-check-circle"),
     "niewydrukowano": ("Przygotowywane", "info", "bi-hourglass-split"),
-    "wydrukowano": ("Przygotowane do wysylki", "primary", "bi-printer"),
+    "wydrukowano": ("Przygotowane do wysyłki", "primary", "bi-printer"),
     "spakowano": ("Spakowane", "primary", "bi-box-seam"),
     "przekazano_kurierowi": ("Nadane", "warning", "bi-truck"),
     "w_drodze": ("W drodze", "warning", "bi-truck"),
@@ -35,9 +35,9 @@ CUSTOMER_STATUS_MAP = {
 
 # Etapy realizacji widoczne dla klienta
 CUSTOMER_STAGES = [
-    ("accepted", "Przyjete", "bi-check-circle"),
+    ("accepted", "Przyjęte", "bi-check-circle"),
     ("preparing", "Przygotowywane", "bi-box-seam"),
-    ("shipped", "Wysylka", "bi-truck"),
+    ("shipped", "Wysyłka", "bi-truck"),
     ("delivered", "Dostarczone", "bi-check2-circle"),
 ]
 
