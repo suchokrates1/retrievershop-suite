@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+.action-btns > .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .25rem .5rem;
+    line-height: 1.5;
+}
+</style>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline-secondary btn-sm mb-2">
@@ -197,27 +206,27 @@
                     {% endif %}
                 </td>
                 <td>
-                    <div class="btn-group btn-group-sm" role="group">
+                    <div class="btn-group btn-group-sm action-btns" role="group">
                         <!-- Nasza oferta -->
                         <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
-                           class="btn btn-outline-primary d-inline-flex align-items-center" title="Nasza oferta">
+                           class="btn btn-outline-primary" title="Nasza oferta" role="button">
                             <i class="bi bi-box-arrow-up-right"></i>
                         </a>
                         {% if item.competitor_url %}
                             <!-- Oferta konkurenta -->
                             <a href="{{ item.competitor_url }}" target="_blank" 
-                               class="btn btn-outline-secondary d-inline-flex align-items-center" title="Oferta konkurenta">
+                               class="btn btn-outline-secondary" title="Oferta konkurenta" role="button">
                                 <i class="bi bi-person"></i>
                             </a>
                         {% endif %}
                         <!-- Sprawdz ponownie -->
-                        <button type="button" class="btn btn-outline-info btn-recheck d-inline-flex align-items-center" 
+                        <button type="button" class="btn btn-outline-info btn-recheck" 
                                 data-item-id="{{ item.id }}" title="Sprawdz cene ponownie">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         {% if item.suggestion %}
                             <!-- Zmien cene -->
-                            <button type="button" class="btn btn-outline-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-change-price d-inline-flex align-items-center" 
+                            <button type="button" class="btn btn-outline-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-change-price" 
                                     data-item-id="{{ item.id }}"
                                     data-current-price="{{ item.our_price }}"
                                     data-target-price="{{ item.suggestion.target_price }}"
@@ -229,7 +238,7 @@
                         {% endif %}
                         {% if item.competitor_seller %}
                             <!-- Wyklucz sprzedawce -->
-                            <button type="button" class="btn btn-outline-danger btn-exclude-seller d-inline-flex align-items-center" 
+                            <button type="button" class="btn btn-outline-danger btn-exclude-seller" 
                                     data-seller="{{ item.competitor_seller }}"
                                     title="Wyklucz sprzedawce {{ item.competitor_seller }}">
                                 <i class="bi bi-person-x"></i>
