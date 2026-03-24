@@ -21,10 +21,14 @@ def test_agent_loop_stores_courier_code(monkeypatch):
 
     captured = {}
     monkeypatch.setattr(agent, "mark_as_printed", lambda oid, data=None: captured.setdefault("marked", data))
-    monkeypatch.setattr(agent, "send_messenger_message", lambda data: captured.setdefault("mess", data))
+    monkeypatch.setattr(
+        agent,
+        "send_messenger_message",
+        lambda data, print_success=True: captured.setdefault("mess", data),
+    )
 
     monkeypatch.setattr(agent, "get_orders", lambda: [{"order_id": 1, "products": [{"name": "Prod", "quantity": 1}]}])
-    monkeypatch.setattr(agent, "get_order_packages", lambda oid: [{"package_id": "p1", "courier_code": "DHL"}])
+    monkeypatch.setattr(agent, "get_order_packages", lambda oid: [{"shipment_id": "s1", "carrier_id": "DHL", "waybill": "WB123"}])
     monkeypatch.setattr(agent, "get_label", lambda code, pid: ("data", "pdf"))
 
     class Stopper:
