@@ -78,6 +78,12 @@ from .refunds import (
     REFUNDABLE_STATUSES,
 )
 
+from .events import (
+    fetch_order_events,
+    fetch_event_stats,
+    ACTIONABLE_EVENT_TYPES,
+)
+
 from .orders import (
     fetch_allegro_orders,
     fetch_allegro_order_detail,
@@ -134,6 +140,10 @@ __all__ = [
     "get_refund_status",
     "ALLEGRO_RETURN_STATUS_DELIVERED",
     "REFUNDABLE_STATUSES",
+    # Events
+    "fetch_order_events",
+    "fetch_event_stats",
+    "ACTIONABLE_EVENT_TYPES",
     # Orders
     "fetch_allegro_orders",
     "fetch_allegro_order_detail",
