@@ -205,9 +205,28 @@ def _was_email_sent(order, email_type: str) -> bool:
         return False
 
 
-def generate_correction_invoice(order_id: str, reason: str = "") -> dict:
+def generate_correction_invoice(
+    order_id: str,
+    reason: str = "",
+    return_id: int = None,
+    include_delivery: bool = False,
+) -> dict:
     """
-    Wystaw korekte zerujaca do faktury zamowienia.
+    Wystaw korekte do faktury zamowienia na podstawie zwrotu.
+
+    Jesli return_id jest podane, koryguje tylko pozycje ze zwrotu.
+    Jesli return_id jest None, tworzy korekte zerujaca (wszystkie pozycje).
+
+    Parameters
+    ----------
+    order_id : str
+        ID zamowienia.
+    reason : str
+        Powod korekty.
+    return_id : int, optional
+        ID rekordu Return. Jesli podane, korygowane sa tylko zwracane pozycje.
+    include_delivery : bool
+        Czy uwzglednic korekte kosztu dostawy. Domyslnie False.
 
     Returns
     -------
@@ -215,7 +234,10 @@ def generate_correction_invoice(order_id: str, reason: str = "") -> dict:
         {"success": bool, "invoice_number": str, "errors": list[str]}
     """
     from ..wfirma_api import WFirmaClient
-    from ..wfirma_api.invoices import create_correction_invoice, download_invoice_pdf
+    from ..wfirma_api.invoices import (
+        create_correction_invoice, download_invoice_pdf, get_invoice,
+    )
+    from ..models import Return
     from .email_service import send_invoice_correction
 
     result = {"success": False, "invoice_number": None, "errors": []}
@@ -238,13 +260,51 @@ def generate_correction_invoice(order_id: str, reason: str = "") -> dict:
             result["errors"].append(f"Blad inicjalizacji klienta wFirma: {exc}")
             return result
 
-        description = reason or f"Korekta zerujaca do zamowienia {order_id}"
+        original_invoice_id = int(order.wfirma_invoice_id)
+
+        # Przygotuj corrected_items na podstawie zwrotu
+        corrected_items = None
+        if return_id is not None:
+            return_record = db.query(Return).filter(Return.id == return_id).first()
+            if not return_record:
+                result["errors"].append(f"Zwrot id={return_id} nie znaleziony")
+                return result
+
+            return_items = json.loads(return_record.items_json) if return_record.items_json else []
+            if not return_items:
+                result["errors"].append(f"Zwrot id={return_id} nie ma pozycji")
+                return result
+
+            # Pobierz oryginalna fakture i dopasuj pozycje
+            try:
+                original = get_invoice(client, original_invoice_id)
+            except Exception as exc:
+                result["errors"].append(f"Blad pobrania oryginalnej faktury: {exc}")
+                return result
+
+            corrected_items, match_errors = _match_return_to_invoice(
+                return_items, original, include_delivery=include_delivery,
+            )
+            result["errors"].extend(match_errors)
+
+            if not corrected_items:
+                result["errors"].append(
+                    "Nie udalo sie dopasowac zadnej pozycji zwrotu do faktury"
+                )
+                return result
+
+        if not reason:
+            if return_id is not None:
+                reason = f"Zwrot produktow z zamowienia {order_id}"
+            else:
+                reason = f"Korekta zerujaca do zamowienia {order_id}"
 
         try:
             inv = create_correction_invoice(
                 client,
-                original_invoice_id=int(order.wfirma_invoice_id),
-                description=description,
+                original_invoice_id=original_invoice_id,
+                corrected_items=corrected_items,
+                description=reason,
             )
             invoice_id = inv["invoice_id"]
             invoice_number = inv["invoice_number"]
@@ -267,7 +327,7 @@ def generate_correction_invoice(order_id: str, reason: str = "") -> dict:
             try:
                 send_invoice_correction(
                     order,
-                    reason=description,
+                    reason=reason,
                     refund_amount=abs(inv["total"]),
                     pdf_data=pdf_data,
                     pdf_filename=pdf_filename,
@@ -284,3 +344,101 @@ def generate_correction_invoice(order_id: str, reason: str = "") -> dict:
         )
 
     return result
+
+
+def _match_return_to_invoice(
+    return_items: list[dict],
+    original_invoice: dict,
+    include_delivery: bool = False,
+) -> tuple[list[dict], list[str]]:
+    """
+    Dopasuj pozycje zwrotu do pozycji oryginalnej faktury wFirma.
+
+    Dopasowanie odbywa sie po nazwie produktu. Zwracane pozycje
+    ustawiaja count na (oryginalny count - zwracana ilosc).
+
+    Parameters
+    ----------
+    return_items : list[dict]
+        Pozycje ze zwrotu (items_json): [{"name": str, "quantity": int, ...}]
+    original_invoice : dict
+        Pelne dane faktury z wFirma (z invoicecontents).
+    include_delivery : bool
+        Czy uwzglednic korekte dostawy.
+
+    Returns
+    -------
+    tuple[list[dict], list[str]]
+        (corrected_items, ostrzezenia)
+        corrected_items: [{"original_content_id": int, "count": int}]
+    """
+    errors = []
+
+    # Wyciagnij pozycje faktury
+    contents_data = original_invoice.get("invoicecontents", {})
+    invoice_contents = []
+    for k in sorted(contents_data):
+        if k == "parameters":
+            continue
+        content = contents_data[k].get("invoicecontent", {})
+        if content:
+            invoice_contents.append(content)
+
+    if not invoice_contents:
+        errors.append("Oryginalna faktura nie ma pozycji")
+        return [], errors
+
+    # Buduj indeks nazw faktury (lowercase -> content)
+    name_index = {}
+    for content in invoice_contents:
+        name_lower = content.get("name", "").strip().lower()
+        if name_lower:
+            name_index[name_lower] = content
+
+    corrected_items = []
+    for ret_item in return_items:
+        ret_name = (ret_item.get("name") or "").strip()
+        ret_qty = int(ret_item.get("quantity", 1))
+        ret_name_lower = ret_name.lower()
+
+        # Dokladne dopasowanie
+        matched = name_index.get(ret_name_lower)
+
+        # Jesli brak - szukaj czesciowego dopasowania
+        if not matched:
+            for inv_name_lower, content in name_index.items():
+                if ret_name_lower in inv_name_lower or inv_name_lower in ret_name_lower:
+                    matched = content
+                    break
+
+        if not matched:
+            errors.append(
+                f"Nie dopasowano pozycji zwrotu: '{ret_name}' "
+                f"(brak na fakturze)"
+            )
+            continue
+
+        original_count = int(float(matched.get("count", 0)))
+        new_count = max(0, original_count - ret_qty)
+        content_id = int(matched["id"])
+
+        corrected_items.append({
+            "original_content_id": content_id,
+            "count": new_count,
+        })
+
+    # Korekta dostawy - znajdz pozycje "Dostawa:" na fakturze
+    if include_delivery:
+        for content in invoice_contents:
+            name = content.get("name", "")
+            if name.lower().startswith("dostawa"):
+                content_id = int(content["id"])
+                # Sprawdz czy nie jest juz w corrected_items
+                if not any(ci["original_content_id"] == content_id for ci in corrected_items):
+                    corrected_items.append({
+                        "original_content_id": content_id,
+                        "count": 0,
+                    })
+                break
+
+    return corrected_items, errors
