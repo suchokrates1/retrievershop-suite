@@ -252,6 +252,8 @@ def create_correction_invoice(
     Jesli corrected_items jest None, tworzy korekte zerujaca
     (wszystkie pozycje na count=0).
 
+    Jesli corrected_items jest podane, koryguje TYLKO wymienione pozycje.
+
     Parameters
     ----------
     client : WFirmaClient
@@ -261,7 +263,8 @@ def create_correction_invoice(
     corrected_items : list[dict], optional
         Lista skorygowanych pozycji. Kazdy element:
         {"original_content_id": int, "count": int/float}
-        Jesli None - korekta zerujaca (count=0 dla kazdej pozycji).
+        count = nowa ilosc po korekcie (0 = pelny zwrot pozycji).
+        Jesli None - korekta zerujaca (count=0 dla WSZYSTKICH pozycji).
     description : str
         Opis korekty (np. "Zwrot pelny zamowienia #12345").
     payment_method : str
@@ -302,7 +305,15 @@ def create_correction_invoice(
     invoice_contents = []
     for content in original_contents:
         content_id = int(content["id"])
-        new_count = count_map.get(content_id, 0) if corrected_items is not None else 0
+
+        if corrected_items is not None:
+            # Selektywna korekta - uwzgledniaj TYLKO pozycje z corrected_items
+            if content_id not in count_map:
+                continue
+            new_count = count_map[content_id]
+        else:
+            # Korekta zerujaca - wszystkie pozycje na 0
+            new_count = 0
 
         invoice_contents.append({
             "invoicecontent": {
@@ -314,6 +325,9 @@ def create_correction_invoice(
                 "parent": {"id": content_id},
             }
         })
+
+    if not invoice_contents:
+        raise WFirmaError("Brak pozycji do korekty po filtrowaniu")
 
     invoice_data = {
         "invoices": [{
