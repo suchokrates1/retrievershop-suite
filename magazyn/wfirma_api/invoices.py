@@ -187,7 +187,7 @@ def find_invoice(client: WFirmaClient, invoice_number: str) -> Optional[dict]:
         Dane faktury lub None jesli nie znaleziono.
     """
     data = {
-        "invoices": [{
+        "invoices": {
             "parameters": {
                 "conditions": {
                     "condition": {
@@ -197,13 +197,15 @@ def find_invoice(client: WFirmaClient, invoice_number: str) -> Optional[dict]:
                     }
                 }
             }
-        }]
+        }
     }
 
     result = client.request("invoices/find", data=data)
-    invoices = result.get("invoices", [])
+    invoices = result.get("invoices", {})
 
-    if not invoices:
+    if not invoices or not any(k != "parameters" for k in invoices):
         return None
 
-    return invoices[0].get("invoice")
+    # Pierwszy wynik (klucz "0")
+    first_key = next(k for k in sorted(invoices) if k != "parameters")
+    return invoices[first_key].get("invoice")
