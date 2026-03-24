@@ -12,144 +12,291 @@
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
           integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
           crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
-        .header-bar {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            padding: 1.5rem 0;
+        :root {
+            --bg: #f0f2f5;
+            --card-bg: #fff;
+            --card-border: rgba(0,0,0,0.04);
+            --card-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            --accent: #198754;
+            --accent-light: rgba(25,135,84,0.1);
+            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --footer-bg: #0f172a;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
         }
-        .header-bar img { height: 40px; }
-        .status-progress { position: relative; padding: 0 1rem; }
-        .progress-line {
-            position: absolute;
-            top: 20px;
-            left: 10%;
-            right: 10%;
-            height: 4px;
-            background: #dee2e6;
-            z-index: 0;
-        }
-        .progress-line-fill {
-            position: absolute;
-            top: 20px;
-            left: 10%;
-            height: 4px;
-            background: #198754;
-            z-index: 1;
-            transition: width 0.5s ease;
-        }
-        .stage-dot {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            min-height: 100vh;
             display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Header --- */
+        .site-header {
+            background: var(--header-bg);
+            padding: 0.85rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 8px rgba(0,0,0,0.15);
+        }
+        .site-header .logo-img {
+            height: 32px;
+            filter: brightness(1.1);
+        }
+        .site-header .brand-name {
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: #fff;
+            letter-spacing: -0.01em;
+        }
+        .site-header .nav-label {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        /* --- Karty --- */
+        .card {
+            border: 1px solid var(--card-border);
+            border-radius: 0.75rem;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            transition: box-shadow 0.2s ease;
+        }
+        .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        .card-header {
+            background: var(--card-bg);
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 1rem;
+        }
+
+        /* --- Status glowny --- */
+        .hero-status {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--card-border);
+        }
+        .hero-status .status-badge {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            background: #dee2e6;
-            color: #6c757d;
-            font-size: 1.1rem;
+            gap: 0.4rem;
+            padding: 0.5rem 1.25rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .hero-status h4 {
+            font-weight: 700;
+            font-size: 1.15rem;
+            margin-top: 0.75rem;
+        }
+
+        /* --- Progress bar --- */
+        .progress-track { position: relative; padding: 1.5rem 0.5rem 0.5rem; }
+        .progress-bg {
+            position: absolute;
+            top: calc(1.5rem + 18px);
+            left: 8%;
+            right: 8%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+        }
+        .progress-fill {
+            position: absolute;
+            top: calc(1.5rem + 18px);
+            left: 8%;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+        }
+        .stage {
+            text-align: center;
             position: relative;
             z-index: 2;
+            flex: 1;
+        }
+        .stage-circle {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #e2e8f0;
+            color: var(--text-muted);
+            font-size: 1rem;
             transition: all 0.3s ease;
+            border: 3px solid var(--bg);
         }
-        .stage-dot.active {
-            background: #198754;
-            color: white;
+        .stage.done .stage-circle {
+            background: var(--accent);
+            color: #fff;
         }
-        .stage-dot.current {
-            background: #198754;
-            color: white;
-            box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.25);
+        .stage.active .stage-circle {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 0 4px var(--accent-light);
+            animation: glow 2.5s ease-in-out infinite;
         }
-        .stage-label { font-size: 0.8rem; color: #6c757d; margin-top: 0.5rem; }
-        .stage-label.active { color: #198754; font-weight: 600; }
-        .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-        .tracking-link {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            background: #fff3cd;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            color: #664d03;
+        @keyframes glow {
+            0%,100% { box-shadow: 0 0 0 4px var(--accent-light); }
+            50%     { box-shadow: 0 0 0 8px rgba(25,135,84,0.05); }
+        }
+        .stage-text {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 0.4rem;
             font-weight: 500;
         }
-        .tracking-link:hover { background: #ffe69c; color: #664d03; }
-        .timeline-item { position: relative; padding-left: 2rem; padding-bottom: 1rem; }
-        .timeline-item::before {
+        .stage.done .stage-text,
+        .stage.active .stage-text { color: var(--accent); font-weight: 600; }
+
+        /* --- Tracking --- */
+        .tracking-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.5rem 1rem;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .tracking-btn:hover { background: #157347; color: #fff; }
+
+        /* --- Tabela produktow --- */
+        .products-table { font-size: 0.9rem; }
+        .products-table th { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); }
+        .products-table td { vertical-align: middle; }
+        .products-table tfoot td { font-size: 0.85rem; }
+
+        /* --- Timeline --- */
+        .tl-item {
+            position: relative;
+            padding-left: 2rem;
+            padding-bottom: 1rem;
+        }
+        .tl-item::before {
             content: '';
             position: absolute;
             left: 0.55rem;
-            top: 1.5rem;
+            top: 1.4rem;
             bottom: 0;
             width: 2px;
-            background: #dee2e6;
+            background: var(--border);
         }
-        .timeline-item:last-child::before { display: none; }
-        .timeline-dot {
+        .tl-item:last-child::before { display: none; }
+        .tl-dot {
             position: absolute;
             left: 0;
-            top: 0.25rem;
+            top: 0.2rem;
             width: 1.25rem;
             height: 1.25rem;
             border-radius: 50%;
-            background: #198754;
+            background: var(--accent);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-size: 0.65rem;
+            color: #fff;
+            font-size: 0.6rem;
         }
-        .footer-bar { background: #1a1a2e; color: #adb5bd; padding: 2rem 0; }
+        .tl-item:first-child .tl-dot {
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+
+        /* --- Footer --- */
+        .site-footer {
+            background: var(--footer-bg);
+            color: rgba(255,255,255,0.6);
+            padding: 2rem 0;
+            margin-top: auto;
+            font-size: 0.85rem;
+        }
+        .site-footer a { color: rgba(255,255,255,0.8); text-decoration: none; }
+        .site-footer a:hover { color: #fff; }
+        .footer-brand { font-weight: 600; color: #fff; font-size: 1rem; }
+        .footer-divider {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin: 1rem 0;
+        }
+
+        /* --- Responsywnosc --- */
+        @media (max-width: 576px) {
+            .hero-status { padding: 1.25rem 1rem; }
+            .stage-circle { width: 30px; height: 30px; font-size: 0.85rem; }
+            .stage-text { font-size: 0.65rem; }
+            .site-header .brand-name { font-size: 0.9rem; }
+        }
     </style>
 </head>
 <body>
-    <div class="header-bar">
+    {# ===== HEADER ===== #}
+    <header class="site-header">
         <div class="container">
             <div class="d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center gap-3">
-                    <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Retriever Shop">
-                    <span class="fs-5 d-none d-sm-inline">Retriever Shop</span>
-                </div>
-                <span class="text-white-50 small">Status zamowienia</span>
+                <a href="https://retrievershop.pl" class="d-flex align-items-center gap-2 text-decoration-none">
+                    <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png"
+                         alt="Retriever Shop" class="logo-img">
+                    <span class="brand-name d-none d-sm-inline">Retriever Shop</span>
+                </a>
+                <span class="nav-label">Status zamowienia</span>
             </div>
         </div>
-    </div>
+    </header>
 
-    <div class="container py-4">
+    {# ===== TRESC ===== #}
+    <main class="container py-4">
         {# Status glowny #}
-        <div class="card mb-4">
-            <div class="card-body text-center py-4">
-                <div class="mb-3">
-                    <span class="badge bg-{{ status_color }} fs-6 px-3 py-2">
-                        <i class="bi {{ status_icon }} me-1"></i>
-                        {{ status_label }}
-                    </span>
-                </div>
-                <h4 class="mb-1">Zamowienie #{{ order.order_id[:20] }}{% if order.order_id|length > 20 %}...{% endif %}</h4>
-                {% if date_add %}
-                <p class="text-muted mb-0">z dnia {{ date_add.strftime('%d.%m.%Y, %H:%M') }}</p>
-                {% endif %}
+        <div class="hero-status mb-4">
+            <div class="mb-2">
+                <span class="status-badge bg-{{ status_color }}">
+                    <i class="bi {{ status_icon }}"></i>
+                    {{ status_label }}
+                </span>
             </div>
+            <h4 class="mb-1">Zamowienie #{{ order.order_id[:20] }}{% if order.order_id|length > 20 %}...{% endif %}</h4>
+            {% if date_add %}
+            <p class="text-muted mb-0" style="font-size:0.9rem">z dnia {{ date_add.strftime('%d.%m.%Y, %H:%M') }}</p>
+            {% endif %}
         </div>
 
         {# Progress bar etapow #}
         {% if current_stage >= 0 %}
         <div class="card mb-4">
-            <div class="card-body py-4">
-                <div class="status-progress">
-                    <div class="progress-line"></div>
-                    {% set fill_pct = (current_stage / (stages|length - 1) * 80) if stages|length > 1 else 0 %}
-                    <div class="progress-line-fill" style="width: {{ fill_pct }}%"></div>
+            <div class="card-body">
+                <div class="progress-track">
+                    <div class="progress-bg"></div>
+                    {% set fill_pct = (current_stage / (stages|length - 1) * 84) if stages|length > 1 else 0 %}
+                    <div class="progress-fill" style="width: {{ fill_pct }}%"></div>
                     <div class="d-flex justify-content-between">
                         {% for key, label, icon in stages %}
-                        <div class="text-center">
-                            <div class="stage-dot mx-auto {% if loop.index0 < current_stage %}active{% elif loop.index0 == current_stage %}current{% endif %}">
+                        <div class="stage {% if loop.index0 < current_stage %}done{% elif loop.index0 == current_stage %}active{% endif %}">
+                            <span class="stage-circle">
                                 <i class="bi {{ icon }}"></i>
-                            </div>
-                            <div class="stage-label {% if loop.index0 <= current_stage %}active{% endif %}">
-                                {{ label }}
-                            </div>
+                            </span>
+                            <span class="stage-text">{{ label }}</span>
                         </div>
                         {% endfor %}
                     </div>
@@ -158,35 +305,28 @@
         </div>
         {% endif %}
 
-        <div class="row">
+        <div class="row g-4">
             {# Lewa kolumna #}
-            <div class="col-lg-7 mb-4">
+            <div class="col-lg-7">
                 {# Tracking #}
                 {% if tracking_number %}
                 <div class="card mb-3">
-                    <div class="card-header bg-white">
-                        <i class="bi bi-truck"></i> Sledzenie przesylki
+                    <div class="card-header">
+                        <i class="bi bi-truck me-1"></i> Sledzenie przesylki
                     </div>
                     <div class="card-body">
                         <p class="mb-2">
-                            <strong>Numer przesylki:</strong>
-                            <code>{{ tracking_number }}</code>
+                            <span class="text-muted" style="font-size:0.85rem">Numer przesylki</span><br>
+                            <code style="font-size:1rem">{{ tracking_number }}</code>
                         </p>
                         {% if delivery_method %}
-                        <p class="mb-2">
-                            <strong>Metoda dostawy:</strong>
-                            {{ delivery_method }}
-                        </p>
+                        <p class="mb-3 text-muted" style="font-size:0.85rem">{{ delivery_method }}</p>
                         {% endif %}
                         {% if tracking_url %}
-                        <a href="{{ tracking_url }}" target="_blank" rel="noopener" class="tracking-link">
-                            <i class="bi bi-box-arrow-up-right me-1"></i>
+                        <a href="{{ tracking_url }}" target="_blank" rel="noopener" class="tracking-btn">
+                            <i class="bi bi-box-arrow-up-right"></i>
                             Sledz przesylke
                         </a>
-                        {% else %}
-                        <p class="text-muted small mb-0">
-                            Sledzenie dostepne w panelu Allegro
-                        </p>
                         {% endif %}
                     </div>
                 </div>
@@ -194,17 +334,17 @@
 
                 {# Produkty #}
                 <div class="card mb-3">
-                    <div class="card-header bg-white d-flex justify-content-between">
-                        <span><i class="bi bi-bag"></i> Produkty</span>
-                        <span class="badge bg-secondary">{{ total_products }} szt.</span>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-bag me-1"></i> Produkty</span>
+                        <span class="badge bg-secondary rounded-pill">{{ total_products }} szt.</span>
                     </div>
                     <div class="card-body p-0">
-                        <table class="table table-striped mb-0">
-                            <thead class="table-light">
-                                <tr>
+                        <table class="table products-table mb-0">
+                            <thead>
+                                <tr class="table-light">
                                     <th>Produkt</th>
-                                    <th class="text-center">Ilosc</th>
-                                    <th class="text-end">Cena</th>
+                                    <th class="text-center" style="width:60px">Ilosc</th>
+                                    <th class="text-end" style="width:100px">Cena</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -221,18 +361,18 @@
                                 </tr>
                                 {% endfor %}
                             </tbody>
-                            <tfoot class="table-light">
-                                <tr>
-                                    <td colspan="2"><strong>Produkty</strong></td>
-                                    <td class="text-end"><strong>{{ '%.2f'|format(products_total) }} zl</strong></td>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td colspan="2">Produkty</td>
+                                    <td class="text-end fw-semibold">{{ '%.2f'|format(products_total) }} zl</td>
                                 </tr>
                                 {% if delivery_cost > 0 %}
-                                <tr>
+                                <tr class="table-light">
                                     <td colspan="2">Wysylka</td>
                                     <td class="text-end">{{ '%.2f'|format(delivery_cost) }} zl</td>
                                 </tr>
                                 {% endif %}
-                                <tr class="fw-bold">
+                                <tr class="table-light fw-bold">
                                     <td colspan="2">Razem</td>
                                     <td class="text-end">{{ '%.2f'|format(order_total) }} zl</td>
                                 </tr>
@@ -243,27 +383,27 @@
             </div>
 
             {# Prawa kolumna #}
-            <div class="col-lg-5 mb-4">
+            <div class="col-lg-5">
                 {# Adres dostawy #}
                 <div class="card mb-3">
-                    <div class="card-header bg-white">
-                        <i class="bi bi-geo-alt"></i> Adres dostawy
+                    <div class="card-header">
+                        <i class="bi bi-geo-alt me-1"></i> Adres dostawy
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="font-size:0.9rem">
                         {% if order.delivery_point_name %}
                         <p class="mb-1">
-                            <span class="badge bg-info">Punkt odbioru</span>
+                            <span class="badge bg-info rounded-pill">Punkt odbioru</span>
                         </p>
-                        <p class="mb-1"><strong>{{ order.delivery_point_name }}</strong></p>
+                        <p class="mb-1 fw-semibold">{{ order.delivery_point_name }}</p>
                         <p class="mb-1">{{ order.delivery_point_address }}</p>
-                        <p class="mb-0">{{ order.delivery_point_postcode }} {{ order.delivery_point_city }}</p>
+                        <p class="mb-0 text-muted">{{ order.delivery_point_postcode }} {{ order.delivery_point_city }}</p>
                         {% else %}
-                        <p class="mb-1"><strong>{{ order.delivery_fullname or order.customer_name or '-' }}</strong></p>
+                        <p class="mb-1 fw-semibold">{{ order.delivery_fullname or order.customer_name or '-' }}</p>
                         {% if order.delivery_company %}
                         <p class="mb-1">{{ order.delivery_company }}</p>
                         {% endif %}
                         <p class="mb-1">{{ order.delivery_address or '-' }}</p>
-                        <p class="mb-0">
+                        <p class="mb-0 text-muted">
                             {{ order.delivery_postcode or '' }} {{ order.delivery_city or '' }}
                         </p>
                         {% endif %}
@@ -273,12 +413,12 @@
                 {# Dane do faktury #}
                 {% if invoice_data %}
                 <div class="card mb-3">
-                    <div class="card-header bg-white">
-                        <i class="bi bi-receipt"></i> Dane do faktury
+                    <div class="card-header">
+                        <i class="bi bi-receipt me-1"></i> Dane do faktury
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="font-size:0.9rem">
                         {% if invoice_data.company %}
-                        <p class="mb-1"><strong>{{ invoice_data.company }}</strong></p>
+                        <p class="mb-1 fw-semibold">{{ invoice_data.company }}</p>
                         {% endif %}
                         {% if invoice_data.nip %}
                         <p class="mb-1">NIP: {{ invoice_data.nip }}</p>
@@ -287,7 +427,7 @@
                         <p class="mb-1">{{ invoice_data.name }}</p>
                         {% endif %}
                         <p class="mb-1">{{ invoice_data.address or '' }}</p>
-                        <p class="mb-0">{{ invoice_data.postcode or '' }} {{ invoice_data.city or '' }}</p>
+                        <p class="mb-0 text-muted">{{ invoice_data.postcode or '' }} {{ invoice_data.city or '' }}</p>
                     </div>
                 </div>
                 {% endif %}
@@ -295,17 +435,17 @@
                 {# Historia statusow #}
                 {% if status_history %}
                 <div class="card mb-3">
-                    <div class="card-header bg-white">
-                        <i class="bi bi-clock-history"></i> Historia realizacji
+                    <div class="card-header">
+                        <i class="bi bi-clock-history me-1"></i> Historia realizacji
                     </div>
                     <div class="card-body">
                         {% for entry in status_history|reverse %}
-                        <div class="timeline-item">
-                            <div class="timeline-dot">
+                        <div class="tl-item">
+                            <div class="tl-dot">
                                 <i class="bi {{ entry.icon }}"></i>
                             </div>
                             <div>
-                                <strong>{{ entry.label }}</strong>
+                                <strong style="font-size:0.9rem">{{ entry.label }}</strong>
                                 <br>
                                 <small class="text-muted">
                                     {{ entry.timestamp.strftime('%d.%m.%Y, %H:%M') }}
@@ -319,33 +459,64 @@
 
                 {# Platnosc #}
                 <div class="card mb-3">
-                    <div class="card-header bg-white">
-                        <i class="bi bi-credit-card"></i> Platnosc
+                    <div class="card-header">
+                        <i class="bi bi-credit-card me-1"></i> Platnosc
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="font-size:0.9rem">
                         {% if order.payment_method %}
                         <p class="mb-1">
-                            <strong>Metoda:</strong> {{ order.payment_method }}
+                            <span class="text-muted">Metoda:</span> {{ order.payment_method }}
                         </p>
                         {% endif %}
                         {% if order.payment_done %}
                         <p class="mb-0">
-                            <strong>Zaplacono:</strong>
-                            <span class="text-success">{{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}</span>
+                            <span class="text-muted">Zaplacono:</span>
+                            <span class="text-success fw-semibold">{{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}</span>
                         </p>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
-    <div class="footer-bar mt-auto">
-        <div class="container text-center">
-            <p class="mb-1">Retriever Shop</p>
-            <p class="small mb-0">Masz pytania? Napisz do nas przez wiadomosci na Allegro.</p>
+    {# ===== FOOTER ===== #}
+    <footer class="site-footer">
+        <div class="container">
+            <div class="row align-items-start">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png"
+                             alt="Retriever Shop" style="height:28px; filter:brightness(1.1)">
+                        <span class="footer-brand">Retriever Shop</span>
+                    </div>
+                    <p class="mb-0" style="font-size:0.8rem">Akcesoria dla psow z pasja do jakosci.</p>
+                </div>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <p class="fw-semibold text-white mb-2" style="font-size:0.85rem">Kontakt</p>
+                    <p class="mb-1">
+                        <i class="bi bi-envelope me-1"></i>
+                        <a href="mailto:kontakt@retrievershop.pl">kontakt@retrievershop.pl</a>
+                    </p>
+                    <p class="mb-0">
+                        <i class="bi bi-globe me-1"></i>
+                        <a href="https://retrievershop.pl" target="_blank" rel="noopener">retrievershop.pl</a>
+                    </p>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <p class="fw-semibold text-white mb-2" style="font-size:0.85rem">Pomoc</p>
+                    <p class="mb-0">Masz pytania? Napisz do nas przez
+                        <a href="https://allegro.pl/pomoc" target="_blank" rel="noopener">wiadomosci Allegro</a>
+                        lub email.
+                    </p>
+                </div>
+            </div>
+            <div class="footer-divider"></div>
+            <p class="text-center mb-0" style="font-size:0.75rem; color:rgba(255,255,255,0.35)">
+                Retriever Shop &copy; {{ date_add.year if date_add else 2026 }}
+            </p>
         </div>
-    </div>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
             integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
