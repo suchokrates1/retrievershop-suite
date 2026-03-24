@@ -69,7 +69,7 @@ def generate_and_send_invoice(order_id: str) -> dict:
                 "unit": "szt.",
                 "count": op.quantity or 1,
                 "price": price,
-                "vat": "23",
+                "vat": "zw",
             })
 
         if not items:
@@ -84,7 +84,7 @@ def generate_and_send_invoice(order_id: str) -> dict:
                 "unit": "szt.",
                 "count": 1,
                 "price": delivery_price,
-                "vat": "23",
+                "vat": "zw",
             })
 
         try:
@@ -117,6 +117,8 @@ def generate_and_send_invoice(order_id: str) -> dict:
                 contractor_id=contractor_id,
                 items=items,
                 payment_method="transfer",
+                invoice_type="bill",
+                description=f"Zamowienie {order_id}",
             )
             invoice_id = inv["invoice_id"]
             invoice_number = inv["invoice_number"]
