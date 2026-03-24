@@ -10,7 +10,7 @@ import sqlite3
 
 def migrate(db_path):
     """Add wfirma invoice and email tracking columns to orders."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30)
     cursor = conn.cursor()
 
     try:
