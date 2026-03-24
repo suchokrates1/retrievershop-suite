@@ -588,9 +588,83 @@
                 </div>
                 <div class="card-body">
                     <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
-                       target="_blank" class="btn btn-outline-secondary w-100">
+                       target="_blank" class="btn btn-outline-secondary w-100 mb-2">
                         <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
                     </a>
+                    {% if customer_page_url %}
+                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
+                        <i class="bi bi-person-lines-fill"></i> Strona klienta
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif customer_page_url %}
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lightning"></i> Szybkie akcje
+                </div>
+                <div class="card-body">
+                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
+                        <i class="bi bi-person-lines-fill"></i> Strona klienta
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Komunikacja z klientem #}
+            <div class="card mb-3 mt-3">
+                <div class="card-header">
+                    <i class="bi bi-envelope"></i> Komunikacja z klientem
+                </div>
+                <div class="card-body">
+                    {% if email_log %}
+                    <ul class="list-unstyled mb-0">
+                        {% for em in email_log %}
+                        <li class="d-flex align-items-center mb-2">
+                            <span class="badge bg-success me-2"><i class="bi bi-check"></i></span>
+                            {{ em.label }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">Brak wyslanych emaili</p>
+                    {% endif %}
+
+                    {% if order.email %}
+                    <hr>
+                    <p class="mb-0 small text-muted">
+                        <i class="bi bi-at"></i> {{ order.email }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Faktura wFirma #}
+            {% if wfirma_invoice_id or order.want_invoice %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-receipt"></i> Faktura
+                </div>
+                <div class="card-body">
+                    {% if wfirma_invoice_number %}
+                    <p class="mb-2">
+                        <strong>Nr:</strong> {{ wfirma_invoice_number }}
+                    </p>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('orders.download_invoice_pdf', order_id=order.order_id) }}"
+                           target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> Podglad
+                        </a>
+                        <a href="{{ url_for('orders.download_invoice_pdf', order_id=order.order_id) }}"
+                           download class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-download"></i> Pobierz
+                        </a>
+                    </div>
+                    {% elif order.want_invoice %}
+                    <p class="text-warning mb-0">
+                        <i class="bi bi-hourglass-split"></i> Klient chce fakture - oczekuje na wystawienie
+                    </p>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
