@@ -91,6 +91,30 @@ ENV_INFO = {
         "URL Proxy Allegro",
         "Adres proxy dla scrapera Allegro (format: user:pass@host:port)",
     ),
+    "SENDER_NAME": (
+        "Nazwa nadawcy przesylki",
+        "Nazwa firmy/osoby na etykiecie nadawczej",
+    ),
+    "SENDER_STREET": (
+        "Ulica nadawcy",
+        "Adres ulicy nadawcy na etykiecie",
+    ),
+    "SENDER_CITY": (
+        "Miasto nadawcy",
+        "Miasto nadawcy na etykiecie",
+    ),
+    "SENDER_ZIPCODE": (
+        "Kod pocztowy nadawcy",
+        "Kod pocztowy nadawcy na etykiecie",
+    ),
+    "SENDER_EMAIL": (
+        "Email nadawcy",
+        "Adres email nadawcy na etykiecie",
+    ),
+    "SENDER_PHONE": (
+        "Telefon nadawcy",
+        "Numer telefonu nadawcy na etykiecie",
+    ),
     "PRICE_MAX_DISCOUNT_PERCENT": (
         "Max znizka dla sugestii cen (%)",
         "Maksymalny procent obnizki przy ktorym pokazywane sa sugestie cen w raportach (domyslnie 5%)",
