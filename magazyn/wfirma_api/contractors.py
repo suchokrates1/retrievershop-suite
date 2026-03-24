@@ -1,0 +1,178 @@
+"""
+Zarzadzanie kontrahentami w wFirma.
+
+Endpointy:
+- POST /contractors/add - tworzenie kontrahenta
+- POST /contractors/find - wyszukiwanie kontrahentow
+"""
+import logging
+from typing import Optional
+
+from .client import WFirmaClient, WFirmaError
+
+logger = logging.getLogger(__name__)
+
+
+def find_contractor(
+    client: WFirmaClient,
+    *,
+    nip: Optional[str] = None,
+    name: Optional[str] = None,
+) -> Optional[dict]:
+    """
+    Wyszukaj kontrahenta w wFirma po NIP lub nazwie.
+
+    Parameters
+    ----------
+    client : WFirmaClient
+        Klient API.
+    nip : str, optional
+        NIP kontrahenta (priorytetowe wyszukiwanie).
+    name : str, optional
+        Nazwa kontrahenta (fallback).
+
+    Returns
+    -------
+    dict or None
+        Dane kontrahenta (id, name, nip, ...) lub None.
+    """
+    if not nip and not name:
+        return None
+
+    # Priorytet: szukaj po NIP
+    field = "nip" if nip else "name"
+    value = nip if nip else name
+
+    data = {
+        "contractors": [{
+            "parameters": {
+                "conditions": {
+                    "condition": {
+                        "field": field,
+                        "operator": "eq",
+                        "value": value,
+                    }
+                }
+            }
+        }]
+    }
+
+    result = client.request("contractors/find", data=data)
+    contractors = result.get("contractors", [])
+
+    if not contractors:
+        return None
+
+    contractor = contractors[0].get("contractor", {})
+    logger.debug("Znaleziono kontrahenta wFirma: %s (id=%s)", contractor.get("name"), contractor.get("id"))
+    return contractor
+
+
+def create_contractor(
+    client: WFirmaClient,
+    *,
+    name: str,
+    street: str = "",
+    zip_code: str = "",
+    city: str = "",
+    country: str = "PL",
+    nip: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+) -> dict:
+    """
+    Utworz kontrahenta w wFirma.
+
+    Parameters
+    ----------
+    client : WFirmaClient
+        Klient API.
+    name : str
+        Nazwa kontrahenta (firma lub imie i nazwisko).
+    street, zip_code, city, country : str
+        Adres.
+    nip : str, optional
+        NIP (dla firm).
+    email, phone : str, optional
+        Dane kontaktowe.
+
+    Returns
+    -------
+    dict
+        {"contractor_id": int, "name": str}
+    """
+    contractor = {
+        "name": name,
+        "street": street,
+        "zip": zip_code,
+        "city": city,
+        "country": country,
+    }
+    if nip:
+        contractor["nip"] = nip
+    if email:
+        contractor["email"] = email
+    if phone:
+        contractor["phone"] = phone
+
+    data = {
+        "contractors": [{
+            "contractor": contractor,
+        }]
+    }
+
+    result = client.request("contractors/add", data=data)
+    contractors = result.get("contractors", [])
+
+    if not contractors:
+        raise WFirmaError("wFirma nie zwrocil danych kontrahenta", details=result)
+
+    new_contractor = contractors[0].get("contractor", {})
+    contractor_id = new_contractor.get("id")
+
+    logger.info("Utworzono kontrahenta wFirma: %s (id=%s)", name, contractor_id)
+
+    return {
+        "contractor_id": contractor_id,
+        "name": name,
+    }
+
+
+def find_or_create_contractor(
+    client: WFirmaClient,
+    *,
+    name: str,
+    street: str = "",
+    zip_code: str = "",
+    city: str = "",
+    country: str = "PL",
+    nip: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+) -> int:
+    """
+    Znajdz istniejacego kontrahenta lub utworz nowego.
+
+    Szuka po NIP (jesli podany) lub nazwie. Jesli nie znajdzie - tworzy.
+
+    Returns
+    -------
+    int
+        ID kontrahenta w wFirma.
+    """
+    existing = find_contractor(client, nip=nip, name=name)
+    if existing:
+        return existing["id"]
+
+    result = create_contractor(
+        client,
+        name=name,
+        street=street,
+        zip_code=zip_code,
+        city=city,
+        country=country,
+        nip=nip,
+        email=email,
+        phone=phone,
+    )
+    return result["contractor_id"]
