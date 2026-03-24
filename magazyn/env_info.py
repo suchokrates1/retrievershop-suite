@@ -58,7 +58,15 @@ ENV_INFO = {
     "SMTP_SERVER": ("Serwer SMTP", "Adres serwera SMTP do wysyłki e-mail"),
     "SMTP_PORT": ("Port SMTP", "Port serwera SMTP"),
     "SMTP_USERNAME": ("Użytkownik SMTP", "Login do serwera SMTP"),
-    "SMTP_PASSWORD": ("Hasło SMTP", "Hasło do serwera SMTP"),
+    "SMTP_PASSWORD": ("Haslo SMTP", "Haslo do serwera SMTP"),
+    "EMAIL_FROM_NAME": (
+        "Nazwa nadawcy email",
+        "Nazwa wyswietlana jako nadawca maili do klientow (domyslnie: Retriever Shop)",
+    ),
+    "APP_BASE_URL": (
+        "Bazowy URL aplikacji",
+        "Publiczny adres aplikacji do linkow w mailach, np. https://magazyn.retrievershop.pl",
+    ),
     "ENABLE_WEEKLY_REPORTS": (
         "Raport tygodniowy",
         "Wysyłaj raport tygodniowy",
