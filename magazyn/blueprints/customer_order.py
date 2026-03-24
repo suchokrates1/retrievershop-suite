@@ -2,7 +2,7 @@
 Blueprint publicznej strony zamowienia dla klienta.
 
 Dostepna bez logowania - autoryzacja przez unikalny token w URL.
-Odpowiednik strony zamowienia BaseLinker z danymi, trackingiem, faktura.
+Strona zamowienia z danymi, trackingiem, faktura.
 """
 
 import logging

@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Dodaj zamowienie reczne</h2>
+    <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Powrot
+    </a>
+</div>
+
+<form method="post" action="{{ url_for('orders.add_order') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# Platforma i dane klienta #}
+    <div class="card mb-3">
+        <div class="card-header"><strong>Dane zamowienia</strong></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="platform" class="form-label">Platforma</label>
+                    <select name="platform" id="platform" class="form-select" required>
+                        <option value="olx">OLX</option>
+                        <option value="allegro_manual">Allegro (reczne)</option>
+                        <option value="shop">Sklep</option>
+                        <option value="inne">Inne</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="external_order_id" class="form-label">Nr zamowienia (zewn.)</label>
+                    <input type="text" name="external_order_id" id="external_order_id" class="form-control"
+                           placeholder="np. numer OLX">
+                </div>
+                <div class="col-md-3">
+                    <label for="payment_method" class="form-label">Metoda platnosci</label>
+                    <select name="payment_method" id="payment_method" class="form-select">
+                        <option value="przelew">Przelew</option>
+                        <option value="za_pobraniem">Za pobraniem</option>
+                        <option value="gotowka">Gotowka</option>
+                        <option value="blik">BLIK</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="payment_done" class="form-label">Zaplacono (PLN)</label>
+                    <input type="number" step="0.01" min="0" name="payment_done" id="payment_done" class="form-control" value="0">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Dane klienta #}
+    <div class="card mb-3">
+        <div class="card-header"><strong>Klient</strong></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="customer_name" class="form-label">Imie i nazwisko</label>
+                    <input type="text" name="customer_name" id="customer_name" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" name="email" id="email" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label for="phone" class="form-label">Telefon</label>
+                    <input type="text" name="phone" id="phone" class="form-control">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Adres dostawy #}
+    <div class="card mb-3">
+        <div class="card-header"><strong>Adres dostawy</strong></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="delivery_fullname" class="form-label">Imie i nazwisko odbiorcy</label>
+                    <input type="text" name="delivery_fullname" id="delivery_fullname" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label for="delivery_company" class="form-label">Firma (opcjonalnie)</label>
+                    <input type="text" name="delivery_company" id="delivery_company" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label for="delivery_address" class="form-label">Adres</label>
+                    <input type="text" name="delivery_address" id="delivery_address" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="delivery_postcode" class="form-label">Kod pocztowy</label>
+                    <input type="text" name="delivery_postcode" id="delivery_postcode" class="form-control"
+                           pattern="\d{2}-\d{3}" placeholder="00-000">
+                </div>
+                <div class="col-md-3">
+                    <label for="delivery_city" class="form-label">Miasto</label>
+                    <input type="text" name="delivery_city" id="delivery_city" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="delivery_method" class="form-label">Metoda dostawy</label>
+                    <select name="delivery_method" id="delivery_method" class="form-select">
+                        <option value="Kurier DPD">Kurier DPD</option>
+                        <option value="Kurier InPost">Kurier InPost</option>
+                        <option value="InPost Paczkomat">InPost Paczkomat</option>
+                        <option value="Poczta Polska">Poczta Polska</option>
+                        <option value="Odbior osobisty">Odbior osobisty</option>
+                        <option value="Inna">Inna</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="delivery_price" class="form-label">Koszt dostawy (PLN)</label>
+                    <input type="number" step="0.01" min="0" name="delivery_price" id="delivery_price" class="form-control" value="0">
+                </div>
+                <div class="col-md-4">
+                    <label for="delivery_package_nr" class="form-label">Nr przesylki (opcj.)</label>
+                    <input type="text" name="delivery_package_nr" id="delivery_package_nr" class="form-control">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Punkt odbioru #}
+    <div class="card mb-3" id="pickup-point-card" style="display:none;">
+        <div class="card-header"><strong>Punkt odbioru (paczkomat)</strong></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="delivery_point_id" class="form-label">ID paczkomatu</label>
+                    <input type="text" name="delivery_point_id" id="delivery_point_id" class="form-control"
+                           placeholder="np. KRA01A">
+                </div>
+                <div class="col-md-4">
+                    <label for="delivery_point_address" class="form-label">Adres paczkomatu</label>
+                    <input type="text" name="delivery_point_address" id="delivery_point_address" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label for="delivery_point_city" class="form-label">Miasto</label>
+                    <input type="text" name="delivery_point_city" id="delivery_point_city" class="form-control">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Produkty #}
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Produkty</strong>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addProductRow()">
+                <i class="bi bi-plus-lg"></i> Dodaj produkt
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="products-container">
+                <div class="row g-2 mb-2 product-row align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Nazwa produktu</label>
+                        <input type="text" name="prod_name[]" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">EAN / SKU</label>
+                        <input type="text" name="prod_ean[]" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">Ilosc</label>
+                        <input type="number" name="prod_qty[]" class="form-control form-control-sm" min="1" value="1" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Cena brutto</label>
+                        <input type="number" step="0.01" min="0" name="prod_price[]" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">ID aukcji</label>
+                        <input type="text" name="prod_auction[]" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeProductRow(this)" title="Usun">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Faktura #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <div class="form-check">
+                <input type="checkbox" name="want_invoice" id="want_invoice" class="form-check-input" value="1"
+                       onchange="document.getElementById('invoice-fields').style.display = this.checked ? '' : 'none';">
+                <label class="form-check-label" for="want_invoice"><strong>Faktura VAT</strong></label>
+            </div>
+        </div>
+        <div class="card-body" id="invoice-fields" style="display:none;">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="invoice_fullname" class="form-label">Nazwa / Imie i nazwisko</label>
+                    <input type="text" name="invoice_fullname" id="invoice_fullname" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label for="invoice_company" class="form-label">Firma</label>
+                    <input type="text" name="invoice_company" id="invoice_company" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label for="invoice_nip" class="form-label">NIP</label>
+                    <input type="text" name="invoice_nip" id="invoice_nip" class="form-control">
+                </div>
+                <div class="col-md-5">
+                    <label for="invoice_address" class="form-label">Adres</label>
+                    <input type="text" name="invoice_address" id="invoice_address" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label for="invoice_postcode" class="form-label">Kod pocztowy</label>
+                    <input type="text" name="invoice_postcode" id="invoice_postcode" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label for="invoice_city" class="form-label">Miasto</label>
+                    <input type="text" name="invoice_city" id="invoice_city" class="form-control">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Uwagi #}
+    <div class="card mb-3">
+        <div class="card-header"><strong>Uwagi</strong></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="user_comments" class="form-label">Komentarz klienta</label>
+                    <textarea name="user_comments" id="user_comments" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="col-md-6">
+                    <label for="admin_comments" class="form-label">Notatka wewnetrzna</label>
+                    <textarea name="admin_comments" id="admin_comments" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-end mb-4">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-check-lg"></i> Zapisz zamowienie
+        </button>
+    </div>
+</form>
+
+<script>
+document.getElementById('delivery_method').addEventListener('change', function() {
+    document.getElementById('pickup-point-card').style.display =
+        this.value === 'InPost Paczkomat' ? '' : 'none';
+});
+
+function addProductRow() {
+    const container = document.getElementById('products-container');
+    const row = container.querySelector('.product-row').cloneNode(true);
+    row.querySelectorAll('input').forEach(inp => {
+        if (inp.type === 'number' && inp.name === 'prod_qty[]') inp.value = '1';
+        else inp.value = '';
+    });
+    container.appendChild(row);
+}
+
+function removeProductRow(btn) {
+    const container = document.getElementById('products-container');
+    if (container.querySelectorAll('.product-row').length > 1) {
+        btn.closest('.product-row').remove();
+    }
+}
+</script>
+{% endblock %}

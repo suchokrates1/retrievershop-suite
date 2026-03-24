@@ -22,8 +22,6 @@ def _sync_from_allegro_events(app):
     3. Dla READY_FOR_PROCESSING: pobierz szczegoly -> sync_order_from_data()
     4. Dla BUYER_CANCELLED / AUTO_CANCELLED: aktualizuj status
     5. Zapisz nowy last_event_id
-
-    Tryb dual-run: dziala obok BaseLinker sync, loguje roznice.
     """
     from .db import get_session
     from .orders import sync_order_from_data, add_order_status
@@ -341,7 +339,6 @@ def _process_pending_invoices():
 
 def _sync_worker(app):
     """Background worker that syncs orders and parcel statuses every hour."""
-    from .orders import _sync_orders_from_baselinker, ALL_STATUS_IDS
     from .parcel_tracking import sync_parcel_statuses
     from .returns import sync_returns
     
@@ -352,7 +349,7 @@ def _sync_worker(app):
     while not _stop_event.is_set():
         try:
             with app.app_context():
-                # 0. Sync zamowien z Allegro Events API (nowy, inkrementalny)
+                # 0. Sync zamowien z Allegro Events API (inkrementalny)
                 logger.info("Starting Allegro Events sync")
                 ev_stats = _sync_from_allegro_events(app)
                 logger.info(
@@ -361,12 +358,7 @@ def _sync_worker(app):
                     f"errors={ev_stats['errors']}"
                 )
 
-                # 1. Sync orders from BaseLinker (dual-run - do usuniecia po migracji)
-                logger.info("Starting automatic order sync (last 30 days, all statuses)")
-                synced = _sync_orders_from_baselinker(ALL_STATUS_IDS, days=30)
-                logger.info(f"Automatic order sync completed: {synced} orders synced")
-                
-                # 2. Sync parcel tracking statuses from Allegro
+                # 1. Sync parcel tracking statuses from Allegro
                 logger.info("Starting automatic parcel tracking sync")
                 stats = sync_parcel_statuses()
                 logger.info(
@@ -374,7 +366,7 @@ def _sync_worker(app):
                     f"updated={stats['updated']}, errors={stats['errors']}"
                 )
                 
-                # 3. Sync fulfillment status z Allegro checkout-forms API
+                # 2. Sync fulfillment status z Allegro checkout-forms API
                 logger.info("Starting Allegro fulfillment sync")
                 f_stats = _sync_allegro_fulfillment(app)
                 logger.info(
@@ -382,12 +374,12 @@ def _sync_worker(app):
                     f"updated={f_stats['updated']}, errors={f_stats['errors']}"
                 )
                 
-                # 4. Sync returns - sprawdz zwroty, wyslij powiadomienia, aktualizuj stany
+                # 3. Sync returns - sprawdz zwroty, wyslij powiadomienia, aktualizuj stany
                 logger.info("Starting automatic returns sync")
                 returns_stats = sync_returns()
                 logger.info(f"Returns sync completed: {returns_stats}")
 
-                # 4b. Automatyczne wystawianie faktur dla zamowien z want_invoice
+                # 4. Automatyczne wystawianie faktur dla zamowien z want_invoice
                 try:
                     inv_stats = _process_pending_invoices()
                     if inv_stats["processed"] > 0:
@@ -410,7 +402,7 @@ def _sync_worker(app):
                     except Exception as offer_err:
                         logger.error(f"Error in daily offer sync: {offer_err}", exc_info=True)
                     
-                    # 6. Sync wyrozien Allegro (razem z ofertami, raz dziennie)
+                    # 6. Sync promowanych ofert Allegro (raz dziennie)
                     logger.info("Starting daily promo sync")
                     try:
                         from .services.allegro_promotions import get_promotions_summary

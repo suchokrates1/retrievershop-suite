@@ -347,18 +347,18 @@ class Message(Base):
 
 
 # =============================================================================
-# Orders System - Full BaseLinker order data with status tracking
+# Orders System - zamowienia z Allegro i reczne
 # =============================================================================
 
 class Order(Base):
-    """Full order data from BaseLinker API."""
+    """Dane zamowienia."""
     __tablename__ = "orders"
     __table_args__ = (
         Index("idx_orders_date_add", "date_add"),
         Index("idx_orders_platform", "platform"),
     )
     
-    # Primary key - BaseLinker order_id
+    # Primary key - identyfikator zamowienia
     order_id = Column(String, primary_key=True)
     external_order_id = Column(String, nullable=True)  # e.g. Allegro order number
     shop_order_id = Column(Integer, nullable=True)
@@ -455,9 +455,9 @@ class OrderProduct(Base):
     id = Column(Integer, primary_key=True)
     order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
     
-    # BaseLinker product data
-    order_product_id = Column(Integer, nullable=True)  # BaseLinker order item ID
-    product_id = Column(String, nullable=True)  # BaseLinker/shop product ID
+    # Dane produktu
+    order_product_id = Column(Integer, nullable=True)
+    product_id = Column(String, nullable=True)
     variant_id = Column(String, nullable=True)
     sku = Column(String, nullable=True)
     ean = Column(String, nullable=True)  # Key for linking to ProductSize

@@ -52,7 +52,6 @@ BOOLEAN_KEYS = {
 # Grupowanie ustawien w sekcje (klucz -> (nazwa_grupy, ikona))
 SETTINGS_GROUPS = {
     "API_TOKEN": ("API i Integracje", "bi-plug"),
-    "BASELINKER_WEBHOOK_TOKEN": ("API i Integracje", "bi-plug"),
     "ALLEGRO_SCRAPER_API_URL": ("Allegro", "bi-shop"),
     "ALLEGRO_PROXY_URL": ("Allegro", "bi-shop"),
     "COMMISSION_ALLEGRO": ("Allegro", "bi-shop"),
@@ -168,7 +167,7 @@ def _make_error_notifier():
 
 
 def _api_token_ok(value: Optional[str]) -> bool:
-    expected = settings.BASELINKER_WEBHOOK_TOKEN or settings.API_TOKEN
+    expected = settings.API_TOKEN
     if not expected:
         return False
     return hmac.compare_digest(str(value or ""), str(expected))

@@ -1,5 +1,5 @@
 ENV_INFO = {
-    "API_TOKEN": ("Token API", "Klucz API BaseLinker do pobierania zamówień"),
+    "API_TOKEN": ("Token API", "Klucz API do uwierzytelniania zewnetrznych zapytan"),
     "PAGE_ACCESS_TOKEN": (
         "Token Dostępu Strony",
         "Token strony w Messengerze do wysyłania powiadomień",
@@ -78,10 +78,6 @@ ENV_INFO = {
     "PACKAGING_COST": (
         "Cena pakowania",
         "Koszt pakowania jednego zamowienia (PLN)",
-    ),
-    "BASELINKER_WEBHOOK_TOKEN": (
-        "Token webhook BaseLinker",
-        "Sekretny token do wywołań URL z BaseLinker (Wywołaj URL)",
     ),
     "ALLEGRO_SCRAPER_API_URL": (
         "URL Scrapera Allegro",

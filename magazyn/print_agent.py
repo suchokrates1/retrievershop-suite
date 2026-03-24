@@ -65,7 +65,7 @@ class ConfigError(Exception):
 
 
 class ApiError(Exception):
-    """Raised when the Baselinker API call fails."""
+    """Raised when an API call fails."""
 
 
 class PrintError(Exception):
@@ -106,7 +106,7 @@ class AgentConfig:
     log_file: str
     db_file: str
     lock_file: str
-    base_url: str = "https://api.baselinker.com/connector.php"
+    base_url: str = ""  # nieuzywane - zachowane dla kompatybilnosci konfiguracji
     legacy_printed_file: Optional[str] = None
     legacy_queue_file: Optional[str] = None
     legacy_db_file: Optional[str] = None
@@ -182,10 +182,6 @@ class LabelAgent:
         self._last_api_log = datetime.now()
         self._api_call_times: Deque[float] = deque()
         self._label_error_notifications: Dict[str, int] = {}  # Śledzenie ile razy wysłano powiadomienie o błędzie
-        self._headers = {
-            "X-BLToken": config.api_token,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
         self._configure_logging(initial=True)
         self._configure_db_engine()
 
@@ -244,7 +240,6 @@ class LabelAgent:
         """Reload configuration from ``.env`` and update the agent state."""
         self.settings = load_config()
         self.config = AgentConfig.from_settings(self.settings)
-        self._headers["X-BLToken"] = self.config.api_token
         self._configure_logging()
         self._configure_db_engine()
         globals()["settings"] = self.settings
@@ -744,87 +739,6 @@ class LabelAgent:
                 while self._api_call_times and now - self._api_call_times[0] >= window:
                     self._api_call_times.popleft()
             self._api_call_times.append(time.monotonic())
-
-    def call_api(
-        self,
-        method: str,
-        parameters: Optional[Dict[str, Any]] = None,
-        *,
-        raise_on_error: bool = False,
-    ) -> Dict[str, Any]:
-        parameters = parameters or {}
-        max_attempts = max(1, self.config.api_retry_attempts)
-        backoff_initial = max(0.0, self.config.api_retry_backoff_initial)
-        backoff_max = max(backoff_initial, self.config.api_retry_backoff_max)
-        attempts = 0
-        last_error: Optional[Exception] = None
-
-        while attempts < max_attempts and not self._stop_event.is_set():
-            attempts += 1
-            try:
-                self._enforce_rate_limit()
-            except ApiError as exc:
-                last_error = exc
-                self.logger.error("Rate limit error in call_api(%s): %s", method, exc)
-                break
-
-            success = False
-            response_data: Dict[str, Any] = {}
-            attempt_error: Optional[Exception] = None
-            try:
-                payload = {"method": method, "parameters": json.dumps(parameters)}
-                response = requests.post(
-                    self.config.base_url,
-                    headers=self._headers,
-                    data=payload,
-                    timeout=10,
-                )
-                response.raise_for_status()
-                response_data = response.json()
-                success = True
-            except requests.exceptions.HTTPError as exc:
-                attempt_error = exc
-                last_error = exc
-                self.logger.error("HTTP error in call_api(%s): %s", method, exc)
-            except requests.exceptions.RequestException as exc:
-                attempt_error = exc
-                last_error = exc
-                self.logger.error("Request error in call_api(%s): %s", method, exc)
-            except Exception as exc:  # pragma: no cover - defensive
-                attempt_error = exc
-                last_error = exc
-                self.logger.error("Błąd w call_api(%s): %s", method, exc)
-            finally:
-                self._api_calls_total += 1
-                if success:
-                    self._api_calls_success += 1
-                self._maybe_log_api_summary()
-
-            if success:
-                return response_data
-
-            if attempts >= max_attempts:
-                break
-
-            delay = backoff_initial * (2 ** (attempts - 1))
-            if delay > backoff_max:
-                delay = backoff_max
-            if delay > 0 and attempt_error is not None:
-                self.logger.warning(
-                    "call_api(%s) retrying in %.1fs (attempt %s/%s)",
-                    method,
-                    delay,
-                    attempts + 1,
-                    max_attempts,
-                )
-                PRINT_AGENT_RETRIES_TOTAL.inc()
-                PRINT_AGENT_DOWNTIME_SECONDS.inc(delay)
-                if self._stop_event.wait(delay):
-                    break
-
-        if raise_on_error and last_error is not None:
-            raise ApiError(str(last_error)) from last_error
-        return {}
 
     def get_orders(self) -> List[Dict[str, Any]]:
         """Pobierz zamowienia gotowe do druku z lokalnej bazy danych.
