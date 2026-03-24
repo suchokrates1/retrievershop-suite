@@ -1,6 +1,7 @@
 """Orders blueprint - view and manage BaseLinker orders."""
 import json
 import re
+import secrets
 import time
 import logging
 import unicodedata
@@ -859,6 +860,7 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         
         if not order:
             order = Order(order_id=order_id)
+            order.customer_token = secrets.token_urlsafe(32)
             db.add(order)
             is_new_order = True
     

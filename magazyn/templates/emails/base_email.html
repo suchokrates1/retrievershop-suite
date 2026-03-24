@@ -1,0 +1,56 @@
+{# Bazowy szablon email - inline CSS dla kompatybilnosci z klientami pocztowymi #}
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Retriever Shop{% endblock %}</title>
+    <!--[if mso]>
+    <style>table,td{font-family:Arial,sans-serif!important;}</style>
+    <![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;">
+        <tr>
+            <td align="center" style="padding:20px 10px;">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+                    {# Naglowek #}
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);padding:24px 30px;text-align:center;border-radius:8px 8px 0 0;">
+                            <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Retriever Shop" height="36" style="display:inline-block;vertical-align:middle;">
+                            <span style="color:#ffffff;font-size:18px;margin-left:12px;vertical-align:middle;">Retriever Shop</span>
+                        </td>
+                    </tr>
+                    {# Tresc #}
+                    <tr>
+                        <td style="background-color:#ffffff;padding:30px;">
+                            {% block content %}{% endblock %}
+                        </td>
+                    </tr>
+                    {# Przycisk do strony zamowienia #}
+                    {% block order_link %}
+                    {% if order_page_url %}
+                    <tr>
+                        <td style="background-color:#ffffff;padding:0 30px 30px;text-align:center;">
+                            <a href="{{ order_page_url }}" style="display:inline-block;padding:12px 28px;background-color:#198754;color:#ffffff;text-decoration:none;font-weight:bold;border-radius:6px;font-size:14px;">
+                                Sprawdz status zamowienia
+                            </a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endblock %}
+                    {# Stopka #}
+                    <tr>
+                        <td style="background-color:#f4f4f7;padding:20px 30px;text-align:center;border-radius:0 0 8px 8px;">
+                            <p style="margin:0 0 4px;font-size:12px;color:#9b9b9b;">Retriever Shop</p>
+                            <p style="margin:0;font-size:11px;color:#bbb;">
+                                Masz pytania? Napisz do nas przez wiadomosci na Allegro.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

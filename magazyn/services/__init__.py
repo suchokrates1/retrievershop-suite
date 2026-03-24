@@ -19,6 +19,13 @@ from .allegro_promotions import (
     check_and_notify_promotions,
     disable_promotion,
 )
+from .email_service import (
+    send_order_confirmation,
+    send_shipment_notification,
+    send_invoice_email,
+    send_delivery_confirmation,
+    send_invoice_correction,
+)
 
 # Re-export z domain dla kompatybilnosci wstecznej
 from ..domain.inventory import consume_order_stock
@@ -43,4 +50,10 @@ __all__ = [
     # Kompatybilnosc wsteczna
     "consume_order_stock",
     "get_sales_summary",
+    # Email do klienta
+    "send_order_confirmation",
+    "send_shipment_notification",
+    "send_invoice_email",
+    "send_delivery_confirmation",
+    "send_invoice_correction",
 ]

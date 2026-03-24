@@ -426,7 +426,10 @@ class Order(Base):
     
     # Raw products JSON (for reference, parsed into OrderProduct)
     products_json = Column(Text, nullable=True)
-    
+
+    # Token dostepu klienta do strony zamowienia (bez logowania)
+    customer_token = Column(String, nullable=True, unique=True, index=True)
+
     # Timestamps
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

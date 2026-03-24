@@ -1,0 +1,35 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Korekta faktury - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Korekta faktury</h2>
+<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
+    Do zamowienia <strong>#{{ order_id }}</strong> wystawiona zostala korekta faktury
+    {% if reason %}w zwiazku z: <strong>{{ reason }}</strong>{% endif %}.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff3cd;border-radius:8px;margin-bottom:20px;">
+    <tr>
+        <td style="padding:20px;">
+            <p style="margin:0 0 8px;font-size:13px;color:#664d03;">Informacja o korekcie:</p>
+            {% if refund_amount %}
+            <p style="margin:0 0 4px;font-size:14px;color:#333;">
+                Kwota zwrotu: <strong>{{ '%.2f'|format(refund_amount) }} zl</strong>
+            </p>
+            {% endif %}
+            {% if invoice_data %}
+            <p style="margin:0 0 4px;font-size:13px;color:#555;">
+                Nabywca: {{ invoice_data.company or invoice_data.name or '' }}
+            </p>
+            {% if invoice_data.nip %}
+            <p style="margin:0;font-size:13px;color:#555;">NIP: {{ invoice_data.nip }}</p>
+            {% endif %}
+            {% endif %}
+        </td>
+    </tr>
+</table>
+
+<p style="margin:0;font-size:13px;color:#888;line-height:1.6;">
+    Korekta faktury w formacie PDF zostala dolaczona do tej wiadomosci.
+    W razie pytan skontaktuj sie z nami przez wiadomosci na Allegro.
+</p>
+{% endblock %}
