@@ -141,7 +141,7 @@ def test_recreate_shipment_and_get_label(tmp_path, monkeypatch):
     cancel_called = []
     monkeypatch.setattr(
         pa, "cancel_shipment",
-        lambda ids: cancel_called.append(ids),
+        lambda sid: cancel_called.append(sid),
     )
 
     new_packages = [
@@ -167,7 +167,7 @@ def test_recreate_shipment_and_get_label(tmp_path, monkeypatch):
 
     assert label_data == "base64data"
     assert ext == "pdf"
-    assert cancel_called == [["old-ship-expired"]]
+    assert cancel_called == ["old-ship-expired"]
     assert "old-ship-expired" not in package_ids
     assert "new-ship-123" in package_ids
     assert "WAY123" in tracking_numbers
