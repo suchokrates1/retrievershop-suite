@@ -390,6 +390,95 @@
                 </div>
             </div>
 
+            {# Status history #}
+            {% if status_history %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-clock-history"></i> Historia statusow{% if return_info %} (wysylka){% endif %}
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                    {% for log in status_history %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
+                                    {% if log.tracking_number %}
+                                    <br><small class="text-muted">Nr: {{ log.tracking_number }}</small>
+                                    {% endif %}
+                                    {% if log.notes %}
+                                    <br><small class="text-muted">{{ log.notes }}</small>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
+                            </div>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Return status history (if return exists) #}
+            {% if return_info and return_status_history %}
+            <div class="card mb-3 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-arrow-return-left"></i> Historia zwrotu
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                    {% for log in return_status_history %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
+                                    {% if log.notes %}
+                                    <br><small class="text-muted">{{ log.notes }}</small>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
+                            </div>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Right column - szybkie akcje, platnosc, komunikacja, dokumenty #}
+        <div class="col-lg-4">
+            {# Quick actions #}
+            {% if order.external_order_id and order.platform == 'allegro' %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-lightning"></i> Szybkie akcje
+                </div>
+                <div class="card-body">
+                    <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
+                       target="_blank" class="btn btn-outline-secondary w-100 mb-2">
+                        <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
+                    </a>
+                    {% if customer_page_url %}
+                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
+                        <i class="bi bi-person-lines-fill"></i> Strona klienta
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif customer_page_url %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-lightning"></i> Szybkie akcje
+                </div>
+                <div class="card-body">
+                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
+                        <i class="bi bi-person-lines-fill"></i> Strona klienta
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
             {# Payment info #}
             <div class="card mb-3">
                 <div class="card-header">
@@ -521,40 +610,6 @@
                     {% endif %}
                 </div>
             </div>
-        </div>
-
-        {# Right column - szybkie akcje, komunikacja, dokumenty #}
-        <div class="col-lg-4">
-            {# Quick actions #}
-            {% if order.external_order_id and order.platform == 'allegro' %}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-lightning"></i> Szybkie akcje
-                </div>
-                <div class="card-body">
-                    <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
-                       target="_blank" class="btn btn-outline-secondary w-100 mb-2">
-                        <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
-                    </a>
-                    {% if customer_page_url %}
-                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
-                        <i class="bi bi-person-lines-fill"></i> Strona klienta
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-            {% elif customer_page_url %}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-lightning"></i> Szybkie akcje
-                </div>
-                <div class="card-body">
-                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
-                        <i class="bi bi-person-lines-fill"></i> Strona klienta
-                    </a>
-                </div>
-            </div>
-            {% endif %}
 
             {# Komunikacja z klientem #}
             <div class="card mb-3">
@@ -634,61 +689,6 @@
                             <i class="bi bi-download"></i> Pobierz
                         </a>
                     </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {# Status history #}
-            {% if status_history %}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-clock-history"></i> Historia statusow{% if return_info %} (wysylka){% endif %}
-                </div>
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
-                    {% for log in status_history %}
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
-                                    {% if log.tracking_number %}
-                                    <br><small class="text-muted">Nr: {{ log.tracking_number }}</small>
-                                    {% endif %}
-                                    {% if log.notes %}
-                                    <br><small class="text-muted">{{ log.notes }}</small>
-                                    {% endif %}
-                                </div>
-                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
-                            </div>
-                        </li>
-                    {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            {% endif %}
-
-            {# Return status history (if return exists) #}
-            {% if return_info and return_status_history %}
-            <div class="card mb-3 border-danger">
-                <div class="card-header bg-danger text-white">
-                    <i class="bi bi-arrow-return-left"></i> Historia zwrotu
-                </div>
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
-                    {% for log in return_status_history %}
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
-                                    {% if log.notes %}
-                                    <br><small class="text-muted">{{ log.notes }}</small>
-                                    {% endif %}
-                                </div>
-                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
-                            </div>
-                        </li>
-                    {% endfor %}
-                    </ul>
                 </div>
             </div>
             {% endif %}
