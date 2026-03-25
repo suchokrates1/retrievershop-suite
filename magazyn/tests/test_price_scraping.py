@@ -149,17 +149,21 @@ def test_save_report_item_no_competitors():
         assert added_item.competitor_is_super_seller is None
 
 
-# --- Test check_single_offer uzywa ceny z dialogu ---
+# --- Test check_single_offer uzywa ceny z API ---
 
-def test_check_single_offer_uses_dialog_price():
-    """Sprawdza ze check_single_offer uzywa ceny z dialogu zamiast z bazy."""
+def test_check_single_offer_uses_api_price():
+    """Sprawdza ze check_single_offer uzywa ceny z API/bazy (nie z dialogu).
+    
+    Dialog moze zawierac inna nasza oferte tego samego produktu z inna cena.
+    Dlatego uzywamy ceny z bazy (API) a nie z dialogu.
+    """
     import asyncio
     from magazyn.scripts.price_checker_ws import PriceCheckResult, CompetitorOffer
 
     mock_result = PriceCheckResult(
         offer_id="123",
         success=True,
-        my_price=95.0,  # Cena z dialogu (aktualna)
+        my_price=110.0,  # Cena z API (parametr)
         competitors=[
             CompetitorOffer(seller="A", price=100.0, price_with_delivery=108.99)
         ],
@@ -177,14 +181,14 @@ def test_check_single_offer_uses_dialog_price():
             offer = {
                 "offer_id": "123",
                 "title": "Test produkt",
-                "price": 110.0,  # Stara cena z bazy
+                "price": 110.0,  # Cena z bazy/API
                 "product_size_id": 1,
             }
 
             result = await check_single_offer(offer, "192.168.31.147", 9223)
 
-            # Powinien uzyc ceny z dialogu (95.0) zamiast z bazy (110.0)
-            assert result["our_price"] == 95.0
+            # Powinien uzyc ceny z API/bazy (110.0)
+            assert result["our_price"] == 110.0
             assert result["competitors_all_count"] == 3
             assert result["cheapest"]["is_super_seller"] is False
 

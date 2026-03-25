@@ -529,17 +529,20 @@ async def check_offer_price(
                 result.error = "Brak ofert w dialogu"
                 return result
             
-            # Znajdz moja oferte
-            my_offer = next((o for o in all_offers if o.is_mine), None)
-            if my_offer:
-                # Zawsze uzywaj ceny z dialogu - zapewnia spojnosc
-                # miedzy pozycja (liczona z dialog) a porownaniem cen
-                result.my_price = my_offer.price
+            # Sprawdzana oferta NIE pojawia sie w dialogu (to jest jej strona)
+            # Ale inne nasze oferty tego samego produktu MOGA sie pojawic
+            our_other_offers = [o for o in all_offers if o.is_mine]
+            if our_other_offers:
+                logger.info(f"Znaleziono {len(our_other_offers)} naszych innych ofert w dialogu: "
+                            f"{', '.join(o.offer_id or '?' for o in our_other_offers)}")
+            
+            # my_price zachowujemy z parametru (cena z API naszej oferty)
+            # Dialog nie zawiera sprawdzanej oferty, nie mozemy stamtad wziac ceny
             
             # Pobierz wykluczonych sprzedawcow
             excluded_sellers = get_excluded_sellers()
             
-            # Filtruj konkurencje po czasie dostawy i wykluczonych (bez mojej oferty)
+            # Konkurencja = wszystkie oferty POZA naszymi (inne nasze to "inna OK")
             competitors_all = [o for o in all_offers if not o.is_mine]
             result.competitors_all_count = len(competitors_all)
             competitors_filtered = [
@@ -564,20 +567,14 @@ async def check_offer_price(
             if competitors_filtered:
                 result.cheapest_competitor = min(competitors_filtered, key=lambda x: x.price)
             
-            # Moja pozycja (tylko wsrod ofert z szybka dostawa i bez wykluczonych)
-            # Sortuj po cenie bazowej (price), nie z dostawa - wszyscy uzywaja Smart
-            offers_for_ranking = [
-                o for o in all_offers 
-                if o.is_mine or (
-                    (o.delivery_days is None or o.delivery_days < max_delivery_days)
-                    and o.seller not in excluded_sellers
+            # Pozycja: wstawiamy nasza cene (z API) do rankingu konkurentow
+            # Inne nasze oferty NIE uczestnicza w rankingu (to "inna OK")
+            if result.my_price and competitors_filtered:
+                result.my_position = 1 + sum(
+                    1 for c in competitors_filtered if c.price < result.my_price
                 )
-            ]
-            sorted_offers = sorted(offers_for_ranking, key=lambda x: x.price)
-            for i, o in enumerate(sorted_offers, 1):
-                if o.is_mine:
-                    result.my_position = i
-                    break
+            elif result.my_price:
+                result.my_position = 1
             
             result.success = True
             
