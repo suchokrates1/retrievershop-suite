@@ -156,7 +156,7 @@ def test_create_invoice_with_contractor_id(client):
     invoice = call_data["invoices"][0]["invoice"]
     assert invoice["contractor"]["id"] == 10
     assert len(invoice["invoicecontents"]) == 2
-    assert invoice["type"] == "normal"
+    assert invoice["type"] == "bill"
     assert invoice["price_type"] == "brutto"
 
 
@@ -224,13 +224,18 @@ def test_download_invoice_pdf_too_small(client):
 def test_find_invoice_found(client):
     """Wyszukiwanie istniejącej faktury."""
     client.request = MagicMock(return_value={
-        "invoices": [{
-            "invoice": {
-                "id": 42,
-                "fullnumber": "FV 1/06/2025",
-                "total": 110.70,
-            }
-        }]
+        "invoices": {
+            "0": {
+                "invoice": {
+                    "id": 42,
+                    "fullnumber": "FV 1/06/2025",
+                    "total": 110.70,
+                }
+            },
+            "parameters": {
+                "total": 1,
+            },
+        }
     })
 
     result = find_invoice(client, "FV 1/06/2025")
