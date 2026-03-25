@@ -36,7 +36,6 @@ GET_ROUTES = [
     "/logs",
     "/allegro/offers",
     "/offers-and-prices",
-    "/allegro/price-check",
     "/discussions",
     "/add_item",
     "/orders/add",

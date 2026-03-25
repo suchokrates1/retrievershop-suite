@@ -25,7 +25,7 @@ Korzysc: czytelniejszy kod, mniej manipulacji DOM, latwe utrzymanie, lepsze wspa
 | Szablony HTML ogolnie | ~40 |
 | Szablony z inline JS | ~22 |
 | Szablony bez JS (bez zmian) | ~18 |
-| Pliki JS w static/ | 3 (barcode-scanner, price_check, quagga) |
+| Pliki JS w static/ | 2 (barcode-scanner, quagga) |
 | Szacunkowa ilosc linii inline JS | ~1500 |
 | Unikalne wzorce JS do migracji | 10 |
 
@@ -207,23 +207,6 @@ Z komponentem `wakeLock()` zarejestrowanym w `Alpine.data()`.
 </div>
 ```
 
-### 2.4 price_check.js — Monitoring cen
-**Plik: `magazyn/static/price_check.js` (~320 linii)**
-
-Przepisanie na komponent Alpine z pollingiem:
-```html
-<div x-data="priceMonitor()" x-init="startPolling()">
-    <template x-for="check in recentChecks" :key="check.id">
-        <tr>
-            <td x-text="check.title"></td>
-            <td x-text="check.myPrice"></td>
-            <td x-text="check.competitorPrice"></td>
-            <td :class="check.statusClass" x-text="check.status"></td>
-        </tr>
-    </template>
-</div>
-```
-
 ---
 
 ## Faza 3 — Sredni priorytet (powtarzalne wzorce)
@@ -370,7 +353,7 @@ Prosty `x-data` z `loadMore()`:
 | `searchableDropdown(options)` | offers, offers_and_prices, review_invoice, add_order | Dropdown z wyszukiwaniem i filtracja opcji |
 | `wakeLock()` | base.html | Zarzadzanie Wake Lock API |
 | `lazyTable(url)` | product_detail, home | Lazy loading danych do tabeli z paginacja |
-| `pollStatus(url, interval)` | reports_list, price_check | Polling statusu z automatycznym odswiezaniem |
+| `pollStatus(url, interval)` | reports_list | Polling statusu z automatycznym odswiezaniem |
 | `dynamicRows(template)` | add_delivery, add_order | Dynamiczne dodawanie/usuwanie wierszy formularza |
 | `confirmAction(message)` | orders_list, order_detail, items | Przycisk z potwierdzeniem przed akcja |
 

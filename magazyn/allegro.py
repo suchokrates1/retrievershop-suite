@@ -3,14 +3,11 @@ from decimal import Decimal
 import json
 import requests
 import secrets
-from typing import Callable, Optional
-from queue import Queue
-from threading import Thread
+from typing import Optional
 from urllib.parse import urlencode
 
 from flask import (
     Blueprint,
-    Response,
     current_app,
     make_response,
     render_template,
@@ -20,7 +17,6 @@ from flask import (
     flash,
     jsonify,
     session,
-    stream_with_context,
     has_app_context,
 )
 
@@ -33,11 +29,6 @@ from .config import settings
 from .env_tokens import update_allegro_tokens
 from .print_agent import agent
 from .auth import login_required
-from .allegro_scraper import (
-    AllegroScrapeError,
-    fetch_competitors_for_offer,
-    parse_price_amount,
-)
 from .allegro_helpers import build_inventory_list, format_decimal
 from . import allegro_api
 from requests.exceptions import HTTPError
@@ -73,11 +64,6 @@ def _append_debug_log(
     if logs is not None:
         logs.append(line)
     return formatted, line
-
-
-def _sse_event(event: str, payload: dict[str, object]) -> str:
-    data = json.dumps(payload, ensure_ascii=False)
-    return f"event: {event}\ndata: {data}\n\n"
 
 
 def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
@@ -531,216 +517,6 @@ def offers_and_prices():
     response.headers["Expires"] = "0"
     return response
 
-
-
-def fetch_price_via_local_scraper(offer_url: str) -> Optional[Decimal]:
-    """
-    Fetch price from local scraper API running on PC.
-    Returns price as Decimal or None if unavailable/error.
-    """
-    import requests
-    
-    scraper_url = settings.ALLEGRO_SCRAPER_API_URL
-    if not scraper_url or not scraper_url.strip():
-        return None
-    
-    scraper_url = scraper_url.rstrip('/')
-    
-    try:
-        response = requests.get(
-            f"{scraper_url}/check_price",
-            params={"url": offer_url},
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            price_str = data.get("price")
-            if price_str:
-                # Parse price: "159.89" or "159,89"
-                price_str = price_str.replace(",", ".")
-                return Decimal(price_str).quantize(Decimal("0.01"))
-        elif response.status_code == 503:
-            # CAPTCHA - log but don't fail
-            current_app.logger.warning(
-                "CAPTCHA detected by local scraper for %s", offer_url
-            )
-        else:
-            current_app.logger.error(
-                "Local scraper error %s: %s", response.status_code, response.text
-            )
-    except requests.RequestException as e:
-        current_app.logger.error(
-            "Failed to connect to local scraper at %s: %s", scraper_url, e
-        )
-    except (ValueError, TypeError) as e:
-        current_app.logger.error("Failed to parse price from scraper: %s", e)
-    
-    return None
-
-
-def fetch_prices_batch_via_scraper(eans: list[str]) -> dict[str, Optional[Decimal]]:
-    """
-    Fetch prices for multiple EANs via local scraper API.
-    Returns dict: {ean: price_decimal or None}
-    """
-    import requests
-    
-    scraper_url = settings.ALLEGRO_SCRAPER_API_URL
-    if not scraper_url or not scraper_url.strip():
-        return {}
-    
-    scraper_url = scraper_url.rstrip('/')
-    
-    try:
-        response = requests.post(
-            f"{scraper_url}/check_prices_batch",
-            json={"eans": eans},
-            timeout=len(eans) * 5 + 30  # 5 seconds per EAN + 30s buffer
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            results = {}
-            
-            for item in data.get("results", []):
-                ean = item.get("ean")
-                price_str = item.get("price")
-                
-                if price_str:
-                    try:
-                        price_str = price_str.replace(",", ".")
-                        results[ean] = Decimal(price_str).quantize(Decimal("0.01"))
-                    except (ValueError, TypeError):
-                        results[ean] = None
-                else:
-                    results[ean] = None
-                    if item.get("error"):
-                        current_app.logger.warning(
-                            "Scraper error for EAN %s: %s", ean, item["error"]
-                        )
-            
-            return results
-        else:
-            current_app.logger.error(
-                "Batch scraper error %s: %s", response.status_code, response.text
-            )
-            return {}
-            
-    except requests.RequestException as e:
-        current_app.logger.error(
-            "Failed to connect to batch scraper at %s: %s", scraper_url, e
-        )
-        return {}
-
-
-# Import z nowego serwisu dla kompatybilnosci wstecznej
-from .services.price_checker import build_price_checks, PriceCheckerService, DebugContext
-
-
-@bp.route("/allegro/price-check")
-@login_required
-def price_check():
-    debug_steps: list[dict[str, str]] = []
-    debug_log_lines: list[str] = []
-
-    def record_debug(label: str, value: object) -> None:
-        _record_debug_step(debug_steps, label, value)
-        _append_debug_log(debug_log_lines, label, value)
-
-    wants_json = (
-        request.args.get("format") == "json"
-        or request.accept_mimetypes.best == "application/json"
-    )
-
-    record_debug("Żądany format odpowiedzi", "json" if wants_json else "html")
-
-    if wants_json:
-        price_checks = build_price_checks(debug_steps, debug_log_lines)
-        return jsonify(
-            {
-                "price_checks": price_checks,
-                "auth_error": None,
-                "debug_steps": debug_steps,
-                "debug_log": "\n".join(debug_log_lines),
-            }
-        )
-
-    return render_template(
-        "allegro/price_check.html",
-        auth_error=None,
-        debug_steps=debug_steps,
-        debug_log="\n".join(debug_log_lines),
-    )
-
-
-@bp.route("/allegro/price-check/stream")
-@login_required
-def price_check_stream():
-    def event_stream():
-        queue: "Queue[Optional[str]]" = Queue()
-        debug_steps: list[dict[str, str]] = []
-        debug_log_lines: list[str] = []
-
-        def push_log(label: str, value: str) -> None:
-            line = f"{label}: {value}" if value else label
-            queue.put(
-                _sse_event(
-                    "log",
-                    {
-                        "label": label,
-                        "value": value,
-                        "line": line,
-                    },
-                )
-            )
-
-        def push_screenshot(data: dict) -> None:
-            queue.put(_sse_event("screenshot", data))
-
-        def run_price_check() -> None:
-            try:
-                price_checks = build_price_checks(
-                    debug_steps,
-                    debug_log_lines,
-                    log_callback=push_log,
-                    screenshot_callback=push_screenshot,
-                )
-                queue.put(
-                    _sse_event(
-                        "result",
-                        {
-                            "price_checks": price_checks,
-                            "auth_error": None,
-                            "debug_steps": debug_steps,
-                            "debug_log": "\n".join(debug_log_lines),
-                        },
-                    )
-                )
-            except Exception as exc:  # pragma: no cover - unexpected errors
-                current_app.logger.exception("Price check stream failed")
-                queue.put(
-                    _sse_event("error", {"message": str(exc)})
-                )
-            finally:
-                queue.put(None)
-
-        worker = Thread(target=run_price_check, daemon=True)
-        worker.start()
-
-        while True:
-            item = queue.get()
-            if item is None:
-                break
-            yield item
-
-    response = Response(
-        stream_with_context(event_stream()),
-        mimetype="text/event-stream",
-    )
-    response.headers["Cache-Control"] = "no-cache"
-    response.headers["X-Accel-Buffering"] = "no"
-    return response
 
 
 @bp.route("/allegro/refresh", methods=["POST"])

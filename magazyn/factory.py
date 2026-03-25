@@ -13,7 +13,6 @@ from .products import bp as products_bp
 from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
-from .api_scraper import api_scraper_bp
 from .orders import bp as orders_bp
 from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
@@ -70,7 +69,6 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     configure_engine(settings.DB_PATH)
 
     csrf.init_app(app)
-    csrf.exempt(api_scraper_bp)  # Exempt scraper API from CSRF protection
     app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
     
     # Register custom template filters
@@ -101,7 +99,6 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(history_bp)
     app.register_blueprint(sales_bp)
     app.register_blueprint(allegro_bp)
-    app.register_blueprint(api_scraper_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(discussions_bp)

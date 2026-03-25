@@ -24,8 +24,6 @@ import hmac
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 from typing import Optional
-import zipfile
-from io import BytesIO
 from pathlib import Path
 
 from .models import User, Thread, Product, ProductSize, Order, OrderProduct, PurchaseBatch, AllegroOffer, Sale
@@ -52,8 +50,6 @@ BOOLEAN_KEYS = {
 # Grupowanie ustawien w sekcje (klucz -> (nazwa_grupy, ikona))
 SETTINGS_GROUPS = {
     "API_TOKEN": ("API i Integracje", "bi-plug"),
-    "ALLEGRO_SCRAPER_API_URL": ("Allegro", "bi-shop"),
-    "ALLEGRO_PROXY_URL": ("Allegro", "bi-shop"),
     "COMMISSION_ALLEGRO": ("Allegro", "bi-shop"),
     "PRICE_MAX_DISCOUNT_PERCENT": ("Allegro", "bi-shop"),
     "PRINTER_NAME": ("Drukarka", "bi-printer"),
@@ -678,28 +674,3 @@ def handle_500(error):
 # =============================================================================
 # Utility Routes
 # =============================================================================
-
-@bp.route("/download/scraper")
-@login_required
-def download_scraper():
-    """Download portable Allegro scraper package"""
-    script_dir = Path(__file__).parent / "scripts"
-    files = {
-        "scraper_api.py": script_dir / "scraper_api.py",
-        "SETUP.bat": script_dir / "SETUP.bat",
-        "README_SCRAPER.txt": script_dir / "README_SCRAPER.txt",
-    }
-    
-    memory_file = BytesIO()
-    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for filename, filepath in files.items():
-            if filepath.exists():
-                zipf.write(filepath, f"AllegroScraper/{filename}")
-    
-    memory_file.seek(0)
-    
-    response = make_response(memory_file.getvalue())
-    response.headers['Content-Type'] = 'application/zip'
-    response.headers['Content-Disposition'] = 'attachment; filename=AllegroScraper_Portable.zip'
-    
-    return response

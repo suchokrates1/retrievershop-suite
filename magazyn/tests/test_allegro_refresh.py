@@ -16,7 +16,6 @@ from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSi
 from magazyn.allegro_token_refresher import AllegroTokenRefresher
 from magazyn.env_tokens import update_allegro_tokens
 from magazyn.allegro_api import AUTH_URL, refresh_token as api_refresh_token
-from magazyn.allegro_scraper import Offer
 from magazyn.metrics import (
     ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL,
     ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL,
@@ -1264,61 +1263,3 @@ def test_refresh_token_uses_settings_store_when_env_missing(monkeypatch):
         settings_store.update(cleanup)
 
     assert result == {"access_token": "new-token", "refresh_token": "new-refresh"}
-
-
-def test_price_check_uses_selenium_listing(client, login, monkeypatch, allegro_tokens):
-    allegro_tokens("token", "refresh")
-
-    with get_session() as session:
-        product = Product(name="Szelki", color="Zielone")
-        session.add(product)
-        session.flush()
-        size = ProductSize(product_id=product.id, size="M", barcode="789")
-        session.add(size)
-        session.flush()
-        session.add(
-            AllegroOffer(
-                offer_id="offer-123",
-                title="Oferta testowa",
-                price=Decimal("100.00"),
-                product_size_id=size.id,
-            )
-        )
-
-    calls: list[str] = []
-
-    def fake_competitors(
-        offer_id,
-        *,
-        stop_seller=None,
-        limit=30,
-        headless=True,
-        log_callback=None,
-        screenshot_callback=None,
-    ):
-        calls.append(offer_id)
-        if log_callback is not None:
-            log_callback("log")
-        return (
-            [
-                Offer(
-                    "Konkurent",
-                    "50,00 zł",
-                    "Sklep",
-                    "https://allegro.pl/oferta/competitor-offer",
-                )
-            ],
-            ["log"],
-        )
-
-    monkeypatch.setattr("magazyn.services.price_checker.fetch_competitors_for_offer", fake_competitors)
-
-    response = client.get("/allegro/price-check?format=json")
-
-    assert response.status_code == 200
-    payload = response.get_json()
-    assert payload["auth_error"] is None
-    assert payload["price_checks"]
-    item = payload["price_checks"][0]
-    assert item["competitor_price"] == "50.00"
-    assert calls == ["offer-123"]
