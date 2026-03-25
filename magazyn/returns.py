@@ -286,7 +286,7 @@ def _map_allegro_return_status(allegro_status: str) -> str:
         "WAITING_FOR_PARCEL": RETURN_STATUS_PENDING,
         "PARCEL_IN_TRANSIT": RETURN_STATUS_IN_TRANSIT,
         "PARCEL_DELIVERED": RETURN_STATUS_DELIVERED,
-        "ACCEPTED": RETURN_STATUS_COMPLETED,
+        "ACCEPTED": RETURN_STATUS_DELIVERED,
         "COMMISSION_REFUNDED": RETURN_STATUS_COMPLETED,
         "FINISHED": RETURN_STATUS_COMPLETED,
         "REJECTED": RETURN_STATUS_CANCELLED,
@@ -546,17 +546,16 @@ def restore_stock_for_return(return_id: int) -> bool:
             
             if restored_items:
                 return_record.stock_restored = True
-                return_record.status = RETURN_STATUS_COMPLETED
                 _add_return_status_log(
                     db,
                     return_record.id,
-                    RETURN_STATUS_COMPLETED,
+                    return_record.status,
                     f"Przywrocono stan: {', '.join(restored_items)}"
                 )
                 db.commit()
                 
                 # Wyslij powiadomienie o przywroceniu stanu
-                message = f"[ZWROT ZAKONCZONY] Zamowienie {return_record.order_id}\nPrzywrocono stan: {', '.join(restored_items)}"
+                message = f"[STAN PRZYWROCONY] Zamowienie {return_record.order_id}\nPrzywrocono stan: {', '.join(restored_items)}"
                 send_messenger(message)
                 
                 logger.info(f"Zakonczono obsluge zwrotu #{return_id}")
@@ -706,9 +705,13 @@ def process_refund(
         if not return_record:
             return False, f"Nie znaleziono zwrotu dla zamowienia {order_id}"
         
-        # Sprawdz status - musi byc delivered
-        if return_record.status not in (RETURN_STATUS_DELIVERED, RETURN_STATUS_IN_TRANSIT):
-            return False, f"Zwrot musi byc w statusie 'delivered' lub 'in_transit'. Aktualny status: {return_record.status}"
+        if return_record.refund_processed:
+            return False, "Zwrot pieniedzy juz zostal przetworzony"
+        
+        # Sprawdz status
+        allowed = (RETURN_STATUS_DELIVERED, RETURN_STATUS_IN_TRANSIT, RETURN_STATUS_COMPLETED)
+        if return_record.status not in allowed:
+            return False, f"Zwrot musi byc w statusie 'delivered', 'in_transit' lub 'completed'. Aktualny status: {return_record.status}"
         
         # Sprawdz czy mamy allegro_return_id
         if not return_record.allegro_return_id:
@@ -730,6 +733,7 @@ def process_refund(
         if success:
             # Aktualizuj status w bazie
             return_record.status = RETURN_STATUS_COMPLETED
+            return_record.refund_processed = True
             _add_return_status_log(
                 db,
                 return_record.id,
@@ -739,6 +743,31 @@ def process_refund(
             db.commit()
             
             logger.info(f"Zwrot pieniedzy dla zamowienia {order_id} przetworzony pomyslnie")
+            
+            # Wystaw korekte faktury i wyslij email
+            try:
+                from .services.invoice_service import generate_correction_invoice
+                correction = generate_correction_invoice(
+                    order_id=order_id,
+                    reason=reason or "Zwrot produktow",
+                    return_id=return_record.id,
+                    include_delivery=delivery_cost_covered,
+                )
+                if correction["success"]:
+                    logger.info(
+                        "Korekta %s wystawiona dla zamowienia %s",
+                        correction["invoice_number"], order_id,
+                    )
+                else:
+                    logger.warning(
+                        "Nie udalo sie wystawic korekty dla zamowienia %s: %s",
+                        order_id, correction["errors"],
+                    )
+            except Exception as exc:
+                logger.error(
+                    "Blad wystawiania korekty dla zamowienia %s: %s",
+                    order_id, exc,
+                )
         else:
             logger.error(f"Blad zwrotu pieniedzy dla zamowienia {order_id}: {message}")
         
@@ -766,14 +795,15 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         if not return_record:
             return False, "Brak zwrotu dla tego zamowienia", None
         
-        if return_record.status == RETURN_STATUS_COMPLETED:
-            return False, "Zwrot juz zostal rozliczony", None
+        if return_record.refund_processed:
+            return False, "Zwrot pieniedzy juz zostal przetworzony", None
         
         if return_record.status == RETURN_STATUS_CANCELLED:
             return False, "Zwrot zostal anulowany", None
         
-        if return_record.status not in (RETURN_STATUS_DELIVERED, RETURN_STATUS_IN_TRANSIT):
-            return False, f"Zwrot musi byc w statusie 'delivered' lub 'in_transit'. Aktualny: {return_record.status}", None
+        allowed = (RETURN_STATUS_DELIVERED, RETURN_STATUS_IN_TRANSIT, RETURN_STATUS_COMPLETED)
+        if return_record.status not in allowed:
+            return False, f"Zwrot musi byc w statusie 'delivered', 'in_transit' lub 'completed'. Aktualny: {return_record.status}", None
         
         if not return_record.allegro_return_id:
             return False, "Brak ID zwrotu Allegro", None

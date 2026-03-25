@@ -546,6 +546,7 @@ class Return(Base):
     # Flagi procesowania
     messenger_notified = Column(Boolean, default=False, nullable=False)
     stock_restored = Column(Boolean, default=False, nullable=False)
+    refund_processed = Column(Boolean, default=False, nullable=False)
     
     # Notatki
     notes = Column(Text, nullable=True)
