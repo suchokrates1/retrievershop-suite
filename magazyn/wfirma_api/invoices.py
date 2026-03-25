@@ -315,16 +315,19 @@ def create_correction_invoice(
             # Korekta zerujaca - wszystkie pozycje na 0
             new_count = 0
 
-        invoice_contents.append({
-            "invoicecontent": {
-                "name": content["name"],
-                "count": new_count,
-                "price": content["price"],
-                "unit": content.get("unit", "szt."),
-                "vat_code": content.get("vat_code", {"id": 233}),
-                "parent": {"id": content_id},
-            }
-        })
+        ic = {
+            "name": content["name"],
+            "count": new_count,
+            "price": content["price"],
+            "unit": content.get("unit", "szt."),
+        }
+
+        if correction_type != "bill":
+            # Dla faktur VAT linkujemy pozycje do oryginalnych
+            ic["vat_code"] = content.get("vat_code", {"id": 233})
+            ic["parent"] = {"id": content_id}
+
+        invoice_contents.append({"invoicecontent": ic})
 
     if not invoice_contents:
         raise WFirmaError("Brak pozycji do korekty po filtrowaniu")

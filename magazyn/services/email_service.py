@@ -236,6 +236,7 @@ def send_invoice_correction(
     refund_amount: float | None = None,
     pdf_data: bytes | None = None,
     pdf_filename: str | None = None,
+    invoice_number: str = "",
 ) -> bool:
     """Wyslij email z korekta faktury (odpowiednik automatyzacji BL 90895)."""
     email = order.email
@@ -245,23 +246,12 @@ def send_invoice_correction(
     ctx = _load_order_context(order)
     ctx["reason"] = reason
     ctx["refund_amount"] = refund_amount
-
-    invoice_data = None
-    if order.want_invoice:
-        invoice_data = {
-            "company": order.invoice_company,
-            "nip": order.invoice_nip,
-            "name": order.invoice_fullname,
-            "address": order.invoice_address,
-            "city": order.invoice_city,
-            "postcode": order.invoice_postcode,
-        }
-    ctx["invoice_data"] = invoice_data
+    ctx["invoice_number"] = invoice_number
 
     html = render_template("emails/invoice_correction.html", **ctx)
     return _send_html_email(
         to_email=email,
-        subject=f"Korekta faktury - zamowienie #{ctx['order_id']} - Retriever Shop",
+        subject=f"Korekta za zamowienie nr {ctx['order_id']}",
         html_body=html,
         attachment=pdf_data,
         attachment_filename=pdf_filename,
