@@ -685,9 +685,9 @@ def reprint_label(order_id: str):
         printed_any = False
         
         for pkg in packages:
-            pid = pkg.get("package_id")
-            code = pkg.get("courier_code")
-            if not pid or not code:
+            pid = pkg.get("shipment_id") or pkg.get("package_id")
+            code = pkg.get("courier_code") or pkg.get("carrier_id") or ""
+            if not pid:
                 continue
             label_data, ext = print_agent.get_label(code, pid)
             if label_data:
@@ -828,15 +828,17 @@ def download_label(order_id: str):
         packages = print_agent.get_order_packages(order_id)
         
         for pkg in packages:
-            pid = pkg.get("package_id")
-            code = pkg.get("courier_code")
-            if not pid or not code:
+            pid = pkg.get("shipment_id") or pkg.get("package_id")
+            code = pkg.get("courier_code") or pkg.get("carrier_id") or ""
+            if not pid:
                 continue
             label_data, ext = print_agent.get_label(code, pid)
             if label_data:
                 # Save to temporary file and send
+                import base64
+                pdf_bytes = base64.b64decode(label_data)
                 tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
-                tmp.write(label_data)
+                tmp.write(pdf_bytes)
                 tmp.close()
                 
                 @after_this_request

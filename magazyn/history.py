@@ -55,9 +55,9 @@ def reprint_label(order_id):
         else:
             packages = print_agent.get_order_packages(order_id)
             for p in packages:
-                pid = p.get("package_id")
-                code = p.get("courier_code")
-                if not pid or not code:
+                pid = p.get("shipment_id") or p.get("package_id")
+                code = p.get("courier_code") or p.get("carrier_id") or ""
+                if not pid:
                     continue
                 label_data, ext = print_agent.get_label(code, pid)
                 if label_data:
