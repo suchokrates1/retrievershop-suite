@@ -62,8 +62,8 @@ SAMPLE_PACKAGES = [
 @patch("magazyn.allegro_api.shipment_management._call_with_refresh")
 def test_get_delivery_services(mock_call):
     invalidate_delivery_services_cache()
-    services = [{"id": "svc-1", "name": "InPost Paczkomaty"}]
-    mock_call.return_value = _mock_response({"deliveryServices": services})
+    services = [{"id": {"deliveryMethodId": "svc-1", "credentialsId": None}, "name": "InPost Paczkomaty"}]
+    mock_call.return_value = _mock_response({"services": services})
 
     result = get_delivery_services()
 
@@ -74,8 +74,8 @@ def test_get_delivery_services(mock_call):
 @patch("magazyn.allegro_api.shipment_management._call_with_refresh")
 def test_get_delivery_services_cached(mock_call):
     invalidate_delivery_services_cache()
-    services = [{"id": "svc-1", "name": "DPD"}]
-    mock_call.return_value = _mock_response({"deliveryServices": services})
+    services = [{"id": {"deliveryMethodId": "svc-1", "credentialsId": None}, "name": "DPD"}]
+    mock_call.return_value = _mock_response({"services": services})
 
     result1 = get_delivery_services()
     result2 = get_delivery_services()
@@ -86,9 +86,9 @@ def test_get_delivery_services_cached(mock_call):
 
 @patch("magazyn.allegro_api.shipment_management._call_with_refresh")
 def test_get_delivery_services_list_fallback(mock_call):
-    """Gdy API zwraca liste zamiast obiektu z kluczem deliveryServices."""
+    """Gdy API zwraca liste zamiast obiektu z kluczem services."""
     invalidate_delivery_services_cache()
-    services = [{"id": "svc-1", "name": "DHL"}]
+    services = [{"id": {"deliveryMethodId": "svc-1", "credentialsId": None}, "name": "DHL"}]
     mock_call.return_value = _mock_response(services)
 
     result = get_delivery_services()
@@ -110,9 +110,11 @@ def test_create_shipment(mock_call):
         "status": "DRAFT",
     })
 
+    svc_id = {"deliveryMethodId": "svc-1", "credentialsId": None}
+
     result = create_shipment(
         checkout_form_id="order-abc",
-        delivery_service_id="svc-1",
+        delivery_service_id=svc_id,
         sender=SAMPLE_SENDER,
         receiver=SAMPLE_RECEIVER,
         packages=SAMPLE_PACKAGES,
@@ -120,7 +122,7 @@ def test_create_shipment(mock_call):
 
     assert result["id"] == "ship-123"
     body = mock_call.call_args.kwargs["json"]
-    assert body["deliveryServiceId"] == "svc-1"
+    assert body["deliveryServiceId"] == svc_id
     assert body["checkoutForm"]["id"] == "order-abc"
     assert body["sender"] == SAMPLE_SENDER
     assert body["receiver"] == SAMPLE_RECEIVER
@@ -135,7 +137,7 @@ def test_create_shipment_with_pickup(mock_call):
 
     create_shipment(
         checkout_form_id="order-abc",
-        delivery_service_id="svc-1",
+        delivery_service_id={"deliveryMethodId": "svc-1", "credentialsId": None},
         sender=SAMPLE_SENDER,
         receiver=SAMPLE_RECEIVER,
         packages=SAMPLE_PACKAGES,

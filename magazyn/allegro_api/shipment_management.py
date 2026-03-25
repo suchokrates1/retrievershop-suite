@@ -93,7 +93,7 @@ def get_delivery_services() -> list[dict]:
     if isinstance(data, list):
         services = data
     else:
-        services = data.get("deliveryServices", [])
+        services = data.get("services", data.get("deliveryServices", []))
 
     _delivery_services_cache = services
     _delivery_services_cache_time = now
@@ -112,7 +112,7 @@ def invalidate_delivery_services_cache() -> None:
 def create_shipment(
     *,
     checkout_form_id: str,
-    delivery_service_id: str,
+    delivery_service_id,
     sender: dict,
     receiver: dict,
     packages: list[dict],
@@ -127,7 +127,7 @@ def create_shipment(
     ----------
     checkout_form_id : str
         UUID zamowienia Allegro (checkout-form).
-    delivery_service_id : str
+    delivery_service_id : str | dict
         ID uslugi dostawy (z get_delivery_services()).
     sender : dict
         Dane nadawcy: name, street, city, zipCode, countryCode, phone, email.
