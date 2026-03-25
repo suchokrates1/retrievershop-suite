@@ -128,13 +128,13 @@
                         <div class="col-3">
                             <div class="border-end">
                                 <h3 class="text-success mb-1">{{ dashboard.orders.month }}</h3>
-                                <small class="text-muted">Zamowien</small>
+                                <small class="text-muted">Zamówień</small>
                             </div>
                         </div>
                         <div class="col-3">
                             <div class="border-end">
-                                <h3 class="text-primary mb-1">{{ "%.0f"|format(dashboard.revenue.month) }} zl</h3>
-                                <small class="text-muted">Przychod</small>
+                                <h3 class="text-primary mb-1">{{ "%.0f"|format(dashboard.revenue.month) }} zł</h3>
+                                <small class="text-muted">Przychód</small>
                             </div>
                         </div>
                         <div class="col-3" id="profit-section">
@@ -166,7 +166,7 @@
                         <span class="badge bg-success">{{ dashboard.allegro.total_offers }}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center px-1">
-                        <small>Niepowiazane:</small>
+                        <small>Niepowiązane:</small>
                         <span class="badge {% if dashboard.allegro.unlinked_offers > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
                             {{ dashboard.allegro.unlinked_offers }}
                         </span>
@@ -174,7 +174,7 @@
                     {% if dashboard.allegro.unlinked_offers > 0 %}
                     <div class="px-1 mt-1">
                         <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-outline-warning btn-sm w-100">
-                            <i class="bi bi-link me-1"></i>Powiaz oferty
+                            <i class="bi bi-link me-1"></i>Powiąż oferty
                         </a>
                     </div>
                     {% endif %}
@@ -184,7 +184,7 @@
                         <hr class="my-2">
                         <div class="text-center py-2">
                             <span class="spinner-border spinner-border-sm text-muted"></span>
-                            <small class="text-muted ms-1">Ladowanie wyroznien...</small>
+                            <small class="text-muted ms-1">Ładowanie wyróżnień...</small>
                         </div>
                     </div>
                 </div>
@@ -331,20 +331,19 @@
                                 <tr>
                                     <th style="width: 40px;"></th>
                                     <th>Data</th>
-                                    <th>Dostawca / Zrodlo</th>
+                                    <th>Dostawca / Źródło</th>
                                     <th>Faktura</th>
                                     <th class="text-center">Pozycje</th>
-                                    <th class="text-center">Laczna ilosc</th>
-                                    <th class="text-end">Wartosc</th>
+                                    <th class="text-center">Łączna ilość</th>
+                                    <th class="text-end">Wartość</th>
                                 </tr>
                             </thead>
-                            <tbody>
                                 {% for delivery in dashboard.latest_deliveries %}
-                                <tr class="delivery-row" data-bs-toggle="collapse" data-bs-target="#delivery-{{ loop.index }}" 
-                                    aria-expanded="false" aria-controls="delivery-{{ loop.index }}" 
+                            <tbody x-data="{ expanded: false }">
+                                <tr class="delivery-row" @click="expanded = !expanded"
                                     style="cursor: pointer;">
                                     <td class="text-center">
-                                        <i class="bi bi-chevron-right delivery-chevron"></i>
+                                        <i class="bi bi-chevron-right delivery-chevron" :class="{ rotated: expanded }"></i>
                                     </td>
                                     <td class="small fw-semibold">{{ delivery.purchase_date }}</td>
                                     <td>
@@ -357,9 +356,9 @@
                                     <td class="text-center">
                                         <span class="badge bg-info">{{ delivery.total_quantity }} szt.</span>
                                     </td>
-                                    <td class="text-end text-success fw-semibold">{{ "%.2f"|format(delivery.total_value) }} zl</td>
+                                    <td class="text-end text-success fw-semibold">{{ "%.2f"|format(delivery.total_value) }} zł</td>
                                 </tr>
-                                <tr class="collapse" id="delivery-{{ loop.index }}">
+                                <tr x-show="expanded" x-transition.duration.200ms x-cloak>
                                     <td colspan="7" class="p-0 bg-light">
                                         <div class="p-2">
                                             <table class="table table-sm table-bordered mb-0 bg-white">
@@ -368,9 +367,9 @@
                                                         <th>Produkt</th>
                                                         <th>Kolor</th>
                                                         <th>Rozmiar</th>
-                                                        <th class="text-center">Ilosc</th>
+                                                        <th class="text-center">Ilość</th>
                                                         <th class="text-end">Cena jedn.</th>
-                                                        <th class="text-end">Wartosc</th>
+                                                        <th class="text-end">Wartość</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -384,8 +383,8 @@
                                                         <td class="small text-muted">{{ product.color or '-' }}</td>
                                                         <td class="small">{{ product.size }}</td>
                                                         <td class="text-center"><span class="badge bg-info">{{ product.quantity }}</span></td>
-                                                        <td class="text-end small">{{ "%.2f"|format(product.price) }} zl</td>
-                                                        <td class="text-end small text-success">{{ "%.2f"|format(product.value) }} zl</td>
+                                                        <td class="text-end small">{{ "%.2f"|format(product.price) }} zł</td>
+                                                        <td class="text-end small text-success">{{ "%.2f"|format(product.value) }} zł</td>
                                                     </tr>
                                                     {% endfor %}
                                                 </tbody>
@@ -393,8 +392,8 @@
                                         </div>
                                     </td>
                                 </tr>
-                                {% endfor %}
                             </tbody>
+                                {% endfor %}
                         </table>
                     </div>
                 </div>
@@ -409,22 +408,10 @@
     .delivery-row .delivery-chevron {
         transition: transform 0.2s ease;
     }
-    .delivery-row[aria-expanded="true"] .delivery-chevron {
+    .delivery-row .delivery-chevron.rotated {
         transform: rotate(90deg);
     }
     </style>
-    
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Obsluga animacji chevron przy rozwijaniu/zwijaniu
-        document.querySelectorAll('.delivery-row').forEach(function(row) {
-            row.addEventListener('click', function() {
-                var expanded = this.getAttribute('aria-expanded') === 'true';
-                this.setAttribute('aria-expanded', !expanded);
-            });
-        });
-    });
-    </script>
     {% endif %}
 
     <!-- ================================================================= -->
@@ -436,11 +423,11 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                    <i class="bi bi-graph-up-arrow me-2"></i>Trend tygodniowy (porownanie do poprzedniego tygodnia)
+                    <i class="bi bi-graph-up-arrow me-2"></i>Trend tygodniowy (porównanie do poprzedniego tygodnia)
                 </div>
                 <div class="card-body text-center py-4">
                     <span class="spinner-border text-muted"></span>
-                    <p class="text-muted mt-2 mb-0">Ladowanie trendow...</p>
+                    <p class="text-muted mt-2 mb-0">Ładowanie trendów...</p>
                 </div>
             </div>
         </div>
@@ -461,7 +448,7 @@
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header bg-success text-white">
-                    <i class="bi bi-trophy me-2"></i>Bestsellery miesiaca (Top 10)
+                    <i class="bi bi-trophy me-2"></i>Bestsellery miesiąca (Top 10)
                 </div>
                 <div class="card-body text-center py-4">
                     <span class="spinner-border spinner-border-sm text-muted"></span>
@@ -471,7 +458,7 @@
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header bg-primary text-white">
-                    <i class="bi bi-star-fill me-2"></i>Bestsellery wszechczasow
+                    <i class="bi bi-star-fill me-2"></i>Bestsellery wszechczasów
                 </div>
                 <div class="card-body text-center py-4">
                     <span class="spinner-border spinner-border-sm text-muted"></span>
@@ -488,11 +475,11 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-arrow-return-left me-2"></i>Zwroty w tym miesiacu</span>
+                    <span><i class="bi bi-arrow-return-left me-2"></i>Zwroty w tym miesiącu</span>
                     <span class="spinner-border spinner-border-sm text-muted" id="returns-spinner"></span>
                 </div>
                 <div class="card-body p-2" id="returns-section">
-                    <p class="text-muted text-center small mb-0">Ladowanie...</p>
+                    <p class="text-muted text-center small mb-0">Ładowanie...</p>
                 </div>
             </div>
         </div>
@@ -581,26 +568,26 @@ document.addEventListener('DOMContentLoaded', function() {
             renderSlowMoving(data.slow_moving);
         })
         .catch(err => {
-            console.error('Blad ladowania danych:', err);
+            console.error('B\u0142\u0105d \u0142adowania danych:', err);
             document.getElementById('profit-section').querySelector('.border-end').innerHTML =
-                '<h3 class="text-danger mb-1">Blad</h3><small class="text-muted">Realny zysk</small>';
+                '<h3 class="text-danger mb-1">B\u0142\u0105d</h3><small class="text-muted">Realny zysk</small>';
         });
     
     function renderProfit(profit) {
         if (!profit) return;
         const color = profit.month > 0 ? 'text-success' : 'text-danger';
         
-        let tooltip = `Zysk brutto: ${Math.round(profit.month_before_fixed + (profit.ads_cost || 0))} zl`;
+        let tooltip = `Zysk brutto: ${Math.round(profit.month_before_fixed + (profit.ads_cost || 0))} z\u0142`;
         if (profit.ads_cost > 0) {
-            tooltip += `<br>Koszty kampanii Ads: -${profit.ads_cost.toFixed(2)} zl`;
+            tooltip += `<br>Koszty kampanii Ads: -${profit.ads_cost.toFixed(2)} z\u0142`;
         }
         if (profit.returned_orders) {
-            tooltip += `<br>Pominietych zwrotow: ${profit.returned_orders}`;
+            tooltip += `<br>Pomini\u0119tych zwrot\u00f3w: ${profit.returned_orders}`;
         }
         if (profit.fixed_costs_list && profit.fixed_costs_list.length > 0) {
-            tooltip += `<br>Koszty stale: -${Math.round(profit.fixed_costs)} zl`;
+            tooltip += `<br>Koszty sta\u0142e: -${Math.round(profit.fixed_costs)} z\u0142`;
             profit.fixed_costs_list.forEach(fc => {
-                tooltip += `<br>&nbsp;&nbsp;- ${fc.name}: ${Math.round(fc.amount)} zl`;
+                tooltip += `<br>&nbsp;&nbsp;- ${fc.name}: ${Math.round(fc.amount)} z\u0142`;
             });
         }
         
@@ -610,13 +597,13 @@ document.addEventListener('DOMContentLoaded', function() {
         profitEl.querySelector('.border-end').setAttribute('data-bs-html', 'true');
         profitEl.querySelector('.border-end').setAttribute('title', tooltip);
         profitEl.querySelector('.border-end').innerHTML =
-            `<h3 class="${color} mb-1">${Math.round(profit.month)} zl</h3>` +
+            `<h3 class="${color} mb-1">${Math.round(profit.month)} z\u0142</h3>` +
             `<small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>`;
         
         const soldEl = document.getElementById('sold-section');
         const returnsHtml = (profit.returns_count > 0)
-            ? `<small class="text-warning d-block mt-1"><i class="bi bi-arrow-return-left me-1"></i>${profit.returns_count} zwrot${profit.returns_count === 1 ? '' : (profit.returns_count < 5 ? 'y' : 'ow')} (${profit.returned_qty} szt.)</small>`
-            : `<small class="text-secondary d-block mt-1">Brak zwrotow</small>`;
+            ? `<small class="text-warning d-block mt-1"><i class="bi bi-arrow-return-left me-1"></i>${profit.returns_count} zwrot${profit.returns_count === 1 ? '' : (profit.returns_count < 5 ? 'y' : '\u00f3w')} (${profit.returned_qty} szt.)</small>`
+            : `<small class="text-secondary d-block mt-1">Brak zwrot\u00f3w</small>`;
         soldEl.querySelector('div').innerHTML =
             `<h3 class="text-info mb-1">${profit.products_sold}</h3>` +
             `<small class="text-muted">Sprzedanych szt.</small>` +
@@ -634,10 +621,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }).join('');
                 returnsSection.innerHTML =
                     `<div class="table-responsive"><table class="table table-sm table-dark mb-0">` +
-                    `<thead><tr><th class="small">Zamowienie</th><th class="small">Klient</th><th class="small">Produkty</th><th class="small text-center">Data zwrotu</th></tr></thead>` +
+                    `<thead><tr><th class="small">Zam\u00f3wienie</th><th class="small">Klient</th><th class="small">Produkty</th><th class="small text-center">Data zwrotu</th></tr></thead>` +
                     `<tbody>${rowsHtml}</tbody></table></div>`;
             } else {
-                returnsSection.innerHTML = '<p class="text-muted text-center small mb-0">Brak zwrotow w tym miesiacu</p>';
+                returnsSection.innerHTML = '<p class="text-muted text-center small mb-0">Brak zwrot\u00f3w w tym miesi\u0105cu</p>';
             }
         }
 
@@ -648,7 +635,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderPromotions(promos) {
         const section = document.getElementById('promotions-section');
         if (!promos || promos.error) {
-            section.innerHTML = '<hr class="my-2"><p class="text-muted text-center small mb-0">Brak danych wyroznien</p>';
+            section.innerHTML = '<hr class="my-2"><p class="text-muted text-center small mb-0">Brak danych wyr\u00f3\u017cnie\u0144</p>';
             return;
         }
         
@@ -658,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!existingBadge) {
             const badge = document.createElement('span');
             badge.className = 'badge bg-info float-end';
-            badge.textContent = promos.active_count + ' wyroz.';
+            badge.textContent = promos.active_count + ' wyr\u00f3\u017c.';
             cardHeader.appendChild(badge);
         }
         
@@ -673,7 +660,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (promos.active_promotions && promos.active_promotions.length > 0) {
             html += '<div class="table-responsive" style="max-height: 180px; overflow-y: auto;">';
             html += '<table class="table table-sm table-hover mb-0" style="font-size: 0.78rem;">';
-            html += '<thead class="table-light sticky-top"><tr><th>Oferta</th><th class="text-center">Typ</th><th class="text-end">Koszt</th><th class="text-end">Przedl.</th></tr></thead><tbody>';
+            html += '<thead class="table-light sticky-top"><tr><th>Oferta</th><th class="text-center">Typ</th><th class="text-end">Koszt</th><th class="text-end">Przed\u0142.</th></tr></thead><tbody>';
             
             promos.active_promotions.forEach(p => {
                 const rowClass = (p.days_to_renewal !== null && p.days_to_renewal <= 1) ? 'table-warning' : '';
@@ -696,7 +683,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += `<tr class="${rowClass}">`;
                 html += `<td class="text-truncate" style="max-width: 120px;" title="${p.offer_name}"><a href="https://allegro.pl/oferta/${p.offer_id}" target="_blank" class="text-decoration-none">${p.offer_name}</a></td>`;
                 html += `<td class="text-center text-nowrap">${typeBadge}</td>`;
-                html += `<td class="text-end text-nowrap">${p.estimated_cost.toFixed(2)} zl</td>`;
+                html += `<td class="text-end text-nowrap">${p.estimated_cost.toFixed(2)} z\u0142</td>`;
                 html += `<td class="text-end text-nowrap">${renewal}</td>`;
                 html += '</tr>';
             });
@@ -707,8 +694,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         html += `<div class="d-flex justify-content-between align-items-center mt-1 px-1">`;
         html += `<small class="text-muted">Szac. mies.:</small>`;
-        html += `<span class="badge bg-secondary">${promos.estimated_monthly_cost.toFixed(2)} zl</span></div>`;
-        
+        html += `<span class="badge bg-secondary">${promos.estimated_monthly_cost.toFixed(2)} z\u0142</span></div>`;
         section.innerHTML = html;
     }
     
@@ -725,14 +711,14 @@ document.addEventListener('DOMContentLoaded', function() {
         card.innerHTML = `
             <div class="row text-center">
                 <div class="col-md-6">
-                    <h5 class="mb-1">Zamowienia</h5>
+                    <h5 class="mb-1">Zam\u00f3wienia</h5>
                     <h3 class="mb-0">${ordersWeek} <small class="${ocColor}">${ocArrow} ${trends.orders_change}%</small></h3>
-                    <small class="text-muted">poprzedni tydzien: ${trends.prev_week_orders}</small>
+                    <small class="text-muted">poprzedni tydzie\u0144: ${trends.prev_week_orders}</small>
                 </div>
                 <div class="col-md-6">
-                    <h5 class="mb-1">Przychod</h5>
-                    <h3 class="mb-0">${revenueWeek} zl <small class="${rcColor}">${rcArrow} ${trends.revenue_change}%</small></h3>
-                    <small class="text-muted">poprzedni tydzien: ${Math.round(trends.prev_week_revenue)} zl</small>
+                    <h5 class="mb-1">Przych\u00f3d</h5>
+                    <h3 class="mb-0">${revenueWeek} z\u0142 <small class="${rcColor}">${rcArrow} ${trends.revenue_change}%</small></h3>
+                    <small class="text-muted">poprzedni tydzie\u0144: ${Math.round(trends.prev_week_revenue)} z\u0142</small>
                 </div>
             </div>
         `;
@@ -754,7 +740,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `<a href="/products/${item.product_id}" class="text-decoration-none" title="${item.name}">${item.short_name}</a>`
                 : `<span title="${item.name}">${item.short_name}</span>`;
             
-            const revCol = item.revenue !== undefined ? `<td class="text-end small text-success fw-semibold">${Math.round(item.revenue)} zl</td>` : '';
+            const revCol = item.revenue !== undefined ? `<td class="text-end small text-success fw-semibold">${Math.round(item.revenue)} z\u0142</td>` : '';
             
             return `<tr><td>${numBadge}</td><td class="small">${nameHtml}</td><td class="text-center"><span class="badge bg-${badgeColor}">${item.quantity}</span></td>${revCol}</tr>`;
         }).join('');
@@ -771,7 +757,7 @@ document.addEventListener('DOMContentLoaded', function() {
             `<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead class="table-light">${weekCols}</thead><tbody>${renderBestsellerTable(bestsellers.week, 'danger')}</tbody></table></div>`;
         
         // Miesiaca
-        const monthCols = '<tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th><th class="text-end">Przychod</th></tr>';
+        const monthCols = '<tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th><th class="text-end">Przych\u00f3d</th></tr>';
         cards[1].querySelector('.card-body').innerHTML =
             `<div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top">${monthCols}</thead><tbody>${renderBestsellerTable(bestsellers.month, 'success')}</tbody></table></div>`;
         
@@ -806,14 +792,14 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="col-12">
                 <div class="card border-warning">
                     <div class="card-header bg-warning text-dark">
-                        <i class="bi bi-exclamation-triangle me-2"></i>Produkty wolnoobrotowe - rozwaz promocje
-                        <small class="float-end">(stan >= 5 szt., sprzedaz < 2 szt. w 30 dni)</small>
+                        <i class="bi bi-exclamation-triangle me-2"></i>Produkty wolnoobrotowe - rozwa\u017c promocj\u0119
+                        <small class="float-end">(stan >= 5 szt., sprzeda\u017c < 2 szt. w 30 dni)</small>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-sm table-hover mb-0">
                                 <thead class="table-light">
-                                    <tr><th>Produkt</th><th>Kolor</th><th>Rozmiar</th><th class="text-center">Stan</th><th class="text-center">Sprzedaz 30d</th><th class="text-center">Rotacja</th></tr>
+                                    <tr><th>Produkt</th><th>Kolor</th><th>Rozmiar</th><th class="text-center">Stan</th><th class="text-center">Sprzeda\u017c 30d</th><th class="text-center">Rotacja</th></tr>
                                 </thead>
                                 <tbody>${rows}</tbody>
                             </table>
@@ -822,8 +808,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="card-footer bg-light">
                         <small class="text-muted">
                             <i class="bi bi-info-circle me-1"></i>
-                            Rotacja = szacowany czas wyprzedania przy aktualnym tempie sprzedazy. 
-                            Produkty z rotacja > 180 dni powinny byc objete promocja lub wyprzedaza.
+                            Rotacja = szacowany czas wyprzedania przy aktualnym tempie sprzeda\u017cy. 
+                            Produkty z rotacj\u0105 > 180 dni powinny by\u0107 obj\u0119te promocj\u0105 lub wyprzeda\u017c\u0105.
                         </small>
                     </div>
                 </div>

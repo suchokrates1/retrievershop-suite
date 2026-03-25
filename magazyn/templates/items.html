@@ -33,7 +33,7 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="d-flex align-items-center gap-2">
             <label class="mb-0 text-nowrap small">Na stronie:</label>
-            <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
+            <select class="form-select form-select-sm" style="width: auto;" @change="const u = new URL(window.location); u.searchParams.set('per_page', $el.value); u.searchParams.set('page', '1'); window.location = u.toString()">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -117,20 +117,11 @@
         </li>
     </ul>
     <div class="text-center text-muted small">
-        Strona {{ page }} z {{ total_pages }} (wyswietlono {{ products|length }} z {{ total }})
+        Strona {{ page }} z {{ total_pages }} (wyświetlono {{ products|length }} z {{ total }})
     </div>
 </nav>
 {% endif %}
 
 </div>
-
-<script>
-function changePerPage(value) {
-    var url = new URL(window.location);
-    url.searchParams.set('per_page', value);
-    url.searchParams.set('page', '1');
-    window.location = url.toString();
-}
-</script>
 
 {% endblock %}

@@ -27,21 +27,20 @@
                 <td>
                     <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="product_id" value="{{ offer.product_id or '' }}" data-product-input>
-                        <input type="hidden" name="product_size_id" value="{{ offer.product_size_id or '' }}" data-size-input>
-                        <div class="dropdown flex-grow-1 search-dropdown" data-offer-id="{{ offer.offer_id }}">
-                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-selected-label data-placeholder="Wybierz z magazynu">
-                                {{ offer.selected_label or 'Wybierz z magazynu' }}
+                        <div class="dropdown flex-grow-1" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
+                            <input type="hidden" name="product_id" :value="productId">
+                            <input type="hidden" name="product_size_id" :value="sizeId">
+                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
                             </button>
                             <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
-                                <input type="text" class="form-control form-control-sm mb-2 search-dropdown-input" placeholder="Szukaj..." autocomplete="off" data-search-input>
-                                <div class="list-group search-dropdown-options" data-options>
-                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="none" data-value="" data-label="Wybierz z magazynu" data-filter="">
+                                <input type="text" class="form-control form-control-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
+                                <div class="list-group">
+                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('none', '', 'Wybierz z magazynu')">
                                         <div class="fw-semibold">Brak powiązania</div>
                                         <div class="small text-muted">Zostaw ofertę bez przypisania</div>
                                     </button>
                                     {% for item in inventory %}
-                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="{{ item.type }}" data-value="{{ item.id }}" data-label="{{ item.label }}" data-filter="{{ item.filter }}">
+                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
                                         <div class="fw-semibold">{{ item.label }}</div>
                                         <div class="small text-muted">
                                             <span class="badge bg-secondary me-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
@@ -82,83 +81,44 @@
 </section>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.search-dropdown').forEach(dropdown => {
-        const toggleButton = dropdown.querySelector('[data-selected-label]');
-        const form = dropdown.closest('form');
-        const productInput = form.querySelector('[data-product-input]');
-        const sizeInput = form.querySelector('[data-size-input]');
-        const searchInput = dropdown.querySelector('[data-search-input]');
-        const options = dropdown.querySelectorAll('[data-option]');
-        const placeholder = toggleButton.dataset.placeholder || toggleButton.textContent.trim();
+document.addEventListener('alpine:init', () => {
+    Alpine.data('searchDropdown', (initProductId, initSizeId, initLabel) => ({
+        productId: initProductId || '',
+        sizeId: initSizeId || '',
+        selectedLabel: initLabel || 'Wybierz z magazynu',
+        searchQuery: '',
 
-        const updateLabel = (text) => {
-            toggleButton.textContent = text && text.trim() ? text : placeholder;
-        };
-
-        const dropdownInstance = bootstrap.Dropdown.getOrCreateInstance(toggleButton);
-
-        options.forEach(option => {
-            option.addEventListener('click', () => {
-                const kind = option.dataset.kind;
-                const value = option.dataset.value || '';
-                if (kind === 'product') {
-                    productInput.value = value;
-                    sizeInput.value = '';
-                } else if (kind === 'size') {
-                    sizeInput.value = value;
-                    productInput.value = '';
-                } else {
-                    productInput.value = '';
-                    sizeInput.value = '';
-                }
-                updateLabel(option.dataset.label || placeholder);
-                dropdownInstance.hide();
-            });
-        });
-
-        const setInitialSelection = () => {
-            let currentType = null;
-            let currentValue = '';
-            if (sizeInput.value) {
-                currentType = 'size';
-                currentValue = sizeInput.value;
-            } else if (productInput.value) {
-                currentType = 'product';
-                currentValue = productInput.value;
-            }
-            const selectedOption = Array.from(options).find(option => {
-                if (!currentType) {
-                    return option.dataset.kind === 'none';
-                }
-                return option.dataset.kind === currentType && option.dataset.value === currentValue;
-            });
-            if (selectedOption) {
-                updateLabel(selectedOption.dataset.label || placeholder);
+        selectOption(kind, value, label) {
+            if (kind === 'product') {
+                this.productId = value;
+                this.sizeId = '';
+            } else if (kind === 'size') {
+                this.sizeId = value;
+                this.productId = '';
             } else {
-                updateLabel(placeholder);
+                this.productId = '';
+                this.sizeId = '';
             }
-        };
+            this.selectedLabel = label || 'Wybierz z magazynu';
+            const btn = this.$refs.toggleBtn;
+            bootstrap.Dropdown.getOrCreateInstance(btn).hide();
+        },
 
-        setInitialSelection();
+        matchesFilter(filter) {
+            if (!this.searchQuery) return true;
+            return (filter || '').includes(this.searchQuery.toLowerCase());
+        },
 
-        searchInput.addEventListener('input', () => {
-            const query = searchInput.value.trim().toLowerCase();
-            options.forEach(option => {
-                if (!option.dataset.filter) {
-                    option.classList.toggle('d-none', Boolean(query));
-                    return;
-                }
-                const matches = option.dataset.filter.includes(query);
-                option.classList.toggle('d-none', !matches);
+        init() {
+            this.$refs.toggleBtn.addEventListener('shown.bs.dropdown', () => {
+                this.searchQuery = '';
+                this.$nextTick(() => {
+                    const input = this.$refs.searchInput;
+                    if (input) input.focus();
+                });
             });
-        });
-
-        dropdown.addEventListener('hidden.bs.dropdown', () => {
-            searchInput.value = '';
-            options.forEach(option => option.classList.remove('d-none'));
-        });
-    });
+        }
+    }));
 });
 </script>
 {% endblock %}

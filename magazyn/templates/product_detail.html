@@ -199,11 +199,23 @@
                     </table>
                 </div>
                 {% if delivery_history|length >= 100 %}
-                <div class="card-footer text-center" id="deliveries-footer">
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadMoreHistory('deliveries')">
-                        <i class="bi bi-arrow-down-circle"></i> Zaladuj wiecej dostaw
-                    </button>
-                    <div class="text-muted mt-1"><small>Wyswietlono <span id="deliveries-count">{{ delivery_history|length }}</span> dostaw</small></div>
+                <div class="card-footer text-center" x-data="lazyHistory('deliveries', {{ product.id }}, {{ delivery_history|length }})">
+                    <template x-for="(item, i) in extraItems" :key="'d-' + i">
+                        <tr x-ref="injected"></tr>
+                    </template>
+                    <template x-if="hasMore">
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary" @click="loadMore()" :disabled="loading">
+                                <template x-if="loading"><span class="spinner-border spinner-border-sm"></span></template>
+                                <template x-if="!loading"><i class="bi bi-arrow-down-circle"></i></template>
+                                <span x-text="loading ? ' Ładowanie...' : ' Załaduj więcej dostaw'"></span>
+                            </button>
+                            <div class="text-muted mt-1"><small>Wyświetlono <span x-text="currentCount"></span> dostaw</small></div>
+                        </div>
+                    </template>
+                    <template x-if="!hasMore && extraItems.length > 0">
+                        <small class="text-muted" x-text="'Wyświetlono wszystkie rekordy (' + currentCount + ')'"></small>
+                    </template>
                 </div>
                 {% endif %}
             </div>
@@ -222,7 +234,7 @@
                         <thead>
                             <tr>
                                 <th>ID oferty</th>
-                                <th>Tytul</th>
+                                <th>Tytuł</th>
                                 <th>Rozmiar</th>
                                 <th class="text-end">Cena</th>
                                 <th>Status</th>
@@ -249,12 +261,12 @@
                                     <span class="badge bg-secondary">Produkt</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end fw-bold">{{ '%.2f'|format(offer.price) }} zl</td>
+                                <td class="text-end fw-bold">{{ '%.2f'|format(offer.price) }} zł</td>
                                 <td>
                                     {% if offer.publication_status == 'ACTIVE' %}
                                     <span class="badge bg-success">Aktywna</span>
                                     {% elif offer.publication_status == 'ENDED' %}
-                                    <span class="badge bg-secondary">Zakonczona</span>
+                                    <span class="badge bg-secondary">Zakończona</span>
                                     {% else %}
                                     <span class="badge bg-warning">{{ offer.publication_status }}</span>
                                     {% endif %}
@@ -264,8 +276,8 @@
                             <tr>
                                 <td colspan="5" class="text-center text-muted py-3">
                                     <i class="bi bi-shop fs-3"></i>
-                                    <p class="mb-0 mt-2">Brak powiazanych ofert Allegro</p>
-                                    <small>Powiaz oferty na stronie Oferty i ceny</small>
+                                    <p class="mb-0 mt-2">Brak powiązanych ofert Allegro</p>
+                                    <small>Powiąż oferty na stronie Oferty i ceny</small>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -331,11 +343,20 @@
                     </table>
                 </div>
                 {% if order_history|length >= 50 %}
-                <div class="card-footer text-center" id="orders-footer">
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadMoreHistory('orders')">
-                        <i class="bi bi-arrow-down-circle"></i> Zaladuj wiecej zamowien
-                    </button>
-                    <div class="text-muted mt-1"><small>Wyswietlono <span id="orders-count">{{ order_history|length }}</span> z {{ total_sold }} zamowien</small></div>
+                <div class="card-footer text-center" x-data="lazyHistory('orders', {{ product.id }}, {{ order_history|length }}, {{ total_sold }})">
+                    <template x-if="hasMore">
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary" @click="loadMore()" :disabled="loading">
+                                <template x-if="loading"><span class="spinner-border spinner-border-sm"></span></template>
+                                <template x-if="!loading"><i class="bi bi-arrow-down-circle"></i></template>
+                                <span x-text="loading ? ' Ładowanie...' : ' Załaduj więcej zamówień'"></span>
+                            </button>
+                            <div class="text-muted mt-1"><small>Wyświetlono <span x-text="currentCount"></span> z {{ total_sold }} zamówień</small></div>
+                        </div>
+                    </template>
+                    <template x-if="!hasMore && extraItems.length > 0">
+                        <small class="text-muted" x-text="'Wyświetlono wszystkie rekordy (' + currentCount + ')'"></small>
+                    </template>
                 </div>
                 {% endif %}
             </div>
@@ -353,72 +374,71 @@
 </style>
 
 <script>
-const productId = {{ product.id }};
-const loadState = {
-    orders: { offset: {{ order_history|length }}, loading: false },
-    deliveries: { offset: {{ delivery_history|length }}, loading: false }
-};
+document.addEventListener('alpine:init', () => {
+    Alpine.data('lazyHistory', (type, productId, initialCount, totalHint) => ({
+        extraItems: [],
+        offset: initialCount,
+        loading: false,
+        hasMore: true,
 
-function loadMoreHistory(type) {
-    const state = loadState[type];
-    if (state.loading) return;
-    state.loading = true;
+        get currentCount() {
+            return initialCount + this.extraItems.length;
+        },
 
-    const btn = document.querySelector(`#${type}-footer button`);
-    const origText = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ladowanie...';
-    btn.disabled = true;
+        async loadMore() {
+            if (this.loading) return;
+            this.loading = true;
 
-    fetch(`/api/product/${productId}/history?type=${type}&offset=${state.offset}&limit=50`)
-        .then(r => r.json())
-        .then(data => {
-            const tbody = type === 'orders'
-                ? document.querySelector('#orders-footer').closest('.card').querySelector('tbody')
-                : document.querySelector('#deliveries-footer').closest('.card').querySelector('tbody');
+            try {
+                const r = await fetch(`/api/product/${productId}/history?type=${type}&offset=${this.offset}&limit=50`);
+                const data = await r.json();
+                const tbody = this.$el.closest('.card').querySelector('tbody');
 
-            data.items.forEach(item => {
-                const tr = document.createElement('tr');
-                if (type === 'orders') {
-                    tr.innerHTML = `
-                        <td><small>${item.date ? new Date(item.date * 1000).toLocaleDateString('pl-PL') : '-'}</small></td>
-                        <td><small>${item.size || '-'}</small></td>
-                        <td class="text-center"><small>${item.quantity}</small></td>
-                        <td class="text-end"><small>${item.price ? item.price.toFixed(2) + ' PLN' : '-'}</small></td>
-                        <td><small>${item.customer || '-'}</small></td>
-                        <td><a href="/orders/${item.order_id}" class="text-decoration-none"><small>#${item.lp}</small></a></td>
-                    `;
-                } else {
-                    tr.innerHTML = `
-                        <td><small>${item.date || '-'}</small></td>
-                        <td><small>${item.size || '-'}</small></td>
-                        <td class="text-center"><small>${item.quantity}</small></td>
-                        <td class="text-center"><small>${item.remaining}</small></td>
-                        <td class="text-end"><small>${item.price.toFixed(2)} PLN</small></td>
-                        <td><small>${item.invoice_number || '-'}</small></td>
-                    `;
-                }
-                tbody.appendChild(tr);
-            });
+                data.items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    if (type === 'orders') {
+                        const dateStr = item.date ? new Date(item.date * 1000).toLocaleDateString('pl-PL') : '-';
+                        tr.className = 'clickable-row';
+                        tr.onclick = () => { window.location = `/orders/${item.order_id}`; };
+                        tr.innerHTML = `
+                            <td><a href="/orders/${item.order_id}" class="text-decoration-none">LP${item.lp}</a></td>
+                            <td>${dateStr}</td>
+                            <td>${item.customer || '-'}</td>
+                            <td>${item.size || '-'}</td>
+                            <td class="text-end">${item.quantity}</td>
+                            <td class="text-end">${item.price ? item.price.toFixed(2) : '-'}</td>
+                        `;
+                    } else {
+                        const remaining = item.remaining > 0
+                            ? `<span class="badge bg-success">${item.remaining}</span>`
+                            : `<span class="badge bg-secondary">0</span>`;
+                        const price = item.price ? item.price.toFixed(2) + ' zł' : '-';
+                        const invoiceInfo = item.invoice_number || item.supplier
+                            ? `<small>${item.invoice_number || ''}${item.supplier ? '<br><span class="text-muted">' + item.supplier + '</span>' : ''}</small>`
+                            : '<span class="text-muted">-</span>';
+                        tr.innerHTML = `
+                            <td>${item.date ? item.date.substring(0, 10) : '-'}</td>
+                            <td>${item.size || '-'}</td>
+                            <td class="text-end">${item.quantity}</td>
+                            <td class="text-end">${remaining}</td>
+                            <td class="text-end">${price}</td>
+                            <td>${invoiceInfo}</td>
+                        `;
+                        if (item.remaining === 0) tr.classList.add('text-muted');
+                    }
+                    tbody.appendChild(tr);
+                });
 
-            state.offset += data.items.length;
-            const countEl = document.getElementById(`${type}-count`);
-            if (countEl) countEl.textContent = state.offset;
-
-            if (!data.has_more) {
-                document.getElementById(`${type}-footer`).innerHTML =
-                    '<small class="text-muted">Wyswietlono wszystkie rekordy (' + state.offset + ')</small>';
-            } else {
-                btn.innerHTML = origText;
-                btn.disabled = false;
+                this.extraItems = this.extraItems.concat(data.items);
+                this.offset += data.items.length;
+                this.hasMore = data.has_more;
+            } catch (err) {
+                console.error('Błąd ładowania historii:', err);
+            } finally {
+                this.loading = false;
             }
-            state.loading = false;
-        })
-        .catch(err => {
-            console.error('Blad ladowania historii:', err);
-            btn.innerHTML = origText;
-            btn.disabled = false;
-            state.loading = false;
-        });
-}
+        }
+    }));
+});
 </script>
 {% endblock %}

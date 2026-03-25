@@ -60,7 +60,7 @@ def test_sensitive_tokens_render_as_password(app_mod, client, login):
         "ALLEGRO_REFRESH_TOKEN",
     ]:
         field_html = _extract_input(html, key)
-        assert "type=\"password\"" in field_html.lower()
+        assert "type=\"password\"" in field_html.lower() or ":type=\"show" in field_html.lower()
 
 
 def test_settings_post_updates_store(app_mod, client, login, monkeypatch):
@@ -133,7 +133,7 @@ def test_extra_keys_display_and_save(app_mod, client, login, monkeypatch):
     label = ENV_INFO.get("EXTRA_KEY", ("EXTRA_KEY", None))[0]
     assert label in html
     extra_field = _extract_input(html, "EXTRA_KEY")
-    assert "type=\"password\"" in extra_field.lower()
+    assert "type=\"password\"" in extra_field.lower() or ":type=\"show" in extra_field.lower()
 
     values = app_mod.load_settings(include_hidden=True)
     values["EXTRA_KEY"] = "bar"

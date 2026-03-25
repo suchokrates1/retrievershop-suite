@@ -133,30 +133,28 @@
                            class="form-control form-control-sm" style="font-size: 0.75rem;">
                 </td>
                 <td>
-                    <input type="hidden" name="ps_id_{{ loop.index0 }}" id="ps_id_{{ loop.index0 }}" value="{{ row.matched_ps_id or '' }}">
-                    <div class="product-selector dropdown">
+                    <div class="product-selector dropdown" x-data="productSelector('{{ row.matched_ps_id or '' }}', '{{ row.matched_name|e if row.matched_ps_id else '+ Nowy produkt' }}')">
+                        <input type="hidden" name="ps_id_{{ loop.index0 }}" :value="hiddenValue">
                         <button type="button" class="btn btn-sm btn-outline-secondary dropdown-trigger dropdown-toggle" 
                                 data-bs-toggle="dropdown" aria-expanded="false"
-                                id="btn_ps_{{ loop.index0 }}">
-                            {% if row.matched_ps_id %}
-                                {{ row.matched_name }}
-                            {% else %}
-                                + Nowy produkt
-                            {% endif %}
+                                x-ref="trigger" x-text="selectedLabel">
                         </button>
                         <div class="dropdown-menu dropdown-menu-dark">
                             <div class="dropdown-search">
-                                <input type="text" class="form-control form-control-sm search-input" 
-                                       placeholder="Szukaj produktu..." data-target="{{ loop.index0 }}">
+                                <input type="text" class="form-control form-control-sm" 
+                                       placeholder="Szukaj produktu..." x-model="searchTerm"
+                                       x-ref="searchInput" @click.stop>
                             </div>
-                            <div class="dropdown-item new-product {% if not row.matched_ps_id %}active{% endif %}" 
-                               data-ps-id="__new__" data-row="{{ loop.index0 }}">+ Nowy produkt</div>
-                            <div class="dropdown-item" data-ps-id="" data-row="{{ loop.index0 }}">-- Brak (pomiń) --</div>
+                            <div class="dropdown-item new-product" :class="{ 'active': selectedPsId === '__new__' || selectedPsId === '' }"
+                               @click.prevent.stop="selectItem('__new__', '+ Nowy produkt')">+ Nowy produkt</div>
+                            <div class="dropdown-item"
+                               @click.prevent.stop="selectItem('', '-- Brak (pomiń) --')">-- Brak (pomiń) --</div>
                             {% for ps in product_sizes %}
-                            <div class="dropdown-item {% if row.matched_ps_id == ps['ps_id'] %}active{% endif %}" 
-                               data-ps-id="{{ ps['ps_id'] }}" data-row="{{ loop.index0 }}"
-                               data-name="{{ ps['name'] }}" data-color="{{ ps['color'] }}" data-size="{{ ps['size'] }}"
-                               data-search="{{ ps['name']|lower }} {{ ps['color']|lower }} {{ ps['size']|lower }} {{ ps['barcode'] or '' }}">
+                            <div class="dropdown-item" :class="{ 'active': selectedPsId === '{{ ps['ps_id'] }}' }"
+                               @click.prevent.stop="selectItem('{{ ps['ps_id'] }}', '{{ ps['name']|e }} ({{ ps['color']|e }}) {{ ps['size']|e }}')"
+                               data-ps-id="{{ ps['ps_id'] }}"
+                               data-search="{{ ps['name']|lower }} {{ ps['color']|lower }} {{ ps['size']|lower }} {{ ps['barcode'] or '' }}"
+                               x-show="matchesSearch($el)">
                                 <strong>{{ ps['name'] }}</strong> ({{ ps['color'] }}) <span class="badge bg-secondary">{{ ps['size'] }}</span>
                                 {% if ps['barcode'] %}<br><span class="product-barcode">EAN: {{ ps['barcode'] }}</span>{% endif %}
                             </div>
@@ -194,85 +192,43 @@
 </form>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Handle product selection
-    document.querySelectorAll('.product-selector .dropdown-item').forEach(function(item) {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const psId = this.dataset.psId;
-            const rowIdx = this.dataset.row;
-            const btn = document.getElementById('btn_ps_' + rowIdx);
-            const hiddenInput = document.getElementById('ps_id_' + rowIdx);
-            
-            // Update hidden input
-            hiddenInput.value = psId || '';
-            
-            // Update button text
-            if (psId === '__new__') {
-                btn.textContent = '+ Nowy produkt';
-                hiddenInput.value = '';
-            } else if (psId && this.dataset.name) {
-                btn.textContent = this.dataset.name + ' (' + this.dataset.color + ') ' + this.dataset.size;
-            } else if (psId) {
-                const strong = this.querySelector('strong');
-                const badge = this.querySelector('.badge');
-                if (strong && badge) {
-                    const colorMatch = this.textContent.match(/\(([^)]+)\)/);
-                    btn.textContent = strong.textContent + (colorMatch ? ' (' + colorMatch[1] + ') ' : ' ') + badge.textContent;
-                }
-            } else {
-                btn.textContent = '-- Brak (pomiń) --';
-            }
-            
-            // Update active state
-            this.closest('.dropdown-menu').querySelectorAll('.dropdown-item').forEach(function(i) {
-                i.classList.remove('active');
-            });
-            if (psId) {
-                this.classList.add('active');
-            }
-            
-            // Close dropdown manually
+document.addEventListener('alpine:init', () => {
+    Alpine.data('productSelector', (initialPsId, initialName) => ({
+        selectedPsId: initialPsId || '',
+        selectedLabel: initialName || '+ Nowy produkt',
+        searchTerm: '',
+
+        get hiddenValue() {
+            return this.selectedPsId === '__new__' ? '' : this.selectedPsId;
+        },
+
+        selectItem(psId, label) {
+            this.selectedPsId = psId || '';
+            this.selectedLabel = label;
+            const btn = this.$refs.trigger;
             const dropdown = bootstrap.Dropdown.getOrCreateInstance(btn);
             dropdown.hide();
-        });
-    });
-    
-    // Handle search filtering
-    document.querySelectorAll('.search-input').forEach(function(input) {
-        input.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            const dropdown = this.closest('.dropdown-menu');
-            
-            dropdown.querySelectorAll('.dropdown-item').forEach(function(item) {
-                const searchData = item.dataset.search || '';
-                if (searchTerm === '' || searchData.includes(searchTerm) || !item.dataset.psId || item.dataset.psId === '__new__') {
-                    item.style.display = '';
-                } else {
-                    item.style.display = 'none';
-                }
+        },
+
+        matchesSearch(el) {
+            if (!this.searchTerm) return true;
+            const psId = el.dataset.psId;
+            if (!psId || psId === '__new__') return true;
+            const searchData = el.dataset.search || '';
+            return searchData.includes(this.searchTerm.toLowerCase());
+        },
+
+        init() {
+            const btn = this.$refs.trigger;
+            btn.addEventListener('shown.bs.dropdown', () => {
+                this.searchTerm = '';
+                this.$nextTick(() => {
+                    const input = this.$refs.searchInput;
+                    if (input) input.focus();
+                });
             });
-        });
-        
-        // Prevent dropdown close when clicking on search input
-        input.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-    });
-    
-    // Focus search on dropdown open
-    document.querySelectorAll('.dropdown-trigger').forEach(function(btn) {
-        btn.addEventListener('shown.bs.dropdown', function() {
-            const searchInput = this.nextElementSibling.querySelector('.search-input');
-            if (searchInput) {
-                searchInput.value = '';
-                searchInput.dispatchEvent(new Event('input'));
-                setTimeout(function() { searchInput.focus(); }, 100);
-            }
-        });
-    });
+        }
+    }));
 });
 </script>
 {% endblock %}

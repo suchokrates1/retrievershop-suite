@@ -13,15 +13,15 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline-secondary btn-sm mb-2">
-            <i class="bi bi-arrow-left"></i> Powrot do listy
+            <i class="bi bi-arrow-left"></i> Powrót do listy
         </a>
         <h2>Raport cenowy #{{ report.id }}</h2>
         <p class="text-muted mb-0">
             {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}
             {% if report.status == 'completed' %}
-                <span class="badge bg-success ms-2">Zakonczony</span>
+                <span class="badge bg-success ms-2">Zakończony</span>
             {% elif report.status == 'completed_with_errors' %}
-                <span class="badge bg-warning text-dark ms-2">Zakonczony z bledami</span>
+                <span class="badge bg-warning text-dark ms-2">Zakończony z błędami</span>
             {% elif report.status == 'running' %}
                 <span class="badge bg-primary ms-2">W toku ({{ report.items_checked }}/{{ report.items_total }})</span>
             {% endif %}
@@ -31,7 +31,7 @@
         <form action="{{ url_for('price_reports.restart_report', report_id=report.id) }}" method="post" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-warning" 
-                    onclick="return confirm('Restartowac raport? Oferty z bledami zostana sprawdzone ponownie.')">
+                    onclick="return confirm('Restartować raport? Oferty z błędami zostaną sprawdzone ponownie.')">
                 <i class="bi bi-arrow-repeat"></i> Restart raportu
             </button>
         </form>
@@ -52,7 +52,7 @@
         <div class="card text-center border-success">
             <div class="card-body text-success">
                 <h3 class="mb-0">{{ stats.cheapest }}</h3>
-                <small>Jestesmy najtansi</small>
+                <small>Jesteśmy najtańsi</small>
             </div>
         </div>
     </div>
@@ -60,7 +60,7 @@
         <div class="card text-center border-danger">
             <div class="card-body text-danger">
                 <h3 class="mb-0">{{ stats.not_cheapest }}</h3>
-                <small>Drozsi od konkurencji</small>
+                <small>Drożsi od konkurencji</small>
             </div>
         </div>
     </div>
@@ -68,7 +68,7 @@
         <div class="card text-center border-warning">
             <div class="card-body text-warning">
                 <h3 class="mb-0">{{ stats.with_suggestion }}</h3>
-                <small>Z sugestia obnizki</small>
+                <small>Z sugestią obniżki</small>
             </div>
         </div>
     </div>
@@ -76,7 +76,7 @@
         <div class="card text-center border-primary">
             <div class="card-body text-primary">
                 <h3 class="mb-0">{{ stats.with_raise_suggestion }}</h3>
-                <small>Mozna podniesc cene</small>
+                <small>Można podnieść cenę</small>
             </div>
         </div>
     </div>
@@ -98,22 +98,22 @@
     </a>
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='not_cheapest') }}" 
        class="btn btn-outline-danger {% if filter_mode == 'not_cheapest' %}active{% endif %}">
-        Drozsi ({{ stats.not_cheapest }})
+        Drożsi ({{ stats.not_cheapest }})
     </a>
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='cheapest') }}" 
        class="btn btn-outline-success {% if filter_mode == 'cheapest' %}active{% endif %}">
-        Najtansi ({{ stats.cheapest }})
+        Najtańsi ({{ stats.cheapest }})
     </a>
     {% if stats.errors > 0 %}
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='errors') }}" 
        class="btn btn-outline-warning {% if filter_mode == 'errors' %}active{% endif %}">
-        Bledy ({{ stats.errors }})
+        Błędy ({{ stats.errors }})
     </a>
     {% endif %}
 </div>
 
 {% if items %}
-<div class="table-responsive">
+<div x-data="reportDetail()" class="table-responsive">
     <table class="table table-striped table-hover table-sm" style="table-layout: fixed;">
         <thead class="table-dark">
             <tr>
@@ -140,15 +140,15 @@
                     </span>
                     {% endif %}
                     <br>
-                    <small class="text-muted">{{ item.offer_id }} | {% if item.our_price %}<strong>{{ "%.2f"|format(item.our_price) }} zl</strong>{% else %}-{% endif %}</small>
+                    <small class="text-muted">{{ item.offer_id }} | {% if item.our_price %}<strong>{{ "%.2f"|format(item.our_price) }} zł</strong>{% else %}-{% endif %}</small>
                 </td>
                 <td class="text-end">
                     {% if item.competitor_price %}
-                        {{ "%.2f"|format(item.competitor_price) }} zl
+                        {{ "%.2f"|format(item.competitor_price) }} zł
                         {% if item.price_difference %}
                             <br>
                             <small class="{% if item.price_difference > 0 %}text-danger{% else %}text-success{% endif %}">
-                                {% if item.price_difference > 0 %}+{% endif %}{{ "%.2f"|format(item.price_difference) }} zl
+                                {% if item.price_difference > 0 %}+{% endif %}{{ "%.2f"|format(item.price_difference) }} zł
                             </small>
                         {% endif %}
                     {% else %}
@@ -169,7 +169,7 @@
                     {% if item.our_position %}
                         {{ item.our_position }}/{{ item.total_offers }}
                         {% if item.competitors_all_count and item.competitors_all_count != (item.total_offers - 1) %}
-                            <br><small class="text-muted" title="Ofert na allegro lacznie (przed filtrem dostawy/wykluczonych)">({{ item.competitors_all_count + 1 }} lacznie)</small>
+                            <br><small class="text-muted" title="Ofert na allegro łącznie (przed filtrem dostawy/wykluczonych)">({{ item.competitors_all_count + 1 }} łącznie)</small>
                         {% endif %}
                     {% else %}
                         -
@@ -177,28 +177,28 @@
                 </td>
                 <td class="text-center">
                     {% if item.error %}
-                        <span class="badge bg-warning" title="{{ item.error }}">Blad</span>
+                        <span class="badge bg-warning" title="{{ item.error }}">Błąd</span>
                     {% elif item.is_cheapest %}
                         <span class="badge bg-success"><i class="bi bi-check"></i> OK</span>
                     {% else %}
-                        <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drozsi</span>
+                        <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drożsi</span>
                     {% endif %}
                 </td>
                 <td>
                     {% if item.suggestion and item.suggestion.type == 'decrease' %}
                         <span class="badge bg-warning text-dark">
-                            <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zl
+                            <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zł
                         </span>
                         <br>
                         <small class="text-muted">-{{ "%.1f"|format(item.suggestion.discount_percent) }}%</small>
                     {% elif item.suggestion and item.suggestion.type == 'increase' %}
                         <span class="badge bg-primary">
-                            <i class="bi bi-arrow-up"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zl
+                            <i class="bi bi-arrow-up"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zł
                         </span>
                         <br>
-                        <small class="text-muted">+{{ "%.1f"|format(item.suggestion.raise_percent) }}% (+{{ "%.2f"|format(item.suggestion.extra_profit) }} zl)</small>
+                        <small class="text-muted">+{{ "%.1f"|format(item.suggestion.raise_percent) }}% (+{{ "%.2f"|format(item.suggestion.extra_profit) }} zł)</small>
                     {% elif item.suggestion_note == "inna_aukcja_ok" %}
-                        <span class="badge bg-info text-dark" title="Inna aukcja tego produktu jest najtansza - cena ustawiona celowo">
+                        <span class="badge bg-info text-dark" title="Inna aukcja tego produktu jest najtańsza - cena ustawiona celowo">
                             <i class="bi bi-link-45deg"></i> Inna aukcja OK
                         </span>
                     {% else %}
@@ -219,28 +219,24 @@
                                 <i class="bi bi-person"></i>
                             </a>
                         {% endif %}
-                        <!-- Sprawdz ponownie -->
+                        <!-- Sprawdź ponownie -->
                         <button type="button" class="btn btn-outline-info btn-recheck" 
-                                data-item-id="{{ item.id }}" title="Sprawdz cene ponownie">
+                                @click="recheck('{{ item.id }}', $event)" title="Sprawdź cenę ponownie">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         {% if item.suggestion %}
-                            <!-- Zmien cene -->
+                            <!-- Zmień cenę -->
                             <button type="button" class="btn btn-outline-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-change-price" 
-                                    data-item-id="{{ item.id }}"
-                                    data-current-price="{{ item.our_price }}"
-                                    data-target-price="{{ item.suggestion.target_price }}"
-                                    data-product-name="{{ item.product_name[:30] }}"
-                                    data-change-type="{{ item.suggestion.type }}"
-                                    title="Zmien cene na {{ item.suggestion.target_price }} zl">
+                                    @click="openChangePrice('{{ item.id }}', '{{ item.our_price }}', '{{ item.suggestion.target_price }}', '{{ item.product_name[:30] }}', '{{ item.suggestion.type }}')"
+                                    title="Zmień cenę na {{ item.suggestion.target_price }} zł">
                                 <i class="bi bi-cash-coin"></i>
                             </button>
                         {% endif %}
                         {% if item.competitor_seller %}
-                            <!-- Wyklucz sprzedawce -->
+                            <!-- Wyklucz sprzedawcę -->
                             <button type="button" class="btn btn-outline-danger btn-exclude-seller" 
-                                    data-seller="{{ item.competitor_seller }}"
-                                    title="Wyklucz sprzedawce {{ item.competitor_seller }}">
+                                    @click="openExcludeSeller('{{ item.competitor_seller }}')"
+                                    title="Wyklucz sprzedawcę {{ item.competitor_seller }}">
                                 <i class="bi bi-person-x"></i>
                             </button>
                         {% endif %}
@@ -250,7 +246,102 @@
             {% endfor %}
         </tbody>
     </table>
+
+<!-- Modal potwierdzenia zmiany ceny -->
+<div class="modal fade" id="changePriceModal" tabindex="-1" x-ref="changePriceModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Potwierdź zmianę ceny</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong x-text="priceModal.productName"></strong></p>
+                <div class="alert alert-warning">
+                    <p class="mb-1">Czy na pewno chcesz zmienić cenę?</p>
+                    <p class="mb-0">
+                        <strong x-text="priceModal.currentPrice"></strong> zł
+                        <i class="bi" :class="priceModal.changeType === 'increase' ? 'bi-arrow-up text-success' : 'bi-arrow-down text-danger'"></i>
+                        <strong x-text="priceModal.targetPrice" :class="priceModal.changeType === 'increase' ? 'text-success' : 'text-danger'"></strong> zł
+                    </p>
+                </div>
+                <div class="mb-3">
+                    <template x-if="profitCalc.loading">
+                        <p class="text-muted small mb-1">Ładowanie kalkulacji zysku...</p>
+                    </template>
+                    <template x-if="profitCalc.error">
+                        <p class="text-danger small" x-text="profitCalc.error"></p>
+                    </template>
+                    <template x-if="profitCalc.data">
+                        <div>
+                            <table class="table table-sm mb-0">
+                                <tr>
+                                    <td>Zmiana ceny:</td>
+                                    <td class="text-end text-danger" x-text="'-' + profitCalc.data.price_change_percent + '%'"></td>
+                                </tr>
+                                <tr>
+                                    <td>Aktualny zysk:</td>
+                                    <td class="text-end" x-text="profitCalc.data.current_profit.toFixed(2) + ' zł'"></td>
+                                </tr>
+                                <tr>
+                                    <td>Nowy zysk:</td>
+                                    <td class="text-end" x-text="profitCalc.data.new_profit.toFixed(2) + ' zł'"></td>
+                                </tr>
+                                <tr :class="profitCalc.data.profit_change < 0 ? 'table-danger' : 'table-success'">
+                                    <td><strong>Zmiana zysku:</strong></td>
+                                    <td class="text-end">
+                                        <strong x-text="(profitCalc.data.profit_change > 0 ? '+' : '') + profitCalc.data.profit_change.toFixed(2) + ' zł'"></strong>
+                                    </td>
+                                </tr>
+                            </table>
+                            <template x-if="profitCalc.data.note">
+                                <p class="text-muted small mt-2 mb-0" x-text="profitCalc.data.note"></p>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-warning" @click="confirmChangePrice()" :disabled="changingPrice">
+                    <template x-if="changingPrice">
+                        <span><span class="spinner-border spinner-border-sm"></span> Zmieniam...</span>
+                    </template>
+                    <template x-if="!changingPrice">
+                        <span><i class="bi bi-check"></i> Zmień cenę</span>
+                    </template>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Modal wykluczenia sprzedawcy -->
+<div class="modal fade" id="excludeSellerModal" tabindex="-1" x-ref="excludeSellerModal">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Wyklucz sprzedawcę</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Wykluczyć sprzedawcę <strong x-text="excludeSeller.name"></strong> z porównań cen?</p>
+                <form x-ref="excludeSellerForm" method="post" action="{{ url_for('price_reports.exclude_seller') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="seller_name" :value="excludeSeller.name">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-danger" @click="confirmExcludeSeller()">
+                    <i class="bi bi-person-x"></i> Wyklucz
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /x-data reportDetail + table-responsive -->
 {% else %}
 <div class="alert alert-secondary text-center">
     <i class="bi bi-inbox fs-1"></i>
@@ -264,19 +355,19 @@
         <h6 class="card-title">Legenda</h6>
         <ul class="list-inline mb-0">
             <li class="list-inline-item">
-                <span class="badge bg-success"><i class="bi bi-check"></i> OK</span> - Jestesmy najtansi
+                <span class="badge bg-success"><i class="bi bi-check"></i> OK</span> - Jesteśmy najtańsi
             </li>
             <li class="list-inline-item">
-                <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drozsi</span> - Konkurent jest tanszy
+                <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drożsi</span> - Konkurent jest tańszy
             </li>
             <li class="list-inline-item">
-                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-down"></i></span> - Sugerowana obnizka (max {{ max_discount }}%)
+                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-down"></i></span> - Sugerowana obniżka (max {{ max_discount }}%)
             </li>
             <li class="list-inline-item">
-                <span class="badge bg-primary"><i class="bi bi-arrow-up"></i></span> - Sugerowana podwyzka (mozna podniesc i nadal byc najtanszym)
+                <span class="badge bg-primary"><i class="bi bi-arrow-up"></i></span> - Sugerowana podwyżka (można podnieść i nadal być najtańszym)
             </li>
             <li class="list-inline-item">
-                <span class="badge bg-warning">Blad</span> - Nie udalo sie sprawdzic
+                <span class="badge bg-warning">Błąd</span> - Nie udało się sprawdzić
             </li>
             <li class="list-inline-item">
                 <i class="bi bi-star-fill text-warning"></i> - Super Sprzedawca
@@ -287,228 +378,128 @@
         <ul class="list-inline mb-0">
             <li class="list-inline-item"><i class="bi bi-box-arrow-up-right text-primary"></i> - Nasza oferta</li>
             <li class="list-inline-item"><i class="bi bi-person text-secondary"></i> - Oferta konkurenta</li>
-            <li class="list-inline-item"><i class="bi bi-arrow-clockwise text-info"></i> - Sprawdz ponownie</li>
-            <li class="list-inline-item"><i class="bi bi-cash-coin text-warning"></i> - Zmien cene</li>
-            <li class="list-inline-item"><i class="bi bi-person-x text-danger"></i> - Wyklucz sprzedawce</li>
+            <li class="list-inline-item"><i class="bi bi-arrow-clockwise text-info"></i> - Sprawdź ponownie</li>
+            <li class="list-inline-item"><i class="bi bi-cash-coin text-warning"></i> - Zmień cenę</li>
+            <li class="list-inline-item"><i class="bi bi-person-x text-danger"></i> - Wyklucz sprzedawcę</li>
         </ul>
     </div>
 </div>
 
-<!-- Modal potwierdzenia zmiany ceny -->
-<div class="modal fade" id="changePriceModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Potwierdz zmiane ceny</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p><strong id="modal-product-name"></strong></p>
-                <div class="alert alert-warning">
-                    <p class="mb-1">Czy na pewno chcesz zmienic cene?</p>
-                    <p class="mb-0">
-                        <strong id="modal-current-price"></strong> zl 
-                        <i class="bi bi-arrow-right" id="modal-arrow-icon"></i> 
-                        <strong id="modal-target-price"></strong> zl
-                    </p>
-                </div>
-                <div id="profit-calculation" class="mb-3">
-                    <p class="text-muted small mb-1">Ladowanie kalkulacji zysku...</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
-                <button type="button" class="btn btn-warning" id="confirm-change-price">
-                    <i class="bi bi-check"></i> Zmien cene
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal wykluczenia sprzedawcy -->
-<div class="modal fade" id="excludeSellerModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Wyklucz sprzedawce</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Wykluczyc sprzedawce <strong id="exclude-seller-name"></strong> z porownan cen?</p>
-                <form id="exclude-seller-form" method="post" action="{{ url_for('price_reports.exclude_seller') }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="seller_name" id="exclude-seller-input">
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
-                <button type="button" class="btn btn-danger" id="confirm-exclude-seller">
-                    <i class="bi bi-person-x"></i> Wyklucz
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const csrfToken = '{{ csrf_token() }}';
-    
-    // Sprawdz ponownie
-    document.querySelectorAll('.btn-recheck').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const itemId = this.dataset.itemId;
-            const row = this.closest('tr');
-            const icon = this.querySelector('i');
-            
-            icon.classList.remove('bi-arrow-clockwise');
-            icon.classList.add('bi-hourglass-split');
-            this.disabled = true;
-            
+const CSRF_TOKEN_REPORT = "{{ csrf_token() }}";
+
+document.addEventListener('alpine:init', () => {
+    Alpine.data('reportDetail', () => ({
+        priceModal: {
+            itemId: null,
+            productName: '',
+            currentPrice: '',
+            targetPrice: '',
+            changeType: 'decrease'
+        },
+        profitCalc: {
+            loading: false,
+            data: null,
+            error: null
+        },
+        changingPrice: false,
+        recheckingIds: {},
+        excludeSeller: {
+            name: ''
+        },
+
+        openChangePrice(itemId, currentPrice, targetPrice, productName, changeType) {
+            this.priceModal = { itemId, productName, currentPrice, targetPrice, changeType: changeType || 'decrease' };
+            this.profitCalc = { loading: true, data: null, error: null };
+            this.changingPrice = false;
+
+            const modal = new bootstrap.Modal(this.$refs.changePriceModal);
+            modal.show();
+
+            this._loadProfitCalc(itemId);
+        },
+
+        async _loadProfitCalc(itemId) {
+            try {
+                const response = await fetch(`/price-reports/calculate-profit/${itemId}`);
+                const result = await response.json();
+                if (result.success) {
+                    this.profitCalc = { loading: false, data: result.data, error: null };
+                } else {
+                    this.profitCalc = { loading: false, data: null, error: result.error };
+                }
+            } catch (e) {
+                this.profitCalc = { loading: false, data: null, error: 'Błąd ładowania: ' + e.message };
+            }
+        },
+
+        async confirmChangePrice() {
+            if (!this.priceModal.itemId || !this.priceModal.targetPrice) return;
+            this.changingPrice = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('new_price', this.priceModal.targetPrice);
+
+                const response = await fetch(`/price-reports/change-price/${this.priceModal.itemId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': CSRF_TOKEN_REPORT },
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    bootstrap.Modal.getInstance(this.$refs.changePriceModal).hide();
+                    location.reload();
+                } else {
+                    alert('Błąd: ' + result.error);
+                }
+            } catch (e) {
+                alert('Błąd połączenia: ' + e.message);
+            } finally {
+                this.changingPrice = false;
+            }
+        },
+
+        async recheck(itemId, event) {
+            const btn = event.currentTarget;
+            const icon = btn.querySelector('i');
+            this.recheckingIds[itemId] = true;
+
+            icon.classList.replace('bi-arrow-clockwise', 'bi-hourglass-split');
+            btn.disabled = true;
+
             try {
                 const response = await fetch(`/price-reports/recheck-item/${itemId}`, {
                     method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrfToken
-                    }
+                    headers: { 'X-CSRFToken': CSRF_TOKEN_REPORT }
                 });
                 const result = await response.json();
-                
+
                 if (result.success) {
-                    // Odswiez strone zeby pokazac nowe dane
                     location.reload();
                 } else {
-                    alert('Blad: ' + result.error);
+                    alert('Błąd: ' + result.error);
                 }
             } catch (e) {
-                alert('Blad polaczenia: ' + e.message);
+                alert('Błąd połączenia: ' + e.message);
             } finally {
-                icon.classList.remove('bi-hourglass-split');
-                icon.classList.add('bi-arrow-clockwise');
-                this.disabled = false;
+                icon.classList.replace('bi-hourglass-split', 'bi-arrow-clockwise');
+                btn.disabled = false;
+                delete this.recheckingIds[itemId];
             }
-        });
-    });
-    
-    // Zmien cene
-    let currentItemId = null;
-    let currentTargetPrice = null;
-    
-    document.querySelectorAll('.btn-change-price').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            currentItemId = this.dataset.itemId;
-            const currentPrice = this.dataset.currentPrice;
-            currentTargetPrice = this.dataset.targetPrice;
-            const productName = this.dataset.productName;
-            const changeType = this.dataset.changeType || 'decrease';
-            
-            document.getElementById('modal-product-name').textContent = productName;
-            document.getElementById('modal-current-price').textContent = currentPrice;
-            document.getElementById('modal-target-price').textContent = currentTargetPrice;
-            
-            const arrow = document.getElementById('modal-arrow-icon');
-            if (changeType === 'increase') {
-                arrow.className = 'bi bi-arrow-up text-success';
-                document.getElementById('modal-target-price').className = 'text-success';
-            } else {
-                arrow.className = 'bi bi-arrow-down text-danger';
-                document.getElementById('modal-target-price').className = 'text-danger';
-            }
-            
-            document.getElementById('profit-calculation').innerHTML = '<p class="text-muted small mb-1">Ladowanie kalkulacji zysku...</p>';
-            
-            const modal = new bootstrap.Modal(document.getElementById('changePriceModal'));
+        },
+
+        openExcludeSeller(sellerName) {
+            this.excludeSeller.name = sellerName;
+            const modal = new bootstrap.Modal(this.$refs.excludeSellerModal);
             modal.show();
-            
-            // Pobierz kalkulacje zysku
-            try {
-                const response = await fetch(`/price-reports/calculate-profit/${currentItemId}`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    const d = result.data;
-                    let html = `
-                        <table class="table table-sm mb-0">
-                            <tr>
-                                <td>Zmiana ceny:</td>
-                                <td class="text-end text-danger">-${d.price_change_percent}%</td>
-                            </tr>
-                            <tr>
-                                <td>Aktualny zysk:</td>
-                                <td class="text-end">${d.current_profit.toFixed(2)} zl</td>
-                            </tr>
-                            <tr>
-                                <td>Nowy zysk:</td>
-                                <td class="text-end">${d.new_profit.toFixed(2)} zl</td>
-                            </tr>
-                            <tr class="${d.profit_change < 0 ? 'table-danger' : 'table-success'}">
-                                <td><strong>Zmiana zysku:</strong></td>
-                                <td class="text-end"><strong>${d.profit_change > 0 ? '+' : ''}${d.profit_change.toFixed(2)} zl</strong></td>
-                            </tr>
-                        </table>
-                    `;
-                    if (d.note) {
-                        html += `<p class="text-muted small mt-2 mb-0">${d.note}</p>`;
-                    }
-                    document.getElementById('profit-calculation').innerHTML = html;
-                } else {
-                    document.getElementById('profit-calculation').innerHTML = `<p class="text-danger small">${result.error}</p>`;
-                }
-            } catch (e) {
-                document.getElementById('profit-calculation').innerHTML = `<p class="text-danger small">Blad ladowania: ${e.message}</p>`;
-            }
-        });
-    });
-    
-    document.getElementById('confirm-change-price').addEventListener('click', async function() {
-        if (!currentItemId || !currentTargetPrice) return;
-        
-        this.disabled = true;
-        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Zmieniam...';
-        
-        try {
-            const formData = new FormData();
-            formData.append('new_price', currentTargetPrice);
-            
-            const response = await fetch(`/price-reports/change-price/${currentItemId}`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrfToken
-                },
-                body: formData
-            });
-            const result = await response.json();
-            
-            if (result.success) {
-                bootstrap.Modal.getInstance(document.getElementById('changePriceModal')).hide();
-                location.reload();
-            } else {
-                alert('Blad: ' + result.error);
-            }
-        } catch (e) {
-            alert('Blad polaczenia: ' + e.message);
-        } finally {
-            this.disabled = false;
-            this.innerHTML = '<i class="bi bi-check"></i> Zmien cene';
+        },
+
+        confirmExcludeSeller() {
+            this.$refs.excludeSellerForm.submit();
         }
-    });
-    
-    // Wyklucz sprzedawce
-    document.querySelectorAll('.btn-exclude-seller').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const seller = this.dataset.seller;
-            document.getElementById('exclude-seller-name').textContent = seller;
-            document.getElementById('exclude-seller-input').value = seller;
-            
-            const modal = new bootstrap.Modal(document.getElementById('excludeSellerModal'));
-            modal.show();
-        });
-    });
-    
-    document.getElementById('confirm-exclude-seller').addEventListener('click', function() {
-        document.getElementById('exclude-seller-form').submit();
-    });
+    }));
 });
 </script>
 {% endblock %}
