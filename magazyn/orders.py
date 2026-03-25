@@ -331,7 +331,7 @@ def orders_list():
     # Note: Automatic sync runs every hour via order_sync_scheduler
     
     page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = request.args.get("per_page", 25, type=int)
     search = request.args.get("search", "").strip()
     sort_by = request.args.get("sort", "date")  # date, order_id, status, amount
     sort_dir = request.args.get("dir", "desc")  # asc, desc
@@ -341,7 +341,7 @@ def orders_list():
     
     # Limit per_page to reasonable values
     if per_page not in [10, 25, 50, 100]:
-        per_page = 10
+        per_page = 25
     
     with get_session() as db:
         query = db.query(Order)
@@ -479,16 +479,14 @@ def orders_list():
                 latest_status.status if latest_status else "niewydrukowano"
             )
             
-            # Get product summary
+            # Get product summary - kazdy produkt w osobnej linii
             products = db.query(OrderProduct).filter(
                 OrderProduct.order_id == order.order_id
             ).all()
-            product_summary = ", ".join([
+            product_lines = [
                 f"{p.name or 'Produkt'} x{p.quantity}"
-                for p in products[:3]
-            ])
-            if len(products) > 3:
-                product_summary += f" (+{len(products) - 3} wiecej)"
+                for p in products
+            ]
             
             # Sprawdz czy zamowienie ma aktywny zwrot
             has_return = db.query(Return).filter(
@@ -509,7 +507,7 @@ def orders_list():
                 "currency": order.currency,
                 "status_text": status_text,
                 "status_class": status_class,
-                "product_summary": product_summary,
+                "product_summary": product_lines,
                 "tracking_number": order.delivery_package_nr,
                 "has_return": has_return,
             })

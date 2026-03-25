@@ -723,10 +723,16 @@ def process_refund(
         if not access_token:
             return False, "Brak tokenu Allegro - zaloguj sie do Allegro"
         
+        # Pobierz external_order_id z zamowienia
+        order_record = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order_record or not order_record.external_order_id:
+            return False, "Brak external_order_id zamowienia - nie mozna zrealizowac zwrotu"
+
         # Wywolaj API Allegro
         success, message, response_data = allegro_api.initiate_refund(
             access_token=access_token,
             return_id=return_record.allegro_return_id,
+            order_external_id=order_record.external_order_id,
             delivery_cost_covered=delivery_cost_covered,
             reason=reason
         )
