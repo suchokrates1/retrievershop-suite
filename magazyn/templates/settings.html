@@ -1,285 +1,662 @@
 {% extends "base.html" %}
 
+{% block styles %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --ds-primary: #2563EB;
+    --ds-secondary: #3B82F6;
+    --ds-cta: #F97316;
+    --ds-bg: #F8FAFC;
+    --ds-text: #1E293B;
+    --ds-muted: #64748B;
+    --ds-border: #E2E8F0;
+    --ds-success: #16A34A;
+    --ds-danger: #DC2626;
+    --ds-warning: #F59E0B;
+    --ds-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --ds-shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+    --ds-shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+    --ds-radius: 12px;
+    --ds-radius-sm: 8px;
+}
+.settings-page {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--ds-text);
+    max-width: 900px;
+    margin: 0 auto;
+}
+.settings-page .page-header {
+    padding: 2rem 0 1.5rem;
+    text-align: center;
+}
+.settings-page .page-header h2 {
+    font-weight: 700;
+    font-size: 1.75rem;
+    letter-spacing: -0.02em;
+    color: var(--ds-text);
+    margin-bottom: 0.25rem;
+}
+.settings-page .page-header p {
+    color: var(--ds-muted);
+    font-size: 0.9rem;
+}
+.settings-page .ds-card {
+    background: #fff;
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius);
+    box-shadow: var(--ds-shadow-sm);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+.settings-page .ds-card:hover {
+    box-shadow: var(--ds-shadow-md);
+}
+.settings-page .ds-card-header {
+    padding: 1rem 1.25rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--ds-border);
+}
+.settings-page .ds-card-header .header-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--ds-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.settings-page .ds-card-body {
+    padding: 1.25rem;
+}
+/* Sekcja naglowkowa */
+.settings-page .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem 0 0.75rem;
+}
+.settings-page .section-divider .divider-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.settings-page .section-divider h4 {
+    font-weight: 700;
+    font-size: 1.15rem;
+    margin: 0;
+    color: var(--ds-text);
+}
+.settings-page .section-divider .subtitle {
+    font-size: 0.8rem;
+    color: var(--ds-muted);
+    margin: 0;
+}
+/* Accordion redesign */
+.settings-page .accordion-item {
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius) !important;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    box-shadow: var(--ds-shadow-sm);
+    transition: box-shadow 200ms ease;
+}
+.settings-page .accordion-item:hover {
+    box-shadow: var(--ds-shadow-md);
+}
+.settings-page .accordion-button {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.875rem 1.25rem;
+    color: var(--ds-text);
+    background: #fff;
+    border: none;
+    transition: background 200ms ease;
+}
+.settings-page .accordion-button:not(.collapsed) {
+    background: var(--ds-bg);
+    color: var(--ds-primary);
+    box-shadow: none;
+}
+.settings-page .accordion-button:focus {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    border-color: var(--ds-primary);
+}
+.settings-page .accordion-button .badge {
+    font-weight: 500;
+    font-size: 0.7rem;
+    padding: 0.25em 0.6em;
+    border-radius: 999px;
+    background: var(--ds-primary) !important;
+}
+/* Tabela ustawien */
+.settings-page .settings-table {
+    margin: 0;
+    font-size: 0.85rem;
+}
+.settings-page .settings-table th {
+    font-weight: 500;
+    color: var(--ds-text);
+    padding: 0.75rem 1rem;
+    vertical-align: top;
+    border-color: var(--ds-border);
+    background: transparent;
+}
+.settings-page .settings-table td {
+    padding: 0.75rem 1rem;
+    border-color: var(--ds-border);
+}
+.settings-page .settings-table tr {
+    transition: background 150ms ease;
+}
+.settings-page .settings-table tr:hover {
+    background: var(--ds-bg);
+}
+.settings-page .settings-table .text-muted {
+    color: var(--ds-muted) !important;
+}
+/* Formularze redesign */
+.settings-page .form-control,
+.settings-page .form-select {
+    font-family: 'Inter', system-ui, sans-serif;
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    font-size: 0.85rem;
+}
+.settings-page .form-control:focus,
+.settings-page .form-select:focus {
+    border-color: var(--ds-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+/* Przyciski redesign */
+.settings-page .btn-ds-primary {
+    background: var(--ds-primary);
+    color: #fff;
+    border: none;
+    padding: 0.625rem 1.75rem;
+    border-radius: var(--ds-radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 200ms ease;
+    cursor: pointer;
+}
+.settings-page .btn-ds-primary:hover {
+    background: #1D4ED8;
+    transform: translateY(-1px);
+    box-shadow: var(--ds-shadow-md);
+}
+.settings-page .btn-ds-primary:focus {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+.settings-page .btn-ds-cta {
+    background: var(--ds-cta);
+    color: #fff;
+    border: none;
+    padding: 0.625rem 1.75rem;
+    border-radius: var(--ds-radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 200ms ease;
+    cursor: pointer;
+}
+.settings-page .btn-ds-cta:hover {
+    background: #EA580C;
+    transform: translateY(-1px);
+    box-shadow: var(--ds-shadow-md);
+    color: #fff;
+}
+.settings-page .btn-ds-outline {
+    background: transparent;
+    color: var(--ds-primary);
+    border: 2px solid var(--ds-primary);
+    padding: 0.5rem 1.5rem;
+    border-radius: var(--ds-radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 200ms ease;
+    cursor: pointer;
+}
+.settings-page .btn-ds-outline:hover {
+    background: var(--ds-primary);
+    color: #fff;
+    transform: translateY(-1px);
+}
+/* Koszty stale */
+.settings-page .cost-row td {
+    vertical-align: middle;
+}
+.settings-page .cost-amount {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+/* Alert redesign */
+.settings-page .ds-alert {
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid;
+    padding: 0.875rem 1rem;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+.settings-page .ds-alert-warning {
+    background: #FFFBEB;
+    border-color: #FDE68A;
+    color: #92400E;
+}
+.settings-page .ds-alert-info {
+    background: #EFF6FF;
+    border-color: #BFDBFE;
+    color: #1E40AF;
+}
+.settings-page .ds-alert-success {
+    background: #F0FDF4;
+    border-color: #BBF7D0;
+    color: #166534;
+}
+/* Stepper / lista */
+.settings-page .step-list {
+    counter-reset: steps;
+    list-style: none;
+    padding: 0;
+}
+.settings-page .step-list li {
+    counter-increment: steps;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    font-size: 0.85rem;
+    color: var(--ds-text);
+}
+.settings-page .step-list li::before {
+    content: counter(steps);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--ds-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.settings-page .feature-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    font-size: 0.85rem;
+}
+.settings-page .feature-check i {
+    color: var(--ds-success);
+    font-size: 1rem;
+}
+/* Sticky save bar */
+.settings-page .save-bar {
+    position: sticky;
+    bottom: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--ds-border);
+    padding: 0.875rem 0;
+    margin: 0 -0.75rem;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<h2 class="mb-3 text-center">Ustawienia</h2>
-{% if db_path_notice %}
-<div class="alert alert-warning text-center">
-  Sciezka bazy danych jest odczytywana tylko podczas uruchamiania aplikacji.
-  Aby zmienic lokalizacje, edytuj plik <code>.env</code> i zrestartuj serwer.
-</div>
-{% endif %}
-<form method="post" id="settingsForm" class="col-md-8 mx-auto">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    
-    <div class="accordion" id="settingsAccordion">
-    {% for group_name, group_data in grouped_settings.items() %}
-        <div class="accordion-item">
-            <h2 class="accordion-header">
-                <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" 
-                        data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}" 
-                        aria-expanded="{{ 'true' if loop.first else 'false' }}">
-                    <i class="{{ group_data.icon }} me-2"></i>{{ group_name }}
-                    <span class="badge bg-secondary ms-2">{{ group_data.entries|length }}</span>
-                </button>
-            </h2>
-            <div id="group-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" 
-                 data-bs-parent="#settingsAccordion">
-                <div class="accordion-body p-0">
-                    <table class="table table-striped table-hover table-sm mb-0">
-                        <tbody>
-                        {% for item in group_data.entries %}
-                        <tr>
-                            <th scope="row" style="width: 40%;">
-                                {{ item.label }}
-                                {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
-                            </th>
-                            <td>
-                                {% set lower = item.key.lower() %}
-                                {% if item.key in boolean_keys %}
-                                <select class="form-select form-select-sm" id="{{ item.key }}" name="{{ item.key }}">
-                                    <option value="1" {% if item.value|string == '1' %}selected{% endif %}>Tak</option>
-                                    <option value="0" {% if item.value|string != '1' %}selected{% endif %}>Nie</option>
-                                </select>
-                                {% elif 'shipping' in lower or 'commission' in lower %}
-                                <input type="number" step="0.01" class="form-control form-control-sm" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
-                                {% elif item.key == 'LOG_LEVEL' %}
-                                <select class="form-select form-select-sm" id="{{ item.key }}" name="{{ item.key }}">
-                                    {% for lvl in ['DEBUG','INFO','WARNING','ERROR','CRITICAL'] %}
-                                    <option value="{{ lvl }}" {% if item.value == lvl %}selected{% endif %}>{{ lvl }}</option>
-                                    {% endfor %}
-                                </select>
-                                {% elif item.key == 'FLASK_ENV' %}
-                                <select class="form-select form-select-sm" id="{{ item.key }}" name="{{ item.key }}">
-                                    {% for env in ['production','development'] %}
-                                    <option value="{{ env }}" {% if item.value == env %}selected{% endif %}>{{ env }}</option>
-                                    {% endfor %}
-                                </select>
-                                {% else %}
-                                {% set is_sensitive =
-                                    'password' in lower
-                                    or 'secret' in lower
-                                    or 'token' in lower
-                                    or 'client_secret' in lower
-                                    or 'key' in lower
-                                %}
-                                {% if is_sensitive %}
-                                <div class="input-group input-group-sm" x-data="{ show: false }">
-                                    <input :type="show ? 'text' : 'password'" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
-                                    <span class="input-group-text" style="cursor:pointer" @click="show = !show">
-                                        <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
-                                    </span>
-                                </div>
-                                {% else %}
-                                <input type="text" class="form-control form-control-sm" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
-                                {% endif %}
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+<div class="settings-page">
+    <!-- Naglowek strony -->
+    <div class="page-header">
+        <h2><i class="bi bi-gear me-2"></i>Ustawienia</h2>
+        <p>Konfiguracja aplikacji, integracje i koszty stale</p>
+    </div>
+
+    {% if db_path_notice %}
+    <div class="ds-alert ds-alert-warning mb-4">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Ścieżka bazy danych jest odczytywana tylko podczas uruchamiania aplikacji.
+        Aby zmienić lokalizację, edytuj plik <code>.env</code> i zrestartuj serwer.</span>
+    </div>
+    {% endif %}
+
+    <!-- ============================================ -->
+    <!-- SEKCJA 1: Konfiguracja aplikacji             -->
+    <!-- ============================================ -->
+    <div class="section-divider">
+        <div class="divider-icon" style="background: #EFF6FF; color: var(--ds-primary);">
+            <i class="bi bi-sliders"></i>
         </div>
-    {% endfor %}
+        <div>
+            <h4>Konfiguracja</h4>
+            <p class="subtitle">Ustawienia systemowe pogrupowane wg kategorii</p>
+        </div>
     </div>
-</form>
-<div class="form-actions text-center mt-3">
-    <button type="submit" form="settingsForm" class="btn btn-primary">Zapisz</button>
-    <form method="post" action="{{ url_for('allegro.authorize') }}" class="d-inline ms-2">
+
+    <form method="post" id="settingsForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline-secondary">Połącz z Allegro</button>
-    </form>
-</div>
 
-<hr class="my-4">
-
-{# Sekcja kosztow stalych #}
-<div class="card col-md-10 mx-auto mb-4">
-    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Koszty stale (miesieczne)</h5>
-        <span class="badge bg-dark">Suma: {{ '%.2f'|format(total_fixed_costs) }} PLN/mies.</span>
-    </div>
-    <div class="card-body">
-        <p class="text-muted small mb-3">
-            Koszty stale sa automatycznie odejmowane od miesiecznego zysku na stronie glownej i w raportach.
-            Mozesz dodawac rowniez wartosci ujemne (np. dotacje, zwroty).
-        </p>
-        
-        {# Formularz dodawania nowego kosztu #}
-        <form method="post" action="{{ url_for('add_fixed_cost') }}" class="row g-2 mb-4 align-items-end">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="col-md-4">
-                <label for="new_cost_name" class="form-label small">Nazwa kosztu</label>
-                <input type="text" class="form-control form-control-sm" id="new_cost_name" name="name" 
-                       placeholder="np. Ksiegowosc, ZUS, Hosting..." required>
-            </div>
-            <div class="col-md-2">
-                <label for="new_cost_amount" class="form-label small">Kwota (PLN)</label>
-                <input type="number" step="0.01" class="form-control form-control-sm" id="new_cost_amount" 
-                       name="amount" placeholder="0.00" required>
-            </div>
-            <div class="col-md-4">
-                <label for="new_cost_desc" class="form-label small">Opis (opcjonalnie)</label>
-                <input type="text" class="form-control form-control-sm" id="new_cost_desc" name="description" 
-                       placeholder="Dodatkowe informacje...">
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-success btn-sm w-100">
-                    <i class="bi bi-plus-lg"></i> Dodaj
-                </button>
-            </div>
-        </form>
-        
-        {# Lista kosztow stalych #}
-        {% if fixed_costs %}
-        <table class="table table-sm table-hover">
-            <thead class="table-light">
-                <tr>
-                    <th>Nazwa</th>
-                    <th>Kwota</th>
-                    <th>Opis</th>
-                    <th>Status</th>
-                    <th class="text-end">Akcje</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for cost in fixed_costs %}
-                <tr class="{{ 'table-secondary text-muted' if not cost.is_active else '' }}">
-                    <td>
-                        <strong>{{ cost.name }}</strong>
-                    </td>
-                    <td>
-                        <span class="{{ 'text-danger' if cost.amount > 0 else 'text-success' }}">
-                            {{ '%.2f'|format(cost.amount) }} PLN
-                        </span>
-                    </td>
-                    <td class="small text-muted">{{ cost.description or '-' }}</td>
-                    <td>
-                        {% if cost.is_active %}
-                        <span class="badge bg-success">Aktywny</span>
-                        {% else %}
-                        <span class="badge bg-secondary">Nieaktywny</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-end">
-                        {# Przycisk edycji - otwiera modal #}
-                        <button type="button" class="btn btn-outline-primary btn-sm" 
-                                data-bs-toggle="modal" data-bs-target="#editModal{{ cost.id }}"
-                                title="Edytuj">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        {# Przycisk wlacz/wylacz #}
-                        <form method="post" action="{{ url_for('toggle_fixed_cost', cost_id=cost.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-outline-{{ 'warning' if cost.is_active else 'success' }} btn-sm"
-                                    title="{{ 'Dezaktywuj' if cost.is_active else 'Aktywuj' }}">
-                                <i class="bi bi-{{ 'pause' if cost.is_active else 'play' }}"></i>
-                            </button>
-                        </form>
-                        {# Przycisk usun #}
-                        <form method="post" action="{{ url_for('delete_fixed_cost', cost_id=cost.id) }}" class="d-inline"
-                              onsubmit="return confirm('Na pewno usunac koszt {{ cost.name }}?')">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Usun">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                
-                {# Modal edycji #}
-                <div class="modal fade" id="editModal{{ cost.id }}" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form method="post" action="{{ url_for('edit_fixed_cost', cost_id=cost.id) }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Edytuj koszt: {{ cost.name }}</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">Nazwa</label>
-                                        <input type="text" class="form-control" name="name" value="{{ cost.name }}" required>
+        <div class="accordion" id="settingsAccordion">
+        {% for group_name, group_data in grouped_settings.items() %}
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}"
+                            aria-expanded="{{ 'true' if loop.first else 'false' }}">
+                        <i class="{{ group_data.icon }} me-2"></i>{{ group_name }}
+                        <span class="badge ms-2">{{ group_data.entries|length }}</span>
+                    </button>
+                </h2>
+                <div id="group-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                     data-bs-parent="#settingsAccordion">
+                    <div class="accordion-body p-0">
+                        <table class="table settings-table table-sm mb-0">
+                            <tbody>
+                            {% for item in group_data.entries %}
+                            <tr>
+                                <th scope="row" style="width: 40%;">
+                                    {{ item.label }}
+                                    {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
+                                </th>
+                                <td>
+                                    {% set lower = item.key.lower() %}
+                                    {% if item.key in boolean_keys %}
+                                    <select class="form-select form-select-sm" id="{{ item.key }}" name="{{ item.key }}">
+                                        <option value="1" {% if item.value|string == '1' %}selected{% endif %}>Tak</option>
+                                        <option value="0" {% if item.value|string != '1' %}selected{% endif %}>Nie</option>
+                                    </select>
+                                    {% elif 'shipping' in lower or 'commission' in lower %}
+                                    <input type="number" step="0.01" class="form-control form-control-sm" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                                    {% elif item.key == 'LOG_LEVEL' %}
+                                    <select class="form-select form-select-sm" id="{{ item.key }}" name="{{ item.key }}">
+                                        {% for lvl in ['DEBUG','INFO','WARNING','ERROR','CRITICAL'] %}
+                                        <option value="{{ lvl }}" {% if item.value == lvl %}selected{% endif %}>{{ lvl }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    {% elif item.key == 'FLASK_ENV' %}
+                                    <select class="form-select form-select-sm" id="{{ item.key }}" name="{{ item.key }}">
+                                        {% for env in ['production','development'] %}
+                                        <option value="{{ env }}" {% if item.value == env %}selected{% endif %}>{{ env }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    {% else %}
+                                    {% set is_sensitive =
+                                        'password' in lower
+                                        or 'secret' in lower
+                                        or 'token' in lower
+                                        or 'client_secret' in lower
+                                        or 'key' in lower
+                                    %}
+                                    {% if is_sensitive %}
+                                    <div class="input-group input-group-sm" x-data="{ show: false }">
+                                        <input :type="show ? 'text' : 'password'" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                                        <span class="input-group-text" style="cursor:pointer" @click="show = !show">
+                                            <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
+                                        </span>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Kwota (PLN)</label>
-                                        <input type="number" step="0.01" class="form-control" name="amount" 
-                                               value="{{ cost.amount }}" required>
-                                        <small class="text-muted">Wartosc ujemna = przychod/dotacja</small>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Opis</label>
-                                        <input type="text" class="form-control" name="description" 
-                                               value="{{ cost.description or '' }}">
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
-                                    <button type="submit" class="btn btn-primary">Zapisz</button>
-                                </div>
-                            </form>
-                        </div>
+                                    {% else %}
+                                    <input type="text" class="form-control form-control-sm" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                                    {% endif %}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="alert alert-info mb-0">
-            <i class="bi bi-info-circle me-2"></i>
-            Brak zdefiniowanych kosztow stalych. Dodaj pierwsze koszty (np. Ksiegowosc, ZUS, hosting).
+            </div>
+        {% endfor %}
         </div>
-        {% endif %}
+    </form>
+
+    <!-- Sticky save bar -->
+    <div class="save-bar">
+        <button type="submit" form="settingsForm" class="btn btn-ds-primary">
+            <i class="bi bi-check-lg me-1"></i>Zapisz ustawienia
+        </button>
+        <form method="post" action="{{ url_for('allegro.authorize') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-ds-outline">
+                <i class="bi bi-shop me-1"></i>Połącz z Allegro
+            </button>
+        </form>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- SEKCJA 2: Koszty stale                       -->
+    <!-- ============================================ -->
+    <div class="section-divider">
+        <div class="divider-icon" style="background: #FFFBEB; color: var(--ds-warning);">
+            <i class="bi bi-cash-stack"></i>
+        </div>
+        <div>
+            <h4>Koszty stale</h4>
+            <p class="subtitle">Miesieczne koszty odejmowane od zysku &mdash; suma:
+                <strong style="color: var(--ds-danger);">{{ '%.2f'|format(total_fixed_costs) }} PLN/mies.</strong>
+            </p>
+        </div>
+    </div>
+
+    <div class="ds-card">
+        <div class="ds-card-body">
+            <p class="text-muted" style="font-size: 0.82rem; margin-bottom: 1rem;">
+                Koszty stale sa automatycznie odejmowane od miesiecznego zysku na stronie glownej i w raportach.
+                Mozesz dodawac rowniez wartosci ujemne (np. dotacje, zwroty).
+            </p>
+
+            <!-- Formularz dodawania -->
+            <form method="post" action="{{ url_for('add_fixed_cost') }}" class="row g-2 mb-4 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-4">
+                    <label for="new_cost_name" class="form-label small fw-medium">Nazwa kosztu</label>
+                    <input type="text" class="form-control form-control-sm" id="new_cost_name" name="name"
+                           placeholder="np. Ksiegowosc, ZUS, Hosting..." required>
+                </div>
+                <div class="col-md-2">
+                    <label for="new_cost_amount" class="form-label small fw-medium">Kwota (PLN)</label>
+                    <input type="number" step="0.01" class="form-control form-control-sm" id="new_cost_amount"
+                           name="amount" placeholder="0.00" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="new_cost_desc" class="form-label small fw-medium">Opis (opcjonalnie)</label>
+                    <input type="text" class="form-control form-control-sm" id="new_cost_desc" name="description"
+                           placeholder="Dodatkowe informacje...">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-ds-cta btn-sm w-100" style="padding: 0.375rem 0.5rem; font-size: 0.82rem;">
+                        <i class="bi bi-plus-lg me-1"></i>Dodaj
+                    </button>
+                </div>
+            </form>
+
+            <!-- Lista kosztow -->
+            {% if fixed_costs %}
+            <div class="table-responsive">
+                <table class="table settings-table table-sm">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--ds-border);">
+                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Nazwa</th>
+                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Kwota</th>
+                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Opis</th>
+                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Status</th>
+                            <th class="text-end" style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cost in fixed_costs %}
+                        <tr class="cost-row {{ 'opacity-50' if not cost.is_active else '' }}">
+                            <td>
+                                <strong>{{ cost.name }}</strong>
+                            </td>
+                            <td>
+                                <span class="cost-amount {{ 'text-danger' if cost.amount > 0 else 'text-success' }}">
+                                    {{ '%.2f'|format(cost.amount) }} PLN
+                                </span>
+                            </td>
+                            <td class="small" style="color: var(--ds-muted);">{{ cost.description or '-' }}</td>
+                            <td>
+                                {% if cost.is_active %}
+                                <span class="badge" style="background: #DCFCE7; color: #166534; font-weight: 500;">Aktywny</span>
+                                {% else %}
+                                <span class="badge" style="background: #F1F5F9; color: #64748B; font-weight: 500;">Nieaktywny</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary border-0"
+                                        data-bs-toggle="modal" data-bs-target="#editModal{{ cost.id }}"
+                                        title="Edytuj" style="cursor: pointer;">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form method="post" action="{{ url_for('toggle_fixed_cost', cost_id=cost.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary border-0"
+                                            title="{{ 'Dezaktywuj' if cost.is_active else 'Aktywuj' }}" style="cursor: pointer;">
+                                        <i class="bi bi-{{ 'pause-circle' if cost.is_active else 'play-circle' }}"></i>
+                                    </button>
+                                </form>
+                                <form method="post" action="{{ url_for('delete_fixed_cost', cost_id=cost.id) }}" class="d-inline"
+                                      onsubmit="return confirm('Na pewno usunac koszt {{ cost.name }}?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0"
+                                            title="Usuń" style="cursor: pointer;">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+
+                        <!-- Modal edycji -->
+                        <div class="modal fade" id="editModal{{ cost.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content" style="border-radius: var(--ds-radius); border: none; box-shadow: var(--ds-shadow-lg);">
+                                    <form method="post" action="{{ url_for('edit_fixed_cost', cost_id=cost.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <div class="modal-header" style="border-bottom: 1px solid var(--ds-border);">
+                                            <h5 class="modal-title" style="font-weight: 600;">Edytuj koszt: {{ cost.name }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-medium small">Nazwa</label>
+                                                <input type="text" class="form-control" name="name" value="{{ cost.name }}" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-medium small">Kwota (PLN)</label>
+                                                <input type="number" step="0.01" class="form-control" name="amount"
+                                                       value="{{ cost.amount }}" required>
+                                                <small style="color: var(--ds-muted);">Wartosc ujemna = przychod/dotacja</small>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-medium small">Opis</label>
+                                                <input type="text" class="form-control" name="description"
+                                                       value="{{ cost.description or '' }}">
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer" style="border-top: 1px solid var(--ds-border);">
+                                            <button type="button" class="btn btn-ds-outline btn-sm" data-bs-dismiss="modal" style="padding: 0.375rem 1rem;">Anuluj</button>
+                                            <button type="submit" class="btn btn-ds-primary btn-sm" style="padding: 0.375rem 1rem;">Zapisz</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="ds-alert ds-alert-info">
+                <i class="bi bi-info-circle"></i>
+                <span>Brak zdefiniowanych kosztow stalych. Dodaj pierwsze koszty (np. Ksiegowosc, ZUS, hosting).</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- SEKCJA 3: Allegro Scraper                    -->
+    <!-- ============================================ -->
+    <div class="section-divider">
+        <div class="divider-icon" style="background: #EFF6FF; color: var(--ds-secondary);">
+            <i class="bi bi-robot"></i>
+        </div>
+        <div>
+            <h4>Allegro Scraper</h4>
+            <p class="subtitle">Sprawdzanie cen konkurencji z pomoca lokalnego scrapera</p>
+        </div>
+    </div>
+
+    <div class="ds-card">
+        <div class="ds-card-body">
+            <div class="ds-alert ds-alert-info mb-3">
+                <i class="bi bi-lightbulb"></i>
+                <div>
+                    <strong>Jak to dziala?</strong>
+                    <ol class="step-list mt-2 mb-0">
+                        <li>Pobierz scraper i zainstaluj na swoim PC z Windows</li>
+                        <li>Wpisz adres API scrapera w polu "URL Scrapera Allegro" powyżej</li>
+                        <li>Kliknij "Monitor cen Allegro" w menu &mdash; ceny beda pobierane z Twojego PC!</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <h6 style="font-weight: 600; margin-bottom: 0.75rem;">Instalacja (jednorazowo)</h6>
+                    <ol class="step-list">
+                        <li>
+                            <span>
+                                <a href="{{ url_for('main.download_scraper') }}" class="btn btn-ds-cta btn-sm" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">
+                                    <i class="bi bi-download me-1"></i>Pobierz AllegroScraper
+                                </a>
+                            </span>
+                        </li>
+                        <li>Rozpakuj ZIP na swoim PC</li>
+                        <li>Uruchom <code>SETUP.bat</code> (instaluje Chrome driver)</li>
+                        <li>Uruchom <code>RUN_SCRAPER.bat</code> (startuje API)</li>
+                        <li>Zaloguj sie na Allegro w oknie Chrome (jednorazowo)</li>
+                        <li>Wpisz adres w polu powyżej, np: <code style="background: var(--ds-bg); padding: 0.125rem 0.375rem; border-radius: 4px;">http://192.168.31.150:5555</code></li>
+                    </ol>
+                </div>
+                <div class="col-md-6">
+                    <h6 style="font-weight: 600; margin-bottom: 0.75rem;">Zalety</h6>
+                    <div class="feature-check"><i class="bi bi-check-circle-fill"></i> Brak captcha (prawdziwy Chrome z logowaniem)</div>
+                    <div class="feature-check"><i class="bi bi-check-circle-fill"></i> Szybkie &mdash; 3-5 sekund na oferte</div>
+                    <div class="feature-check"><i class="bi bi-check-circle-fill"></i> Nie blokuje Brave (dedykowany profil Chrome)</div>
+                    <div class="feature-check"><i class="bi bi-check-circle-fill"></i> Dziala na kazdy PC z Windows</div>
+                    <div class="feature-check"><i class="bi bi-check-circle-fill"></i> Fallback do wbudowanego Selenium</div>
+
+                    <div class="ds-alert ds-alert-warning mt-3" style="font-size: 0.8rem;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <span>Zostaw pole "URL Scrapera Allegro" puste aby uzyc wbudowanego Selenium (wolniejsze, czasem captcha).</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-
-<hr class="my-4">
-
-<div class="card col-md-8 mx-auto">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0">Allegro Scraper - Sprawdzanie cen</h5>
-    </div>
-    <div class="card-body">
-        <p class="card-text">
-            Lokalny scraper omija blokady DataDome i szybko sprawdza ceny konkurencji.
-        </p>
-        
-        <div class="alert alert-info">
-            <strong>Jak to działa?</strong>
-            <ol class="mb-0 mt-2">
-                <li>Pobierz scraper i zainstaluj na swoim PC z Windows</li>
-                <li>Wpisz adres API scrapera w polu "URL Scrapera Allegro" powyżej</li>
-                <li>Kliknij "Monitor cen Allegro" w menu - ceny będą pobierane z Twojego PC!</li>
-            </ol>
-        </div>
-        
-        <h6 class="mt-3">Instalacja scrapera (jednorazowo):</h6>
-        <ol>
-            <li><a href="{{ url_for('main.download_scraper') }}" class="btn btn-sm btn-success">
-                <i class="bi bi-download"></i> Pobierz AllegroScraper_Portable.zip
-            </a></li>
-            <li>Rozpakuj ZIP na swoim PC</li>
-            <li>Uruchom <code>SETUP.bat</code> (instaluje Chrome driver)</li>
-            <li>Uruchom <code>RUN_SCRAPER.bat</code> (startuje API)</li>
-            <li>Zaloguj się na Allegro w oknie Chrome (jednorazowo)</li>
-            <li>Wpisz adres w polu powyżej, np: <code>http://192.168.31.150:5555</code></li>
-        </ol>
-        
-        <h6 class="mt-3">Zalety:</h6>
-        <ul class="mb-0">
-            <li>✅ Brak captcha (używa prawdziwego Chrome z logowaniem)</li>
-            <li>✅ Szybkie - 3-5 sekund na ofertę</li>
-            <li>✅ Nie blokuje Brave (dedykowany profil Chrome)</li>
-            <li>✅ Działa na każdym PC z Windows</li>
-            <li>✅ Jeśli scraper nie jest dostępny - automatycznie fallback do wbudowanego Selenium</li>
-        </ul>
-        
-        <small class="text-muted d-block mt-3">
-            <strong>Uwaga:</strong> Pozostaw pole "URL Scrapera Allegro" puste aby używać wbudowanego Selenium (wolniejsze, czasem captcha).
-        </small>
-    </div>
-</div>
-
 {% endblock %}
