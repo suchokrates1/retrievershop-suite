@@ -9,31 +9,33 @@
         </a>
         <form action="{{ url_for('price_reports.start_manual_report') }}" method="post" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-primary" onclick="return confirm('Rozpoczac generowanie raportu cenowego?')">
-                <i class="bi bi-play-fill"></i> Uruchom raport recznie
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Rozpocząć generowanie raportu cenowego?')">
+                <i class="bi bi-play-fill"></i> Uruchom raport ręcznie
             </button>
         </form>
     </div>
 </div>
 
-<!-- Status biezacego raportu -->
-<div id="currentReportStatus" class="alert alert-info d-none mb-4">
-    <div class="d-flex align-items-center justify-content-between">
-        <div class="d-flex align-items-center">
-            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-            <div>
-                <strong>Raport #<span id="statusReportId">-</span> w toku:</strong> 
-                <span id="statusProgress">0</span>/<span id="statusTotal">0</span> ofert 
-                (<span id="statusPercent">0</span>%)
-                <small class="text-muted ms-2">Aktualizacja co 5s</small>
+<!-- Status bieżącego raportu -->
+<div x-data="reportStatus()" x-cloak>
+    <div class="alert alert-info mb-4" x-show="visible" x-transition>
+        <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                <div>
+                    <strong>Raport #<span x-text="reportId">-</span> w toku:</strong>
+                    <span x-text="progress">0</span>/<span x-text="total">0</span> ofert
+                    (<span x-text="percent">0</span>%)
+                    <small class="text-muted ms-2">Aktualizacja co 5s</small>
+                </div>
             </div>
+            <a :href="reportLink" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye"></i> Zobacz szczegóły
+            </a>
         </div>
-        <a href="#" id="statusReportLink" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-eye"></i> Zobacz szczegoly
-        </a>
-    </div>
-    <div class="progress mt-2" style="height: 8px;">
-        <div id="statusProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+        <div class="progress mt-2" style="height: 8px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" :style="'width: ' + percent + '%'"></div>
+        </div>
     </div>
 </div>
 
@@ -46,8 +48,8 @@
                 <th>Data utworzenia</th>
                 <th>Status</th>
                 <th>Ofert</th>
-                <th>Najtansi</th>
-                <th>Drozsi</th>
+                <th>Najtańsi</th>
+                <th>Drożsi</th>
             </tr>
         </thead>
         <tbody>
@@ -57,9 +59,9 @@
                 <td>{{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}</td>
                 <td>
                     {% if report.status == 'completed' %}
-                        <span class="badge bg-success">Zakonczony</span>
+                        <span class="badge bg-success">Zakończony</span>
                     {% elif report.status == 'completed_with_errors' %}
-                        <span class="badge bg-warning text-dark">Zakonczony z bledami</span>
+                        <span class="badge bg-warning text-dark">Zakończony z błędami</span>
                     {% elif report.status == 'running' %}
                         <span class="badge bg-primary">W toku</span>
                     {% elif report.status == 'pending' %}
@@ -91,8 +93,8 @@
 {% else %}
 <div class="alert alert-secondary text-center">
     <i class="bi bi-inbox fs-1"></i>
-    <p class="mt-2 mb-0">Brak raportow cenowych</p>
-    <p class="text-muted">Raporty sa generowane automatycznie w weekendy lub mozesz uruchomic recznie.</p>
+    <p class="mt-2 mb-0">Brak raportów cenowych</p>
+    <p class="text-muted">Raporty są generowane automatycznie w weekendy lub możesz uruchomić ręcznie.</p>
 </div>
 {% endif %}
 
@@ -100,61 +102,65 @@
     <div class="card-body">
         <h5 class="card-title"><i class="bi bi-info-circle"></i> Informacje</h5>
         <ul class="mb-0">
-            <li>Raporty sa generowane automatycznie od <strong>piatku 16:00</strong></li>
-            <li>Oferty sa sprawdzane partiami z losowymi odstepami (3-6 min miedzy partiami)</li>
-            <li>Powiadomienie o gotowym raporcie wysylane jest po zakonczeniu</li>
-            <li>Mozesz tez uruchomic raport recznie w dowolnym momencie</li>
+            <li>Raporty są generowane automatycznie od <strong>piątku 16:00</strong></li>
+            <li>Oferty są sprawdzane partiami z losowymi odstępami (3-6 min między partiami)</li>
+            <li>Powiadomienie o gotowym raporcie wysyłane jest po zakończeniu</li>
+            <li>Możesz też uruchomić raport ręcznie w dowolnym momencie</li>
         </ul>
     </div>
 </div>
 
 <script>
-// Sprawdzaj status co 5 sekund
-let lastReportStatus = null;
-let lastItemsChecked = 0;
+const STATUS_URL = '{{ url_for("price_reports.current_status") }}';
+const REPORT_BASE_URL = '{{ url_for("price_reports.report_detail", report_id=0) }}';
 
-function checkStatus() {
-    fetch('{{ url_for("price_reports.current_status") }}')
-        .then(r => r.json())
-        .then(data => {
-            const statusDiv = document.getElementById('currentReportStatus');
-            const isRunning = (data.status === 'running' || data.status === 'pending');
-            
-            if (isRunning) {
-                // Pokaz pasek tylko jesli nie jest juz widoczny
-                if (statusDiv.classList.contains('d-none')) {
-                    statusDiv.classList.remove('d-none');
+document.addEventListener('alpine:init', () => {
+    Alpine.data('reportStatus', () => ({
+        visible: false,
+        reportId: '-',
+        progress: 0,
+        total: 0,
+        percent: 0,
+        reportLink: '#',
+        lastStatus: null,
+        interval: null,
+
+        init() {
+            setTimeout(() => this.checkStatus(), 1000);
+            this.interval = setInterval(() => this.checkStatus(), 5000);
+        },
+
+        destroy() {
+            if (this.interval) clearInterval(this.interval);
+        },
+
+        async checkStatus() {
+            try {
+                const r = await fetch(STATUS_URL);
+                const data = await r.json();
+                const isRunning = data.status === 'running' || data.status === 'pending';
+
+                if (isRunning) {
+                    this.visible = true;
+                    this.reportId = data.id;
+                    this.progress = data.items_checked;
+                    this.total = data.items_total;
+                    this.percent = data.progress_percent;
+                    this.reportLink = REPORT_BASE_URL.replace('/0', '/' + data.id);
+                    this.lastStatus = 'running';
+                } else {
+                    if (this.lastStatus === 'running') {
+                        this.lastStatus = 'completed';
+                        location.reload();
+                        return;
+                    }
+                    this.visible = false;
                 }
-                document.getElementById('statusReportId').textContent = data.id;
-                document.getElementById('statusProgress').textContent = data.items_checked;
-                document.getElementById('statusTotal').textContent = data.items_total;
-                document.getElementById('statusPercent').textContent = data.progress_percent;
-                document.getElementById('statusProgressBar').style.width = data.progress_percent + '%';
-                document.getElementById('statusReportLink').href = '{{ url_for("price_reports.report_detail", report_id=0) }}'.replace('/0', '/' + data.id);
-                lastReportStatus = 'running';
-                lastItemsChecked = data.items_checked;
-            } else {
-                // Raport zakonczony lub brak
-                if (lastReportStatus === 'running') {
-                    // Byl raport w toku, teraz sie zakonczyl - odswierz strone
-                    lastReportStatus = 'completed';
-                    location.reload();
-                    return;
-                }
-                // Ukryj pasek tylko jesli jest widoczny
-                if (!statusDiv.classList.contains('d-none')) {
-                    statusDiv.classList.add('d-none');
-                }
+            } catch (err) {
+                console.error('Błąd sprawdzania statusu:', err);
             }
-        })
-        .catch(err => {
-            // Blad sieci - nie rob nic, sprobuj ponownie przy nastepnym interwale
-            console.error('Blad sprawdzania statusu:', err);
-        });
-}
-
-// Pierwsze sprawdzenie po 1 sekundzie, potem co 5 sekund
-setTimeout(checkStatus, 1000);
-setInterval(checkStatus, 5000);
+        }
+    }));
+});
 </script>
 {% endblock %}

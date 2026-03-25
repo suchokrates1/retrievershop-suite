@@ -515,7 +515,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="discussions-layout" data-username="{{ username }}" data-can-reply="{{ 'true' if can_reply else 'false' }}">
+<div class="discussions-layout"
+     x-data="chatApp()"
+     data-username="{{ username }}"
+     x-cloak>
+    <script id="chat-init-data" type="application/json">{{ threads | tojson }}</script>
     <aside class="threads-panel">
         <div class="threads-toolbar">
             <h5>
@@ -524,7 +528,7 @@
             </h5>
             <div class="input-group input-group-sm search-group">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" id="search-threads" placeholder="Szukaj rozmów...">
+                <input type="text" class="form-control" x-model="searchQuery" placeholder="Szukaj rozmów...">
             </div>
             {% if autoresponder_enabled %}
             <div class="autoresponder-badge">
@@ -533,86 +537,127 @@
             </div>
             {% endif %}
         </div>
-        <div class="threads-list" id="threads-container" data-threads>
-            {% for thread in threads %}
-            <div class="thread-item{% if not thread.read %} unread{% endif %}" role="button" tabindex="0" aria-selected="false" data-thread-id="{{ thread.id }}" data-thread-title="{{ thread.title|e }}" data-thread-author="{{ thread.author|default('', true)|e }}" data-thread-type="{{ thread.type|default('', true)|e }}" data-thread-read="{{ 'true' if thread.read else 'false' }}" data-thread-last="{{ thread.last_message_iso or '' }}" data-thread-preview="{{ thread.last_message_preview|default('', true)|e }}" data-thread-last-author="{{ thread.last_message_author|default('', true)|e }}" data-source="{{ thread.source|default('messaging', true) }}">
-                <div class="thread-item-header">
-                    <div class="thread-title-row">
-                        <h6 class="thread-title">{{ thread.title }}</h6>
-                        <time class="thread-timestamp" data-thread-timestamp>{{ thread.last_message_at|format_dt }}</time>
+        <div class="threads-list" role="listbox" aria-label="Lista wątków">
+            <template x-for="thread in filteredThreads" :key="thread.id">
+                <div class="thread-item"
+                     :class="{ 'unread': !thread.read, 'active': thread.id === currentThreadId }"
+                     role="button" tabindex="0"
+                     :aria-selected="thread.id === currentThreadId ? 'true' : 'false'"
+                     @click="selectThread(thread)"
+                     @keydown.enter="selectThread(thread)"
+                     @keydown.space.prevent="selectThread(thread)">
+                    <div class="thread-item-header">
+                        <div class="thread-title-row">
+                            <h6 class="thread-title" x-text="thread.title"></h6>
+                            <time class="thread-timestamp" x-text="formatDate(thread.last_message_iso)"></time>
+                        </div>
+                        <div class="thread-item-meta">
+                            <span class="thread-author"
+                                  x-text="thread.last_message_author ? '@' + thread.last_message_author : 'Nieznany nadawca'"></span>
+                            <span class="thread-type-pill"
+                                  :class="thread.type === 'dyskusja' ? 'pill-discussion' : 'pill-message'">
+                                <i class="bi"
+                                   :class="thread.type === 'dyskusja' ? 'bi-chat-dots-fill' : 'bi-envelope-fill'"></i>
+                                <span x-text="thread.type === 'dyskusja' ? 'Dyskusja' : 'Wiadomość'"></span>
+                            </span>
+                        </div>
                     </div>
-                    <div class="thread-item-meta">
-                        <span class="thread-author" data-thread-author>
-                            {% if thread.last_message_author %}@{{ thread.last_message_author }}{% else %}Nieznany nadawca{% endif %}
-                        </span>
-                        <span class="thread-type-pill {% if thread.type == 'dyskusja' %}pill-discussion{% else %}pill-message{% endif %}" data-thread-type-pill>
-                            {% if thread.type == 'dyskusja' %}
-                                <i class="bi bi-chat-dots-fill"></i>Dyskusja
-                            {% else %}
-                                <i class="bi bi-envelope-fill"></i>Wiadomość
-                            {% endif %}
-                        </span>
-                    </div>
+                    <p class="thread-preview"
+                       x-text="thread.last_message_preview || 'Brak wiadomości w tym wątku.'"></p>
+                    <span class="unread-dot" aria-hidden="true" x-show="!thread.read"></span>
                 </div>
-                <p class="thread-preview" data-thread-preview-text>
-                    {% if thread.last_message_preview %}
-                        {{ thread.last_message_preview }}
-                    {% else %}
-                        Brak wiadomości w tym wątku.
-                    {% endif %}
-                </p>
-                {% if not thread.read %}
-                <span class="unread-dot" aria-hidden="true"></span>
-                {% endif %}
-            </div>
-            {% else %}
-            <div class="threads-empty text-muted text-center px-3 py-4">
+            </template>
+            <div class="threads-empty text-muted text-center px-3 py-4"
+                 x-show="threads.length === 0" x-cloak>
                 <i class="bi bi-inbox fs-2 d-block mb-2"></i>
                 Brak rozmów. Poczekaj na synchronizację z Allegro.
             </div>
-            {% endfor %}
         </div>
     </aside>
     <section class="conversation-panel">
         <header class="conversation-header">
             <div class="conversation-header-left">
-                <h2 class="conversation-title" data-thread-title>Wybierz wątek</h2>
-                <div class="conversation-meta" data-thread-meta>Kliknij rozmowę po lewej stronie</div>
+                <h2 class="conversation-title" x-text="headerTitle"></h2>
+                <div class="conversation-meta" x-text="headerMeta" :title="headerPreview"></div>
             </div>
             <div class="conversation-actions">
-                <span class="thread-type-pill" data-thread-type hidden></span>
-                <button type="button" class="btn btn-outline-light btn-sm" id="refresh-thread" title="Odśwież wiadomości" aria-label="Odśwież wiadomości">
+                <span class="thread-type-pill"
+                      x-show="currentThread && currentThread.type"
+                      :class="currentThread?.type === 'dyskusja' ? 'pill-discussion' : 'pill-message'"
+                      x-cloak>
+                    <i class="bi"
+                       :class="currentThread?.type === 'dyskusja' ? 'bi-chat-dots-fill' : 'bi-envelope-fill'"></i>
+                    <span x-text="currentThread?.type === 'dyskusja' ? 'Dyskusja' : 'Wiadomość'"></span>
+                </span>
+                <button type="button" class="btn btn-outline-light btn-sm"
+                        @click="refreshThread()"
+                        title="Odśwież wiadomości" aria-label="Odśwież wiadomości">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
         </header>
-        <div class="chat-status" id="chat-status" role="status" aria-live="polite"></div>
-        <div class="messages-area" id="messages-area">
-            <div class="chat-placeholder">
+        <div class="chat-status" role="status" aria-live="polite"
+             x-show="statusMessage"
+             :class="'chat-status alert alert-' + statusVariant"
+             x-text="statusMessage"
+             x-cloak></div>
+        <div class="messages-area" x-ref="messagesArea">
+            <div class="chat-placeholder" x-show="!currentThreadId && !loading">
                 <i class="bi bi-chat-text fs-2 d-block mb-3"></i>
                 Wybierz wątek po lewej, aby zobaczyć historię wiadomości.
             </div>
+            <div class="chat-loading" x-show="loading" x-cloak>
+                <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                <span>Ładuję wiadomości...</span>
+            </div>
+            <div class="chat-placeholder" x-show="currentThreadId && !loading && messages.length === 0" x-cloak>
+                <i class="bi bi-inboxes fs-2 d-block mb-3"></i>
+                Nie znaleziono wiadomości w tym wątku.
+            </div>
+            <template x-for="(msg, msgIndex) in messages" :key="msg.id || msgIndex">
+                <article class="message-row"
+                         :class="isOwnMessage(msg) ? 'message-outgoing' : 'message-incoming'">
+                    <div class="message-bubble"
+                         :class="isOwnMessage(msg) ? 'outgoing' : 'incoming'">
+                        <div class="message-author"
+                             x-text="isOwnMessage(msg) ? 'Ty' : (msg.author || '')"></div>
+                        <div class="message-content"
+                             x-text="msg.content || ''"></div>
+                        <div class="message-meta"
+                             x-text="formatTimestamp(msg.created_at)"></div>
+                    </div>
+                </article>
+            </template>
         </div>
-        <footer class="composer" id="composer">
+        <footer class="composer">
             {% if can_reply %}
-            <form id="message-form" class="composer-form">
+            <form class="composer-form" @submit.prevent="sendMessage()">
                 <label for="message-input" class="visually-hidden">Treść wiadomości</label>
-                <textarea id="message-input" class="form-control" rows="3" placeholder="Napisz odpowiedź (Enter = wyślij, Shift+Enter = nowa linia)" required></textarea>
+                <textarea id="message-input" class="form-control" rows="3"
+                          x-model="newMessage"
+                          x-ref="messageInput"
+                          @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); sendMessage() }"
+                          placeholder="Napisz odpowiedź (Enter = wyślij, Shift+Enter = nowa linia)"
+                          :disabled="!currentThreadId"></textarea>
                 <div class="composer-actions">
-                    <small>Enter = wyślij • Shift+Enter = nowa linia</small>
+                    <small>Enter = wyślij &bull; Shift+Enter = nowa linia</small>
                     <div class="d-flex align-items-center gap-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-message">
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @click="newMessage = ''; $refs.messageInput.focus()">
                             <i class="bi bi-x-circle me-1"></i>Wyczyść
                         </button>
-                        <button type="submit" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true"></span>
+                        <button type="submit" class="btn btn-primary"
+                                :disabled="isSending || !currentThreadId">
+                            <span class="spinner-border spinner-border-sm me-2"
+                                  :class="{ 'd-none': !isSending }"
+                                  role="status" aria-hidden="true"></span>
                             Wyślij
                         </button>
                     </div>
                 </div>
             </form>
             {% else %}
-            <div class="composer-disabled" id="composer-disabled">
+            <div class="composer-disabled">
                 <i class="bi bi-lock-fill"></i>
                 Wyślij odpowiedź dopiero po skonfigurowaniu integracji Allegro.
             </div>
@@ -624,747 +669,350 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const layout = document.querySelector('.discussions-layout');
-    if (!layout) {
-        return;
-    }
+document.addEventListener('alpine:init', () => {
+    const CSRF_TOKEN = "{{ csrf_token() }}";
 
-    const username = (layout.dataset.username || '').toLowerCase();
-    const csrfToken = "{{ csrf_token() }}";
-    const threadsContainer = document.getElementById('threads-container');
-    const messagesArea = document.getElementById('messages-area');
-    const headerTitle = document.querySelector('[data-thread-title]');
-    const headerMeta = document.querySelector('[data-thread-meta]');
-    const headerTypePill = document.querySelector('[data-thread-type]');
-    const statusBox = document.getElementById('chat-status');
-    const messageForm = document.getElementById('message-form');
-    const messageInput = document.getElementById('message-input');
-    const clearButton = document.getElementById('clear-message');
-    const refreshButton = document.getElementById('refresh-thread');
-    const sendButton = messageForm ? messageForm.querySelector('button[type="submit"]') : null;
-    const sendSpinner = messageForm ? messageForm.querySelector('.spinner-border') : null;
-    const searchInput = document.getElementById('search-threads');
+    Alpine.data('chatApp', () => ({
+        // --- Stan ---
+        threads: [],
+        messages: [],
+        currentThreadId: null,
+        currentThreadSource: null,
+        searchQuery: '',
+        newMessage: '',
+        isSending: false,
+        loading: false,
+        statusMessage: '',
+        statusVariant: 'info',
+        username: '',
+        csrfToken: CSRF_TOKEN,
+        notificationsEnabled: false,
+        _autoRefreshInterval: null,
+        _lastMessageCount: 0,
 
-    let currentThreadId = null;
-    let currentThreadSource = null;
-    let activeThreadEl = null;
-    let isSending = false;
-
-    const threadSelector = '.thread-item';
-    const fallbackPreview = 'Brak wiadomości w tym wątku.';
-
-    if (threadsContainer) {
-        threadsContainer.setAttribute('role', 'listbox');
-        threadsContainer.setAttribute('aria-label', 'Lista wątków');
-        threadsContainer.querySelectorAll(threadSelector).forEach((item) => {
-            item.setAttribute('aria-selected', 'false');
-        });
-    }
-
-    function escapeHTML(value) {
-        return (value || '').replace(/[&<>"']/g, (char) => {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#39;'
-            };
-            return map[char] || char;
-        });
-    }
-
-    function parseDate(value) {
-        if (!value) {
-            return null;
-        }
-        const parsed = new Date(value);
-        return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    function formatTimestamp(value, includeDate = true) {
-        const dt = parseDate(value);
-        if (!dt) {
-            return '';
-        }
-        const options = includeDate
-            ? { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }
-            : { hour: '2-digit', minute: '2-digit' };
-        return dt.toLocaleString('pl-PL', options);
-    }
-
-    function formatMeta(author, lastMessageAt) {
-        const parts = [];
-        if (author) {
-            parts.push(`@${author}`);
-        }
-        if (lastMessageAt) {
-            parts.push(formatTimestamp(lastMessageAt));
-        }
-        return parts.join(' • ') || 'Brak aktywnej rozmowy';
-    }
-
-    function showPlaceholder() {
-        messagesArea.innerHTML = `
-            <div class="chat-placeholder">
-                <i class="bi bi-chat-text fs-2 d-block mb-3"></i>
-                Wybierz wątek po lewej, aby zobaczyć historię wiadomości.
-            </div>
-        `;
-    }
-
-    function showLoading() {
-        messagesArea.innerHTML = `
-            <div class="chat-loading">
-                <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
-                <span>Ładuję wiadomości...</span>
-            </div>
-        `;
-    }
-
-    function clearStatus() {
-        statusBox.textContent = '';
-        statusBox.className = 'chat-status';
-    }
-
-    function showStatus(message, variant = 'info') {
-        statusBox.textContent = message;
-        statusBox.className = `chat-status alert alert-${variant}`;
-    }
-
-    function findThreadElement(threadId) {
-        if (!threadId || !threadsContainer) {
-            return null;
-        }
-        const items = Array.from(threadsContainer.querySelectorAll(threadSelector));
-        return items.find((item) => item.dataset.threadId === String(threadId)) || null;
-    }
-
-    function moveThreadToTop(threadId) {
-        const card = findThreadElement(threadId);
-        if (card && threadsContainer && threadsContainer.firstElementChild !== card) {
-            threadsContainer.prepend(card);
-        }
-    }
-
-    // Keep list item metadata in sync with the backend payload.
-    function updateThreadCard(threadData) {
-        if (!threadData || !threadData.id) {
-            return { updated: false, shouldReorder: false };
-        }
-        const card = findThreadElement(threadData.id);
-        if (!card) {
-            return { updated: false, shouldReorder: false };
-        }
-
-        const previousLast = card.dataset.threadLast || '';
-        const newLast = threadData.last_message_at || threadData.last_message_iso || previousLast;
-
-        if (threadData.title !== undefined) {
-            card.dataset.threadTitle = threadData.title || '';
-            const titleEl = card.querySelector('.thread-title');
-            if (titleEl) {
-                titleEl.textContent = threadData.title || 'Wiadomość';
-            }
-        }
-
-        if (threadData.author !== undefined) {
-            card.dataset.threadAuthor = threadData.author || '';
-        }
-
-        if (threadData.type !== undefined) {
-            card.dataset.threadType = threadData.type || '';
-            const pillEl = card.querySelector('[data-thread-type-pill]');
-            if (pillEl) {
-                const isDiscussion = threadData.type === 'dyskusja';
-                pillEl.classList.toggle('pill-discussion', isDiscussion);
-                pillEl.classList.toggle('pill-message', !isDiscussion);
-                pillEl.innerHTML = isDiscussion
-                    ? '<i class="bi bi-chat-dots-fill"></i>Dyskusja'
-                    : '<i class="bi bi-envelope-fill"></i>Wiadomość';
-            }
-        }
-
-        const lastAuthor = threadData.last_message_author || threadData.author || '';
-        card.dataset.threadLastAuthor = lastAuthor || '';
-        const authorEl = card.querySelector('[data-thread-author]');
-        if (authorEl) {
-            authorEl.textContent = lastAuthor ? `@${lastAuthor}` : 'Nieznany nadawca';
-        }
-
-        card.dataset.threadPreview = threadData.last_message_preview || '';
-        const previewEl = card.querySelector('[data-thread-preview-text]');
-        if (previewEl) {
-            previewEl.textContent = threadData.last_message_preview || fallbackPreview;
-        }
-
-        card.dataset.threadLast = newLast || '';
-        const timestampEl = card.querySelector('[data-thread-timestamp]');
-        if (timestampEl && newLast) {
-            timestampEl.textContent = formatTimestamp(newLast);
-        }
-
-        if (typeof threadData.read === 'boolean') {
-            card.dataset.threadRead = threadData.read ? 'true' : 'false';
-            if (threadData.read) {
-                card.classList.remove('unread');
-                const dot = card.querySelector('.unread-dot');
-                if (dot) {
-                    dot.remove();
-                }
-            } else if (!card.classList.contains('unread')) {
-                card.classList.add('unread');
-            }
-            if (!threadData.read && !card.querySelector('.unread-dot')) {
-                const dot = document.createElement('span');
-                dot.className = 'unread-dot';
-                dot.setAttribute('aria-hidden', 'true');
-                card.appendChild(dot);
-            }
-        }
-
-        card.setAttribute('aria-selected', card === activeThreadEl ? 'true' : 'false');
-
-        const previousDate = parseDate(previousLast);
-        const newDate = parseDate(newLast);
-        const shouldReorder = Boolean(newDate && (!previousDate || newDate > previousDate));
-
-        return { updated: true, shouldReorder };
-    }
-
-    function setActiveThread(threadEl) {
-        if (activeThreadEl) {
-            activeThreadEl.classList.remove('active');
-            activeThreadEl.setAttribute('aria-selected', 'false');
-        }
-        activeThreadEl = threadEl;
-        if (activeThreadEl) {
-            activeThreadEl.classList.add('active');
-            activeThreadEl.classList.remove('unread');
-            activeThreadEl.dataset.threadRead = 'true';
-            activeThreadEl.setAttribute('aria-selected', 'true');
-            const dot = activeThreadEl.querySelector('.unread-dot');
-            if (dot) {
-                dot.remove();
-            }
-            if (document.activeElement !== activeThreadEl) {
-                try {
-                    activeThreadEl.focus({ preventScroll: true });
-                } catch (focusError) {
-                    activeThreadEl.focus();
-                }
-            }
-        }
-    }
-
-    function updateHeaderFromElement(threadEl) {
-        if (!threadEl) {
-            headerTitle.textContent = 'Wybierz wątek';
-            headerMeta.textContent = 'Brak aktywnej rozmowy';
-            headerTypePill.hidden = true;
-            headerMeta.removeAttribute('title');
-            return;
-        }
-
-        const title = threadEl.dataset.threadTitle || 'Wiadomość';
-        const author = threadEl.dataset.threadLastAuthor || threadEl.dataset.threadAuthor || '';
-        const lastAt = threadEl.dataset.threadLast || '';
-        const type = threadEl.dataset.threadType || '';
-        const preview = threadEl.dataset.threadPreview || '';
-
-        headerTitle.textContent = title;
-        headerMeta.textContent = formatMeta(author, lastAt);
-        if (preview) {
-            headerMeta.title = preview;
-        } else {
-            headerMeta.removeAttribute('title');
-        }
-
-        if (type) {
-            const isDiscussion = type === 'dyskusja';
-            headerTypePill.innerHTML = isDiscussion
-                ? '<i class="bi bi-chat-dots-fill"></i>Dyskusja'
-                : '<i class="bi bi-envelope-fill"></i>Wiadomość';
-            headerTypePill.classList.toggle('pill-discussion', isDiscussion);
-            headerTypePill.classList.toggle('pill-message', !isDiscussion);
-            headerTypePill.hidden = false;
-        } else {
-            headerTypePill.hidden = true;
-            headerTypePill.innerHTML = '';
-        }
-    }
-
-    function updateHeaderFromPayload(thread) {
-        if (!thread) {
-            return;
-        }
-        const { shouldReorder } = updateThreadCard(thread);
-        headerTitle.textContent = thread.title || 'Wiadomość';
-        const metaAuthor = thread.last_message_author || thread.author;
-        headerMeta.textContent = formatMeta(metaAuthor, thread.last_message_at);
-        if (thread.last_message_preview) {
-            headerMeta.title = thread.last_message_preview;
-        } else {
-            headerMeta.removeAttribute('title');
-        }
-        if (thread.type) {
-            const isDiscussion = thread.type === 'dyskusja';
-            headerTypePill.innerHTML = isDiscussion
-                ? '<i class="bi bi-chat-dots-fill"></i>Dyskusja'
-                : '<i class="bi bi-envelope-fill"></i>Wiadomość';
-            headerTypePill.classList.toggle('pill-discussion', isDiscussion);
-            headerTypePill.classList.toggle('pill-message', !isDiscussion);
-            headerTypePill.hidden = false;
-        } else {
-            headerTypePill.hidden = true;
-            headerTypePill.innerHTML = '';
-        }
-        if (shouldReorder) {
-            moveThreadToTop(thread.id);
-        }
-    }
-
-    function renderMessage(message) {
-        const wrapper = document.createElement('article');
-        const author = message.author || '';
-        const isOwn = author.toLowerCase() === username;
-        wrapper.className = `message-row ${isOwn ? 'message-outgoing' : 'message-incoming'}`;
-        const timestamp = formatTimestamp(message.created_at, true);
-        wrapper.innerHTML = `
-            <div class="message-bubble ${isOwn ? 'outgoing' : 'incoming'}">
-                <div class="message-author">${isOwn ? 'Ty' : escapeHTML(author)}</div>
-                <div class="message-content">${escapeHTML(message.content || '').replace(/\n/g, '<br>')}</div>
-                <div class="message-meta">${timestamp}</div>
-            </div>
-        `;
-        return wrapper;
-    }
-
-    function renderMessages(messages, threadInfo) {
-        messagesArea.innerHTML = '';
-        if (!messages.length) {
-            messagesArea.innerHTML = `
-                <div class="chat-placeholder">
-                    <i class="bi bi-inboxes fs-2 d-block mb-3"></i>
-                    Nie znaleziono wiadomości w tym wątku.
-                </div>
-            `;
-        } else {
-            const fragment = document.createDocumentFragment();
-            messages.forEach((message) => {
-                fragment.appendChild(renderMessage(message));
+        // --- Gettery ---
+        get filteredThreads() {
+            if (!this.searchQuery.trim()) return this.threads;
+            const q = this.searchQuery.trim().toLowerCase();
+            return this.threads.filter(t => {
+                const text = [t.title, t.author, t.last_message_author, t.last_message_preview]
+                    .filter(Boolean).join(' ').toLowerCase();
+                return text.includes(q);
             });
-            messagesArea.appendChild(fragment);
-            messagesArea.scrollTop = messagesArea.scrollHeight;
-        }
+        },
 
-        if (threadInfo) {
-            updateHeaderFromPayload(threadInfo);
-        }
-    }
+        get currentThread() {
+            return this.threads.find(t => t.id === this.currentThreadId) || null;
+        },
 
-    async function markThreadAsRead(threadId) {
-        // TODO: Implement /read endpoint if needed for marking threads as read
-        // Currently disabled to prevent 404 errors
-        return;
-    }
+        get headerTitle() {
+            if (!this.currentThread) return 'Wybierz wątek';
+            return this.currentThread.title || 'Wiadomość';
+        },
 
-    async function loadThread(threadEl, { forceReload = false } = {}) {
-        if (!threadEl) {
-            return;
-        }
-        const threadId = threadEl.dataset.threadId;
-        const source = threadEl.dataset.source || 'messaging';
-        
-        if (!threadId || (!forceReload && currentThreadId === threadId)) {
-            return;
-        }
-        currentThreadId = threadId;
-        currentThreadSource = source;
-        setActiveThread(threadEl);
-        updateHeaderFromElement(threadEl);
-        clearStatus();
-        showLoading();
-        try {
-            const response = await fetch(`/discussions/${threadId}?source=${encodeURIComponent(source)}`, { credentials: 'same-origin' });
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => '');
-                throw new Error(errorText || 'Nie udało się pobrać wiadomości.');
+        get headerMeta() {
+            if (!this.currentThread) return 'Kliknij rozmowę po lewej stronie';
+            const t = this.currentThread;
+            const author = t.last_message_author || t.author || '';
+            return this._formatMeta(author, t.last_message_iso);
+        },
+
+        get headerPreview() {
+            return this.currentThread?.last_message_preview || '';
+        },
+
+        // --- Inicjalizacja ---
+        init() {
+            this.username = (this.$el.dataset.username || '').toLowerCase();
+
+            const dataEl = document.getElementById('chat-init-data');
+            if (dataEl) {
+                try {
+                    this.threads = JSON.parse(dataEl.textContent || '[]');
+                } catch (e) {
+                    console.error('Blad parsowania watkow:', e);
+                    this.threads = [];
+                }
             }
-            const payload = await response.json();
-            renderMessages(payload.messages || [], payload.thread);
-            await markThreadAsRead(threadId);
-        } catch (error) {
-            console.error('Błąd ładowania wątku', error);
-            showStatus(error.message || 'Wystąpił błąd podczas pobierania wiadomości.', 'danger');
-            showPlaceholder();
-        }
-    }
 
-    function setSending(state) {
-        isSending = state;
-        if (sendButton) {
-            sendButton.disabled = state;
-        }
-        if (sendSpinner) {
-            sendSpinner.classList.toggle('d-none', !state);
-        }
-    }
-
-    function appendMessage(message) {
-        const row = renderMessage(message);
-        messagesArea.appendChild(row);
-        messagesArea.scrollTop = messagesArea.scrollHeight;
-    }
-
-    if (threadsContainer) {
-        threadsContainer.addEventListener('click', (event) => {
-            const item = event.target.closest(threadSelector);
-            if (!item || !threadsContainer.contains(item)) {
-                return;
+            const first = this.threads.find(t => !t.read) || this.threads[0];
+            if (first) {
+                this.selectThread(first);
             }
-            loadThread(item, { forceReload: true });
-        });
 
-        threadsContainer.addEventListener('keydown', (event) => {
-            if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
-                return;
-            }
-            const item = event.target.closest(threadSelector);
-            if (!item || !threadsContainer.contains(item)) {
-                return;
-            }
-            event.preventDefault();
-            loadThread(item, { forceReload: true });
-        });
-    }
+            this._requestNotificationPermission();
+            window.addEventListener('beforeunload', () => this._stopAutoRefresh());
+        },
 
-    if (messageForm && messageInput) {
-        messageForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            if (!currentThreadId || !messageInput.value.trim() || isSending) {
-                return;
-            }
-            const content = messageInput.value.trim();
-            setSending(true);
-            clearStatus();
+        destroy() {
+            this._stopAutoRefresh();
+        },
+
+        // --- Formatowanie ---
+        _parseDate(value) {
+            if (!value) return null;
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        },
+
+        formatDate(value) {
+            const dt = this._parseDate(value);
+            if (!dt) return '';
+            return dt.toLocaleString('pl-PL', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        },
+
+        formatTimestamp(value) {
+            return this.formatDate(value);
+        },
+
+        _formatMeta(author, lastMessageAt) {
+            const parts = [];
+            if (author) parts.push('@' + author);
+            if (lastMessageAt) parts.push(this.formatDate(lastMessageAt));
+            return parts.join(' \u2022 ') || 'Brak aktywnej rozmowy';
+        },
+
+        isOwnMessage(msg) {
+            return (msg.author || '').toLowerCase() === this.username;
+        },
+
+        // --- Nawigacja po wątkach ---
+        selectThread(thread) {
+            this.loadThread(thread, true);
+        },
+
+        async loadThread(thread, forceReload) {
+            if (!thread) return;
+            if (!forceReload && this.currentThreadId === thread.id) return;
+
+            this.currentThreadId = thread.id;
+            this.currentThreadSource = thread.source || 'messaging';
+            this._clearStatus();
+            this.loading = true;
+            this.messages = [];
+
+            thread.read = true;
+
             try {
-                const response = await fetch(`/discussions/${currentThreadId}/send`, {
+                const source = encodeURIComponent(this.currentThreadSource);
+                const resp = await fetch(
+                    '/discussions/' + thread.id + '?source=' + source,
+                    { credentials: 'same-origin' }
+                );
+                if (!resp.ok) {
+                    const errorText = await resp.text().catch(() => '');
+                    throw new Error(errorText || 'Nie udalo sie pobrac wiadomosci.');
+                }
+                const payload = await resp.json();
+                this.messages = payload.messages || [];
+
+                if (payload.thread) {
+                    this._updateThreadFromPayload(payload.thread);
+                }
+
+                this.$nextTick(() => this._scrollToBottom());
+            } catch (error) {
+                console.error('Blad ladowania watku', error);
+                this._showStatus(
+                    error.message || 'Wystapil blad podczas pobierania wiadomosci.',
+                    'danger'
+                );
+            } finally {
+                this.loading = false;
+                this._lastMessageCount = this.messages.length;
+                this._startAutoRefresh();
+            }
+        },
+
+        refreshThread() {
+            const thread = this.currentThread;
+            if (thread) {
+                this.loadThread(thread, true);
+            } else {
+                this._showStatus('Najpierw wybierz watek do odswiezenia.', 'info');
+            }
+        },
+
+        // --- Wysylanie wiadomosci ---
+        async sendMessage() {
+            if (!this.currentThreadId || !this.newMessage.trim() || this.isSending) return;
+
+            const content = this.newMessage.trim();
+            this.isSending = true;
+            this._clearStatus();
+
+            try {
+                const resp = await fetch('/discussions/' + this.currentThreadId + '/send', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken,
+                        'X-CSRFToken': this.csrfToken,
                     },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ content, source: currentThreadSource || 'messaging' }),
+                    body: JSON.stringify({
+                        content: content,
+                        source: this.currentThreadSource || 'messaging'
+                    }),
                 });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Wiadomość nie została wysłana.');
+
+                const payload = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    throw new Error(payload.error || 'Wiadomosc nie zostala wyslana.');
                 }
-                appendMessage(payload);
+
+                this.messages.push(payload);
+                this._lastMessageCount = this.messages.length;
+
                 if (payload.thread) {
-                    updateHeaderFromPayload(payload.thread);
+                    this._updateThreadFromPayload(payload.thread);
                 }
-                messageInput.value = '';
-                messageInput.focus();
+
+                this.newMessage = '';
+                this.$nextTick(() => {
+                    this._scrollToBottom();
+                    if (this.$refs.messageInput) this.$refs.messageInput.focus();
+                });
             } catch (error) {
-                console.error('Błąd wysyłania wiadomości', error);
-                showStatus(error.message || 'Nie udało się wysłać wiadomości.', 'danger');
-            } finally {
-                setSending(false);
-            }
-        });
-
-        messageInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                messageForm.requestSubmit();
-            }
-        });
-
-        if (clearButton) {
-            clearButton.addEventListener('click', () => {
-                messageInput.value = '';
-                messageInput.focus();
-            });
-        }
-    }
-
-    if (refreshButton) {
-        refreshButton.addEventListener('click', () => {
-            if (activeThreadEl) {
-                loadThread(activeThreadEl, { forceReload: true });
-            } else {
-                showStatus('Najpierw wybierz wątek do odświeżenia.', 'info');
-            }
-        });
-    }
-
-    if (searchInput && threadsContainer) {
-        searchInput.addEventListener('input', () => {
-            const query = searchInput.value.trim().toLowerCase();
-            const items = threadsContainer.querySelectorAll(threadSelector);
-            items.forEach((item) => {
-                const text = item.innerText || '';
-                item.style.display = text.toLowerCase().includes(query) ? '' : 'none';
-            });
-        });
-    }
-
-    const initialItem = threadsContainer
-    ? threadsContainer.querySelector('.thread-item.unread') || threadsContainer.querySelector(threadSelector)
-        : null;
-    if (initialItem) {
-        loadThread(initialItem);
-    }
-
-    // ========================================
-    // WEBSOCKET REAL-TIME FEATURES (DISABLED)
-    // ========================================
-    // SocketIO disabled due to 400 errors with Cloudflare proxy
-    // TODO: Fix SocketIO session handling or implement alternative real-time solution
-    
-    let socket = null;
-    let currentRoom = null;
-    let typingTimeout = null;
-
-    if (false && typeof io !== 'undefined') {  // DISABLED
-        // Use polling transport only (Cloudflare has issues with WebSocket)
-        socket = io({
-            transports: ['polling'],
-            upgrade: false
-        });
-
-        socket.on('connect', () => {
-            console.log('[SocketIO] Connected (polling mode)');
-        });
-
-        socket.on('disconnect', () => {
-            console.log('[SocketIO] Disconnected');
-        });
-
-        socket.on('message_received', (data) => {
-            console.log('[WebSocket] New message:', data);
-            
-            if (data.thread_id === currentThreadId) {
-                // Dodaj wiadomość do aktualnie otwartego wątku
-                appendMessage(data.message);
-                
-                // Aktualizuj thread card
-                if (data.message.thread) {
-                    updateThreadCard(data.message.thread);
-                }
-            } else {
-                // Aktualizuj badge nieprzeczytanych dla innego wątku
-                const threadItem = document.querySelector(`[data-thread-id="${data.thread_id}"]`);
-                if (threadItem && data.message.thread) {
-                    updateThreadCard(data.message.thread);
-                }
-                
-                // Pokaż powiadomienie jeśli nie jesteśmy na tym wątku
-                showDesktopNotification(
-                    `Nowa wiadomość od ${data.message.author || 'Nieznany'}`,
-                    data.message.content
+                console.error('Blad wysylania wiadomosci', error);
+                this._showStatus(
+                    error.message || 'Nie udalo sie wyslac wiadomosci.',
+                    'danger'
                 );
+            } finally {
+                this.isSending = false;
             }
-        });
+        },
 
-        socket.on('thread_updated', (data) => {
-            console.log('[WebSocket] Thread updated:', data);
-            updateThreadCard(data.thread);
-        });
+        // --- Aktualizacja watku z danych serwera ---
+        _updateThreadFromPayload(threadData) {
+            if (!threadData || !threadData.id) return;
 
-        socket.on('user_typing', (data) => {
-            console.log('[WebSocket] User typing:', data);
-            showTypingIndicator(data.username, data.is_typing);
-        });
+            const idx = this.threads.findIndex(t => t.id === threadData.id);
+            if (idx === -1) return;
 
-        // Funkcja do dołączania do pokoju wątku
-        function joinThreadRoom(threadId) {
-            if (currentRoom && currentRoom !== threadId) {
-                socket.emit('leave_thread', { thread_id: currentRoom });
+            const existing = this.threads[idx];
+
+            if (threadData.title !== undefined) existing.title = threadData.title;
+            if (threadData.author !== undefined) existing.author = threadData.author;
+            if (threadData.type !== undefined) existing.type = threadData.type;
+            if (threadData.last_message_author !== undefined) {
+                existing.last_message_author = threadData.last_message_author;
             }
-            socket.emit('join_thread', { thread_id: threadId });
-            currentRoom = threadId;
-        }
-
-        // Modyfikuj loadThread aby dołączać do pokoju
-        const originalLoadThread = loadThread;
-        loadThread = async function(threadEl, options) {
-            const result = await originalLoadThread(threadEl, options);
-            const threadId = threadEl?.dataset.threadId;
-            if (threadId && socket && socket.connected) {
-                joinThreadRoom(threadId);
+            if (threadData.last_message_preview !== undefined) {
+                existing.last_message_preview = threadData.last_message_preview;
             }
-            return result;
-        };
-
-        // Typing indicator
-        if (messageInput) {
-            messageInput.addEventListener('input', () => {
-                if (!currentThreadId || !socket || !socket.connected) return;
-                
-                socket.emit('typing', { thread_id: currentThreadId, is_typing: true });
-                
-                clearTimeout(typingTimeout);
-                typingTimeout = setTimeout(() => {
-                    socket.emit('typing', { thread_id: currentThreadId, is_typing: false });
-                }, 2000);
-            });
-        }
-
-        function showTypingIndicator(username, isTyping) {
-            let typingDiv = document.getElementById('typing-indicator');
-            if (!typingDiv) {
-                // Create typing indicator if it doesn't exist
-                typingDiv = document.createElement('div');
-                typingDiv.id = 'typing-indicator';
-                typingDiv.className = 'typing-indicator d-none';
-                messagesArea.parentNode.insertBefore(typingDiv, messagesArea.nextSibling);
+            if (threadData.last_message_at !== undefined) {
+                existing.last_message_at = threadData.last_message_at;
             }
-            
-            if (isTyping) {
-                typingDiv.textContent = `${username} pisze...`;
-                typingDiv.classList.remove('d-none');
-            } else {
-                typingDiv.classList.add('d-none');
+            if (threadData.last_message_iso !== undefined) {
+                existing.last_message_iso = threadData.last_message_iso;
             }
-        }
-    } else {
-        console.warn('[WebSocket] Socket.IO not loaded, real-time features disabled');
-    }
+            if (typeof threadData.read === 'boolean') {
+                existing.read = threadData.read;
+            }
 
-    // ========================================
-    // DESKTOP NOTIFICATIONS
-    // ========================================
-    
-    let notificationsEnabled = false;
+            // Przesun watek na gore jesli ma nowsza wiadomosc
+            const prevDate = this._parseDate(existing._prevLastIso);
+            const newIso = threadData.last_message_iso || threadData.last_message_at;
+            const newDate = this._parseDate(newIso);
+            if (newDate && (!prevDate || newDate > prevDate) && idx > 0) {
+                this.threads.splice(idx, 1);
+                this.threads.unshift(existing);
+            }
+            existing._prevLastIso = existing.last_message_iso;
+        },
 
-    async function requestNotificationPermission() {
-        if (!('Notification' in window)) {
-            console.warn('Przeglądarka nie wspiera powiadomień');
-            return false;
-        }
+        // --- Status ---
+        _clearStatus() {
+            this.statusMessage = '';
+            this.statusVariant = 'info';
+        },
 
-        if (Notification.permission === 'granted') {
-            notificationsEnabled = true;
-            return true;
-        }
+        _showStatus(message, variant) {
+            this.statusMessage = message;
+            this.statusVariant = variant || 'info';
+        },
 
-        if (Notification.permission !== 'denied') {
-            const permission = await Notification.requestPermission();
-            notificationsEnabled = permission === 'granted';
-            return notificationsEnabled;
-        }
+        // --- Scroll ---
+        _scrollToBottom() {
+            const area = this.$refs.messagesArea;
+            if (area) area.scrollTop = area.scrollHeight;
+        },
 
-        return false;
-    }
+        // --- Auto-refresh (zamiast SocketIO) ---
+        _startAutoRefresh() {
+            this._stopAutoRefresh();
+            this._autoRefreshInterval = setInterval(async () => {
+                if (!this.currentThreadId) return;
+                try {
+                    const source = encodeURIComponent(this.currentThreadSource || 'messaging');
+                    const resp = await fetch(
+                        '/discussions/' + this.currentThreadId + '?source=' + source,
+                        { credentials: 'same-origin' }
+                    );
+                    if (!resp.ok) {
+                        if (resp.status === 404) this._stopAutoRefresh();
+                        return;
+                    }
+                    const payload = await resp.json();
+                    const msgs = payload.messages || [];
+                    if (msgs.length > this._lastMessageCount) {
+                        const newMsgs = msgs.slice(this._lastMessageCount);
+                        this.messages.push(...newMsgs);
+                        this._lastMessageCount = msgs.length;
+                        this.$nextTick(() => this._scrollToBottom());
 
-    function showDesktopNotification(title, body) {
-        if (!notificationsEnabled || !document.hidden) return;
+                        const lastMsg = msgs[msgs.length - 1];
+                        if (lastMsg && lastMsg.author.toLowerCase() !== this.username) {
+                            this._showDesktopNotification(
+                                'Nowa wiadomosc od ' + lastMsg.author,
+                                lastMsg.content
+                            );
+                        }
+                    }
+                } catch (_) {
+                    // cicho ignoruj bledy sieciowe
+                }
+            }, 30000);
+        },
 
-        const notification = new Notification(title, {
-            body: body.substring(0, 100),
-            icon: '/static/favicon.ico',
-            tag: 'discussion-message',
-        });
+        _stopAutoRefresh() {
+            if (this._autoRefreshInterval) {
+                clearInterval(this._autoRefreshInterval);
+                this._autoRefreshInterval = null;
+            }
+        },
 
-        notification.onclick = function() {
-            window.focus();
-            notification.close();
-        };
-
-        setTimeout(() => notification.close(), 5000);
-    }
-
-    // Request notification permission on page load
-    requestNotificationPermission().then(enabled => {
-        if (enabled) {
-            console.log('[Notifications] Desktop notifications enabled');
-        }
-    });
-
-    // ========================================
-    // AUTO-REFRESH MESSAGES (instead of SocketIO)
-    // ========================================
-    let autoRefreshInterval = null;
-    let lastMessageCount = 0;
-    
-    function startAutoRefresh() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-        }
-        
-        // Refresh messages every 30 seconds
-        autoRefreshInterval = setInterval(async () => {
-            if (!currentThreadId || !activeThreadEl) {
+        // --- Powiadomienia desktopowe ---
+        async _requestNotificationPermission() {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'granted') {
+                this.notificationsEnabled = true;
                 return;
             }
-            
-            try {
-                const source = activeThreadEl.dataset.source || 'messaging';
-                const response = await fetch(`/discussions/${currentThreadId}?source=${encodeURIComponent(source)}`, { 
-                    credentials: 'same-origin' 
-                });
-                
-                // Cicho ignoruj błędy (404, 422 itp.) - wątek może być pusty
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        // Wątek nie istnieje lub jest pusty - zatrzymaj auto-refresh dla tego wątku
-                        stopAutoRefresh();
-                    }
-                    return;
-                }
-                
-                const payload = await response.json();
-                const messages = payload.messages || [];
-                
-                // Sprawdź czy są nowe wiadomości
-                if (messages.length > lastMessageCount) {
-                    // Dodaj tylko nowe wiadomości (różnica)
-                    const newMessages = messages.slice(lastMessageCount);
-                    newMessages.forEach(msg => {
-                        appendMessage(msg);
-                    });
-                    lastMessageCount = messages.length;
-                    
-                    // Pokaż powiadomienie jeśli są nowe wiadomości od innych
-                    const lastMsg = messages[messages.length - 1];
-                    if (lastMsg && lastMsg.author.toLowerCase() !== username) {
-                        showDesktopNotification(
-                            `Nowa wiadomość od ${lastMsg.author}`,
-                            lastMsg.content
-                        );
-                    }
-                }
-            } catch (error) {
-                // Cicho ignoruj błędy sieciowe - nie loguj do konsoli
+            if (Notification.permission !== 'denied') {
+                const perm = await Notification.requestPermission();
+                this.notificationsEnabled = perm === 'granted';
             }
-        }, 30000); // 30 sekund
-        
-        console.log('[Auto-refresh] Started (30s interval)');
-    }
-    
-    function stopAutoRefresh() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-            console.log('[Auto-refresh] Stopped');
-        }
-    }
-    
-    // Start auto-refresh when thread is loaded
-    const originalLoadThreadFunc = loadThread;
-    loadThread = async function(threadEl, options) {
-        await originalLoadThreadFunc(threadEl, options);
-        lastMessageCount = messagesArea.querySelectorAll('.message-row').length;
-        startAutoRefresh();
-    };
-    
-    // Stop auto-refresh when leaving page
-    window.addEventListener('beforeunload', stopAutoRefresh);
+        },
+
+        _showDesktopNotification(title, body) {
+            if (!this.notificationsEnabled || !document.hidden) return;
+            const notification = new Notification(title, {
+                body: (body || '').substring(0, 100),
+                icon: '/static/favicon.ico',
+                tag: 'discussion-message',
+            });
+            notification.onclick = function() {
+                window.focus();
+                notification.close();
+            };
+            setTimeout(() => notification.close(), 5000);
+        },
+    }));
 });
 </script>
 

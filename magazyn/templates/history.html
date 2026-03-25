@@ -5,8 +5,18 @@
 {% block content %}
 <h2 class="text-center">Historia drukowania</h2>
 
-<div class="col-md-6 mx-auto mb-3">
-    <input type="text" id="historySearch" class="form-control" placeholder="Wyszukaj (ID zamowienia, nazwa, kolor)..." onkeyup="filterHistory()">
+<div class="col-md-6 mx-auto mb-3" x-data="{ search: '' }" x-init="$watch('search', val => {
+    const q = val.toLowerCase();
+    const rows = document.getElementById('historyBody').getElementsByTagName('tr');
+    let visible = 0;
+    for (let i = 0; i < rows.length; i++) {
+        const show = !q || rows[i].textContent.toLowerCase().includes(q);
+        rows[i].style.display = show ? '' : 'none';
+        if (show) visible++;
+    }
+    document.getElementById('historyCount').textContent = 'Wyświetlono: ' + visible + ' z ' + rows.length;
+})">
+    <input type="text" class="form-control" placeholder="Wyszukaj (ID zamówienia, nazwa, kolor)..." x-model.debounce.200ms="search">
 </div>
 
 {# .table-responsive ensures horizontal scrolling when needed #}
@@ -58,18 +68,4 @@
     Razem: {{ printed|length }} wydrukowanych, {{ queue|length }} w kolejce
 </div>
 
-<script>
-function filterHistory() {
-    var filter = document.getElementById('historySearch').value.toLowerCase();
-    var rows = document.getElementById('historyBody').getElementsByTagName('tr');
-    var visible = 0;
-    for (var i = 0; i < rows.length; i++) {
-        var text = rows[i].textContent.toLowerCase();
-        var show = !filter || text.indexOf(filter) > -1;
-        rows[i].style.display = show ? '' : 'none';
-        if (show) visible++;
-    }
-    document.getElementById('historyCount').textContent = 'Wyswietlono: ' + visible + ' z ' + rows.length;
-}
-</script>
 {% endblock %}

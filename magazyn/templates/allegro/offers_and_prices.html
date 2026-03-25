@@ -5,15 +5,15 @@
         <h1 class="mb-0">Oferty Allegro</h1>
         <div class="mt-2">
             <span class="badge bg-primary fs-6">Pobrane: {{ total_offers }}</span>
-            <span class="badge bg-success fs-6">Powiazane: {{ matched_offers }}</span>
-            <span class="badge bg-warning fs-6">Niepowiazane: {{ total_offers - matched_offers }}</span>
+            <span class="badge bg-success fs-6">Powiązane: {{ matched_offers }}</span>
+            <span class="badge bg-warning fs-6">Niepowiązane: {{ total_offers - matched_offers }}</span>
         </div>
     </div>
     <div class="d-flex gap-2">
         <form method="post" action="{{ url_for('allegro.refresh') }}" class="mb-0">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-primary">
-                <i class="bi bi-arrow-clockwise"></i> Odswież oferty
+                <i class="bi bi-arrow-clockwise"></i> Odśwież oferty
             </button>
         </form>
     </div>
@@ -40,9 +40,9 @@
                 <a href="{{ url_for('allegro.offers_and_prices', search=search, per_page=per_page, status='all') }}"
                    class="btn btn-outline-secondary {{ 'active' if status_filter == 'all' }}">Wszystkie</a>
                 <a href="{{ url_for('allegro.offers_and_prices', search=search, per_page=per_page, status='linked') }}"
-                   class="btn btn-outline-success {{ 'active' if status_filter == 'linked' }}">Powiazane</a>
+                   class="btn btn-outline-success {{ 'active' if status_filter == 'linked' }}">Powiązane</a>
                 <a href="{{ url_for('allegro.offers_and_prices', search=search, per_page=per_page, status='unlinked') }}"
-                   class="btn btn-outline-warning {{ 'active' if status_filter == 'unlinked' }}">Niepowiazane</a>
+                   class="btn btn-outline-warning {{ 'active' if status_filter == 'unlinked' }}">Niepowiązane</a>
             </div>
             <select class="form-select form-select-sm" style="width: auto;"
                     onchange="location.href='{{ url_for('allegro.offers_and_prices') }}?per_page='+this.value+'&search={{ search }}&status={{ status_filter }}'">
@@ -50,15 +50,15 @@
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
             </select>
-            <span class="text-muted small text-nowrap">{{ total_filtered }} wynikow</span>
+            <span class="text-muted small text-nowrap">{{ total_filtered }} wyników</span>
         </div>
     </div>
 </div>
 
 <div class="alert alert-info small py-2" role="alert">
-    <strong>Jak to dziala?</strong>
-    1. Kliknij "Odswież oferty" aby pobrac najnowsze oferty z Allegro.
-    2. Powiaz oferty z produktami z magazynu uzywajac dropdownow.
+    <strong>Jak to działa?</strong>
+    1. Kliknij "Odśwież oferty" aby pobrać najnowsze oferty z Allegro.
+    2. Powiąż oferty z produktami z magazynu używając dropdownów.
 </div>
 
 <div class="table-responsive">
@@ -74,9 +74,9 @@
             <tr>
                 <th scope="col">ID</th>
                 <th scope="col">EAN</th>
-                <th scope="col">Tytul</th>
+                <th scope="col">Tytuł</th>
                 <th scope="col">Nasza cena</th>
-                <th scope="col">Powiazanie z magazynem</th>
+                <th scope="col">Powiązanie z magazynem</th>
             </tr>
         </thead>
         <tbody>
@@ -87,30 +87,29 @@
                 <td>
                     <div class="fw-semibold">{{ offer.title }}</div>
                     {% if offer.is_linked %}
-                        <span class="badge bg-success">Powiazana</span>
+                        <span class="badge bg-success">Powiązana</span>
                     {% else %}
-                        <span class="badge bg-warning">Niepowiazana</span>
+                        <span class="badge bg-warning">Niepowiązana</span>
                     {% endif %}
                 </td>
                 <td class="fw-semibold">{{ offer.price }}</td>
                 <td>
                     <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="product_id" value="{{ offer.product_id or '' }}" data-product-input>
-                        <input type="hidden" name="product_size_id" value="{{ offer.product_size_id or '' }}" data-size-input>
-                        <div class="dropdown flex-grow-1 search-dropdown" data-offer-id="{{ offer.offer_id }}">
-                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-selected-label data-placeholder="Wybierz z magazynu">
-                                {{ offer.selected_label or 'Wybierz z magazynu' }}
+                        <div class="dropdown flex-grow-1" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
+                            <input type="hidden" name="product_id" :value="productId">
+                            <input type="hidden" name="product_size_id" :value="sizeId">
+                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
                             </button>
                             <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
-                                <input type="text" class="form-control form-control-sm mb-2 search-dropdown-input" placeholder="Szukaj..." autocomplete="off" data-search-input>
-                                <div class="list-group search-dropdown-options" data-options>
-                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="none" data-value="" data-label="Wybierz z magazynu" data-filter="">
-                                        <div class="fw-semibold">Brak powiazania</div>
-                                        <div class="small text-muted">Zostaw oferte bez przypisania</div>
+                                <input type="text" class="form-control form-control-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
+                                <div class="list-group">
+                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('none', '', 'Wybierz z magazynu')">
+                                        <div class="fw-semibold">Brak powiązania</div>
+                                        <div class="small text-muted">Zostaw ofertę bez przypisania</div>
                                     </button>
                                     {% for item in inventory %}
-                                    <button type="button" class="list-group-item list-group-item-action" data-option data-kind="{{ item.type }}" data-value="{{ item.id }}" data-label="{{ item.label }}" data-filter="{{ item.filter }}">
+                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
                                         <div class="fw-semibold">{{ item.label }}</div>
                                         <div class="small text-muted">
                                             <span class="badge bg-secondary me-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
@@ -128,7 +127,7 @@
             <tr>
                 <td colspan="5" class="text-center text-muted py-4">
                     <i class="bi bi-inbox fs-1"></i>
-                    <p class="mt-2 mb-0">Brak ofert do wyswietlenia</p>
+                    <p class="mt-2 mb-0">Brak ofert do wyświetlenia</p>
                 </td>
             </tr>
         {% endfor %}
@@ -161,61 +160,51 @@
         </li>
     </ul>
     <div class="text-center text-muted small">
-        Strona {{ page }} z {{ total_pages }} (wyswietlono {{ offers|length }} z {{ total_filtered }})
+        Strona {{ page }} z {{ total_pages }} (wyświetlono {{ offers|length }} z {{ total_filtered }})
     </div>
 </nav>
 {% endif %}
 
 <script>
 // Search dropdown functionality
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.search-dropdown').forEach(function(dropdown) {
-        const input = dropdown.querySelector('[data-search-input]');
-        const options = dropdown.querySelectorAll('[data-option]');
-        const selectedLabel = dropdown.querySelector('[data-selected-label]');
-        const form = dropdown.closest('form');
-        const productInput = form.querySelector('[data-product-input]');
-        const sizeInput = form.querySelector('[data-size-input]');
-        const offerId = dropdown.dataset.offerId;
+document.addEventListener('alpine:init', () => {
+    Alpine.data('searchDropdown', (initProductId, initSizeId, initLabel) => ({
+        productId: initProductId || '',
+        sizeId: initSizeId || '',
+        selectedLabel: initLabel || 'Wybierz z magazynu',
+        searchQuery: '',
 
-        function filterOptions() {
-            const query = input.value.toLowerCase();
-            options.forEach(function(option) {
-                const filter = option.dataset.filter;
-                const isVisible = !query || filter.includes(query);
-                option.style.display = isVisible ? '' : 'none';
+        selectOption(kind, value, label) {
+            if (kind === 'product') {
+                this.productId = value;
+                this.sizeId = '';
+            } else if (kind === 'size') {
+                this.sizeId = value;
+                this.productId = '';
+            } else {
+                this.productId = '';
+                this.sizeId = '';
+            }
+            this.selectedLabel = label || 'Wybierz z magazynu';
+            const btn = this.$refs.toggleBtn;
+            bootstrap.Dropdown.getOrCreateInstance(btn).hide();
+        },
+
+        matchesFilter(filter) {
+            if (!this.searchQuery) return true;
+            return (filter || '').includes(this.searchQuery.toLowerCase());
+        },
+
+        init() {
+            this.$refs.toggleBtn.addEventListener('shown.bs.dropdown', () => {
+                this.searchQuery = '';
+                this.$nextTick(() => {
+                    const input = this.$refs.searchInput;
+                    if (input) input.focus();
+                });
             });
         }
-
-        input.addEventListener('input', filterOptions);
-
-        options.forEach(function(option) {
-            option.addEventListener('click', function() {
-                const kind = this.dataset.kind;
-                const value = this.dataset.value;
-                const label = this.dataset.label;
-
-                selectedLabel.textContent = label;
-                selectedLabel.classList.remove('text-muted');
-                selectedLabel.classList.add('text-dark');
-
-                if (kind === 'size') {
-                    productInput.value = '';
-                    sizeInput.value = value;
-                } else if (kind === 'product') {
-                    productInput.value = value;
-                    sizeInput.value = '';
-                } else {
-                    productInput.value = '';
-                    sizeInput.value = '';
-                }
-
-                // Close dropdown
-                const bsDropdown = new bootstrap.Dropdown(dropdown.querySelector('.dropdown-toggle'));
-                bsDropdown.hide();
-            });
-        });
-    });
+    }));
 });
 </script>
 {% endblock %}

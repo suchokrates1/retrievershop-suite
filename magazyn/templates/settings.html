@@ -63,10 +63,10 @@
                                     or 'key' in lower
                                 %}
                                 {% if is_sensitive %}
-                                <div class="input-group input-group-sm">
-                                    <input type="password" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
-                                    <span class="input-group-text toggle-password" data-target="{{ item.key }}">
-                                        <i class="bi bi-eye"></i>
+                                <div class="input-group input-group-sm" x-data="{ show: false }">
+                                    <input :type="show ? 'text' : 'password'" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                                    <span class="input-group-text" style="cursor:pointer" @click="show = !show">
+                                        <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
                                     </span>
                                 </div>
                                 {% else %}
@@ -282,19 +282,4 @@
     </div>
 </div>
 
-<script>
-    document.querySelectorAll('.toggle-password').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const input = document.getElementById(btn.dataset.target);
-            if (!input) return;
-            if (input.type === 'password') {
-                input.type = 'text';
-                btn.innerHTML = '<i class="bi bi-eye-slash"></i>';
-            } else {
-                input.type = 'password';
-                btn.innerHTML = '<i class="bi bi-eye"></i>';
-            }
-        });
-    });
-</script>
 {% endblock %}
