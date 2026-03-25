@@ -39,7 +39,7 @@
                     <span class="flex-grow-1 text-center fs-3">Witaj w aplikacji magazynowej</span>
                     {% if show_menu %}
                     <div class="d-flex align-items-center ms-auto">
-                        <div x-data="wakeLock({{ wake_lock_default|default('false')|tojson }})" x-cloak class="d-inline-block">
+                        <div x-data="wakeLock({{ wake_lock_default|default(false)|tojson }})" x-cloak class="d-inline-block">
                             <button x-show="supported"
                                     @click="toggle()"
                                     class="btn btn-sm ms-2"
