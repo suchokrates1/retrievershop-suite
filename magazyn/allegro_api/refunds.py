@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 # Statusy Allegro Customer Return
-ALLEGRO_RETURN_STATUS_DELIVERED = "PARCEL_DELIVERED"
+ALLEGRO_RETURN_STATUS_DELIVERED = "DELIVERED"
 ALLEGRO_RETURN_STATUS_ACCEPTED = "ACCEPTED"
 ALLEGRO_RETURN_STATUS_COMMISSION_REFUNDED = "COMMISSION_REFUNDED"
 ALLEGRO_RETURN_STATUS_FINISHED = "FINISHED"
@@ -26,6 +26,7 @@ ALLEGRO_RETURN_STATUS_FINISHED = "FINISHED"
 # Statusy pozwalajace na zwrot pieniedzy
 REFUNDABLE_STATUSES = {
     ALLEGRO_RETURN_STATUS_DELIVERED,
+    "PARCEL_DELIVERED",
     ALLEGRO_RETURN_STATUS_ACCEPTED,
 }
 
@@ -100,17 +101,29 @@ def validate_return_for_refund(return_data: Dict[str, Any]) -> Tuple[bool, str]:
         return False, f"Zwrot juz zostal rozliczony (status: {status})"
     
     if status not in REFUNDABLE_STATUSES:
-        return False, f"Zwrot nie kwalifikuje sie do zwrotu pieniedzy (status: {status}). Wymagany status: PARCEL_DELIVERED lub ACCEPTED"
+        return False, f"Zwrot nie kwalifikuje sie do zwrotu pieniedzy (status: {status}). Wymagany status: DELIVERED lub ACCEPTED"
     
-    # Sprawdz czy jest kwota do zwrotu
-    refund = return_data.get("refund", {})
-    total_value = refund.get("totalValue", {})
+    # Oblicz kwote do zwrotu - z totalValue lub z items
+    refund = return_data.get("refund") or {}
+    total_value = refund.get("totalValue") or {}
     amount = float(total_value.get("amount", 0))
+    currency = total_value.get("currency", "PLN")
+    
+    if amount <= 0:
+        # Oblicz z items jesli brak totalValue
+        items = return_data.get("items", [])
+        for item in items:
+            price = item.get("price", {})
+            item_amount = float(price.get("amount", 0))
+            qty = int(item.get("quantity", 1))
+            amount += item_amount * qty
+            if not currency or currency == "PLN":
+                currency = price.get("currency", "PLN")
     
     if amount <= 0:
         return False, "Brak kwoty do zwrotu"
     
-    return True, f"Zwrot gotowy do realizacji: {amount} {total_value.get('currency', 'PLN')}"
+    return True, f"Zwrot gotowy do realizacji: {amount:.2f} {currency}"
 
 
 def initiate_refund(
