@@ -751,7 +751,26 @@ def process_refund(
             
             logger.info(f"Zwrot pieniedzy dla zamowienia {order_id} przetworzony pomyslnie")
             
-            # Wystaw korekte faktury i wyslij email
+            # Oblicz kwote zwrotu z odpowiedzi API
+            refund_amount = None
+            if response_data:
+                total_val = response_data.get("totalValue", {})
+                try:
+                    refund_amount = float(total_val.get("amount", 0))
+                except (ValueError, TypeError):
+                    pass
+
+            # Przygotuj liste zwracanych produktow
+            return_items = []
+            if return_record.items_json:
+                try:
+                    return_items = json.loads(return_record.items_json)
+                except Exception:
+                    pass
+
+            correction_sent = False
+
+            # Wystaw korekte faktury (jesli zamowienie ma fakture wFirma)
             try:
                 from .services.invoice_service import generate_correction_invoice
                 correction = generate_correction_invoice(
@@ -761,6 +780,7 @@ def process_refund(
                     include_delivery=delivery_cost_covered,
                 )
                 if correction["success"]:
+                    correction_sent = True
                     logger.info(
                         "Korekta %s wystawiona dla zamowienia %s",
                         correction["invoice_number"], order_id,
@@ -775,6 +795,27 @@ def process_refund(
                     "Blad wystawiania korekty dla zamowienia %s: %s",
                     order_id, exc,
                 )
+
+            # Jesli korekta nie wyslala emaila - wyslij powiadomienie o zwrocie
+            if not correction_sent:
+                try:
+                    from .services.email_service import send_refund_notification
+                    order_record_email = db.query(Order).filter(
+                        Order.order_id == order_id
+                    ).first()
+                    if order_record_email:
+                        sent = send_refund_notification(
+                            order_record_email,
+                            reason=reason or "Zwrot produktow",
+                            refund_amount=refund_amount,
+                            items=return_items,
+                        )
+                        if sent:
+                            logger.info("Email potwierdzenia zwrotu wyslany dla zamowienia %s", order_id)
+                        else:
+                            logger.warning("Nie udalo sie wyslac emaila zwrotu dla zamowienia %s", order_id)
+                except Exception as exc:
+                    logger.error("Blad wysylki emaila zwrotu dla zamowienia %s: %s", order_id, exc)
         else:
             logger.error(f"Blad zwrotu pieniedzy dla zamowienia {order_id}: {message}")
         

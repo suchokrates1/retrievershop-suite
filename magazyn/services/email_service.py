@@ -260,3 +260,27 @@ def send_invoice_correction(
         attachment=pdf_data,
         attachment_filename=pdf_filename,
     )
+
+
+def send_refund_notification(
+    order,
+    reason: str = "",
+    refund_amount: float | None = None,
+    items: list | None = None,
+) -> bool:
+    """Wyslij email z potwierdzeniem zwrotu pieniedzy (bez korekty faktury)."""
+    email = order.email
+    if not email:
+        return False
+
+    ctx = _load_order_context(order)
+    ctx["reason"] = reason
+    ctx["refund_amount"] = refund_amount
+    ctx["items"] = items or []
+
+    html = render_template("emails/refund_notification.html", **ctx)
+    return _send_html_email(
+        to_email=email,
+        subject=f"Potwierdzenie zwrotu - zamowienie #{ctx['order_id']} - Retriever Shop",
+        html_body=html,
+    )
