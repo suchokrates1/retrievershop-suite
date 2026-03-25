@@ -97,3 +97,77 @@ def test_retry_updates_metrics(tmp_path):
     assert waits == [0.5, 1.0]
     assert pa.PRINT_AGENT_RETRIES_TOTAL._value.get() == start_retries + 2
     assert pa.PRINT_AGENT_DOWNTIME_SECONDS._value.get() == start_downtime + 1.5
+
+
+def test_retry_does_not_retry_shipment_expired(tmp_path):
+    """ShipmentExpiredError nie powinien byc retryowany - natychmiastowy raise."""
+    agent = _make_agent(tmp_path)
+    agent._stop_event = threading.Event()
+    attempts = []
+
+    def always_expired():
+        attempts.append(1)
+        raise pa.ShipmentExpiredError("test-shipment-id")
+
+    import pytest
+    with pytest.raises(pa.ShipmentExpiredError):
+        agent._retry(
+            always_expired,
+            stage="label",
+            retry_exceptions=(pa.ApiError,),
+            max_attempts=3,
+        )
+
+    # Powinien byc wywolany tylko raz - bez retry
+    assert len(attempts) == 1
+
+
+def test_recreate_shipment_and_get_label(tmp_path, monkeypatch):
+    """Test cancel + recreate + get_label flow."""
+    agent = _make_agent(tmp_path)
+    agent.last_order_data = {
+        "order_id": "allegro_test-uuid",
+        "delivery_method": "InPost Paczkomaty",
+        "delivery_fullname": "Jan Kowalski",
+        "delivery_address": "ul. Testowa 1",
+        "delivery_city": "Warszawa",
+        "delivery_postcode": "00-001",
+        "delivery_country_code": "PL",
+        "phone": "500000000",
+        "email": "test@test.pl",
+        "products": [{"name": "Produkt testowy", "quantity": 1}],
+    }
+
+    cancel_called = []
+    monkeypatch.setattr(
+        pa, "cancel_shipment",
+        lambda ids: cancel_called.append(ids),
+    )
+
+    new_packages = [
+        {"shipment_id": "new-ship-123", "waybill": "WAY123", "carrier_id": "INPOST"}
+    ]
+    monkeypatch.setattr(
+        agent, "_create_allegro_shipment",
+        lambda oid, cfid: new_packages,
+    )
+
+    monkeypatch.setattr(
+        agent, "get_label",
+        lambda cc, pid: ("base64data", "pdf"),
+    )
+
+    package_ids = ["old-ship-expired"]
+    tracking_numbers = []
+
+    label_data, ext = agent._recreate_shipment_and_get_label(
+        "allegro_test-uuid", "old-ship-expired", "INPOST",
+        package_ids, tracking_numbers,
+    )
+
+    assert label_data == "base64data"
+    assert ext == "pdf"
+    assert cancel_called == [["old-ship-expired"]]
+    assert "old-ship-expired" not in package_ids
+    assert "new-ship-123" in package_ids
+    assert "WAY123" in tracking_numbers
