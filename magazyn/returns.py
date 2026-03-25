@@ -796,26 +796,6 @@ def process_refund(
                     order_id, exc,
                 )
 
-            # Jesli korekta nie wyslala emaila - wyslij powiadomienie o zwrocie
-            if not correction_sent:
-                try:
-                    from .services.email_service import send_refund_notification
-                    order_record_email = db.query(Order).filter(
-                        Order.order_id == order_id
-                    ).first()
-                    if order_record_email:
-                        sent = send_refund_notification(
-                            order_record_email,
-                            reason=reason or "Zwrot produktow",
-                            refund_amount=refund_amount,
-                            items=return_items,
-                        )
-                        if sent:
-                            logger.info("Email potwierdzenia zwrotu wyslany dla zamowienia %s", order_id)
-                        else:
-                            logger.warning("Nie udalo sie wyslac emaila zwrotu dla zamowienia %s", order_id)
-                except Exception as exc:
-                    logger.error("Blad wysylki emaila zwrotu dla zamowienia %s: %s", order_id, exc)
         else:
             logger.error(f"Blad zwrotu pieniedzy dla zamowienia {order_id}: {message}")
         
