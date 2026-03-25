@@ -178,7 +178,7 @@ def test_get_shipment_label_pdf(mock_retry, mock_token, mock_refresh):
 
     assert result == pdf_bytes
     headers = mock_retry.call_args.kwargs["headers"]
-    assert headers["Accept"] == "application/pdf"
+    assert headers["Accept"] == "application/octet-stream"
 
 
 @patch("magazyn.allegro_api.shipment_management._refresh_allegro_token")
@@ -195,7 +195,7 @@ def test_get_shipment_label_zpl(mock_retry, mock_token, mock_refresh):
 
     assert result == zpl_data
     headers = mock_retry.call_args.kwargs["headers"]
-    assert headers["Accept"] == "application/zpl"
+    assert headers["Accept"] == "application/octet-stream"
 
 
 @patch("magazyn.allegro_api.shipment_management._refresh_allegro_token")
