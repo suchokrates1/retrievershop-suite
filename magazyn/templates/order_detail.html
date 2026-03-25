@@ -668,6 +668,30 @@
                 </div>
             </div>
             {% endif %}
+
+            {# Korekta faktury wFirma #}
+            {% if wfirma_correction_id %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-receipt-cutoff"></i> Korekta faktury
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>Nr:</strong> {{ wfirma_correction_number }}
+                    </p>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('orders.download_correction_pdf', order_id=order.order_id) }}"
+                           target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> Podglad
+                        </a>
+                        <a href="{{ url_for('orders.download_correction_pdf', order_id=order.order_id) }}"
+                           download class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-download"></i> Pobierz
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

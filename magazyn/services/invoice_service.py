@@ -313,6 +313,11 @@ def generate_correction_invoice(
             result["errors"].append(f"Blad wystawienia korekty wFirma: {exc}")
             return result
 
+        # Zapisz korekte w zamowieniu
+        order.wfirma_correction_id = invoice_id
+        order.wfirma_correction_number = invoice_number
+        db.commit()
+
         # Pobierz PDF korekty
         pdf_data = None
         try:

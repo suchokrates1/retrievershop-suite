@@ -433,6 +433,8 @@ class Order(Base):
     # Faktura wFirma
     wfirma_invoice_id = Column(Integer, nullable=True)
     wfirma_invoice_number = Column(String, nullable=True)
+    wfirma_correction_id = Column(Integer, nullable=True)
+    wfirma_correction_number = Column(String, nullable=True)
     emails_sent = Column(Text, nullable=True)  # JSON: {"confirmation": true, ...}
 
     # Timestamps
