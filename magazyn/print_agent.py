@@ -863,12 +863,9 @@ class LabelAgent:
     def get_order_packages(self, order_id: str) -> List[Dict[str, Any]]:
         """Pobierz przesylki dla zamowienia z Allegro Shipment Management API.
 
-        Jezeli przesylka nie istnieje, tworzy ja automatycznie
-        przez create_shipment().
-
-        UWAGA: checkout-forms/shipments zwraca ID w formacie base64
-        (np. INPOST:waybill), a shipment-management wymaga UUID.
-        Dlatego uzywamy agent_state do przechowywania UUID z SM.
+        Jezeli przesylka SM nie istnieje, tworzy ja automatycznie.
+        checkout-forms/shipments zwraca ID base64 (nieprzydatne do etykiet).
+        Shipment-management wymaga UUID - zapisujemy go w agent_state.
         """
         # Wyciagnij checkout_form_id z order_id (format: allegro_{uuid})
         checkout_form_id = order_id
@@ -904,35 +901,9 @@ class LabelAgent:
                 )
                 self._save_state_value(f"sm_shipment:{order_id}", None)
 
-        # 2. Sprawdz checkout-forms (dane trackingowe, NIE shipment_id)
-        from .allegro_api.fulfillment import get_shipment_tracking_numbers
-        try:
-            existing = get_shipment_tracking_numbers(checkout_form_id)
-            if existing:
-                # Przesylki istnieja w checkout-forms, ale ich ID (base64)
-                # nie sa UUID z shipment-management - nie nadaja sie do etykiet.
-                # Zwroc dane trackingowe bez shipment_id.
-                self.logger.info(
-                    "Zamowienie %s ma %d przesylek checkout-forms (brak UUID SM)",
-                    order_id, len(existing),
-                )
-                packages = []
-                for ship in existing:
-                    packages.append({
-                        "shipment_id": None,
-                        "waybill": ship.get("waybill"),
-                        "carrier_id": ship.get("carrierId"),
-                        "courier_code": ship.get("carrierId", ""),
-                        "courier_package_nr": ship.get("waybill", ""),
-                    })
-                return packages
-        except Exception as exc:
-            self.logger.debug(
-                "Nie mozna sprawdzic istniejacych przesylek dla %s: %s",
-                order_id, exc,
-            )
-
-        # 3. Brak przesylek - utworz nowa przez Shipment Management
+        # 2. Brak SM UUID - utworz nowa przesylke przez Shipment Management
+        #    (checkout-forms moze miec przesylki, ale ich ID base64
+        #     nie nadaja sie do pobierania etykiet)
         return self._create_allegro_shipment(order_id, checkout_form_id)
 
     def _create_allegro_shipment(
