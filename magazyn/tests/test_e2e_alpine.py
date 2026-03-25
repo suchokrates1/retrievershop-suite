@@ -218,8 +218,8 @@ def test_no_orphan_vanilla_js_handlers(client, login, route):
         vanilla_count += len(_GETELEMENTBYID_RE.findall(script))
         vanilla_count += len(_QUERYSELECTOR_RE.findall(script))
 
-    # Home dashboard ma celowo niemigrowane render functions (~9 selectorow)
-    max_allowed = 10 if route == "/" else 3
+    # Po migracji Fazy 5 dashboard nie ma juz vanilla JS selectorow
+    max_allowed = 3
     assert vanilla_count <= max_allowed, (
         f"Trasa {route} uzywa Alpine ale ma {vanilla_count} "
         f"vanilla JS selectorow - moze brakuje migracji?"

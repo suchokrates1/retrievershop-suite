@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-4" x-data="dashboard()" x-init="loadHeavyData()">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
@@ -138,15 +138,54 @@
                             </div>
                         </div>
                         <div class="col-3" id="profit-section">
-                            <div class="border-end">
-                                <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
-                                <small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>
+                            <div class="border-end"
+                                 x-effect="if(profit) { $nextTick(() => { if($el.dataset.bsToggle) new bootstrap.Tooltip($el) }) }"
+                                 :data-bs-toggle="profit ? 'tooltip' : null"
+                                 data-bs-placement="bottom" data-bs-html="true"
+                                 :title="profitTooltip()">
+                                <template x-if="loading">
+                                    <div>
+                                        <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
+                                        <small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>
+                                    </div>
+                                </template>
+                                <template x-if="!loading && profit">
+                                    <div>
+                                        <h3 class="mb-1" :class="profit.month > 0 ? 'text-success' : 'text-danger'" x-text="Math.round(profit.month) + ' zł'"></h3>
+                                        <small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>
+                                    </div>
+                                </template>
+                                <template x-if="!loading && error">
+                                    <div>
+                                        <h3 class="text-danger mb-1">Błąd</h3>
+                                        <small class="text-muted">Realny zysk</small>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                         <div class="col-3" id="sold-section">
                             <div>
-                                <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
-                                <small class="text-muted">Sprzedanych szt.</small>
+                                <template x-if="loading">
+                                    <div>
+                                        <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
+                                        <small class="text-muted">Sprzedanych szt.</small>
+                                    </div>
+                                </template>
+                                <template x-if="!loading && profit">
+                                    <div>
+                                        <h3 class="text-info mb-1" x-text="profit.products_sold"></h3>
+                                        <small class="text-muted">Sprzedanych szt.</small>
+                                        <template x-if="profit.returns_count > 0">
+                                            <small class="text-warning d-block mt-1">
+                                                <i class="bi bi-arrow-return-left me-1"></i>
+                                                <span x-text="profit.returns_count + ' zwrot' + returnsEnding(profit.returns_count) + ' (' + profit.returned_qty + ' szt.)'"></span>
+                                            </small>
+                                        </template>
+                                        <template x-if="!profit.returns_count || profit.returns_count === 0">
+                                            <small class="text-secondary d-block mt-1">Brak zwrotów</small>
+                                        </template>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </div>
@@ -154,10 +193,14 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-header bg-dark text-white">
+            <div class="card h-100" :class="{'border-warning': promotions?.renewing_tomorrow_count > 0}">
+                <div class="card-header text-white"
+                     :class="promotions?.renewing_tomorrow_count > 0 ? 'bg-warning text-dark' : 'bg-dark'">
                     <i class="bi bi-shop me-2"></i>Allegro
                     <span class="badge bg-success float-end ms-1">{{ dashboard.allegro.total_offers }} ofert</span>
+                    <template x-if="promotions && !promotions.error">
+                        <span class="badge bg-info float-end" x-text="promotions.active_count + ' wyróż.'"></span>
+                    </template>
                 </div>
                 <div class="card-body p-2">
                     <!-- Statystyki ofert -->
@@ -182,10 +225,42 @@
                     <!-- Wyroznienia - ladowane asynchronicznie -->
                     <div id="promotions-section">
                         <hr class="my-2">
-                        <div class="text-center py-2">
-                            <span class="spinner-border spinner-border-sm text-muted"></span>
-                            <small class="text-muted ms-1">Ładowanie wyróżnień...</small>
-                        </div>
+                        <template x-if="loading">
+                            <div class="text-center py-2">
+                                <span class="spinner-border spinner-border-sm text-muted"></span>
+                                <small class="text-muted ms-1">Ładowanie wyróżnień...</small>
+                            </div>
+                        </template>
+                        <template x-if="!loading && promotions && !promotions.error && promotions.active_promotions && promotions.active_promotions.length > 0">
+                            <div>
+                                <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover mb-0" style="font-size: 0.78rem;">
+                                        <thead class="table-light sticky-top"><tr><th>Oferta</th><th class="text-center">Typ</th><th class="text-end">Koszt</th><th class="text-end">Przedł.</th></tr></thead>
+                                        <tbody>
+                                            <template x-for="p in promotions.active_promotions" :key="p.offer_id">
+                                                <tr :class="p.days_to_renewal !== null && p.days_to_renewal <= 1 ? 'table-warning' : ''">
+                                                    <td class="text-truncate" style="max-width: 120px;" :title="p.offer_name">
+                                                        <a :href="'https://allegro.pl/oferta/' + p.offer_id" target="_blank" class="text-decoration-none" x-text="p.offer_name"></a>
+                                                    </td>
+                                                    <td class="text-center text-nowrap">
+                                                        <span class="badge" :class="promoBadgeClass(p)" x-text="promoBadgeText(p)"></span>
+                                                    </td>
+                                                    <td class="text-end text-nowrap" x-text="p.estimated_cost.toFixed(2) + ' zł'"></td>
+                                                    <td class="text-end text-nowrap" x-html="renewalHtml(p)"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1 px-1">
+                                    <small class="text-muted">Szac. mies.:</small>
+                                    <span class="badge bg-secondary" x-text="promotions.estimated_monthly_cost.toFixed(2) + ' zł'"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!loading && (!promotions || promotions.error || !promotions.active_promotions || promotions.active_promotions.length === 0)">
+                            <p class="text-muted text-center small mb-0">Brak aktywnych wyróżnień</p>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -252,7 +327,7 @@
                             </thead>
                             <tbody>
                                 {% for order in dashboard.latest_orders[:7] %}
-                                <tr onclick="window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'" style="cursor: pointer;">
+                                <tr @click="window.location.href='{{ url_for('orders.order_detail', order_id=order.order_id) }}'" style="cursor: pointer;">
                                     <td class="small">
                                         <code>{{ order.order_id[-6:] }}</code>
                                     </td>
@@ -425,9 +500,39 @@
                 <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                     <i class="bi bi-graph-up-arrow me-2"></i>Trend tygodniowy (porównanie do poprzedniego tygodnia)
                 </div>
-                <div class="card-body text-center py-4">
-                    <span class="spinner-border text-muted"></span>
-                    <p class="text-muted mt-2 mb-0">Ładowanie trendów...</p>
+                <div class="card-body">
+                    <template x-if="loading">
+                        <div class="text-center py-4">
+                            <span class="spinner-border text-muted"></span>
+                            <p class="text-muted mt-2 mb-0">Ładowanie trendów...</p>
+                        </div>
+                    </template>
+                    <template x-if="!loading && trends">
+                        <div class="row text-center">
+                            <div class="col-md-6">
+                                <h5 class="mb-1">Zamówienia</h5>
+                                <h3 class="mb-0">
+                                    <span x-text="ordersWeek"></span>
+                                    <small :class="trends.orders_change >= 0 ? 'text-success' : 'text-danger'">
+                                        <i class="bi" :class="trends.orders_change >= 0 ? 'bi-arrow-up' : 'bi-arrow-down'"></i>
+                                        <span x-text="trends.orders_change + '%'"></span>
+                                    </small>
+                                </h3>
+                                <small class="text-muted" x-text="'poprzedni tydzień: ' + trends.prev_week_orders"></small>
+                            </div>
+                            <div class="col-md-6">
+                                <h5 class="mb-1">Przychód</h5>
+                                <h3 class="mb-0">
+                                    <span x-text="revenueWeek + ' zł'"></span>
+                                    <small :class="trends.revenue_change >= 0 ? 'text-success' : 'text-danger'">
+                                        <i class="bi" :class="trends.revenue_change >= 0 ? 'bi-arrow-up' : 'bi-arrow-down'"></i>
+                                        <span x-text="trends.revenue_change + '%'"></span>
+                                    </small>
+                                </h3>
+                                <small class="text-muted" x-text="'poprzedni tydzień: ' + Math.round(trends.prev_week_revenue) + ' zł'"></small>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -440,8 +545,38 @@
                 <div class="card-header bg-danger text-white">
                     <i class="bi bi-fire me-2"></i>Trendy tygodnia (Top 5)
                 </div>
-                <div class="card-body text-center py-4">
-                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                <div class="card-body p-0">
+                    <template x-if="loading">
+                        <div class="text-center py-4">
+                            <span class="spinner-border spinner-border-sm text-muted"></span>
+                        </div>
+                    </template>
+                    <template x-if="!loading && bestsellers">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light"><tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th></tr></thead>
+                                <tbody>
+                                    <template x-for="(item, i) in bestsellers.week || []" :key="item.name + i">
+                                        <tr>
+                                            <td x-html="rankBadge(i)"></td>
+                                            <td class="small">
+                                                <template x-if="item.product_id">
+                                                    <a :href="'/products/' + item.product_id" class="text-decoration-none" :title="item.name" x-text="item.short_name"></a>
+                                                </template>
+                                                <template x-if="!item.product_id">
+                                                    <span :title="item.name" x-text="item.short_name"></span>
+                                                </template>
+                                            </td>
+                                            <td class="text-center"><span class="badge bg-danger" x-text="item.quantity"></span></td>
+                                        </tr>
+                                    </template>
+                                    <template x-if="!bestsellers.week || bestsellers.week.length === 0">
+                                        <tr><td colspan="3" class="text-center text-muted py-3">Brak danych</td></tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -450,8 +585,39 @@
                 <div class="card-header bg-success text-white">
                     <i class="bi bi-trophy me-2"></i>Bestsellery miesiąca (Top 10)
                 </div>
-                <div class="card-body text-center py-4">
-                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                <div class="card-body p-0">
+                    <template x-if="loading">
+                        <div class="text-center py-4">
+                            <span class="spinner-border spinner-border-sm text-muted"></span>
+                        </div>
+                    </template>
+                    <template x-if="!loading && bestsellers">
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light sticky-top"><tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th><th class="text-end">Przychód</th></tr></thead>
+                                <tbody>
+                                    <template x-for="(item, i) in bestsellers.month || []" :key="item.name + i">
+                                        <tr>
+                                            <td x-html="rankBadge(i)"></td>
+                                            <td class="small">
+                                                <template x-if="item.product_id">
+                                                    <a :href="'/products/' + item.product_id" class="text-decoration-none" :title="item.name" x-text="item.short_name"></a>
+                                                </template>
+                                                <template x-if="!item.product_id">
+                                                    <span :title="item.name" x-text="item.short_name"></span>
+                                                </template>
+                                            </td>
+                                            <td class="text-center"><span class="badge bg-success" x-text="item.quantity"></span></td>
+                                            <td class="text-end small text-success fw-semibold" x-text="item.revenue !== undefined ? Math.round(item.revenue) + ' zł' : ''"></td>
+                                        </tr>
+                                    </template>
+                                    <template x-if="!bestsellers.month || bestsellers.month.length === 0">
+                                        <tr><td colspan="4" class="text-center text-muted py-3">Brak danych</td></tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -460,15 +626,85 @@
                 <div class="card-header bg-primary text-white">
                     <i class="bi bi-star-fill me-2"></i>Bestsellery wszechczasów
                 </div>
-                <div class="card-body text-center py-4">
-                    <span class="spinner-border spinner-border-sm text-muted"></span>
+                <div class="card-body p-0">
+                    <template x-if="loading">
+                        <div class="text-center py-4">
+                            <span class="spinner-border spinner-border-sm text-muted"></span>
+                        </div>
+                    </template>
+                    <template x-if="!loading && bestsellers">
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light sticky-top"><tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th><th class="text-end">Przychód</th></tr></thead>
+                                <tbody>
+                                    <template x-for="(item, i) in bestsellers.all_time || []" :key="item.name + i">
+                                        <tr>
+                                            <td x-html="rankBadge(i)"></td>
+                                            <td class="small">
+                                                <template x-if="item.product_id">
+                                                    <a :href="'/products/' + item.product_id" class="text-decoration-none" :title="item.name" x-text="item.short_name"></a>
+                                                </template>
+                                                <template x-if="!item.product_id">
+                                                    <span :title="item.name" x-text="item.short_name"></span>
+                                                </template>
+                                            </td>
+                                            <td class="text-center"><span class="badge bg-primary" x-text="item.quantity"></span></td>
+                                            <td class="text-end small text-success fw-semibold" x-text="item.revenue !== undefined ? Math.round(item.revenue) + ' zł' : ''"></td>
+                                        </tr>
+                                    </template>
+                                    <template x-if="!bestsellers.all_time || bestsellers.all_time.length === 0">
+                                        <tr><td colspan="4" class="text-center text-muted py-3">Brak danych</td></tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
     </div>
     
     <!-- Produkty wolnoobrotowe -->
-    <div id="slow-moving-section"></div>
+    <template x-if="slowMoving.length > 0">
+        <div class="row mt-4" id="slow-moving-section">
+            <div class="col-12">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Produkty wolnoobrotowe - rozważ promocję
+                        <small class="float-end">(stan >= 5 szt., sprzedaż &lt; 2 szt. w 30 dni)</small>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr><th>Produkt</th><th>Kolor</th><th>Rozmiar</th><th class="text-center">Stan</th><th class="text-center">Sprzedaż 30d</th><th class="text-center">Rotacja</th></tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="item in slowMoving" :key="(item.name || '') + item.size">
+                                        <tr>
+                                            <td x-text="(item.name || '').substring(0, 40)"></td>
+                                            <td class="small text-muted" x-text="item.color || '-'"></td>
+                                            <td x-text="item.size"></td>
+                                            <td class="text-center"><span class="badge bg-info" x-text="item.stock"></span></td>
+                                            <td class="text-center"><span class="badge bg-danger" x-text="item.sold_30d"></span></td>
+                                            <td class="text-center" x-html="rotationBadge(item)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Rotacja = szacowany czas wyprzedania przy aktualnym tempie sprzedaży.
+                            Produkty z rotacją > 180 dni powinny być objęte promocją lub wyprzedażą.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
 
     <!-- Zwroty miesiaca -->
     <div class="row g-3 mt-1">
@@ -476,10 +712,32 @@
             <div class="card">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-arrow-return-left me-2"></i>Zwroty w tym miesiącu</span>
-                    <span class="spinner-border spinner-border-sm text-muted" id="returns-spinner"></span>
+                    <span class="spinner-border spinner-border-sm text-muted" x-show="loading" x-cloak></span>
                 </div>
                 <div class="card-body p-2" id="returns-section">
-                    <p class="text-muted text-center small mb-0">Ładowanie...</p>
+                    <template x-if="loading">
+                        <p class="text-muted text-center small mb-0">Ładowanie...</p>
+                    </template>
+                    <template x-if="!loading && returns.length > 0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-dark mb-0">
+                                <thead><tr><th class="small">Zamówienie</th><th class="small">Klient</th><th class="small">Produkty</th><th class="small text-center">Data zwrotu</th></tr></thead>
+                                <tbody>
+                                    <template x-for="r in returns" :key="r.order_id">
+                                        <tr>
+                                            <td class="small" x-text="r.order_id || ''"></td>
+                                            <td class="small" x-text="r.customer_name || ''"></td>
+                                            <td class="small" x-text="r.items.map(i => i.name + ' (' + i.quantity + ' szt.)').join(', ')"></td>
+                                            <td class="small text-center" x-text="r.updated_at || ''"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <template x-if="!loading && returns.length === 0">
+                        <p class="text-muted text-center small mb-0">Brak zwrotów w tym miesiącu</p>
+                    </template>
                 </div>
             </div>
         </div>
@@ -535,13 +793,109 @@
 
 {% block scripts %}
 <script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('dashboard', () => ({
+        loading: true,
+        error: null,
+        profit: null,
+        promotions: null,
+        trends: null,
+        bestsellers: null,
+        slowMoving: [],
+        returns: [],
+        ordersWeek: {{ dashboard.orders.week }},
+        revenueWeek: {{ "%.0f"|format(dashboard.revenue.week) }},
+
+        async loadHeavyData() {
+            try {
+                const r = await fetch('/api/dashboard/heavy');
+                const data = await r.json();
+                this.profit = data.profit;
+                this.promotions = data.promotions;
+                this.trends = data.trends;
+                this.bestsellers = data.bestsellers;
+                this.slowMoving = data.slow_moving || [];
+                this.returns = data.profit?.returns_list || [];
+                this.loading = false;
+            } catch (err) {
+                this.error = 'Blad ladowania danych: ' + err.message;
+                this.loading = false;
+            }
+        },
+
+        returnsEnding(count) {
+            if (count === 1) return '';
+            if (count < 5) return 'y';
+            return 'ow';
+        },
+
+        profitTooltip() {
+            if (!this.profit) return '';
+            let t = 'Zysk brutto: ' + Math.round(this.profit.month_before_fixed + (this.profit.ads_cost || 0)) + ' zl';
+            if (this.profit.ads_cost > 0) t += '<br>Koszty kampanii Ads: -' + this.profit.ads_cost.toFixed(2) + ' zl';
+            if (this.profit.returned_orders) t += '<br>Pominietych zwrotow: ' + this.profit.returned_orders;
+            if (this.profit.fixed_costs_list && this.profit.fixed_costs_list.length > 0) {
+                t += '<br>Koszty stale: -' + Math.round(this.profit.fixed_costs) + ' zl';
+                this.profit.fixed_costs_list.forEach(fc => {
+                    t += '<br>&nbsp;&nbsp;- ' + fc.name + ': ' + Math.round(fc.amount) + ' zl';
+                });
+            }
+            return t;
+        },
+
+        promoBadgeClass(p) {
+            if (!p.package_name) return 'bg-secondary';
+            if (p.package_name.includes('10')) return 'bg-primary';
+            if (p.package_name.toLowerCase().includes('elast')) return 'bg-success';
+            if (p.package_name.toLowerCase().includes('dzia')) return 'bg-secondary';
+            return 'bg-secondary';
+        },
+
+        promoBadgeText(p) {
+            if (!p.package_name) return '';
+            if (p.package_name.includes('10')) return '10d';
+            if (p.package_name.toLowerCase().includes('elast')) return '1d';
+            if (p.package_name.toLowerCase().includes('dzia')) return 'dzial';
+            return p.package_name.substring(0, 8);
+        },
+
+        renewalHtml(p) {
+            if (p.next_cycle_date) {
+                if (p.days_to_renewal !== null && p.days_to_renewal <= 1)
+                    return '<span class="text-danger fw-bold">jutro</span>';
+                if (p.days_to_renewal !== null && p.days_to_renewal <= 3)
+                    return '<span class="text-warning">' + p.days_to_renewal + 'd</span>';
+                return '<span class="text-muted">' + p.next_cycle_date.substring(0, 10) + '</span>';
+            }
+            if (p.will_renew) return '<span class="text-muted">auto</span>';
+            return '-';
+        },
+
+        rankBadge(i) {
+            const idx = i + 1;
+            if (idx === 1) return '<span class="badge bg-warning text-dark">1</span>';
+            if (idx === 2) return '<span class="badge bg-secondary">2</span>';
+            if (idx === 3) return '<span class="badge bg-dark">3</span>';
+            return '<span class="text-muted">' + idx + '</span>';
+        },
+
+        rotationBadge(item) {
+            const rotation = item.sold_30d > 0 ? (item.stock / item.sold_30d) * 30 : 9999;
+            const days = Math.round(rotation);
+            if (rotation > 180) return '<span class="badge bg-danger">' + days + ' dni</span>';
+            if (rotation > 90) return '<span class="badge bg-warning text-dark">' + days + ' dni</span>';
+            return '<span class="badge bg-secondary">' + days + ' dni</span>';
+        },
+    }));
+});
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicjalizacja tooltipow Bootstrap
+    // Inicjalizacja tooltipow Bootstrap (statycznych)
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
+
     // Initialize global barcode detector for label scanning on home page
     if (typeof GlobalBarcodeDetector !== 'undefined') {
         const detector = new GlobalBarcodeDetector({
@@ -550,271 +904,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.reload();
             }
         });
-    }
-    
-    // =============================================
-    // Lazy loading ciezkich danych dashboardu
-    // =============================================
-    const ordersWeek = {{ dashboard.orders.week }};
-    const revenueWeek = {{ "%.0f"|format(dashboard.revenue.week) }};
-    
-    fetch('/api/dashboard/heavy')
-        .then(r => r.json())
-        .then(data => {
-            renderProfit(data.profit);
-            renderPromotions(data.promotions);
-            renderTrends(data.trends);
-            renderBestsellers(data.bestsellers);
-            renderSlowMoving(data.slow_moving);
-        })
-        .catch(err => {
-            console.error('B\u0142\u0105d \u0142adowania danych:', err);
-            document.getElementById('profit-section').querySelector('.border-end').innerHTML =
-                '<h3 class="text-danger mb-1">B\u0142\u0105d</h3><small class="text-muted">Realny zysk</small>';
-        });
-    
-    function renderProfit(profit) {
-        if (!profit) return;
-        const color = profit.month > 0 ? 'text-success' : 'text-danger';
-        
-        let tooltip = `Zysk brutto: ${Math.round(profit.month_before_fixed + (profit.ads_cost || 0))} z\u0142`;
-        if (profit.ads_cost > 0) {
-            tooltip += `<br>Koszty kampanii Ads: -${profit.ads_cost.toFixed(2)} z\u0142`;
-        }
-        if (profit.returned_orders) {
-            tooltip += `<br>Pomini\u0119tych zwrot\u00f3w: ${profit.returned_orders}`;
-        }
-        if (profit.fixed_costs_list && profit.fixed_costs_list.length > 0) {
-            tooltip += `<br>Koszty sta\u0142e: -${Math.round(profit.fixed_costs)} z\u0142`;
-            profit.fixed_costs_list.forEach(fc => {
-                tooltip += `<br>&nbsp;&nbsp;- ${fc.name}: ${Math.round(fc.amount)} z\u0142`;
-            });
-        }
-        
-        const profitEl = document.getElementById('profit-section');
-        profitEl.querySelector('.border-end').setAttribute('data-bs-toggle', 'tooltip');
-        profitEl.querySelector('.border-end').setAttribute('data-bs-placement', 'bottom');
-        profitEl.querySelector('.border-end').setAttribute('data-bs-html', 'true');
-        profitEl.querySelector('.border-end').setAttribute('title', tooltip);
-        profitEl.querySelector('.border-end').innerHTML =
-            `<h3 class="${color} mb-1">${Math.round(profit.month)} z\u0142</h3>` +
-            `<small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>`;
-        
-        const soldEl = document.getElementById('sold-section');
-        const returnsHtml = (profit.returns_count > 0)
-            ? `<small class="text-warning d-block mt-1"><i class="bi bi-arrow-return-left me-1"></i>${profit.returns_count} zwrot${profit.returns_count === 1 ? '' : (profit.returns_count < 5 ? 'y' : '\u00f3w')} (${profit.returned_qty} szt.)</small>`
-            : `<small class="text-secondary d-block mt-1">Brak zwrot\u00f3w</small>`;
-        soldEl.querySelector('div').innerHTML =
-            `<h3 class="text-info mb-1">${profit.products_sold}</h3>` +
-            `<small class="text-muted">Sprzedanych szt.</small>` +
-            returnsHtml;
-
-        // Sekcja zwrotow miesiaca (jesli sa)
-        const returnsSection = document.getElementById('returns-section');
-        const returnsSpinner = document.getElementById('returns-spinner');
-        if (returnsSpinner) returnsSpinner.style.display = 'none';
-        if (returnsSection) {
-            if (profit.returns_count > 0 && profit.returns_list && profit.returns_list.length > 0) {
-                let rowsHtml = profit.returns_list.map(r => {
-                    const itemNames = r.items.map(i => `${i.name} (${i.quantity} szt.)`).join(', ');
-                    return `<tr><td class="small">${r.order_id || ''}</td><td class="small">${r.customer_name || ''}</td><td class="small">${itemNames}</td><td class="small text-center">${r.updated_at || ''}</td></tr>`;
-                }).join('');
-                returnsSection.innerHTML =
-                    `<div class="table-responsive"><table class="table table-sm table-dark mb-0">` +
-                    `<thead><tr><th class="small">Zam\u00f3wienie</th><th class="small">Klient</th><th class="small">Produkty</th><th class="small text-center">Data zwrotu</th></tr></thead>` +
-                    `<tbody>${rowsHtml}</tbody></table></div>`;
-            } else {
-                returnsSection.innerHTML = '<p class="text-muted text-center small mb-0">Brak zwrot\u00f3w w tym miesi\u0105cu</p>';
-            }
-        }
-
-        // Reinicjalizacja tooltipow
-        new bootstrap.Tooltip(profitEl.querySelector('[data-bs-toggle="tooltip"]'));
-    }
-    
-    function renderPromotions(promos) {
-        const section = document.getElementById('promotions-section');
-        if (!promos || promos.error) {
-            section.innerHTML = '<hr class="my-2"><p class="text-muted text-center small mb-0">Brak danych wyr\u00f3\u017cnie\u0144</p>';
-            return;
-        }
-        
-        // Dodaj badge z liczba do headera karty
-        const cardHeader = section.closest('.card').querySelector('.card-header');
-        const existingBadge = cardHeader.querySelector('.badge.bg-info');
-        if (!existingBadge) {
-            const badge = document.createElement('span');
-            badge.className = 'badge bg-info float-end';
-            badge.textContent = promos.active_count + ' wyr\u00f3\u017c.';
-            cardHeader.appendChild(badge);
-        }
-        
-        // Podswietl karte jesli jutro przedluzenie
-        if (promos.renewing_tomorrow_count > 0) {
-            const card = section.closest('.card');
-            card.classList.add('border-warning');
-            cardHeader.className = 'card-header bg-warning text-dark';
-        }
-        
-        let html = '<hr class="my-2">';
-        if (promos.active_promotions && promos.active_promotions.length > 0) {
-            html += '<div class="table-responsive" style="max-height: 180px; overflow-y: auto;">';
-            html += '<table class="table table-sm table-hover mb-0" style="font-size: 0.78rem;">';
-            html += '<thead class="table-light sticky-top"><tr><th>Oferta</th><th class="text-center">Typ</th><th class="text-end">Koszt</th><th class="text-end">Przed\u0142.</th></tr></thead><tbody>';
-            
-            promos.active_promotions.forEach(p => {
-                const rowClass = (p.days_to_renewal !== null && p.days_to_renewal <= 1) ? 'table-warning' : '';
-                let typeBadge = '';
-                if (p.package_name) {
-                    if (p.package_name.includes('10')) typeBadge = '<span class="badge bg-primary">10d</span>';
-                    else if (p.package_name.toLowerCase().includes('elast')) typeBadge = '<span class="badge bg-success">1d</span>';
-                    else if (p.package_name.toLowerCase().includes('dzia')) typeBadge = '<span class="badge bg-secondary">dzial</span>';
-                    else typeBadge = `<span class="badge bg-secondary">${p.package_name.substring(0,8)}</span>`;
-                }
-                let renewal = '-';
-                if (p.next_cycle_date) {
-                    if (p.days_to_renewal !== null && p.days_to_renewal <= 1) renewal = `<span class="text-danger fw-bold">jutro</span>`;
-                    else if (p.days_to_renewal !== null && p.days_to_renewal <= 3) renewal = `<span class="text-warning">${p.days_to_renewal}d</span>`;
-                    else renewal = `<span class="text-muted">${p.next_cycle_date.substring(0,10)}</span>`;
-                } else if (p.will_renew) {
-                    renewal = '<span class="text-muted">auto</span>';
-                }
-                
-                html += `<tr class="${rowClass}">`;
-                html += `<td class="text-truncate" style="max-width: 120px;" title="${p.offer_name}"><a href="https://allegro.pl/oferta/${p.offer_id}" target="_blank" class="text-decoration-none">${p.offer_name}</a></td>`;
-                html += `<td class="text-center text-nowrap">${typeBadge}</td>`;
-                html += `<td class="text-end text-nowrap">${p.estimated_cost.toFixed(2)} z\u0142</td>`;
-                html += `<td class="text-end text-nowrap">${renewal}</td>`;
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table></div>';
-        } else {
-            html += '<p class="text-muted text-center small mb-0">Brak aktywnych wyroznien</p>';
-        }
-        html += `<div class="d-flex justify-content-between align-items-center mt-1 px-1">`;
-        html += `<small class="text-muted">Szac. mies.:</small>`;
-        html += `<span class="badge bg-secondary">${promos.estimated_monthly_cost.toFixed(2)} z\u0142</span></div>`;
-        section.innerHTML = html;
-    }
-    
-    function renderTrends(trends) {
-        if (!trends) return;
-        const section = document.getElementById('trends-section');
-        const card = section.querySelector('.card-body');
-        
-        const ocArrow = trends.orders_change >= 0 ? '<i class="bi bi-arrow-up"></i>' : '<i class="bi bi-arrow-down"></i>';
-        const ocColor = trends.orders_change >= 0 ? 'text-success' : 'text-danger';
-        const rcArrow = trends.revenue_change >= 0 ? '<i class="bi bi-arrow-up"></i>' : '<i class="bi bi-arrow-down"></i>';
-        const rcColor = trends.revenue_change >= 0 ? 'text-success' : 'text-danger';
-        
-        card.innerHTML = `
-            <div class="row text-center">
-                <div class="col-md-6">
-                    <h5 class="mb-1">Zam\u00f3wienia</h5>
-                    <h3 class="mb-0">${ordersWeek} <small class="${ocColor}">${ocArrow} ${trends.orders_change}%</small></h3>
-                    <small class="text-muted">poprzedni tydzie\u0144: ${trends.prev_week_orders}</small>
-                </div>
-                <div class="col-md-6">
-                    <h5 class="mb-1">Przych\u00f3d</h5>
-                    <h3 class="mb-0">${revenueWeek} z\u0142 <small class="${rcColor}">${rcArrow} ${trends.revenue_change}%</small></h3>
-                    <small class="text-muted">poprzedni tydzie\u0144: ${Math.round(trends.prev_week_revenue)} z\u0142</small>
-                </div>
-            </div>
-        `;
-    }
-    
-    function renderBestsellerTable(items, badgeColor) {
-        if (!items || items.length === 0) {
-            return '<tr><td colspan="4" class="text-center text-muted py-3">Brak danych</td></tr>';
-        }
-        return items.map((item, i) => {
-            const idx = i + 1;
-            let numBadge;
-            if (idx === 1) numBadge = '<span class="badge bg-warning text-dark">1</span>';
-            else if (idx === 2) numBadge = '<span class="badge bg-secondary">2</span>';
-            else if (idx === 3) numBadge = '<span class="badge bg-dark">3</span>';
-            else numBadge = `<span class="text-muted">${idx}</span>`;
-            
-            const nameHtml = item.product_id
-                ? `<a href="/products/${item.product_id}" class="text-decoration-none" title="${item.name}">${item.short_name}</a>`
-                : `<span title="${item.name}">${item.short_name}</span>`;
-            
-            const revCol = item.revenue !== undefined ? `<td class="text-end small text-success fw-semibold">${Math.round(item.revenue)} z\u0142</td>` : '';
-            
-            return `<tr><td>${numBadge}</td><td class="small">${nameHtml}</td><td class="text-center"><span class="badge bg-${badgeColor}">${item.quantity}</span></td>${revCol}</tr>`;
-        }).join('');
-    }
-    
-    function renderBestsellers(bestsellers) {
-        if (!bestsellers) return;
-        const section = document.getElementById('bestsellers-section');
-        const cards = section.querySelectorAll('.card');
-        
-        // Trendy tygodnia
-        const weekCols = '<tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th></tr>';
-        cards[0].querySelector('.card-body').innerHTML =
-            `<div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead class="table-light">${weekCols}</thead><tbody>${renderBestsellerTable(bestsellers.week, 'danger')}</tbody></table></div>`;
-        
-        // Miesiaca
-        const monthCols = '<tr><th>#</th><th>Produkt</th><th class="text-center">Szt.</th><th class="text-end">Przych\u00f3d</th></tr>';
-        cards[1].querySelector('.card-body').innerHTML =
-            `<div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top">${monthCols}</thead><tbody>${renderBestsellerTable(bestsellers.month, 'success')}</tbody></table></div>`;
-        
-        // Wszechczasow
-        cards[2].querySelector('.card-body').innerHTML =
-            `<div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top">${monthCols}</thead><tbody>${renderBestsellerTable(bestsellers.all_time, 'primary')}</tbody></table></div>`;
-    }
-    
-    function renderSlowMoving(items) {
-        if (!items || items.length === 0) return;
-        const section = document.getElementById('slow-moving-section');
-        
-        let rows = items.map(item => {
-            let rotation = item.sold_30d > 0 ? (item.stock / item.sold_30d) * 30 : 9999;
-            let rotBadge;
-            if (rotation > 180) rotBadge = `<span class="badge bg-danger">${Math.round(rotation)} dni</span>`;
-            else if (rotation > 90) rotBadge = `<span class="badge bg-warning text-dark">${Math.round(rotation)} dni</span>`;
-            else rotBadge = `<span class="badge bg-secondary">${Math.round(rotation)} dni</span>`;
-            
-            return `<tr>
-                <td>${(item.name || '').substring(0, 40)}</td>
-                <td class="small text-muted">${item.color || '-'}</td>
-                <td>${item.size}</td>
-                <td class="text-center"><span class="badge bg-info">${item.stock}</span></td>
-                <td class="text-center"><span class="badge bg-danger">${item.sold_30d}</span></td>
-                <td class="text-center">${rotBadge}</td>
-            </tr>`;
-        }).join('');
-        
-        section.innerHTML = `
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card border-warning">
-                    <div class="card-header bg-warning text-dark">
-                        <i class="bi bi-exclamation-triangle me-2"></i>Produkty wolnoobrotowe - rozwa\u017c promocj\u0119
-                        <small class="float-end">(stan >= 5 szt., sprzeda\u017c < 2 szt. w 30 dni)</small>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead class="table-light">
-                                    <tr><th>Produkt</th><th>Kolor</th><th>Rozmiar</th><th class="text-center">Stan</th><th class="text-center">Sprzeda\u017c 30d</th><th class="text-center">Rotacja</th></tr>
-                                </thead>
-                                <tbody>${rows}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="card-footer bg-light">
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Rotacja = szacowany czas wyprzedania przy aktualnym tempie sprzeda\u017cy. 
-                            Produkty z rotacj\u0105 > 180 dni powinny by\u0107 obj\u0119te promocj\u0105 lub wyprzeda\u017c\u0105.
-                        </small>
-                    </div>
-                </div>
-            </div>
-        </div>`;
     }
 });
 </script>
