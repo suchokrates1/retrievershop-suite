@@ -39,6 +39,7 @@ from .allegro_api import (
     send_thread_message,
 )
 from .allegro_api.shipment_management import (
+    cancel_shipment,
     create_shipment,
     get_delivery_services,
     get_shipment_details,
@@ -70,6 +71,14 @@ class ApiError(Exception):
 
 class PrintError(Exception):
     """Raised when sending data to the printer fails."""
+
+
+class ShipmentExpiredError(ApiError):
+    """Przesylka wygasla/anulowana - wymaga ponownego utworzenia."""
+
+    def __init__(self, shipment_id: str, message: str = ""):
+        self.shipment_id = shipment_id
+        super().__init__(message or f"Przesylka {shipment_id} wygasla (403)")
 
 
 T = TypeVar("T")
@@ -330,6 +339,8 @@ class LabelAgent:
         while True:
             try:
                 return func(*args, **kwargs)
+            except ShipmentExpiredError:
+                raise
             except retry_exceptions as exc:
                 attempts += 1
                 if attempts >= max_attempts or self._stop_event.is_set():
@@ -1081,6 +1092,82 @@ class LabelAgent:
 
         return "OTHER"
 
+    def _recreate_shipment_and_get_label(
+        self,
+        order_id: str,
+        old_shipment_id: str,
+        courier_code: str,
+        package_ids: List[str],
+        tracking_numbers: List[str],
+    ) -> Tuple[str, str]:
+        """Anuluj wygasla przesylke, stworz nowa i pobierz etykiete.
+
+        Aktualizuje package_ids i tracking_numbers in-place.
+
+        Returns:
+            Tuple (base64_label_data, extension) lub ("", "") przy bledzie.
+        """
+        checkout_form_id = order_id
+        if order_id.startswith("allegro_"):
+            checkout_form_id = order_id[len("allegro_"):]
+
+        # 1. Anuluj stara przesylke
+        try:
+            cancel_shipment([old_shipment_id])
+            self.logger.info("Anulowano wygasla przesylke %s", old_shipment_id)
+        except Exception as exc:
+            self.logger.warning(
+                "Nie mozna anulowac przesylki %s (moze juz anulowana): %s",
+                old_shipment_id, exc,
+            )
+
+        # Usun stary shipment_id z listy
+        if old_shipment_id in package_ids:
+            package_ids.remove(old_shipment_id)
+
+        # 2. Stworz nowa przesylke
+        try:
+            new_packages = self._create_allegro_shipment(order_id, checkout_form_id)
+        except Exception as exc:
+            self.logger.error(
+                "Blad tworzenia nowej przesylki dla %s: %s", order_id, exc,
+            )
+            return "", ""
+
+        if not new_packages:
+            self.logger.error("Nie utworzono nowej przesylki dla %s", order_id)
+            return "", ""
+
+        new_shipment_id = None
+        for pkg in new_packages:
+            sid = pkg.get("shipment_id")
+            waybill = pkg.get("waybill") or pkg.get("courier_package_nr")
+            if sid:
+                new_shipment_id = str(sid)
+                package_ids.append(new_shipment_id)
+            if waybill:
+                tracking_numbers.append(str(waybill))
+
+        if not new_shipment_id:
+            self.logger.error("Brak shipment_id w nowej przesylce dla %s", order_id)
+            return "", ""
+
+        self.logger.info(
+            "Utworzono nowa przesylke %s (stara: %s) dla zamowienia %s",
+            new_shipment_id, old_shipment_id, order_id,
+        )
+
+        # 3. Pobierz etykiete z nowej przesylki
+        try:
+            label_data, ext = self.get_label(courier_code, new_shipment_id)
+            return label_data, ext
+        except Exception as exc:
+            self.logger.error(
+                "Blad pobierania etykiety z nowej przesylki %s: %s",
+                new_shipment_id, exc,
+            )
+            return "", ""
+
     def get_label(self, courier_code: str, package_id: str) -> Tuple[str, str]:
         """Pobierz etykiete przesylki z Allegro Shipment Management API.
 
@@ -1090,6 +1177,9 @@ class LabelAgent:
 
         Returns:
             Tuple (base64_label_data, extension).
+
+        Raises:
+            ShipmentExpiredError: Przesylka wygasla (403) - wymaga recreate.
         """
         if not package_id:
             raise ApiError("Brak ID przesylki do pobrania etykiety")
@@ -1109,6 +1199,11 @@ class LabelAgent:
             except Exception as retry_exc:
                 raise ApiError(f"Etykieta niedostepna: {retry_exc}") from retry_exc
         except Exception as exc:
+            status_code = getattr(
+                getattr(exc, "response", None), "status_code", None,
+            )
+            if status_code == 403:
+                raise ShipmentExpiredError(package_id, str(exc)) from exc
             raise ApiError(f"Blad pobierania etykiety: {exc}") from exc
 
     def print_label(self, base64_data: str, extension: str, order_id: str) -> None:
@@ -1743,6 +1838,18 @@ class LabelAgent:
                                 stage="label",
                                 retry_exceptions=(ApiError,),
                             )
+                        except ShipmentExpiredError as exp_exc:
+                            self.logger.warning(
+                                "Przesylka %s wygasla (403) - anuluje i tworze nowa dla %s",
+                                shipment_id, order_id,
+                            )
+                            label_data, ext = self._recreate_shipment_and_get_label(
+                                order_id, shipment_id, courier_code,
+                                package_ids, tracking_numbers,
+                            )
+                            if not label_data:
+                                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                                continue
                         except ApiError as exc:
                             self.logger.error(
                                 "Blad pobierania etykiety %s/%s: %s",
