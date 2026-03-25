@@ -978,18 +978,25 @@ class LabelAgent:
             receiver["point"] = point_id
 
         # Paczki wg dokumentacji API
+        # Gabaryt A (domyslny) do 5 produktow, B powyzej 5
+        products = order_data.get("products", [])
+        total_qty = sum(p.get("quantity", 1) for p in products)
+        if total_qty > 5:
+            pkg_dims = {"length": 40, "width": 30, "height": 20}
+        else:
+            pkg_dims = {"length": 30, "width": 20, "height": 10}
+
         packages = [
             {
                 "type": "PACKAGE",
                 "weight": {"value": 1.0, "unit": "KILOGRAMS"},
-                "length": {"value": 30, "unit": "CENTIMETER"},
-                "width": {"value": 20, "unit": "CENTIMETER"},
-                "height": {"value": 10, "unit": "CENTIMETER"},
+                "length": {"value": pkg_dims["length"], "unit": "CENTIMETER"},
+                "width": {"value": pkg_dims["width"], "unit": "CENTIMETER"},
+                "height": {"value": pkg_dims["height"], "unit": "CENTIMETER"},
             }
         ]
 
         # Nazwy produktow jako referenceNumber na etykiecie
-        products = order_data.get("products", [])
         reference_number = None
         if products:
             product_names = []

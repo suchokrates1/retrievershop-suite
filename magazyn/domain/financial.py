@@ -308,11 +308,9 @@ class FinancialCalculator:
         from ..models import Order, OrderProduct, Return, FixedCost
         from sqlalchemy import func, select
 
-        # Pobierz zamowienia z wykluczonymi zwrotami (tylko te ze statusem 'completed')
-        # completed = refundacja zrealizowana (COMMISSION_REFUNDED/FINISHED w Allegro)
-        # Zwroty in_transit/pending/delivered nie sa wykluczane - jeszcze nie zwrocono pieniedzy
+        # Wyklucz zamowienia z faktycznym zwrotem pieniedzy (refund_processed=True)
         return_order_ids = select(Return.order_id).where(
-            Return.status == 'completed'
+            Return.refund_processed == True
         ).distinct()
 
         orders = self.db.query(Order).filter(
@@ -335,7 +333,7 @@ class FinancialCalculator:
         start_dt_str = datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d %H:%M:%S')
         end_dt_str = datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d %H:%M:%S')
         returns_in_period = self.db.query(Return).filter(
-            Return.status == 'completed',
+            Return.refund_processed == True,
             Return.updated_at >= start_dt_str,
             Return.updated_at < end_dt_str,
         ).all()
