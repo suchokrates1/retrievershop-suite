@@ -108,14 +108,18 @@ def _find_delivery_service_id(delivery_method_name: str) -> Optional[str]:
     return None
 
 
-def _default_packages() -> list[dict]:
-    """Domyslna paczka dla zamowienia."""
+def _default_packages(total_qty: int = 1) -> list[dict]:
+    """Domyslna paczka dla zamowienia. Gabaryt A do 5 szt, B powyzej."""
+    if total_qty > 5:
+        dims = {"length": 40, "width": 30, "height": 20}
+    else:
+        dims = {"length": 30, "width": 20, "height": 10}
     return [{
         "weight": {"value": 1.0, "unit": "KILOGRAM"},
         "dimensions": {
-            "length": 30,
-            "width": 20,
-            "height": 10,
+            "length": dims["length"],
+            "width": dims["width"],
+            "height": dims["height"],
             "unit": "CENTIMETER",
         },
     }]
@@ -200,7 +204,11 @@ class AllegroLabelService:
         # 2. Przygotuj dane
         sender = _load_sender_data()
         receiver = _build_receiver(order_data)
-        pkgs = packages or _default_packages()
+
+        # Oblicz ilosc produktow do wyboru gabarytu
+        line_items = order_data.get("lineItems", [])
+        total_qty = sum(li.get("quantity", 1) for li in line_items) if line_items else 1
+        pkgs = packages or _default_packages(total_qty)
 
         # 3. Utworz przesylke
         shipment = create_shipment(
