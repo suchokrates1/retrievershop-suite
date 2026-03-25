@@ -280,12 +280,13 @@ def check_allegro_customer_returns() -> Dict[str, int]:
 def _map_allegro_return_status(allegro_status: str) -> str:
     """Mapuj status Allegro na wewnetrzny status zwrotu."""
     # Statusy Allegro: CREATED, WAITING_FOR_PARCEL, PARCEL_IN_TRANSIT, 
-    # PARCEL_DELIVERED, ACCEPTED, REJECTED, COMMISSION_REFUNDED, FINISHED
+    # DELIVERED, ACCEPTED, REJECTED, COMMISSION_REFUNDED, FINISHED
     status_map = {
         "CREATED": RETURN_STATUS_PENDING,
         "WAITING_FOR_PARCEL": RETURN_STATUS_PENDING,
         "PARCEL_IN_TRANSIT": RETURN_STATUS_IN_TRANSIT,
         "PARCEL_DELIVERED": RETURN_STATUS_DELIVERED,
+        "DELIVERED": RETURN_STATUS_DELIVERED,
         "ACCEPTED": RETURN_STATUS_DELIVERED,
         "COMMISSION_REFUNDED": RETURN_STATUS_COMPLETED,
         "FINISHED": RETURN_STATUS_COMPLETED,
@@ -823,14 +824,28 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
             return False, validation_msg, None
         
         # Przygotuj szczegoly
-        refund = return_data.get("refund", {})
-        total_value = refund.get("totalValue", {})
-        delivery = refund.get("delivery", {})
+        refund = return_data.get("refund") or {}
+        total_value = refund.get("totalValue") or {}
+        delivery = refund.get("delivery") or {}
+        
+        total_amount = float(total_value.get("amount", 0))
+        currency = total_value.get("currency", "PLN")
+        
+        # Oblicz z items jesli brak totalValue
+        if total_amount <= 0:
+            items = return_data.get("items", [])
+            for item in items:
+                price = item.get("price", {})
+                item_amount = float(price.get("amount", 0))
+                qty = int(item.get("quantity", 1))
+                total_amount += item_amount * qty
+                if currency == "PLN":
+                    currency = price.get("currency", "PLN")
         
         details = {
             "allegro_status": return_data.get("status"),
-            "total_amount": float(total_value.get("amount", 0)),
-            "currency": total_value.get("currency", "PLN"),
+            "total_amount": total_amount,
+            "currency": currency,
             "delivery_amount": float(delivery.get("amount", 0)) if delivery else 0,
             "items": return_data.get("items", []),
             "allegro_return_id": return_record.allegro_return_id,
