@@ -33,7 +33,7 @@
     <div class="col-md-4 text-end">
         <div class="d-flex align-items-center justify-content-end gap-2">
             <label class="mb-0 text-nowrap">Na stronie:</label>
-            <select class="form-select form-select-sm" style="width: auto;" @change="const u = new URL(window.location); u.searchParams.set('per_page', $el.value); u.searchParams.set('page', '1'); window.location = u.toString()">
+            <select class="form-select form-select-sm" style="width: auto;" @change="localStorage.setItem('orders_per_page', $el.value); const u = new URL(window.location); u.searchParams.set('per_page', $el.value); u.searchParams.set('page', '1'); window.location = u.toString()">
                 <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
@@ -123,13 +123,10 @@
     {% for order in orders %}
     <tr class="clickable-row" @click="if (!$event.target.closest('form,button,a')) window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'">
         <td>
-            <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="fw-bold text-decoration-none">
-                #{{ order.lp }}
-            </a>
-            {% if order.has_return %}<span class="badge bg-danger ms-1" title="Zwrot"><i class="bi bi-arrow-return-left"></i></span>{% endif %}
+            {% if order.has_return %}<span class="badge bg-danger me-1" title="Zwrot"><i class="bi bi-arrow-return-left"></i></span>{% endif %}<a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="fw-bold text-decoration-none">#{{ order.lp }}</a>
         </td>
         <td><small>{{ order.date_add | format_dt_short if order.date_add else '-' }}</small></td>
-        <td><small>{{ order.product_summary or '-' }}</small></td>
+        <td><small>{% for line in order.product_summary %}{{ line }}{% if not loop.last %}<br>{% endif %}{% else %}-{% endfor %}</small></td>
         <td><small>{{ (order.delivery_method or '-') | replace('Allegro ', '') }}</small></td>
         <td class="text-end"><small>{% if order.payment_done %}{{ '%.2f'|format(order.payment_done) }}{% else %}-{% endif %}</small></td>
         <td><span class="badge {{ order.status_class }}">{{ order.status_text }}</span></td>
@@ -198,5 +195,15 @@
     background-color: rgba(0,0,0,0.075) !important;
 }
 </style>
+<script>
+(function() {
+    var saved = localStorage.getItem('orders_per_page');
+    if (saved && !new URLSearchParams(window.location.search).has('per_page')) {
+        var u = new URL(window.location);
+        u.searchParams.set('per_page', saved);
+        window.location.replace(u.toString());
+    }
+})();
+</script>
 
 {% endblock %}
