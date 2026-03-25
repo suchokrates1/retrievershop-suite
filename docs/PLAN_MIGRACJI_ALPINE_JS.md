@@ -411,7 +411,7 @@ Ponizej lista plikow z brakujacymi diakrytykami:
 
 ## Faza 5 — Przepisanie home.html na Alpine.js
 
-**Status**: DO ZROBIENIA
+**Status**: ZROBIONE
 **Plik**: `magazyn/templates/home.html` (821 linii, ~300 linii inline JS)
 **Priorytet**: WYSOKI — ostatni duzy szablon z vanilla JS
 
