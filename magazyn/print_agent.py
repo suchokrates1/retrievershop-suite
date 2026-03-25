@@ -44,6 +44,7 @@ from .allegro_api.shipment_management import (
     get_delivery_services,
     get_shipment_details,
     get_shipment_label,
+    wait_for_shipment_creation,
 )
 from .allegro_api.fulfillment import (
     add_shipment_tracking,
@@ -901,60 +902,62 @@ class LabelAgent:
             self.logger.error("Brak danych zamowienia %s do utworzenia przesylki", order_id)
             return []
 
-        # Mapuj metode dostawy na delivery_service_id
+        # Mapuj metode dostawy na delivery_method_id
         delivery_method = order_data.get("delivery_method", "") or order_data.get("shipping", "")
-        delivery_service_id = self._resolve_delivery_service_id(delivery_method)
+        delivery_method_id = self._resolve_delivery_service_id(delivery_method)
 
-        if not delivery_service_id:
+        if not delivery_method_id:
             self.logger.error(
-                "Nie mozna ustalic delivery_service_id dla metody '%s' (zamowienie %s)",
+                "Nie mozna ustalic delivery_method_id dla metody '%s' (zamowienie %s)",
                 delivery_method, order_id,
             )
             return []
 
-        # Dane nadawcy z ustawien
+        # Dane nadawcy z ustawien (nazwy pol wg dokumentacji API)
         from .settings_store import settings_store
         sender = {
             "name": settings_store.get("SENDER_NAME") or "Retriever Shop",
             "street": settings_store.get("SENDER_STREET") or "",
+            "postalCode": settings_store.get("SENDER_ZIPCODE") or "",
             "city": settings_store.get("SENDER_CITY") or "",
-            "zipCode": settings_store.get("SENDER_ZIPCODE") or "",
             "countryCode": "PL",
             "phone": settings_store.get("SENDER_PHONE") or "",
             "email": settings_store.get("SENDER_EMAIL") or "",
         }
+        sender_company = settings_store.get("SENDER_COMPANY")
+        if sender_company:
+            sender["company"] = sender_company
 
-        # Dane odbiorcy z zamowienia
+        # Dane odbiorcy z zamowienia (nazwy pol wg dokumentacji API)
         receiver = {
             "name": order_data.get("delivery_fullname", ""),
             "street": order_data.get("delivery_address", ""),
+            "postalCode": order_data.get("delivery_postcode", ""),
             "city": order_data.get("delivery_city", ""),
-            "zipCode": order_data.get("delivery_postcode", ""),
             "countryCode": order_data.get("delivery_country_code", "PL"),
-            "phone": order_data.get("phone", ""),
             "email": order_data.get("email", ""),
+            "phone": order_data.get("phone", ""),
         }
 
-        # Punkt odbioru (paczkomat itp.)
+        # Punkt odbioru (paczkomat itp.) - pole "point" wg dokumentacji
         point_id = order_data.get("delivery_point_id", "")
         if point_id:
-            receiver["pickupPointId"] = point_id
+            receiver["point"] = point_id
 
-        # Domyslna paczka
+        # Paczki wg dokumentacji API
         packages = [
             {
-                "weight": {"value": 1.0, "unit": "KILOGRAM"},
-                "dimensions": {
-                    "length": {"value": 30, "unit": "CENTIMETER"},
-                    "width": {"value": 20, "unit": "CENTIMETER"},
-                    "height": {"value": 10, "unit": "CENTIMETER"},
-                },
+                "type": "OTHER",
+                "weight": {"value": 1.0, "unit": "KILOGRAMS"},
+                "length": {"value": 30, "unit": "CENTIMETER"},
+                "width": {"value": 20, "unit": "CENTIMETER"},
+                "height": {"value": 10, "unit": "CENTIMETER"},
             }
         ]
 
-        # Nazwy produktow jako dodatkowe info na etykiecie
+        # Nazwy produktow jako referenceNumber na etykiecie
         products = order_data.get("products", [])
-        references = None
+        reference_number = None
         if products:
             product_names = []
             for p in products:
@@ -969,28 +972,53 @@ class LabelAgent:
                 if label:
                     product_names.append(label)
             if product_names:
-                references = "; ".join(product_names)[:100]
+                reference_number = "; ".join(product_names)[:100]
+
+        # Dodatkowe wlasciwosci InPost (metoda nadania)
+        additional_properties = None
+        carrier_id = self._resolve_carrier_id(delivery_method)
+        if carrier_id == "INPOST":
+            additional_properties = {"inpost#sendingMethod": "any_point"}
 
         try:
-            result = create_shipment(
-                checkout_form_id=checkout_form_id,
-                delivery_service_id=delivery_service_id,
+            # 1. Wyslij komende tworzenia (async)
+            cmd_result = create_shipment(
+                delivery_method_id=delivery_method_id,
                 sender=sender,
                 receiver=receiver,
                 packages=packages,
-                references=references,
+                reference_number=reference_number,
+                additional_properties=additional_properties,
             )
 
-            shipment_id = result.get("id")
+            command_id = cmd_result.get("commandId")
+            if not command_id:
+                self.logger.error("Brak commandId w odpowiedzi create_shipment")
+                return []
+
+            # 2. Poczekaj na wynik (status SUCCESS)
+            creation_result = wait_for_shipment_creation(command_id)
+            shipment_id = creation_result.get("shipmentId")
+
+            if not shipment_id:
+                self.logger.error("Brak shipmentId po utworzeniu (commandId=%s)", command_id)
+                return []
+
+            # 3. Pobierz szczegoly przesylki (waybill itp.)
             waybill = ""
-            # Wyciagnij waybill z packages
-            for pkg in result.get("packages", []):
-                waybill = pkg.get("waybill", "")
-                if waybill:
-                    break
+            try:
+                details = get_shipment_details(shipment_id)
+                for pkg in details.get("packages", []):
+                    waybill = pkg.get("waybill", "")
+                    if waybill:
+                        break
+            except Exception as det_exc:
+                self.logger.warning(
+                    "Nie mozna pobrac szczegolow przesylki %s: %s",
+                    shipment_id, det_exc,
+                )
 
             # Dodaj tracking do zamowienia w Allegro
-            carrier_id = self._resolve_carrier_id(delivery_method)
             if waybill and carrier_id:
                 try:
                     add_shipment_tracking(
@@ -1033,7 +1061,7 @@ class LabelAgent:
             return []
 
     def _resolve_delivery_service_id(self, delivery_method: str) -> Optional[str]:
-        """Mapuj nazwe metody dostawy Allegro na delivery_service_id."""
+        """Mapuj nazwe metody dostawy Allegro na deliveryMethodId."""
         if not delivery_method:
             return None
 
@@ -1045,17 +1073,24 @@ class LabelAgent:
             self.logger.error("Blad pobierania delivery services: %s", exc)
             return None
 
+        def _get_method_id(svc):
+            """Wyciagnij deliveryMethodId z id uslugi."""
+            svc_id = svc.get("id")
+            if isinstance(svc_id, dict):
+                return svc_id.get("deliveryMethodId")
+            return svc_id
+
         # Szukaj dokladnego dopasowania po nazwie
         for svc in services:
             svc_name = (svc.get("name") or "").lower()
             if svc_name == method_lower:
-                return svc["id"]
+                return _get_method_id(svc)
 
         # Szukaj czesciowego dopasowania
         for svc in services:
             svc_name = (svc.get("name") or "").lower()
             if method_lower in svc_name or svc_name in method_lower:
-                return svc["id"]
+                return _get_method_id(svc)
 
         # Szukaj dopasowania po kluczowych slowach (np. "inpost", "paczkomat")
         method_keywords = set(method_lower.split())
@@ -1063,14 +1098,13 @@ class LabelAgent:
             svc_name = (svc.get("name") or "").lower()
             svc_keywords = set(svc_name.split())
             common = method_keywords & svc_keywords
-            # Jesli co najmniej 2 wspolne slowa (np. "inpost" + "paczkomat")
             if len(common) >= 2:
-                return svc["id"]
+                return _get_method_id(svc)
 
         self.logger.warning(
             "Nie znaleziono delivery_service_id dla '%s' "
             "wsrod %d dostepnych uslug: %s", delivery_method, len(services),
-            [s.get("name") for s in services],
+            [s.get("name") for s in services[:20]],
         )
         return None
 
@@ -1124,7 +1158,7 @@ class LabelAgent:
 
         # 1. Anuluj stara przesylke
         try:
-            cancel_shipment([old_shipment_id])
+            cancel_shipment(old_shipment_id)
             self.logger.info("Anulowano wygasla przesylke %s", old_shipment_id)
         except Exception as exc:
             self.logger.warning(
@@ -1196,7 +1230,7 @@ class LabelAgent:
             raise ApiError("Brak ID przesylki do pobrania etykiety")
 
         try:
-            label_bytes = get_shipment_label(package_id, label_format="PDF")
+            label_bytes = get_shipment_label([package_id])
             label_b64 = base64.b64encode(label_bytes).decode("ascii")
             return label_b64, "pdf"
         except RuntimeError as exc:
@@ -1204,7 +1238,7 @@ class LabelAgent:
             self.logger.warning("Etykieta nie gotowa dla %s: %s", package_id, exc)
             time.sleep(3)
             try:
-                label_bytes = get_shipment_label(package_id, label_format="PDF")
+                label_bytes = get_shipment_label([package_id])
                 label_b64 = base64.b64encode(label_bytes).decode("ascii")
                 return label_b64, "pdf"
             except Exception as retry_exc:

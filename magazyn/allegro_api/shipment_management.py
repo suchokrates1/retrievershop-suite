@@ -1,16 +1,21 @@
 """
 Integracja z Allegro Shipment Management API ("Wysylam z Allegro").
 
+Dokumentacja: https://developer.allegro.pl/tutorials/jak-zarzadzac-przesylkami-przez-wysylam-z-allegro-LRVjK7K21sY
+
 Endpointy:
-- GET /shipment-management/delivery-services - lista dostepnych uslug dostawy
-- POST /shipment-management/shipments - tworzenie przesylki (generuje etykiete)
-- GET /shipment-management/shipments/{shipmentId} - szczegoly przesylki
-- GET /shipment-management/shipments/{shipmentId}/label - pobranie etykiety PDF
-- PUT /shipment-management/shipments/commands/cancel - anulowanie przesylki
+- GET  /shipment-management/delivery-services - lista uslug dostawy
+- POST /shipment-management/shipments/create-commands - tworzenie przesylki (async command)
+- GET  /shipment-management/shipments/create-commands/{commandId} - status tworzenia
+- GET  /shipment-management/shipments/{shipmentId} - szczegoly przesylki
+- POST /shipment-management/label - pobranie etykiety PDF/ZPL
+- POST /shipment-management/shipments/cancel-commands - anulowanie przesylki (async command)
+- GET  /shipment-management/shipments/cancel-commands/{commandId} - status anulowania
 """
 
 import logging
 import time
+import uuid
 from typing import Optional
 
 import requests
@@ -26,10 +31,10 @@ _CACHE_TTL = 86400  # 24 godziny
 
 
 def _make_headers(token: str, *, content_type: bool = False,
-                  accept_pdf: bool = False) -> dict:
+                  accept_octet: bool = False) -> dict:
     headers = {"Authorization": f"Bearer {token}"}
-    if accept_pdf:
-        headers["Accept"] = "application/pdf"
+    if accept_octet:
+        headers["Accept"] = "application/octet-stream"
     else:
         headers["Accept"] = "application/vnd.allegro.public.v1+json"
     if content_type:
@@ -38,11 +43,11 @@ def _make_headers(token: str, *, content_type: bool = False,
 
 
 def _call_with_refresh(method, url, endpoint, *, json=None,
-                       accept_pdf=False, **kwargs):
+                       accept_octet=False, **kwargs):
     """Wywolaj request z automatycznym odswiezaniem tokenu przy 401."""
     token, refresh = _get_allegro_token()
     headers = _make_headers(
-        token, content_type=(json is not None), accept_pdf=accept_pdf,
+        token, content_type=(json is not None), accept_octet=accept_octet,
     )
     refreshed = False
 
@@ -62,7 +67,7 @@ def _call_with_refresh(method, url, endpoint, *, json=None,
                 token = _refresh_allegro_token(refresh)
                 headers = _make_headers(
                     token, content_type=(json is not None),
-                    accept_pdf=accept_pdf,
+                    accept_octet=accept_octet,
                 )
                 continue
             raise
@@ -111,65 +116,154 @@ def invalidate_delivery_services_cache() -> None:
 
 def create_shipment(
     *,
-    checkout_form_id: str,
-    delivery_service_id,
+    delivery_method_id: str,
     sender: dict,
     receiver: dict,
     packages: list[dict],
-    pickup: Optional[dict] = None,
-    references: Optional[str] = None,
+    reference_number: Optional[str] = None,
+    label_format: str = "PDF",
+    additional_services: Optional[list[str]] = None,
+    additional_properties: Optional[dict] = None,
+    credentials_id: Optional[str] = None,
 ) -> dict:
-    """Utworz przesylke w Allegro Shipment Management.
+    """Utworz przesylke w Allegro Shipment Management (async command).
 
-    POST /shipment-management/shipments
+    POST /shipment-management/shipments/create-commands
+
+    Operacja asynchroniczna - zwraca commandId.
+    Uzyj get_create_command_status() aby sprawdzic status i uzyskac shipmentId.
 
     Parameters
     ----------
-    checkout_form_id : str
-        UUID zamowienia Allegro (checkout-form).
-    delivery_service_id : str | dict
-        ID uslugi dostawy (z get_delivery_services()).
+    delivery_method_id : str
+        ID metody dostawy (deliveryMethodId z get_delivery_services()).
     sender : dict
-        Dane nadawcy: name, street, city, zipCode, countryCode, phone, email.
+        Dane nadawcy: name, company, street, postalCode, city, countryCode, email, phone.
+        Opcjonalnie point (jesli adres nadawczy to punkt).
     receiver : dict
-        Dane odbiorcy: name, street, city, zipCode, countryCode, phone, email,
-        opcjonalnie pickupPointId (paczkomat/punkt).
+        Dane odbiorcy: name, company, street, postalCode, city, countryCode, email, phone.
+        Opcjonalnie point (jesli adres odbiorczy to punkt odbioru/paczkomat).
     packages : list[dict]
-        Lista paczek z wagami/wymiarami.
-    pickup : dict, optional
-        Dane odbioru kurierskiego (date itp.).
-    references : str, optional
-        Dodatkowe informacje na etykiecie (np. nazwy produktow).
+        Lista paczek. Kazda: type, length, width, height, weight, textOnLabel.
+    reference_number : str, optional
+        Zewnetrzny ID / sygnatura przesylki.
+    label_format : str
+        Format etykiety: "PDF" lub "ZPL". Domyslnie PDF.
+    additional_services : list[str], optional
+        Uslugi dodatkowe (np. "ADDITIONAL_HANDLING").
+    additional_properties : dict, optional
+        Dodatkowe wlasciwosci (np. {"inpost#sendingMethod": "parcel_locker"}).
+    credentials_id : str, optional
+        ID umowy wlasnej (jesli nie korzystasz z umowy Allegro).
 
     Returns
     -------
     dict
-        Dane utworzonej przesylki (id, status, itp.).
+        Odpowiedz z commandId, input, opcjonalnie shipmentId.
     """
-    url = f"{API_BASE_URL}/shipment-management/shipments"
-    body = {
-        "deliveryServiceId": delivery_service_id,
-        "checkoutForm": {"id": checkout_form_id},
+    url = f"{API_BASE_URL}/shipment-management/shipments/create-commands"
+
+    command_id = str(uuid.uuid4())
+
+    input_data = {
+        "deliveryMethodId": delivery_method_id,
         "sender": sender,
         "receiver": receiver,
         "packages": packages,
+        "labelFormat": label_format,
     }
-    if pickup:
-        body["pickup"] = pickup
-    if references:
-        body["additionalProperties"] = {"references": references}
+
+    if credentials_id:
+        input_data["credentialsId"] = credentials_id
+    if reference_number:
+        input_data["referenceNumber"] = reference_number
+    if additional_services:
+        input_data["additionalServices"] = additional_services
+    if additional_properties:
+        input_data["additionalProperties"] = additional_properties
+
+    body = {
+        "commandId": command_id,
+        "input": input_data,
+    }
 
     response = _call_with_refresh(
         requests.post, url, "shipment-create", json=body,
     )
     result = response.json()
 
-    shipment_id = result.get("id", "?")
     logger.info(
-        "Utworzono przesylke %s dla zamowienia %s (usluga: %s)",
-        shipment_id, checkout_form_id, delivery_service_id,
+        "Wyslano komende tworzenia przesylki commandId=%s (usluga: %s)",
+        result.get("commandId", command_id), delivery_method_id,
     )
     return result
+
+
+def get_create_command_status(command_id: str) -> dict:
+    """Sprawdz status asynchronicznego tworzenia przesylki.
+
+    GET /shipment-management/shipments/create-commands/{commandId}
+
+    Returns
+    -------
+    dict
+        status: IN_PROGRESS | SUCCESS | ERROR
+        shipmentId: ID przesylki (gdy SUCCESS)
+        errors: lista bledow (gdy ERROR)
+    """
+    url = f"{API_BASE_URL}/shipment-management/shipments/create-commands/{command_id}"
+    response = _call_with_refresh(
+        requests.get, url, "shipment-create-status",
+    )
+    return response.json()
+
+
+def wait_for_shipment_creation(command_id: str, *, timeout: float = 30.0,
+                                poll_interval: float = 2.0) -> dict:
+    """Poczekaj na zakonczenie tworzenia przesylki.
+
+    Returns
+    -------
+    dict
+        Wynik z get_create_command_status (status SUCCESS lub ERROR).
+
+    Raises
+    ------
+    TimeoutError
+        Gdy przekroczono timeout.
+    RuntimeError
+        Gdy status ERROR.
+    """
+    start = time.monotonic()
+    while True:
+        result = get_create_command_status(command_id)
+        status = result.get("status", "")
+
+        if status == "SUCCESS":
+            logger.info(
+                "Przesylka utworzona: shipmentId=%s (commandId=%s)",
+                result.get("shipmentId"), command_id,
+            )
+            return result
+
+        if status == "ERROR":
+            errors = result.get("errors", [])
+            error_msg = "; ".join(
+                e.get("message", str(e)) for e in errors
+            ) if errors else "Nieznany blad"
+            logger.error(
+                "Blad tworzenia przesylki (commandId=%s): %s", command_id, error_msg,
+            )
+            raise RuntimeError(f"Blad tworzenia przesylki: {error_msg}")
+
+        elapsed = time.monotonic() - start
+        if elapsed > timeout:
+            raise TimeoutError(
+                f"Timeout tworzenia przesylki (commandId={command_id}, "
+                f"status={status}, elapsed={elapsed:.1f}s)"
+            )
+
+        time.sleep(poll_interval)
 
 
 def get_shipment_details(shipment_id: str) -> dict:
@@ -195,17 +289,20 @@ def get_shipment_details(shipment_id: str) -> dict:
     return response.json()
 
 
-def get_shipment_label(shipment_id: str, *, label_format: str = "PDF") -> bytes:
+def get_shipment_label(shipment_ids: list[str], *, page_size: str = "A4",
+                       cut_line: bool = True) -> bytes:
     """Pobierz etykiete przesylki.
 
-    GET /shipment-management/shipments/{shipmentId}/label
+    POST /shipment-management/label
 
     Parameters
     ----------
-    shipment_id : str
-        ID przesylki.
-    label_format : str
-        Format etykiety: "PDF" lub "ZPL". Domyslnie PDF.
+    shipment_ids : list[str]
+        Lista ID przesylek.
+    page_size : str
+        Format strony: "A4" lub "A6". Dotyczy tylko PDF.
+    cut_line : bool
+        Linie ciecia. Dotyczy tylko PDF A4.
 
     Returns
     -------
@@ -215,64 +312,67 @@ def get_shipment_label(shipment_id: str, *, label_format: str = "PDF") -> bytes:
     Raises
     ------
     RuntimeError
-        Gdy etykieta nie jest jeszcze dostepna.
+        Gdy etykieta nie jest dostepna.
     """
-    url = f"{API_BASE_URL}/shipment-management/shipments/{shipment_id}/label"
-
-    token, refresh = _get_allegro_token()
-    # Allegro wymaga application/octet-stream (application/pdf zwraca 406)
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/octet-stream",
+    url = f"{API_BASE_URL}/shipment-management/label"
+    body = {
+        "shipmentIds": shipment_ids,
+        "pageSize": page_size,
+        "cutLine": cut_line,
     }
-    refreshed = False
 
-    while True:
-        try:
-            response = _request_with_retry(
-                requests.get, url, endpoint="shipment-label", headers=headers,
-            )
-            return response.content
-        except Exception as exc:
-            status_code = getattr(
-                getattr(exc, "response", None), "status_code", None,
-            )
-            if status_code in (401, 403) and not refreshed and refresh:
-                refreshed = True
-                token = _refresh_allegro_token(refresh)
-                headers["Authorization"] = f"Bearer {token}"
-                continue
-            if status_code == 404:
-                raise RuntimeError(
-                    f"Etykieta nie dostepna dla przesylki {shipment_id} "
-                    f"(404 - przesylka moze nie byc jeszcze potwierdzona)"
-                ) from exc
-            raise
+    response = _call_with_refresh(
+        requests.post, url, "shipment-label",
+        json=body, accept_octet=True,
+    )
+    return response.content
 
 
-def cancel_shipment(shipment_ids: list[str]) -> dict:
-    """Anuluj przesylki.
+def cancel_shipment(shipment_id: str) -> dict:
+    """Anuluj przesylke (async command).
 
-    PUT /shipment-management/shipments/commands/cancel
+    POST /shipment-management/shipments/cancel-commands
 
     Parameters
     ----------
-    shipment_ids : list[str]
-        Lista ID przesylek do anulowania.
+    shipment_id : str
+        ID przesylki do anulowania.
 
     Returns
     -------
     dict
-        Odpowiedz API z wynikami anulowania.
+        Odpowiedz z commandId i input.shipmentId.
     """
-    url = f"{API_BASE_URL}/shipment-management/shipments/commands/cancel"
+    url = f"{API_BASE_URL}/shipment-management/shipments/cancel-commands"
+    command_id = str(uuid.uuid4())
     body = {
-        "shipmentIds": shipment_ids,
+        "commandId": command_id,
+        "input": {
+            "shipmentId": shipment_id,
+        },
     }
 
     response = _call_with_refresh(
-        requests.put, url, "shipment-cancel", json=body,
+        requests.post, url, "shipment-cancel", json=body,
     )
 
-    logger.info("Anulowano przesylki: %s", shipment_ids)
+    logger.info("Wyslano komende anulowania przesylki %s (commandId=%s)",
+                shipment_id, command_id)
+    return response.json()
+
+
+def get_cancel_command_status(command_id: str) -> dict:
+    """Sprawdz status anulowania przesylki.
+
+    GET /shipment-management/shipments/cancel-commands/{commandId}
+
+    Returns
+    -------
+    dict
+        status: IN_PROGRESS | SUCCESS | ERROR
+    """
+    url = f"{API_BASE_URL}/shipment-management/shipments/cancel-commands/{command_id}"
+    response = _call_with_refresh(
+        requests.get, url, "shipment-cancel-status",
+    )
     return response.json()
