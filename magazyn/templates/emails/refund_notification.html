@@ -1,0 +1,44 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Potwierdzenie zwrotu - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Potwierdzenie zwrotu</h2>
+<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
+    Informujemy, ze dla zamowienia <strong>#{{ order_id }}</strong> zostal zainicjowany
+    zwrot pieniedzy{% if reason %} w zwiazku z: <strong>{{ reason }}</strong>{% endif %}.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#d1e7dd;border-radius:8px;margin-bottom:20px;">
+    <tr>
+        <td style="padding:20px;">
+            {% if refund_amount %}
+            <p style="margin:0 0 8px;font-size:14px;color:#0f5132;">
+                Kwota zwrotu: <strong>{{ '%.2f'|format(refund_amount) }} zl</strong>
+            </p>
+            {% endif %}
+            <p style="margin:0;font-size:13px;color:#0f5132;">
+                Srodki zostana zwrocone na konto, z ktorego dokonano platnosci.
+                Czas realizacji zwrotu zalezy od operatora platnosci.
+            </p>
+        </td>
+    </tr>
+</table>
+
+{% if items %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+    <tr>
+        <td style="padding:0 0 8px;font-size:13px;color:#888;">Zwrocone produkty:</td>
+    </tr>
+    {% for item in items %}
+    <tr>
+        <td style="padding:4px 0;font-size:13px;color:#333;border-bottom:1px solid #eee;">
+            {{ item.name }} x{{ item.quantity }}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+<p style="margin:0;font-size:13px;color:#888;line-height:1.6;">
+    W razie pytan skontaktuj sie z nami przez wiadomosci na Allegro.
+</p>
+{% endblock %}
