@@ -255,7 +255,6 @@ class SettingsStore:
         defaults = settings_io.load_settings(include_hidden=True)
         # Settings not present in .env.example but still expected across the codebase
         defaults.setdefault("ALLEGRO_SELLER_NAME", "")
-        defaults.setdefault("ALLEGRO_SCRAPER_API_URL", "")
         defaults.setdefault("SENDER_NAME", "Retriever Shop")
         defaults.setdefault("SENDER_STREET", "Wroclawska 15/7")
         defaults.setdefault("SENDER_CITY", "Legnica")

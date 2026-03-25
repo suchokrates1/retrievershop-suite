@@ -159,55 +159,6 @@ PY
 2. Navigate to the **Oferty Allegro** page at `/allegro/offers`.
 3. Use the **Odśwież** button to launch offer synchronization.
 
-### Price monitor
-
-The `allegro_price_monitor` helper checks public listings on Allegro and
-notifies when competitors offer lower prices.  Configure the following
-variables in your `.env`:
-
-- `ALLEGRO_ACCESS_TOKEN` – OAuth token obtained in the steps above.
-- `ALLEGRO_SELLER_ID` – your Allegro seller ID so the monitor can skip your
-  own offers.
-- `ALLEGRO_EXCLUDED_SELLERS` – comma-separated seller IDs to ignore.
-
-Run the monitor manually with:
-
-```bash
-python -m magazyn.allegro_price_monitor
-```
-
-To execute it on a schedule, add a cron entry such as:
-
-```cron
-0 * * * * cd /path/to/retrievershop-suite && /usr/bin/env python -m magazyn.allegro_price_monitor >> /var/log/allegro_price_monitor.log 2>&1
-```
-
-Alternatively create a systemd service and timer:
-
-```ini
-# /etc/systemd/system/allegro_price_monitor.service
-[Unit]
-Description=Allegro price monitor
-
-[Service]
-Type=oneshot
-WorkingDirectory=/path/to/retrievershop-suite
-ExecStart=/usr/bin/env python -m magazyn.allegro_price_monitor
-
-# /etc/systemd/system/allegro_price_monitor.timer
-[Unit]
-Description=Run Allegro price monitor hourly
-
-[Timer]
-OnCalendar=hourly
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-Enable the timer with `sudo systemctl enable --now allegro_price_monitor.timer`.
-
 ## Real-time Discussions
 
 The application provides a full-featured messaging interface for communicating with Allegro buyers:

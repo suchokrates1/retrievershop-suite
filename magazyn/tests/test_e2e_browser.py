@@ -283,7 +283,6 @@ ROUTES_FORMS = [
 ROUTES_ALLEGRO = [
     "/allegro/offers",
     "/offers-and-prices",
-    "/allegro/price-check",
     "/discussions",
 ]
 

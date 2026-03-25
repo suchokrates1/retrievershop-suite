@@ -79,14 +79,6 @@ ENV_INFO = {
         "Cena pakowania",
         "Koszt pakowania jednego zamowienia (PLN)",
     ),
-    "ALLEGRO_SCRAPER_API_URL": (
-        "URL Scrapera Allegro",
-        "Adres API lokalnego scrapera (np. http://192.168.31.150:5555) - pozostaw puste aby uzywac wbudowanego Selenium",
-    ),
-    "ALLEGRO_PROXY_URL": (
-        "URL Proxy Allegro",
-        "Adres proxy dla scrapera Allegro (format: user:pass@host:port)",
-    ),
     "SENDER_NAME": (
         "Nazwa nadawcy przesylki",
         "Nazwa firmy/osoby na etykiecie nadawczej",
