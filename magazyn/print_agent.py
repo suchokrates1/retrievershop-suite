@@ -1057,9 +1057,20 @@ class LabelAgent:
             if method_lower in svc_name or svc_name in method_lower:
                 return svc.get("id")
 
+        # Szukaj dopasowania po kluczowych slowach (np. "inpost", "paczkomat")
+        method_keywords = set(method_lower.split())
+        for svc in services:
+            svc_name = (svc.get("name") or "").lower()
+            svc_keywords = set(svc_name.split())
+            common = method_keywords & svc_keywords
+            # Jesli co najmniej 2 wspolne slowa (np. "inpost" + "paczkomat")
+            if len(common) >= 2:
+                return svc.get("id")
+
         self.logger.warning(
             "Nie znaleziono delivery_service_id dla '%s' "
-            "wsrod %d dostepnych uslug", delivery_method, len(services),
+            "wsrod %d dostepnych uslug: %s", delivery_method, len(services),
+            [s.get("name") for s in services],
         )
         return None
 
