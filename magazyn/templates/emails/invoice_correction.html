@@ -1,35 +1,46 @@
-{% extends "emails/base_email.html" %}
-{% block title %}Korekta faktury - Retriever Shop{% endblock %}
-{% block content %}
-<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Korekta faktury</h2>
-<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
-    Do zamowienia <strong>#{{ order_id }}</strong> wystawiona zostala korekta faktury
-    {% if reason %}w zwiazku z: <strong>{{ reason }}</strong>{% endif %}.
-</p>
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Korekta za zamowienie nr {{ order_id }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+    <table width="100%" cellspacing="0" cellpadding="0" style="background-color:#ffffff;max-width:600px;margin:auto;">
+        <tbody>
+            <tr style="background-color:#17383e;background-image:url('https://retrievershop.pl/wp-content/uploads/2024/08/paw-pattern-2.svg');background-size:cover;">
+                <td style="padding:20px;text-align:center;">
+                    <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Retriever Shop" width="200" style="display:block;margin:auto;">
+                </td>
+            </tr>
 
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff3cd;border-radius:8px;margin-bottom:20px;">
-    <tr>
-        <td style="padding:20px;">
-            <p style="margin:0 0 8px;font-size:13px;color:#664d03;">Informacja o korekcie:</p>
-            {% if refund_amount %}
-            <p style="margin:0 0 4px;font-size:14px;color:#333;">
-                Kwota zwrotu: <strong>{{ '%.2f'|format(refund_amount) }} zl</strong>
-            </p>
-            {% endif %}
-            {% if invoice_data %}
-            <p style="margin:0 0 4px;font-size:13px;color:#555;">
-                Nabywca: {{ invoice_data.company or invoice_data.name or '' }}
-            </p>
-            {% if invoice_data.nip %}
-            <p style="margin:0;font-size:13px;color:#555;">NIP: {{ invoice_data.nip }}</p>
-            {% endif %}
-            {% endif %}
-        </td>
-    </tr>
-</table>
+            <tr>
+                <td style="padding:20px;text-align:center;">
+                    <h1 style="color:#333333;">Szanowny Kliencie!</h1>
+                    <p style="color:#666666;">Przesylamy w zalaczniku korekte faktury nr&nbsp;{{ invoice_number }} w zwiazku ze zwrotem Panstwa zamowienia. Bede ogromnie wdzieczna jezeli w odpowiedzi napisza Panstwo co spowodowalo taka decyzje. Pozwoli to ulepszyc moja dzialalnosc i oferowac produkty jak najlepszej jakosci.</p>
+                </td>
+            </tr>
 
-<p style="margin:0;font-size:13px;color:#888;line-height:1.6;">
-    Korekta faktury w formacie PDF zostala dolaczona do tej wiadomosci.
-    W razie pytan skontaktuj sie z nami przez wiadomosci na Allegro.
-</p>
-{% endblock %}
+            <tr>
+                <td style="padding:20px;text-align:center;">
+                    <p style="color:#666666;">Jesli masz jakiekolwiek pytania dotyczace zamowienia, nasz zespol chetnie Ci pomoze. Mozesz sie z nami skontaktowac, odpowiadajac na te wiadomosc lub piszac na adres <a href="mailto:kontakt@retrievershop.pl" style="color:#4caf50;">kontakt@retrievershop.pl</a>.</p>
+                    <p style="color:#666666;">Jeszcze raz dziekujemy za zaufanie i zyczymy wielu milych chwil spedzonych z Twoim pupilem!</p>
+                </td>
+            </tr>
+
+            <tr style="background-color:#17383e;">
+                <td style="padding:20px;text-align:center;color:#ffffff;">
+                    <p style="font-size:12px;">Retriever Shop Alexandra Kaluga. Wszelkie prawa zastrzezone.</p>
+                    <p>Sledz nas na:</p>
+                    <a href="https://www.facebook.com/retrievershop" style="margin:0 10px;text-decoration:none;">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg" alt="Facebook" width="24" style="vertical-align:middle;">
+                    </a>
+                    <a href="https://www.instagram.com/retrievershoppl" style="margin:0 10px;text-decoration:none;">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram" width="24" style="vertical-align:middle;">
+                    </a>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

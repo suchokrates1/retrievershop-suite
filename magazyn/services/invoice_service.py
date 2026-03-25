@@ -331,6 +331,7 @@ def generate_correction_invoice(
                     refund_amount=abs(inv["total"]),
                     pdf_data=pdf_data,
                     pdf_filename=pdf_filename,
+                    invoice_number=invoice_number,
                 )
                 _mark_email_sent(db, order, "correction")
                 db.commit()
