@@ -584,6 +584,8 @@ def order_detail(order_id: str):
         # Faktura wFirma
         context["wfirma_invoice_id"] = order.wfirma_invoice_id
         context["wfirma_invoice_number"] = order.wfirma_invoice_number
+        context["wfirma_correction_id"] = order.wfirma_correction_id
+        context["wfirma_correction_number"] = order.wfirma_correction_number
 
         # Link do strony zamowienia klienta
         customer_page_url = ""
@@ -623,6 +625,34 @@ def download_invoice_pdf(order_id: str):
             return redirect(url_for(".order_detail", order_id=order_id))
 
         safe_nr = (order.wfirma_invoice_number or "faktura").replace("/", "_").replace("\\", "_")
+        from flask import Response
+        return Response(
+            pdf_data,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"inline; filename={safe_nr}.pdf"},
+        )
+
+
+@bp.route("/order/<order_id>/correction-pdf")
+@login_required
+def download_correction_pdf(order_id: str):
+    """Pobierz PDF korekty faktury z wFirma."""
+    with get_session() as db:
+        order = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order or not order.wfirma_correction_id:
+            abort(404)
+
+        try:
+            from .wfirma_api import WFirmaClient
+            from .wfirma_api import download_invoice_pdf as wfirma_download
+            client = WFirmaClient.from_settings()
+            pdf_data = wfirma_download(client, order.wfirma_correction_id)
+        except Exception as exc:
+            logger.error("Blad pobierania PDF korekty %s: %s", order.wfirma_correction_number, exc)
+            flash("Blad pobierania PDF korekty", "error")
+            return redirect(url_for(".order_detail", order_id=order_id))
+
+        safe_nr = (order.wfirma_correction_number or "korekta").replace("/", "_").replace("\\", "_")
         from flask import Response
         return Response(
             pdf_data,
