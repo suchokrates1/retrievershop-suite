@@ -193,6 +193,17 @@ def send_invoice_email(
 
     ctx = _load_order_context(order)
 
+    # Data zamowienia do szablonu
+    from datetime import datetime
+    date_add = getattr(order, "date_add", None)
+    if date_add:
+        if isinstance(date_add, (int, float)):
+            ctx["order_date"] = datetime.fromtimestamp(date_add).strftime("%Y-%m-%d")
+        else:
+            ctx["order_date"] = str(date_add)[:10]
+    else:
+        ctx["order_date"] = ""
+
     invoice_data = None
     if order.want_invoice:
         invoice_data = {
