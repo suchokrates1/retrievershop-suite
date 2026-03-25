@@ -117,6 +117,7 @@ def create_shipment(
     receiver: dict,
     packages: list[dict],
     pickup: Optional[dict] = None,
+    references: Optional[str] = None,
 ) -> dict:
     """Utworz przesylke w Allegro Shipment Management.
 
@@ -137,6 +138,8 @@ def create_shipment(
         Lista paczek z wagami/wymiarami.
     pickup : dict, optional
         Dane odbioru kurierskiego (date itp.).
+    references : str, optional
+        Dodatkowe informacje na etykiecie (np. nazwy produktow).
 
     Returns
     -------
@@ -153,6 +156,8 @@ def create_shipment(
     }
     if pickup:
         body["pickup"] = pickup
+    if references:
+        body["additionalProperties"] = {"references": references}
 
     response = _call_with_refresh(
         requests.post, url, "shipment-create", json=body,
@@ -213,13 +218,12 @@ def get_shipment_label(shipment_id: str, *, label_format: str = "PDF") -> bytes:
         Gdy etykieta nie jest jeszcze dostepna.
     """
     url = f"{API_BASE_URL}/shipment-management/shipments/{shipment_id}/label"
-    accept_pdf = label_format.upper() == "PDF"
 
     token, refresh = _get_allegro_token()
-    accept = "application/pdf" if accept_pdf else "application/zpl"
+    # Allegro wymaga application/octet-stream (application/pdf zwraca 406)
     headers = {
         "Authorization": f"Bearer {token}",
-        "Accept": accept,
+        "Accept": "application/octet-stream",
     }
     refreshed = False
 
