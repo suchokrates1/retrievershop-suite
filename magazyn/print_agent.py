@@ -902,9 +902,13 @@ class LabelAgent:
             self.logger.error("Brak danych zamowienia %s do utworzenia przesylki", order_id)
             return []
 
-        # Mapuj metode dostawy na delivery_method_id
+        # Uzyj delivery_method_id z zamowienia (UUID identyczny z deliveryMethodId w delivery-services)
+        delivery_method_id = order_data.get("delivery_method_id")
         delivery_method = order_data.get("delivery_method", "") or order_data.get("shipping", "")
-        delivery_method_id = self._resolve_delivery_service_id(delivery_method)
+
+        if not delivery_method_id:
+            # Fallback: sprobuj znalezc po nazwie
+            delivery_method_id = self._resolve_delivery_service_id(delivery_method)
 
         if not delivery_method_id:
             self.logger.error(
