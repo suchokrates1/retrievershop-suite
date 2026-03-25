@@ -31,6 +31,7 @@ from .services import consume_order_stock, get_sales_summary
 from .utils import short_preview
 from .allegro_token_refresher import token_refresher
 from .allegro_api import (
+    fetch_allegro_order_detail,
     fetch_discussions,
     fetch_discussion_chat,
     fetch_message_threads,
@@ -902,9 +903,25 @@ class LabelAgent:
             self.logger.error("Brak danych zamowienia %s do utworzenia przesylki", order_id)
             return []
 
-        # Uzyj delivery_method_id z zamowienia (UUID identyczny z deliveryMethodId w delivery-services)
-        delivery_method_id = order_data.get("delivery_method_id")
+        # Pobierz delivery_method_id (UUID) bezposrednio z Allegro API
+        # DB model przechowuje wewnetrzny FK (Integer), wiec musimy pobrac UUID z API
+        delivery_method_id = None
         delivery_method = order_data.get("delivery_method", "") or order_data.get("shipping", "")
+        try:
+            allegro_detail = fetch_allegro_order_detail(checkout_form_id)
+            allegro_delivery = (allegro_detail.get("delivery") or {}).get("method") or {}
+            delivery_method_id = allegro_delivery.get("id")
+            if not delivery_method:
+                delivery_method = allegro_delivery.get("name", "")
+            self.logger.info(
+                "Pobrano delivery_method_id=%s z Allegro API (zamowienie %s)",
+                delivery_method_id, order_id,
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "Nie mozna pobrac delivery.method.id z Allegro API dla %s: %s",
+                checkout_form_id, exc,
+            )
 
         if not delivery_method_id:
             # Fallback: sprobuj znalezc po nazwie
