@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+testpaths = ["magazyn/tests"]
+markers = [
+    "e2e: testy E2E wymagajace dzialajacego CDP (Chrome DevTools Protocol)",
+]
