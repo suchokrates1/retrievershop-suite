@@ -58,4 +58,4 @@ def test_sales_password_fields_render_as_password(app_mod, client, login):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     smtp_password = _extract_input(html, "SMTP_PASSWORD")
-    assert "type=\"password\"" in smtp_password.lower()
+    assert "type=\"password\"" in smtp_password.lower() or ":type=\"show" in smtp_password.lower()

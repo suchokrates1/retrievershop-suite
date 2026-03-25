@@ -136,17 +136,20 @@
 </style>
 {% endblock %}
 {% block content %}
-<div style="max-width:700px; margin:0 auto;">
+<div style="max-width:700px; margin:0 auto;"
+     x-data="stocktakeScan()"
+     data-stocktake-id="{{ stocktake_id }}"
+     x-cloak>
 
-  <!-- Naglowek -->
+  <!-- Nagłówek -->
   <div class="st-header">
     <div class="st-title">Remanent #{{ stocktake_id }}</div>
     <div class="d-flex gap-2">
-      <button id="btn-undo" class="btn btn-warning">
+      <button class="btn btn-warning" @click="undo()">
         <i class="bi bi-arrow-counterclockwise me-1"></i>Cofnij
       </button>
-      <button id="btn-finish" class="btn btn-danger">
-        <i class="bi bi-check-circle me-1"></i>Zakoncz
+      <button class="btn btn-danger" @click="finish()">
+        <i class="bi bi-check-circle me-1"></i>Zakończ
       </button>
     </div>
   </div>
@@ -154,42 +157,56 @@
   <!-- Statystyki -->
   <div class="st-stats">
     <div class="st-stat">
-      <div class="st-stat-value accent" id="stat-scanned-products">{{ scanned_products }}</div>
+      <div class="st-stat-value accent" x-text="stats.scannedProducts"></div>
       <div class="st-stat-label">Zeskanowane</div>
     </div>
     <div class="st-stat">
-      <div class="st-stat-value" id="stat-total-products">{{ total_products }}</div>
+      <div class="st-stat-value" x-text="stats.totalProducts"></div>
       <div class="st-stat-label">Wszystkich</div>
     </div>
     <div class="st-stat">
-      <div class="st-stat-value" id="stat-total-scanned">{{ total_scanned }}</div>
-      <div class="st-stat-label">Skanow</div>
+      <div class="st-stat-value" x-text="stats.totalScanned"></div>
+      <div class="st-stat-label">Skanów</div>
     </div>
   </div>
 
   <!-- Ostatni skan -->
-  <div id="last-scan-card" class="st-scan-card d-none" data-state="ok">
-    <div class="st-scan-name" id="last-scan-product"></div>
+  <div class="st-scan-card"
+       x-show="lastScan"
+       :class="lastScan ? scanCardState : ''"
+       x-cloak>
+    <div class="st-scan-name" x-text="lastScan?.name || ''"></div>
     <div style="display:flex;align-items:baseline;justify-content:center;gap:0.1rem;">
-      <span class="st-scan-qty" id="last-scan-scanned"></span>
+      <span class="st-scan-qty"
+            :class="scanQtyClass"
+            x-text="lastScan?.scannedQty ?? ''"></span>
       <span class="st-scan-divider">/</span>
-      <span class="st-scan-expected" id="last-scan-expected"></span>
+      <span class="st-scan-expected" x-text="lastScan?.expectedQty ?? ''"></span>
     </div>
   </div>
 
-  <!-- Blad -->
-  <div id="scan-error" class="st-error d-none"></div>
+  <!-- Błąd -->
+  <div class="st-error" x-show="error" x-text="error" x-cloak></div>
 
   <!-- Placeholder -->
-  <div class="st-placeholder" id="scan-instruction">
+  <div class="st-placeholder" x-show="!lastScan && history.length === 0">
     <i class="bi bi-upc-scan"></i>
-    <p>Skanuj kody kreskowe produktow</p>
+    <p>Skanuj kody kreskowe produktów</p>
   </div>
 
   <!-- Historia -->
-  <div class="st-history" id="scan-history">
+  <div class="st-history" x-show="history.length > 0" x-cloak>
     <div class="st-history-title">Ostatnie skany</div>
-    <div id="scan-list"></div>
+    <div>
+      <template x-for="item in history" :key="item.name">
+        <div class="st-history-item">
+          <span x-text="item.name"></span>
+          <span class="badge"
+                :class="badgeClass(item.scanned, item.expected)"
+                x-text="badgeText(item.scanned, item.expected)"></span>
+        </div>
+      </template>
+    </div>
   </div>
 
 </div>
@@ -197,210 +214,188 @@
 
 {% block scripts %}
 <script>
-(function() {
-    const STOCKTAKE_ID = {{ stocktake_id }};
-    const UNDO_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/undo';
-    const FINISH_ENDPOINT = '/stocktake/' + STOCKTAKE_ID + '/finish';
-    const CSRF_TOKEN = document.getElementById('barcode-csrf-token').value;
+document.addEventListener('alpine:init', () => {
+    const CSRF_TOKEN = "{{ csrf_token() }}";
 
-    // Aktualizacja statystyk
-    function updateStats(data) {
-        if (data.total_products !== undefined) {
-            document.getElementById('stat-total-products').textContent = data.total_products;
-        }
-        if (data.scanned_products !== undefined) {
-            document.getElementById('stat-scanned-products').textContent = data.scanned_products;
-        }
-        if (data.total_scanned !== undefined) {
-            document.getElementById('stat-total-scanned').textContent = data.total_scanned;
-        }
-    }
+    Alpine.data('stocktakeScan', () => ({
+        stocktakeId: null,
+        stats: {
+            scannedProducts: {{ scanned_products|default(0) }},
+            totalProducts: {{ total_products|default(0) }},
+            totalScanned: {{ total_scanned|default(0) }},
+        },
+        lastScan: null,
+        error: '',
+        history: [],
 
-    // Pokaz wynik skanu
-    function showScanResult(data) {
-        const card = document.getElementById('last-scan-card');
-        const productEl = document.getElementById('last-scan-product');
-        const scannedEl = document.getElementById('last-scan-scanned');
-        const expectedEl = document.getElementById('last-scan-expected');
-        const errorEl = document.getElementById('scan-error');
+        get scanCardState() {
+            if (!this.lastScan) return '';
+            const s = this.lastScan.scannedQty;
+            const e = this.lastScan.expectedQty;
+            if (s > e) return 'danger';
+            if (s === e) return 'ok';
+            return 'warning';
+        },
 
-        errorEl.classList.add('d-none');
-        document.getElementById('scan-instruction').classList.add('d-none');
+        get scanQtyClass() {
+            const state = this.scanCardState;
+            return state !== 'ok' ? state : '';
+        },
 
-        let name = data.series || data.product_name || 'Produkt';
-        if (data.size) name += ' ' + data.size;
-        if (data.color) name += ' ' + data.color;
+        get _historyKey() {
+            return 'stocktake_history_' + this.stocktakeId;
+        },
 
-        productEl.textContent = name;
-        scannedEl.textContent = data.scanned_qty;
-        expectedEl.textContent = data.expected_qty;
+        init() {
+            this.stocktakeId = this.$el.dataset.stocktakeId || '';
 
-        // Stan karty i kolory licznikow
-        card.classList.remove('danger', 'warning', 'ok');
-        scannedEl.classList.remove('danger', 'warning');
-        var state;
-        if (data.scanned_qty > data.expected_qty) {
-            state = 'danger';
-        } else if (data.scanned_qty === data.expected_qty) {
-            state = 'ok';
-        } else {
-            state = 'warning';
-        }
-        card.classList.add(state);
-        if (state !== 'ok') scannedEl.classList.add(state);
+            this._loadHistory();
+            document.addEventListener('barcode:scanned', (e) => {
+                const data = e.detail || {};
+                if (data.scanned_qty !== undefined) {
+                    this._updateStats(data);
+                    this._showScanResult(data);
+                }
+            });
+        },
 
-        card.classList.remove('d-none');
+        // --- Formatowanie badge ---
+        badgeClass(scanned, expected) {
+            const diff = scanned - expected;
+            if (diff > 0) return 'bg-danger';
+            if (diff === 0) return 'bg-success';
+            return 'bg-warning text-dark';
+        },
 
-        // Dodaj do historii
-        addToHistory(name, data.scanned_qty, data.expected_qty);
-    }
+        badgeText(scanned, expected) {
+            const diff = scanned - expected;
+            if (diff > 0) return '+' + diff + ' (' + scanned + '/' + expected + ')';
+            if (diff === 0) return scanned + '/' + expected + ' OK';
+            return scanned + '/' + expected;
+        },
 
-    function showError(msg) {
-        const errorEl = document.getElementById('scan-error');
-        errorEl.textContent = msg;
-        errorEl.classList.remove('d-none');
-    }
+        // --- Aktualizacja statystyk ---
+        _updateStats(data) {
+            if (data.total_products !== undefined) this.stats.totalProducts = data.total_products;
+            if (data.scanned_products !== undefined) this.stats.scannedProducts = data.scanned_products;
+            if (data.total_scanned !== undefined) this.stats.totalScanned = data.total_scanned;
+        },
 
-    const HISTORY_KEY = 'stocktake_history_' + STOCKTAKE_ID;
+        // --- Wynik skanu ---
+        _showScanResult(data) {
+            this.error = '';
 
-    function buildBadge(scanned, expected) {
-        const diff = scanned - expected;
-        if (diff > 0)       return '<span class="badge bg-danger">+' + diff + ' (' + scanned + '/' + expected + ')</span>';
-        else if (diff === 0) return '<span class="badge bg-success">' + scanned + '/' + expected + ' OK</span>';
-        else                return '<span class="badge bg-warning text-dark">' + scanned + '/' + expected + '</span>';
-    }
+            let name = data.series || data.product_name || 'Produkt';
+            if (data.size) name += ' ' + data.size;
+            if (data.color) name += ' ' + data.color;
 
-    function saveHistory(items) {
-        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); } catch(e) {}
-    }
+            this.lastScan = {
+                name: name,
+                scannedQty: data.scanned_qty,
+                expectedQty: data.expected_qty,
+            };
 
-    function loadHistory() {
-        try {
-            var raw = localStorage.getItem(HISTORY_KEY);
-            return raw ? JSON.parse(raw) : [];
-        } catch(e) { return []; }
-    }
+            this._addToHistory(name, data.scanned_qty, data.expected_qty);
+        },
 
-    function renderHistory(items) {
-        const list = document.getElementById('scan-list');
-        list.innerHTML = '';
-        items.forEach(function(item) {
-            const div = document.createElement('div');
-            div.className = 'st-history-item';
-            div.dataset.name = item.name;
-            div.innerHTML = '<span>' + item.name + '</span>' + buildBadge(item.scanned, item.expected);
-            list.appendChild(div);
-        });
-    }
+        _showError(msg) {
+            this.error = msg;
+        },
 
-    function addToHistory(name, scanned, expected) {
-        var items = loadHistory();
-        var idx = items.findIndex(function(it) { return it.name === name; });
-        if (idx !== -1) {
-            items[idx].scanned = scanned;
-            items[idx].expected = expected;
-            // Przesuń na góre
-            var updated = items.splice(idx, 1)[0];
-            items.unshift(updated);
-        } else {
-            items.unshift({ name: name, scanned: scanned, expected: expected });
-            if (items.length > 50) items = items.slice(0, 50);
-        }
-        saveHistory(items);
-        renderHistory(items);
-    }
-
-    // Przywróc historie po refresh
-    (function() {
-        var items = loadHistory();
-        if (items.length > 0) {
-            renderHistory(items);
-            document.getElementById('scan-instruction').classList.add('d-none');
-        }
-    })();
-
-    // Skan - obslugiwany przez globalny skaner (barcode_endpoint -> stocktake)
-
-    // Cofnij
-    document.getElementById('btn-undo').addEventListener('click', function() {
-        fetch(UNDO_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': CSRF_TOKEN
+        // --- Historia (localStorage) ---
+        _loadHistory() {
+            try {
+                const raw = localStorage.getItem(this._historyKey);
+                this.history = raw ? JSON.parse(raw) : [];
+            } catch (_) {
+                this.history = [];
             }
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.error) {
-                showError(data.error);
+        },
+
+        _saveHistory() {
+            try {
+                localStorage.setItem(this._historyKey, JSON.stringify(this.history));
+            } catch (_) {}
+        },
+
+        _addToHistory(name, scanned, expected) {
+            const idx = this.history.findIndex(it => it.name === name);
+            if (idx !== -1) {
+                const updated = this.history.splice(idx, 1)[0];
+                updated.scanned = scanned;
+                updated.expected = expected;
+                this.history.unshift(updated);
             } else {
-                updateStats(data);
-                // Zaktualizuj lub schowaj karte ostatniego skanu
-                var card = document.getElementById('last-scan-card');
+                this.history.unshift({ name, scanned, expected });
+                if (this.history.length > 50) {
+                    this.history = this.history.slice(0, 50);
+                }
+            }
+            this._saveHistory();
+        },
+
+        // --- Cofnij ---
+        async undo() {
+            const endpoint = '/stocktake/' + this.stocktakeId + '/undo';
+            try {
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF_TOKEN,
+                    },
+                });
+                const data = await resp.json();
+                if (data.error) {
+                    this._showError(data.error);
+                    return;
+                }
+                this._updateStats(data);
+
                 if (data.scanned_qty !== undefined) {
                     if (data.scanned_qty <= 0) {
-                        card.classList.add('d-none');
-                        document.getElementById('scan-instruction').classList.remove('d-none');
-                    } else {
-                        document.getElementById('last-scan-scanned').textContent = data.scanned_qty;
-                        card.classList.remove('danger', 'warning', 'ok');
-                        var scannedEl = document.getElementById('last-scan-scanned');
-                        scannedEl.classList.remove('danger', 'warning');
-                        if (data.scanned_qty > data.expected_qty) {
-                            card.classList.add('danger'); scannedEl.classList.add('danger');
-                        } else if (data.scanned_qty === data.expected_qty) {
-                            card.classList.add('ok');
-                        } else {
-                            card.classList.add('warning'); scannedEl.classList.add('warning');
-                        }
+                        this.lastScan = null;
+                    } else if (this.lastScan) {
+                        this.lastScan.scannedQty = data.scanned_qty;
+                        this.lastScan.expectedQty = data.expected_qty;
                     }
                 }
+
                 if (data.tts_name && data.scanned_qty !== undefined) {
-                    addToHistory(data.tts_name, data.scanned_qty, data.expected_qty);
+                    this._addToHistory(data.tts_name, data.scanned_qty, data.expected_qty);
                 }
+
                 if (data.tts_message && window.speechSynthesis) {
                     window.speechSynthesis.cancel();
                     window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.tts_message));
                 }
+            } catch (err) {
+                this._showError('Błąd: ' + err.message);
             }
-        })
-        .catch(function(err) {
-            showError('Blad: ' + err.message);
-        });
-    });
+        },
 
-    // Zakoncz
-    document.getElementById('btn-finish').addEventListener('click', function() {
-        if (!confirm('Czy na pewno chcesz zakonczyc remanent?')) return;
+        // --- Zakończ remanent ---
+        async finish() {
+            if (!confirm('Czy na pewno chcesz zakończyć remanent?')) return;
 
-        fetch(FINISH_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': CSRF_TOKEN
+            const endpoint = '/stocktake/' + this.stocktakeId + '/finish';
+            try {
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF_TOKEN,
+                    },
+                });
+                const data = await resp.json();
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                }
+            } catch (err) {
+                this._showError('Błąd: ' + err.message);
             }
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.redirect) {
-                window.location.href = data.redirect;
-            }
-        })
-        .catch(function(err) {
-            showError('Blad: ' + err.message);
-        });
-    });
-
-    // Globalny skaner wysyla POST do stocktake endpoint (barcode_endpoint w base.html)
-    // Po udanym skanie odpala barcode:scanned - aktualizujemy liczniki
-    document.addEventListener('barcode:scanned', function(e) {
-        var data = e.detail || {};
-        if (data.scanned_qty !== undefined) {
-            updateStats(data);
-            showScanResult(data);
-        }
-    });
-})();
+        },
+    }));
+});
 </script>
 {% endblock %}

@@ -2,7 +2,7 @@
 
 {% block content %}
 <h2 class="mb-3 text-center">Dodaj nowy przedmiot</h2>
-    <form action="{{ url_for('products.add_item') }}" method="post" class="row row-cols-1 row-cols-md-2 g-3 w-100">
+    <form action="{{ url_for('products.add_item') }}" method="post" class="row row-cols-1 row-cols-md-2 g-3 w-100" x-data="{ selectedColor: 'Czerwony' }">
         {{ form.csrf_token }}
         
         <div class="col-md-4">
@@ -36,7 +36,7 @@
 
         <div class="col-md-6">
             <label for="color" class="form-label">Kolor:</label>
-            <select id="color" name="color" required class="form-select" onchange="toggleCustomColor()">
+            <select id="color" name="color" required class="form-select" x-model="selectedColor">
                 <option value="Czerwony">Czerwony</option>
                 <option value="Niebieski">Niebieski</option>
                 <option value="Zielony">Zielony</option>
@@ -60,9 +60,9 @@
             </select>
         </div>
 
-        <div class="col-md-6" id="custom-color-container" style="display: none;">
+        <div class="col-md-6" x-show="selectedColor === 'Inny'" x-cloak>
             <label for="custom_color" class="form-label">Niestandardowy kolor:</label>
-            <input type="text" id="custom_color" name="custom_color" class="form-control" placeholder="Wpisz kolor">
+            <input type="text" id="custom_color" name="custom_color" class="form-control" placeholder="Wpisz kolor" :required="selectedColor === 'Inny'">
         </div>
 
 
@@ -84,28 +84,6 @@
             <button type="submit" class="btn btn-primary">Dodaj przedmiot</button>
         </div>
     </form>
-
-<script>
-function toggleCustomColor() {
-    const colorSelect = document.getElementById('color');
-    const customColorContainer = document.getElementById('custom-color-container');
-    const customColorInput = document.getElementById('custom_color');
-    
-    if (colorSelect.value === 'Inny') {
-        customColorContainer.style.display = 'block';
-        customColorInput.required = true;
-    } else {
-        customColorContainer.style.display = 'none';
-        customColorInput.required = false;
-        customColorInput.value = '';
-    }
-}
-
-// Call on page load in case form is re-rendered with "Inny" selected
-document.addEventListener('DOMContentLoaded', function() {
-    toggleCustomColor();
-});
-</script>
 
 
 {% endblock %}

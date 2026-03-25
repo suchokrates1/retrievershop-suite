@@ -75,13 +75,22 @@
     {% endif %}
 
     <!-- Filtr -->
-    <div class="mb-3">
-        <select id="filter-status" class="form-select form-select-sm bg-dark text-white" style="width: auto; display: inline-block;">
+    <div class="mb-3" x-data="{ filter: 'all' }">
+        <select class="form-select form-select-sm bg-dark text-white" style="width: auto; display: inline-block;"
+                x-model="filter"
+                @change="document.querySelectorAll('#report-table tbody tr').forEach(row => {
+                    const s = row.dataset.status;
+                    if (filter === 'all') row.style.display = '';
+                    else if (filter === 'discrepancy') row.style.display = s !== 'ok' ? '' : 'none';
+                    else if (filter === 'missing') row.style.display = s === 'brak' ? '' : 'none';
+                    else if (filter === 'surplus') row.style.display = s === 'nadwyzka' ? '' : 'none';
+                    else if (filter === 'ok') row.style.display = s === 'ok' ? '' : 'none';
+                })">
             <option value="all">Wszystkie</option>
-            <option value="discrepancy">Tylko rozbieznosci</option>
+            <option value="discrepancy">Tylko rozbieżności</option>
             <option value="ok">Tylko zgodne</option>
             <option value="missing">Tylko braki</option>
-            <option value="surplus">Tylko nadwyzki</option>
+            <option value="surplus">Tylko nadwyżki</option>
         </select>
     </div>
 
@@ -128,25 +137,4 @@
 
 {% endblock %}
 
-{% block scripts %}
-<script>
-document.getElementById('filter-status').addEventListener('change', function() {
-    var filter = this.value;
-    var rows = document.querySelectorAll('#report-table tbody tr');
-    rows.forEach(function(row) {
-        var status = row.getAttribute('data-status');
-        if (filter === 'all') {
-            row.style.display = '';
-        } else if (filter === 'discrepancy') {
-            row.style.display = status !== 'ok' ? '' : 'none';
-        } else if (filter === 'missing') {
-            row.style.display = status === 'brak' ? '' : 'none';
-        } else if (filter === 'surplus') {
-            row.style.display = status === 'nadwyzka' ? '' : 'none';
-        } else if (filter === 'ok') {
-            row.style.display = status === 'ok' ? '' : 'none';
-        }
-    });
-});
-</script>
 {% endblock %}

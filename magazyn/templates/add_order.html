@@ -1,45 +1,45 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">Dodaj zamowienie reczne</h2>
+    <h2 class="mb-0">Dodaj zamówienie ręczne</h2>
     <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Powrot
+        <i class="bi bi-arrow-left"></i> Powrót
     </a>
 </div>
 
-<form method="post" action="{{ url_for('orders.add_order') }}">
+<form method="post" action="{{ url_for('orders.add_order') }}" x-data="addOrder()">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     {# Platforma i dane klienta #}
     <div class="card mb-3">
-        <div class="card-header"><strong>Dane zamowienia</strong></div>
+        <div class="card-header"><strong>Dane zamówienia</strong></div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-3">
                     <label for="platform" class="form-label">Platforma</label>
                     <select name="platform" id="platform" class="form-select" required>
                         <option value="olx">OLX</option>
-                        <option value="allegro_manual">Allegro (reczne)</option>
+                        <option value="allegro_manual">Allegro (ręczne)</option>
                         <option value="shop">Sklep</option>
                         <option value="inne">Inne</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label for="external_order_id" class="form-label">Nr zamowienia (zewn.)</label>
+                    <label for="external_order_id" class="form-label">Nr zamówienia (zewn.)</label>
                     <input type="text" name="external_order_id" id="external_order_id" class="form-control"
                            placeholder="np. numer OLX">
                 </div>
                 <div class="col-md-3">
-                    <label for="payment_method" class="form-label">Metoda platnosci</label>
+                    <label for="payment_method" class="form-label">Metoda płatności</label>
                     <select name="payment_method" id="payment_method" class="form-select">
                         <option value="przelew">Przelew</option>
                         <option value="za_pobraniem">Za pobraniem</option>
-                        <option value="gotowka">Gotowka</option>
+                        <option value="gotowka">Gotówka</option>
                         <option value="blik">BLIK</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label for="payment_done" class="form-label">Zaplacono (PLN)</label>
+                    <label for="payment_done" class="form-label">Zapłacono (PLN)</label>
                     <input type="number" step="0.01" min="0" name="payment_done" id="payment_done" class="form-control" value="0">
                 </div>
             </div>
@@ -52,7 +52,7 @@
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label for="customer_name" class="form-label">Imie i nazwisko</label>
+                    <label for="customer_name" class="form-label">Imię i nazwisko</label>
                     <input type="text" name="customer_name" id="customer_name" class="form-control" required>
                 </div>
                 <div class="col-md-4">
@@ -73,7 +73,7 @@
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label for="delivery_fullname" class="form-label">Imie i nazwisko odbiorcy</label>
+                    <label for="delivery_fullname" class="form-label">Imię i nazwisko odbiorcy</label>
                     <input type="text" name="delivery_fullname" id="delivery_fullname" class="form-control">
                 </div>
                 <div class="col-md-6">
@@ -95,12 +95,12 @@
                 </div>
                 <div class="col-md-4">
                     <label for="delivery_method" class="form-label">Metoda dostawy</label>
-                    <select name="delivery_method" id="delivery_method" class="form-select">
+                    <select name="delivery_method" id="delivery_method" class="form-select" x-model="deliveryMethod">
                         <option value="Kurier InPost">Kurier InPost</option>
                         <option value="InPost Paczkomat">InPost Paczkomat</option>
                         <option value="Kurier DPD">Kurier DPD</option>
                         <option value="Poczta Polska">Poczta Polska</option>
-                        <option value="Odbior osobisty">Odbior osobisty</option>
+                        <option value="Odbiór osobisty">Odbiór osobisty</option>
                         <option value="Inna">Inna</option>
                     </select>
                 </div>
@@ -109,7 +109,7 @@
                     <input type="number" step="0.01" min="0" name="delivery_price" id="delivery_price" class="form-control" value="0">
                 </div>
                 <div class="col-md-4">
-                    <label for="delivery_package_nr" class="form-label">Nr paczki / sledzenia</label>
+                    <label for="delivery_package_nr" class="form-label">Nr paczki / śledzenia</label>
                     <input type="text" name="delivery_package_nr" id="delivery_package_nr" class="form-control"
                            placeholder="np. numer InPost">
                 </div>
@@ -118,7 +118,7 @@
     </div>
 
     {# Punkt odbioru #}
-    <div class="card mb-3" id="pickup-point-card" style="display:none;">
+    <div class="card mb-3" x-show="deliveryMethod === 'InPost Paczkomat'" x-cloak>
         <div class="card-header"><strong>Punkt odbioru (paczkomat)</strong></div>
         <div class="card-body">
             <div class="row g-3">
@@ -146,21 +146,21 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label for="commission_type" class="form-label">Typ prowizji</label>
-                    <select name="commission_type" id="commission_type" class="form-select">
+                    <select name="commission_type" id="commission_type" class="form-select" x-model="commissionType">
                         <option value="percent">Procent (%)</option>
                         <option value="amount">Kwota (PLN)</option>
                     </select>
                 </div>
                 <div class="col-md-4">
                     <label for="commission_value" class="form-label">
-                        <span id="commission_label">Prowizja (%)</span>
+                        <span x-text="commissionType === 'percent' ? 'Prowizja (%)' : 'Prowizja (PLN)'"></span>
                     </label>
                     <input type="number" step="0.01" min="0" name="commission_value" id="commission_value"
                            class="form-control" value="10.0">
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
-                    <small class="text-muted" id="commission_hint">
-                        Domyslnie 10% (Allegro). Dla OLX zwykle ~5-8%.
+                    <small class="text-muted">
+                        Domyślnie 10% (Allegro). Dla OLX zwykle ~5-8%.
                     </small>
                 </div>
             </div>
@@ -171,49 +171,67 @@
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Produkty</strong>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addProductRow()">
+            <button type="button" class="btn btn-sm btn-outline-primary" @click="addProduct()">
                 <i class="bi bi-plus-lg"></i> Dodaj kolejny produkt
             </button>
         </div>
         <div class="card-body">
-            <div id="products-container">
+            <template x-for="(product, index) in products" :key="index">
                 <div class="product-row mb-3 p-2 border rounded">
                     <div class="row g-2 align-items-end">
                         <div class="col-md-5">
                             <label class="form-label">Szukaj produktu</label>
-                            <input type="text" class="form-control form-control-sm product-search"
-                                   placeholder="Wpisz nazwe, EAN lub kolor..." autocomplete="off">
-                            <div class="product-suggestions list-group position-absolute w-100" style="z-index:1000; display:none;"></div>
+                            <div class="position-relative">
+                                <input type="text" class="form-control form-control-sm"
+                                       placeholder="Wpisz nazwę, EAN lub kolor..." autocomplete="off"
+                                       x-model="product.searchQuery"
+                                       @input.debounce.300ms="searchProduct(index)"
+                                       @click.outside="product.showSuggestions = false">
+                                <div class="list-group position-absolute w-100" style="z-index:1000;"
+                                     x-show="product.showSuggestions && product.suggestions.length > 0" x-cloak>
+                                    <template x-for="(item, si) in product.suggestions" :key="si">
+                                        <a href="#" class="list-group-item list-group-item-action py-1 px-2 small"
+                                           x-text="item.label"
+                                           @click.prevent="selectProduct(index, item)"></a>
+                                    </template>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-7">
                             <div class="row g-2 align-items-end">
                                 <div class="col">
                                     <label class="form-label">Nazwa produktu</label>
-                                    <input type="text" name="prod_name[]" class="form-control form-control-sm prod-name" required>
+                                    <input type="text" name="prod_name[]" class="form-control form-control-sm"
+                                           x-model="product.name" required>
                                 </div>
                                 <div class="col-auto" style="width:120px">
                                     <label class="form-label">EAN</label>
-                                    <input type="text" name="prod_ean[]" class="form-control form-control-sm prod-ean">
+                                    <input type="text" name="prod_ean[]" class="form-control form-control-sm"
+                                           x-model="product.ean">
                                 </div>
                                 <div class="col-auto" style="width:70px">
-                                    <label class="form-label">Ilosc</label>
-                                    <input type="number" name="prod_qty[]" class="form-control form-control-sm" min="1" value="1" required>
+                                    <label class="form-label">Ilość</label>
+                                    <input type="number" name="prod_qty[]" class="form-control form-control-sm"
+                                           min="1" x-model="product.qty" required>
                                 </div>
                                 <div class="col-auto" style="width:110px">
-                                    <label class="form-label">Cena sprzedazy</label>
-                                    <input type="number" step="0.01" min="0" name="prod_price[]" class="form-control form-control-sm" required>
+                                    <label class="form-label">Cena sprzedaży</label>
+                                    <input type="number" step="0.01" min="0" name="prod_price[]"
+                                           class="form-control form-control-sm" x-model="product.price" required>
                                 </div>
                                 <div class="col-auto">
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeProductRow(this)" title="Usun">
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            @click="removeProduct(index)" title="Usuń"
+                                            x-show="products.length > 1">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="product-info text-muted small mt-1" style="display:none;"></div>
+                    <div class="text-muted small mt-1" x-show="product.info" x-text="product.info"></div>
                 </div>
-            </div>
+            </template>
         </div>
     </div>
 
@@ -222,14 +240,14 @@
         <div class="card-header">
             <div class="form-check">
                 <input type="checkbox" name="want_invoice" id="want_invoice" class="form-check-input" value="1"
-                       onchange="document.getElementById('invoice-fields').style.display = this.checked ? '' : 'none';">
+                       x-model="wantInvoice">
                 <label class="form-check-label" for="want_invoice"><strong>Faktura VAT</strong></label>
             </div>
         </div>
-        <div class="card-body" id="invoice-fields" style="display:none;">
+        <div class="card-body" x-show="wantInvoice" x-cloak>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label for="invoice_fullname" class="form-label">Nazwa / Imie i nazwisko</label>
+                    <label for="invoice_fullname" class="form-label">Nazwa / Imię i nazwisko</label>
                     <input type="text" name="invoice_fullname" id="invoice_fullname" class="form-control">
                 </div>
                 <div class="col-md-6">
@@ -266,7 +284,7 @@
                     <textarea name="user_comments" id="user_comments" class="form-control" rows="2"></textarea>
                 </div>
                 <div class="col-md-6">
-                    <label for="admin_comments" class="form-label">Notatka wewnetrzna</label>
+                    <label for="admin_comments" class="form-label">Notatka wewnętrzna</label>
                     <textarea name="admin_comments" id="admin_comments" class="form-control" rows="2"></textarea>
                 </div>
             </div>
@@ -275,106 +293,63 @@
 
     <div class="text-end mb-4">
         <button type="submit" class="btn btn-primary btn-lg">
-            <i class="bi bi-check-lg"></i> Zapisz zamowienie
+            <i class="bi bi-check-lg"></i> Zapisz zamówienie
         </button>
     </div>
 </form>
 
 <script>
-document.getElementById('delivery_method').addEventListener('change', function() {
-    document.getElementById('pickup-point-card').style.display =
-        this.value === 'InPost Paczkomat' ? '' : 'none';
-});
+document.addEventListener('alpine:init', () => {
+    Alpine.data('addOrder', () => ({
+        deliveryMethod: 'Kurier InPost',
+        commissionType: 'percent',
+        wantInvoice: false,
+        products: [{ name: '', ean: '', qty: 1, price: '', searchQuery: '', suggestions: [], showSuggestions: false, info: '' }],
 
-document.getElementById('commission_type').addEventListener('change', function() {
-    var label = document.getElementById('commission_label');
-    if (this.value === 'percent') {
-        label.textContent = 'Prowizja (%)';
-    } else {
-        label.textContent = 'Prowizja (PLN)';
-    }
-});
+        addProduct() {
+            this.products.push({ name: '', ean: '', qty: 1, price: '', searchQuery: '', suggestions: [], showSuggestions: false, info: '' });
+        },
 
-// Wyszukiwanie produktow
-var searchTimeout = null;
+        removeProduct(index) {
+            if (this.products.length > 1) {
+                this.products.splice(index, 1);
+            }
+        },
 
-document.addEventListener('input', function(e) {
-    if (!e.target.classList.contains('product-search')) return;
-    var input = e.target;
-    var sugBox = input.parentElement.querySelector('.product-suggestions');
-    var query = input.value.trim();
-
-    clearTimeout(searchTimeout);
-    if (query.length < 2) {
-        sugBox.style.display = 'none';
-        return;
-    }
-
-    searchTimeout = setTimeout(function() {
-        fetch('/orders/api/products/search?q=' + encodeURIComponent(query), {
-            headers: {'X-Requested-With': 'XMLHttpRequest'}
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            sugBox.innerHTML = '';
-            if (!data.length) {
-                sugBox.style.display = 'none';
+        async searchProduct(index) {
+            const product = this.products[index];
+            const query = product.searchQuery.trim();
+            if (query.length < 2) {
+                product.suggestions = [];
+                product.showSuggestions = false;
                 return;
             }
-            data.forEach(function(item) {
-                var a = document.createElement('a');
-                a.href = '#';
-                a.className = 'list-group-item list-group-item-action py-1 px-2 small';
-                a.textContent = item.label;
-                a.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    var row = input.closest('.product-row');
-                    row.querySelector('.prod-name').value = item.name;
-                    row.querySelector('.prod-ean').value = item.ean || '';
-                    var info = row.querySelector('.product-info');
-                    if (item.stock !== undefined) {
-                        info.textContent = 'Stan: ' + item.stock + ' szt. | Rozmiar: ' + (item.size || '-');
-                        info.style.display = '';
-                    }
-                    input.value = '';
-                    sugBox.style.display = 'none';
+
+            try {
+                const response = await fetch('/orders/api/products/search?q=' + encodeURIComponent(query), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                sugBox.appendChild(a);
-            });
-            sugBox.style.display = '';
-        });
-    }, 300);
+                const data = await response.json();
+                product.suggestions = data;
+                product.showSuggestions = data.length > 0;
+            } catch (e) {
+                product.suggestions = [];
+                product.showSuggestions = false;
+            }
+        },
+
+        selectProduct(index, item) {
+            const product = this.products[index];
+            product.name = item.name;
+            product.ean = item.ean || '';
+            product.searchQuery = '';
+            product.suggestions = [];
+            product.showSuggestions = false;
+            if (item.stock !== undefined) {
+                product.info = 'Stan: ' + item.stock + ' szt. | Rozmiar: ' + (item.size || '-');
+            }
+        }
+    }));
 });
-
-// Ukryj sugestie po kliknieciu poza
-document.addEventListener('click', function(e) {
-    if (!e.target.classList.contains('product-search')) {
-        document.querySelectorAll('.product-suggestions').forEach(function(s) {
-            s.style.display = 'none';
-        });
-    }
-});
-
-function addProductRow() {
-    var container = document.getElementById('products-container');
-    var first = container.querySelector('.product-row');
-    var row = first.cloneNode(true);
-    row.querySelectorAll('input').forEach(function(inp) {
-        if (inp.type === 'number' && inp.name === 'prod_qty[]') inp.value = '1';
-        else inp.value = '';
-    });
-    var info = row.querySelector('.product-info');
-    if (info) { info.textContent = ''; info.style.display = 'none'; }
-    var sugBox = row.querySelector('.product-suggestions');
-    if (sugBox) { sugBox.innerHTML = ''; sugBox.style.display = 'none'; }
-    container.appendChild(row);
-}
-
-function removeProductRow(btn) {
-    var container = document.getElementById('products-container');
-    if (container.querySelectorAll('.product-row').length > 1) {
-        btn.closest('.product-row').remove();
-    }
-}
 </script>
 {% endblock %}

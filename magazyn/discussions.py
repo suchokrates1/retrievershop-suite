@@ -182,6 +182,7 @@ def discussions_list():
                 for thread in db_threads:
                     last_msg = thread.messages[-1] if thread.messages else None
                     last_at = last_msg.created_at if last_msg else thread.last_message_at
+                    last_iso = last_at.isoformat() if last_at else None
                     threads.append(
                         {
                             "id": thread.id,
@@ -189,8 +190,8 @@ def discussions_list():
                             "author": thread.author,
                             "type": thread.type,
                             "read": thread.read,
-                            "last_message_at": last_at,
-                            "last_message_iso": last_at.isoformat() if last_at else None,
+                            "last_message_at": last_iso,
+                            "last_message_iso": last_iso,
                             "last_message_preview": (last_msg.content if last_msg else ""),
                             "last_message_author": last_msg.author if last_msg else thread.author,
                             "source": "local",

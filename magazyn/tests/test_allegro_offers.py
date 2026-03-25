@@ -45,12 +45,12 @@ def test_offers_page_shows_manual_mapping_dropdown(client, login):
     assert body.count("<table") == 2
     assert "Oferty wymagające przypięcia" in body
     assert "Oferty powiązane z magazynem" in body
-    assert "data-search-input" in body
+    assert "data-search-input" in body or "x-ref=\"searchInput\"" in body
     assert "Brak powiązania" in body
     assert "Szelki spacerowe" in body
     assert "EAN: 1234567890123" in body
     assert 'name="product_id"' in body
-    assert 'data-kind="product"' in body
+    assert "selectOption(" in body
 
 
 def test_link_offer_to_product_size_updates_relation(client, login):
@@ -229,8 +229,8 @@ def test_price_check_does_not_require_allegro_authorization(
         "Brak połączenia z Allegro. Kliknij „Połącz z Allegro” w ustawieniach, aby ponownie autoryzować aplikację."
         not in body
     )
-    assert 'id="price-check-loading"' in body
-    assert 'id="price-check-table-body"' in body
+    assert 'x-data="priceMonitor()"' in body
+    assert "Alpine.data(" in body
 
     json_response = client.get("/allegro/price-check?format=json")
     assert json_response.status_code == 200
@@ -344,9 +344,8 @@ def test_price_check_table_and_lowest_flag(client, login, monkeypatch, allegro_t
 
     body = response.data.decode("utf-8")
     assert "Monitor cen Allegro" in body
-    assert 'id="price-check-loading"' in body
-    assert 'id="price-check-table-body"' in body
-    assert 'price_check.js' in body
+    assert 'x-data="priceMonitor()"' in body
+    assert "Alpine.data(" in body
 
     json_response = client.get("/allegro/price-check?format=json")
     assert json_response.status_code == 200
