@@ -74,13 +74,19 @@ def _send_html_email(
         )
 
     try:
-        with smtplib.SMTP(smtp_server, smtp_port) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.ehlo()
-            if smtp_user:
-                smtp.login(smtp_user, smtp_pass)
-            smtp.send_message(msg)
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_server, smtp_port) as smtp:
+                if smtp_user:
+                    smtp.login(smtp_user, smtp_pass)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_server, smtp_port) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                if smtp_user:
+                    smtp.login(smtp_user, smtp_pass)
+                smtp.send_message(msg)
         logger.info("Email wyslany do %s: %s", to_email, subject)
         return True
     except Exception as exc:
