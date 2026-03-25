@@ -50,7 +50,7 @@ def get_customer_return(access_token: str, return_id: str) -> Tuple[Optional[Dic
     url = f"{API_BASE_URL}/order/customer-returns/{return_id}"
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Accept": "application/vnd.allegro.public.v1+json",
+        "Accept": "application/vnd.allegro.beta.v1+json",
     }
     
     try:
@@ -157,8 +157,8 @@ def initiate_refund(
     url = f"{API_BASE_URL}/order/customer-returns/{return_id}/refund"
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Accept": "application/vnd.allegro.public.v1+json",
-        "Content-Type": "application/vnd.allegro.public.v1+json",
+        "Accept": "application/vnd.allegro.beta.v1+json",
+        "Content-Type": "application/vnd.allegro.beta.v1+json",
     }
     
     # Payload - wg dokumentacji Allegro
