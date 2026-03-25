@@ -505,9 +505,9 @@ def recheck_item(item_id):
                 item.total_offers = len(result.competitors) + 1 if result.competitors else 1
                 item.competitors_all_count = getattr(result, 'competitors_all_count', None)
                 
-                # Uzywaj ceny z dialogu dla spojnosci z pozycja
-                if result.my_price:
-                    item.our_price = Decimal(str(result.my_price))
+                # Uzywaj ceny z API (nie z dialogu - dialog moze zawierac inna nasza oferte)
+                if price_updated and current_our_price:
+                    item.our_price = Decimal(str(current_our_price))
                 
                 if item.our_price:
                     item.is_cheapest = item.our_price <= item.competitor_price

@@ -217,9 +217,9 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
     return {
         "offer_id": offer["offer_id"],
         "title": offer["title"],
-        # Uzywaj ceny z dialogu (result.my_price) zamiast ceny z bazy (offer["price"])
-        # Zapewnia spojnosc miedzy pozycja (liczona z dialogu) a is_cheapest
-        "our_price": result.my_price if result.my_price else offer["price"],
+        # Uzywaj ceny z API/bazy (offer["price"]), nie z dialogu
+        # Dialog moze zawierac inna nasza oferte z inna cena
+        "our_price": offer["price"],
         "product_size_id": offer["product_size_id"],
         "success": result.success,
         "error": result.error,
