@@ -3,12 +3,13 @@ Modul oblugi zwrotow pieniedzy przez Allegro API.
 
 Umozliwia:
 - Pobieranie szczegolowych danych zwrotu
-- Inicjowanie zwrotu pieniedzy dla zwrotu w statusie PARCEL_DELIVERED
+- Inicjowanie zwrotu pieniedzy przez POST /payments/refunds
 - Walidacje i potwierdzenie operacji zwrotu
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+import uuid
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -126,119 +127,148 @@ def validate_return_for_refund(return_data: Dict[str, Any]) -> Tuple[bool, str]:
     return True, f"Zwrot gotowy do realizacji: {amount:.2f} {currency}"
 
 
+def get_checkout_form(access_token: str, order_external_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Pobierz dane checkout-form (platnosc, line items) z Allegro API.
+    """
+    url = f"{API_BASE_URL}/order/checkout-forms/{order_external_id}"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    try:
+        response = _request_with_retry(
+            requests.get, url, endpoint="checkout-forms",
+            headers=headers, timeout=DEFAULT_TIMEOUT
+        )
+        if response.status_code == 200:
+            return response.json(), None
+        return None, f"Blad pobierania checkout-form ({response.status_code}): {response.text[:200]}"
+    except requests.RequestException as e:
+        return None, f"Blad polaczenia: {e}"
+
+
 def initiate_refund(
-    access_token: str, 
+    access_token: str,
     return_id: str,
+    order_external_id: str,
+    line_items: Optional[List[Dict[str, Any]]] = None,
     delivery_cost_covered: bool = True,
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
 ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """
-    Inicjuj zwrot pieniedzy dla zwrotu klienta.
-    
-    Allegro API endpoint: POST /order/customer-returns/{returnId}/refund
-    
-    UWAGA: Ta operacja jest NIEODWRACALNA! Upewnij sie ze:
-    1. Paczka zwrotna zostala odebrana i sprawdzona
-    2. Produkty sa w stanie pozwalajacym na zwrot
-    3. Uzytkownik potwierdzi operacje
-    
+    Inicjuj zwrot pieniedzy przez POST /payments/refunds.
+
     Args:
         access_token: Token dostepu Allegro
-        return_id: ID zwrotu w Allegro
-        delivery_cost_covered: Czy zwrocic rowniez koszt dostawy (domyslnie True)
-        reason: Opcjonalny komentarz do zwrotu
-    
+        return_id: ID zwrotu w Allegro (customerReturnId) - do walidacji statusu
+        order_external_id: external_order_id zamowienia (UUID z checkout-forms)
+        line_items: Lista pozycji do zwrotu [{id, type, quantity}].
+                    Jesli None, pobiera z checkout-forms i zwraca wszystkie.
+        delivery_cost_covered: Czy zwrocic koszt dostawy
+        reason: Opcjonalny powod
+
     Returns:
         Tuple (sukces, komunikat, dane_odpowiedzi)
     """
     if not access_token:
         return False, "Brak tokenu dostepu Allegro", None
-    
+
     if not return_id:
         return False, "Brak ID zwrotu Allegro", None
-    
-    # Najpierw pobierz dane zwrotu i zwaliduj
+
+    if not order_external_id:
+        return False, "Brak external_order_id zamowienia", None
+
+    # Waliduj status zwrotu
     return_data, error = get_customer_return(access_token, return_id)
     if error:
         return False, error, None
-    
+
     can_refund, validation_msg = validate_return_for_refund(return_data)
     if not can_refund:
         return False, validation_msg, None
-    
-    # Przygotuj payload dla refundu
-    url = f"{API_BASE_URL}/order/customer-returns/{return_id}/refund"
+
+    # Pobierz dane platnosci z checkout-forms
+    checkout_data, cf_error = get_checkout_form(access_token, order_external_id)
+    if cf_error:
+        return False, f"Blad pobierania danych platnosci: {cf_error}", None
+
+    payment = checkout_data.get("payment", {})
+    payment_id = payment.get("id")
+    if not payment_id:
+        return False, "Brak payment.id w danych zamowienia", None
+
+    # Jesli brak line_items - zwroc wszystkie pozycje z checkout-forms
+    if not line_items:
+        cf_items = checkout_data.get("lineItems", [])
+        if not cf_items:
+            return False, "Brak pozycji w zamowieniu", None
+        line_items = [
+            {"id": item["id"], "type": "QUANTITY", "quantity": item.get("quantity", 1)}
+            for item in cf_items
+        ]
+
+    command_id = str(uuid.uuid4())
+    payload = {
+        "payment": {"id": payment_id},
+        "order": {"id": order_external_id},
+        "commandId": command_id,
+        "reason": reason or "REFUND",
+        "lineItems": line_items,
+    }
+
+    url = f"{API_BASE_URL}/payments/refunds"
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Accept": "application/vnd.allegro.beta.v1+json",
-        "Content-Type": "application/vnd.allegro.beta.v1+json",
+        "Accept": "application/vnd.allegro.public.v1+json",
+        "Content-Type": "application/vnd.allegro.public.v1+json",
     }
-    
-    # Payload - wg dokumentacji Allegro
-    payload = {
-        "deliveryCostCovered": delivery_cost_covered,
-    }
-    
-    if reason:
-        payload["sellerComment"] = reason[:500]  # Max 500 znakow
-    
+
     try:
-        logger.info(f"Inicjuje zwrot pieniedzy dla return_id={return_id}")
-        response = _request_with_retry(
-            requests.post,
-            url,
-            endpoint="customer-returns-refund",
-            headers=headers,
-            json=payload,
-            timeout=DEFAULT_TIMEOUT
+        logger.info(
+            "Inicjuje zwrot pieniedzy: return_id=%s, order=%s, payment=%s, command=%s",
+            return_id, order_external_id, payment_id, command_id,
         )
-        
-        if response.status_code in (200, 201, 204):
-            # Pobierz zaktualizowane dane zwrotu
-            updated_data, _ = get_customer_return(access_token, return_id)
-            
-            refund_info = return_data.get("refund", {})
-            total_value = refund_info.get("totalValue", {})
-            amount = total_value.get("amount", "?")
-            currency = total_value.get("currency", "PLN")
-            
-            logger.info(f"Zwrot pieniedzy zainicjowany pomyslnie: {return_id}, kwota: {amount} {currency}")
-            return True, f"Zwrot pieniedzy zainicjowany pomyslnie! Kwota: {amount} {currency}", updated_data
-        
-        elif response.status_code == 400:
-            error_data = response.json() if response.content else {}
-            errors = error_data.get("errors", [])
-            if errors:
-                error_msg = "; ".join([e.get("message", str(e)) for e in errors])
-            else:
-                error_msg = error_data.get("message", "Nieprawidlowe zadanie")
-            return False, f"Blad walidacji Allegro: {error_msg}", None
-        
+        response = _request_with_retry(
+            requests.post, url, endpoint="payments-refunds",
+            headers=headers, json=payload, timeout=DEFAULT_TIMEOUT,
+        )
+
+        if response.status_code in (200, 201):
+            resp_data = response.json()
+            total = resp_data.get("totalValue", {})
+            amount = total.get("amount", "?")
+            currency = total.get("currency", "PLN")
+            logger.info(
+                "Zwrot pieniedzy zainicjowany: return_id=%s, kwota=%s %s, refund_id=%s",
+                return_id, amount, currency, resp_data.get("id"),
+            )
+            return True, f"Zwrot pieniedzy zainicjowany! Kwota: {amount} {currency}", resp_data
+
+        # Obslog bledow
+        error_data = {}
+        try:
+            error_data = response.json()
+        except Exception:
+            pass
+
+        errors = error_data.get("errors", [])
+        error_msg = "; ".join(e.get("message", str(e)) for e in errors) if errors else error_data.get("message", response.text[:300])
+
+        if response.status_code == 422:
+            return False, f"Blad walidacji: {error_msg}", None
         elif response.status_code == 401:
             return False, "Brak autoryzacji - sprawdz token Allegro", None
-        
         elif response.status_code == 403:
-            return False, "Brak uprawnien do wykonania zwrotu dla tego zamowienia", None
-        
-        elif response.status_code == 404:
-            return False, f"Zwrot o ID {return_id} nie istnieje w Allegro", None
-        
-        elif response.status_code == 409:
-            error_data = response.json() if response.content else {}
-            return False, f"Konflikt - zwrot mogl zostac juz przetworzony: {error_data.get('message', '')}", None
-        
+            return False, "Brak uprawnien do wykonania zwrotu", None
         else:
-            error_data = response.json() if response.content else {}
-            error_msg = error_data.get("message", response.text)
-            logger.error(f"Nieoczekiwany blad Allegro API ({response.status_code}): {error_msg}")
+            logger.error("Blad Allegro API (%s): %s", response.status_code, error_msg)
             return False, f"Blad Allegro API ({response.status_code}): {error_msg}", None
-            
+
     except requests.RequestException as e:
-        logger.error(f"Blad HTTP przy inicjowaniu zwrotu {return_id}: {e}")
-        return False, f"Blad polaczenia z Allegro: {str(e)}", None
-    except Exception as e:
-        logger.error(f"Nieoczekiwany blad przy inicjowaniu zwrotu {return_id}: {e}")
-        return False, f"Nieoczekiwany blad: {str(e)}", None
+        logger.error("Blad HTTP przy inicjowaniu zwrotu %s: %s", return_id, e)
+        return False, f"Blad polaczenia z Allegro: {e}", None
 
 
 def get_refund_status(access_token: str, return_id: str) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[str]]:
