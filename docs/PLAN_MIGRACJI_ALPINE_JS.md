@@ -406,3 +406,230 @@ Ponizej lista plikow z brakujacymi diakrytykami:
 | Faza 3 (Sredni priorytet) | 7-8 | Srednia |
 | Faza 4 (Niski priorytet) | 7-8 | Niska |
 | **Lacznie** | **~20 szablonow** | - |
+
+---
+
+## Faza 5 — Przepisanie home.html na Alpine.js
+
+**Status**: DO ZROBIENIA
+**Plik**: `magazyn/templates/home.html` (821 linii, ~300 linii inline JS)
+**Priorytet**: WYSOKI — ostatni duzy szablon z vanilla JS
+
+### Przyczyna
+
+Dashboard (`home.html`) ma 5 sekcji ladowanych asynchronicznie z `/api/dashboard/heavy`.
+Kazda sekcja renderowana jest osobna funkcja vanilla JS ktora:
+1. Pobiera dane z API (`fetch`)
+2. Buduje HTML recznie (template literals + `innerHTML`)
+3. Wstawia renderowany HTML do elementow przez `document.getElementById`
+
+To jedyny szablon z ponad 9 vanilla JS selektorami (prog testu: max 10).
+
+### Obecna architektura (vanilla JS)
+
+```
+DOMContentLoaded
+  |
+  +-- fetch('/api/dashboard/heavy')
+        |
+        +-- renderProfit(data.profit)       -> getElementById('profit-section')
+        +-- renderPromotions(data.promotions) -> getElementById('promotions-section')
+        +-- renderTrends(data.trends)       -> getElementById('trends-section')
+        +-- renderBestsellers(data.bestsellers) -> getElementById('bestsellers-section')
+        +-- renderSlowMoving(data.slow_moving) -> getElementById('slow-moving-section')
+        +-- renderReturns (wewnatrz renderProfit) -> getElementById('returns-section')
+```
+
+### Docelowa architektura (Alpine.js)
+
+Jeden komponent `dashboard()` zarejestrowany w `Alpine.data()`:
+
+```html
+<div x-data="dashboard()" x-init="loadHeavyData()">
+    <!-- profit, promotions, trends, bestsellers, slow_moving jako properties reaktywne -->
+</div>
+```
+
+### Plan krok po kroku
+
+#### 5.1 Utworz komponent `dashboard()`
+
+```javascript
+Alpine.data('dashboard', () => ({
+    loading: true,
+    error: null,
+    profit: null,
+    promotions: null,
+    trends: null,
+    bestsellers: null,
+    slowMoving: [],
+    returns: [],
+    ordersWeek: 0,   // z Jinja
+    revenueWeek: 0,  // z Jinja
+
+    async loadHeavyData() {
+        try {
+            const r = await fetch('/api/dashboard/heavy');
+            const data = await r.json();
+            this.profit = data.profit;
+            this.promotions = data.promotions;
+            this.trends = data.trends;
+            this.bestsellers = data.bestsellers;
+            this.slowMoving = data.slow_moving || [];
+            this.returns = data.profit?.returns_list || [];
+            this.loading = false;
+        } catch (err) {
+            this.error = 'Blad ladowania danych: ' + err.message;
+            this.loading = false;
+        }
+    },
+
+    // Gettery/helpery
+    profitColor() { return this.profit?.month > 0 ? 'text-success' : 'text-danger'; },
+    ordersChangeClass() { return this.trends?.orders_change >= 0 ? 'text-success' : 'text-danger'; },
+    revenueChangeClass() { return this.trends?.revenue_change >= 0 ? 'text-success' : 'text-danger'; },
+    rotationBadge(item) { /* klasa CSS wg rotacji */ },
+}))
+```
+
+#### 5.2 Sekcja zysku (profit-section)
+
+**Przed (vanilla):**
+```javascript
+document.getElementById('profit-section').querySelector('.border-end').innerHTML = ...
+```
+
+**Po (Alpine):**
+```html
+<div class="col-3" id="profit-section">
+    <div class="border-end">
+        <template x-if="loading">
+            <h3 class="text-muted mb-1"><span class="spinner-border spinner-border-sm"></span></h3>
+        </template>
+        <template x-if="!loading && profit">
+            <div>
+                <h3 :class="profitColor() + ' mb-1'" x-text="Math.round(profit.month) + ' zl'"></h3>
+                <small class="text-muted">Realny zysk <i class="bi bi-info-circle"></i></small>
+            </div>
+        </template>
+    </div>
+</div>
+```
+
+#### 5.3 Sekcja promocji (promotions-section)
+
+**Przed:** ~60 linii budowania HTML w `renderPromotions()`
+**Po:** `x-for` iterujacy po `promotions.active_promotions`:
+
+```html
+<template x-if="promotions">
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light"><tr><th>Oferta</th><th>Typ</th><th>Koszt</th><th>Przedl.</th></tr></thead>
+            <tbody>
+                <template x-for="p in promotions.active_promotions" :key="p.offer_id">
+                    <tr :class="p.days_to_renewal <= 1 ? 'table-warning' : ''">
+                        <td x-text="p.offer_name" class="text-truncate" style="max-width: 120px;"></td>
+                        <td class="text-center"><span class="badge bg-primary" x-text="p.package_name"></span></td>
+                        <td class="text-end" x-text="p.estimated_cost.toFixed(2) + ' zl'"></td>
+                        <td class="text-end" x-text="renewalText(p)"></td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+</template>
+```
+
+#### 5.4 Sekcja trendow (trends-section)
+
+**Przed:** `renderTrends()` — budowanie inner HTML z arrow ikonami
+**Po:** Reaktywne bindowania:
+
+```html
+<template x-if="trends">
+    <div class="row text-center">
+        <div class="col-md-6">
+            <h5 class="mb-1">Zamowienia</h5>
+            <h3 class="mb-0">
+                <span x-text="ordersWeek"></span>
+                <small :class="ordersChangeClass()">
+                    <i class="bi" :class="trends.orders_change >= 0 ? 'bi-arrow-up' : 'bi-arrow-down'"></i>
+                    <span x-text="trends.orders_change + '%'"></span>
+                </small>
+            </h3>
+        </div>
+        <!-- analogicznie revenue -->
+    </div>
+</template>
+```
+
+#### 5.5 Sekcja bestsellerow (bestsellers-section)
+
+**Przed:** `renderBestsellers()` + `renderBestsellerTable()` — ~40 linii
+**Po:** 3 karty z `x-for`:
+
+```html
+<template x-for="(item, i) in bestsellers?.week || []" :key="item.name">
+    <tr>
+        <td><span class="badge" :class="i < 3 ? ['bg-warning text-dark','bg-secondary','bg-dark'][i] : ''" x-text="i+1"></span></td>
+        <td class="small"><a :href="'/products/' + item.product_id" x-text="item.short_name"></a></td>
+        <td class="text-center"><span class="badge bg-danger" x-text="item.quantity"></span></td>
+    </tr>
+</template>
+```
+
+#### 5.6 Sekcja wolnoobrotowych (slow-moving-section)
+
+**Przed:** `renderSlowMoving()` — budowanie calej karty jako innerHTML
+**Po:** Karta z `x-show` i `x-for`:
+
+```html
+<div x-show="slowMoving.length > 0" x-cloak>
+    <template x-for="item in slowMoving" :key="item.name + item.size">
+        <tr>
+            <td x-text="item.name.substring(0, 40)"></td>
+            <td class="text-center"><span class="badge bg-info" x-text="item.stock"></span></td>
+            <td class="text-center" x-html="rotationBadge(item)"></td>
+        </tr>
+    </template>
+</div>
+```
+
+#### 5.7 Sekcja zwrotow miesiaca (returns-section)
+
+**Przed:** Wewnatrz `renderProfit()` — budowanie tabeli zwrotow
+**Po:** Osobna sekcja z `x-for`:
+
+```html
+<template x-if="returns.length > 0">
+    <template x-for="r in returns" :key="r.order_id">
+        <tr>
+            <td class="small" x-text="r.order_id || ''"></td>
+            <td class="small" x-text="r.customer_name || ''"></td>
+            <td class="small" x-text="r.items.map(i => i.name + ' (' + i.quantity + ' szt.)').join(', ')"></td>
+        </tr>
+    </template>
+</template>
+```
+
+### Szacunkowy bilans
+
+| Metryka | Przed | Po |
+|---------|-------|----|
+| Linie JS (vanilla) | ~300 | 0 |
+| Linie JS (Alpine.data) | 0 | ~50 |
+| innerHTML assignments | 9 | 0 |
+| getElementById calls | 9 | 0 |
+| querySelector calls | ~15 | 0 |
+| Reaktywne x-text/x-for | 0 | ~40 |
+
+### Testy
+
+Po migracji test `test_no_orphan_vanilla_js_handlers[/]` powinien przechodzic z progiem `max_allowed = 3`
+zamiast obecnych `10`.
+
+### Zaleznosci
+
+- Tooltip Bootstrap wymaga `x-init` z `$nextTick` do reinicjalizacji po zaladowaniu danych
+- Barcode scanner init (GlobalBarcodeDetector) pozostaje jako osobny blok `<script>`

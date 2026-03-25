@@ -135,6 +135,56 @@ def test_alpine_components_registered(client, login, route):
 # ---- Brak inline JS ktory powinien byc Alpine ----
 
 
+# ---- Alpine main x-data scope ----
+
+
+def test_main_has_xdata_scope(client, login):
+    """Element <main> musi miec x-data aby dyrektywy Alpine w content dzialaly."""
+    resp = client.get("/")
+    html = resp.get_data(as_text=True)
+    assert re.search(r"<main\b[^>]*\bx-data\b", html), (
+        "<main> nie ma x-data - dyrektywy Alpine w bloku content nie beda dzialac"
+    )
+
+
+# ---- Dyrektywy Alpine wewnatrz x-data scope ----
+
+
+_ALPINE_DIRECTIVE_RE = re.compile(
+    r"<(\w+)\b[^>]*(?:@click|@change|@keydown|@submit|@input|x-model|x-show|x-text)\b"
+)
+_XDATA_RE = re.compile(r"\bx-data\b")
+
+
+@pytest.mark.parametrize("route", READONLY_ROUTES)
+def test_alpine_directives_have_scope(client, login, route):
+    """Dyrektywy Alpine (@click, x-model, etc.) musza byc wewnatrz elementu z x-data."""
+    resp = client.get(route)
+    if resp.status_code != 200:
+        pytest.skip(f"Trasa {route} zwrocila {resp.status_code}")
+    html = resp.get_data(as_text=True)
+
+    # Sprawdz czy <main> (albo <body>) ma x-data jako globalny scope
+    has_global_scope = bool(re.search(r"<main\b[^>]*\bx-data\b", html))
+
+    if has_global_scope:
+        return  # Globalny scope — wszystkie dyrektywy automatycznie dzialaja
+
+    # Bez globalnego scope — kazda dyrektywa musi byc wewnatrz lokalnego x-data
+    directives = _ALPINE_DIRECTIVE_RE.findall(html)
+    if not directives:
+        return  # Brak dyrektyw — OK
+
+    # Jesli sa dyrektywy a nie ma globalnego scope — blad
+    assert False, (
+        f"Trasa {route} uzywa dyrektyw Alpine ale <main> nie ma x-data. "
+        f"Dyrektywy moga nie dzialac."
+    )
+
+
+# ---- Brak inline JS ktory powinien byc Alpine ----
+
+
 _GETELEMENTBYID_RE = re.compile(r"document\.getElementById\(")
 _QUERYSELECTOR_RE = re.compile(r"document\.querySelector\(")
 
