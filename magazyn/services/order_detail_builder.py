@@ -301,6 +301,7 @@ class OrderDetailBuilder:
             "allegro_return_id": active_return.allegro_return_id,
             "messenger_notified": active_return.messenger_notified,
             "stock_restored": active_return.stock_restored,
+            "refund_processed": active_return.refund_processed,
             "notes": active_return.notes,
             "created_at": active_return.created_at,
             "updated_at": active_return.updated_at,
