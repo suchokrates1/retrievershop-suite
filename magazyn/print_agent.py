@@ -4,9 +4,11 @@ import base64
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
+import unicodedata
 
 # fcntl is Unix-only, provide fallback for Windows
 try:
@@ -968,7 +970,7 @@ class LabelAgent:
         # Paczki wg dokumentacji API
         packages = [
             {
-                "type": "OTHER",
+                "type": "PACKAGE",
                 "weight": {"value": 1.0, "unit": "KILOGRAMS"},
                 "length": {"value": 30, "unit": "CENTIMETER"},
                 "width": {"value": 20, "unit": "CENTIMETER"},
@@ -993,7 +995,11 @@ class LabelAgent:
                 if label:
                     product_names.append(label)
             if product_names:
-                reference_number = "; ".join(product_names)[:100]
+                raw_ref = "; ".join(product_names)
+                # API dopuszcza tylko litery bez diakrytykow, cyfry, spacje i _/-
+                nfkd = unicodedata.normalize('NFKD', raw_ref)
+                ascii_ref = ''.join(c for c in nfkd if not unicodedata.combining(c))
+                reference_number = re.sub(r'[^a-zA-Z0-9 _/\-]', '', ascii_ref)[:100]
 
         # Dodatkowe wlasciwosci InPost (metoda nadania)
         additional_properties = None
