@@ -320,12 +320,9 @@ def create_correction_invoice(
             "count": new_count,
             "price": content["price"],
             "unit": content.get("unit", "szt."),
+            "vat_code": content.get("vat_code", {"id": 233}),
+            "parent": {"id": content_id},
         }
-
-        if correction_type != "bill":
-            # Dla faktur VAT linkujemy pozycje do oryginalnych
-            ic["vat_code"] = content.get("vat_code", {"id": 233})
-            ic["parent"] = {"id": content_id}
 
         invoice_contents.append({"invoicecontent": ic})
 
