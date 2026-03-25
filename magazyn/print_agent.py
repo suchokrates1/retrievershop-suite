@@ -941,6 +941,25 @@ class LabelAgent:
             }
         ]
 
+        # Nazwy produktow jako dodatkowe info na etykiecie
+        products = order_data.get("products", [])
+        references = None
+        if products:
+            product_names = []
+            for p in products:
+                name = shorten_product_name(p.get("name", ""))
+                qty = p.get("quantity", 1)
+                attrs = p.get("attributes", "")
+                label = name
+                if attrs:
+                    label = f"{name} ({attrs})"
+                if qty > 1:
+                    label = f"{label} x{qty}"
+                if label:
+                    product_names.append(label)
+            if product_names:
+                references = "; ".join(product_names)[:100]
+
         try:
             result = create_shipment(
                 checkout_form_id=checkout_form_id,
@@ -948,6 +967,7 @@ class LabelAgent:
                 sender=sender,
                 receiver=receiver,
                 packages=packages,
+                references=references,
             )
 
             shipment_id = result.get("id")
