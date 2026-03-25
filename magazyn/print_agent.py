@@ -865,22 +865,61 @@ class LabelAgent:
 
         Jezeli przesylka nie istnieje, tworzy ja automatycznie
         przez create_shipment().
+
+        UWAGA: checkout-forms/shipments zwraca ID w formacie base64
+        (np. INPOST:waybill), a shipment-management wymaga UUID.
+        Dlatego uzywamy agent_state do przechowywania UUID z SM.
         """
         # Wyciagnij checkout_form_id z order_id (format: allegro_{uuid})
         checkout_form_id = order_id
         if order_id.startswith("allegro_"):
             checkout_form_id = order_id[len("allegro_"):]
 
-        # Najpierw sprawdz czy przesylka juz istnieje w Allegro
+        # 1. Sprawdz zapisany shipment_management UUID
+        stored_sm_id = self._load_state_value(f"sm_shipment:{order_id}")
+        if stored_sm_id:
+            try:
+                details = get_shipment_details(stored_sm_id)
+                carrier = details.get("carrier", "")
+                waybill = ""
+                for pkg in details.get("packages", []):
+                    waybill = pkg.get("waybill", "")
+                    if waybill:
+                        break
+                self.logger.info(
+                    "Uzyto zapisany shipment_management_id=%s dla %s",
+                    stored_sm_id, order_id,
+                )
+                return [{
+                    "shipment_id": stored_sm_id,
+                    "waybill": waybill,
+                    "carrier_id": carrier,
+                    "courier_code": carrier,
+                    "courier_package_nr": waybill,
+                }]
+            except Exception as exc:
+                self.logger.warning(
+                    "Blad pobierania przesylki SM %s: %s. Usuwam mapping.",
+                    stored_sm_id, exc,
+                )
+                self._save_state_value(f"sm_shipment:{order_id}", None)
+
+        # 2. Sprawdz checkout-forms (dane trackingowe, NIE shipment_id)
         from .allegro_api.fulfillment import get_shipment_tracking_numbers
         try:
             existing = get_shipment_tracking_numbers(checkout_form_id)
             if existing:
-                # Przesylka juz istnieje - zwroc dane
+                # Przesylki istnieja w checkout-forms, ale ich ID (base64)
+                # nie sa UUID z shipment-management - nie nadaja sie do etykiet.
+                # Zwroc dane trackingowe bez shipment_id.
+                self.logger.info(
+                    "Zamowienie %s ma %d przesylek checkout-forms (brak UUID SM)",
+                    order_id, len(existing),
+                )
                 packages = []
                 for ship in existing:
                     packages.append({
-                        "shipment_id": ship.get("id"),
+                        "shipment_id": None,
                         "waybill": ship.get("waybill"),
                         "carrier_id": ship.get("carrierId"),
                         "courier_code": ship.get("carrierId", ""),
@@ -893,7 +932,7 @@ class LabelAgent:
                 order_id, exc,
             )
 
-        # Przesylka nie istnieje - utworz nowa przez Shipment Management
+        # 3. Brak przesylek - utworz nowa przez Shipment Management
         return self._create_allegro_shipment(order_id, checkout_form_id)
 
     def _create_allegro_shipment(
@@ -1067,6 +1106,9 @@ class LabelAgent:
                     "Nie mozna zmienic statusu fulfillment dla %s: %s",
                     order_id, ful_exc,
                 )
+
+            # Zapisz UUID shipment-management w agent_state
+            self._save_state_value(f"sm_shipment:{order_id}", shipment_id)
 
             self.logger.info(
                 "Utworzono przesylke %s (waybill: %s) dla zamowienia %s",
