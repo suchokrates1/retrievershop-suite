@@ -1270,7 +1270,7 @@ class LabelAgent:
             raise ApiError("Brak ID przesylki do pobrania etykiety")
 
         try:
-            label_bytes = get_shipment_label([package_id])
+            label_bytes = get_shipment_label([package_id], page_size="A6", cut_line=False)
             label_b64 = base64.b64encode(label_bytes).decode("ascii")
             return label_b64, "pdf"
         except RuntimeError as exc:
@@ -1278,7 +1278,7 @@ class LabelAgent:
             self.logger.warning("Etykieta nie gotowa dla %s: %s", package_id, exc)
             time.sleep(3)
             try:
-                label_bytes = get_shipment_label([package_id])
+                label_bytes = get_shipment_label([package_id], page_size="A6", cut_line=False)
                 label_b64 = base64.b64encode(label_bytes).decode("ascii")
                 return label_b64, "pdf"
             except Exception as retry_exc:
