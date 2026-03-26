@@ -281,14 +281,15 @@ def _sync_allegro_fulfillment(app):
 
 
 def _process_pending_invoices():
-    """Automatyczne wystawianie faktur dla wszystkich zamowien.
+    """Automatyczne wystawianie faktur dla nowych zamowien z Allegro.
 
     Szuka zamowien ktore:
     - nie maja jeszcze wystawionej faktury (wfirma_invoice_id IS NULL)
     - maja przynajmniej jeden produkt
+    - przyszly przez sync Allegro (order_id zaczyna sie od 'allegro_')
 
-    Faktura jest wystawiana ZAWSZE - niezaleznie od want_invoice,
-    bo kazda sprzedaz musi byc udokumentowana dla celow ksiegowych.
+    Stare zamowienia z BaseLinker nie sa przetwarzane -
+    mialy faktury wystawiane recznie w wFirma.
 
     Returns
     -------
@@ -302,7 +303,7 @@ def _process_pending_invoices():
 
     stats = {"processed": 0, "success": 0, "errors": 0}
 
-    # Tylko zamowienia z ostatnich 7 dni (zeby nie wystawiac wstecz)
+    # Tylko zamowienia z ostatnich 7 dni
     cutoff = int(time.time()) - 7 * 24 * 3600
 
     with get_session() as db:
@@ -311,6 +312,7 @@ def _process_pending_invoices():
             .filter(
                 Order.wfirma_invoice_id.is_(None),
                 Order.date_add >= cutoff,
+                Order.order_id.like("allegro_%"),
             )
             .all()
         )
