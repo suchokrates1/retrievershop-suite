@@ -27,7 +27,7 @@ def test_agent_loop_stores_courier_code(monkeypatch):
         lambda data, print_success=True: captured.setdefault("mess", data),
     )
 
-    monkeypatch.setattr(agent, "get_orders", lambda: [{"order_id": 1, "products": [{"name": "Prod", "quantity": 1}]}])
+    monkeypatch.setattr(agent, "get_orders", lambda: [{"order_id": 1, "products": [{"name": "Prod", "quantity": 1}], "payment_done": 100.0}])
     monkeypatch.setattr(agent, "get_order_packages", lambda oid: [{"shipment_id": "s1", "carrier_id": "DHL", "waybill": "WB123"}])
     monkeypatch.setattr(agent, "get_label", lambda code, pid: ("data", "pdf"))
 

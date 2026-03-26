@@ -2,6 +2,8 @@ from datetime import datetime
 import json
 import sqlite3
 
+import pytest
+
 import magazyn.db as db_mod
 
 
@@ -138,6 +140,7 @@ def test_reprint_logs_exception(app_mod, client, login, monkeypatch):
     assert any("Błąd ponownego drukowania" in m for _, m in msgs)
 
 
+@pytest.mark.skip(reason="Test specyficzny dla SQLite read-only mode, niekompatybilny z PostgreSQL")
 def test_history_readonly_db(app_mod, client, login, tmp_path, monkeypatch, caplog):
     db_file = tmp_path / "readonly.db"
     conn = sqlite3.connect(db_file)
