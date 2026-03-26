@@ -4,14 +4,19 @@
 {% endblock %}
 {% block content %}
 
+<div id="page-content" hx-select="#page-content" hx-swap="outerHTML" hx-target="#page-content" hx-push-url="true" hx-indicator="#page-content">
 <div class="container text-center mt-5">
     <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="flex-grow-1 me-3">
-            <form id="searchForm" method="get" action="{{ url_for('products.items') }}" class="d-flex gap-2">
+            <form id="searchForm" method="get" action="{{ url_for('products.items') }}" class="d-flex gap-2" hx-boost="true">
                 <input type="hidden" name="per_page" value="{{ per_page }}">
                 <input type="text" id="searchInput" name="search" class="form-control" 
                        placeholder="Wyszukaj produkt (nazwa, kolor, seria, kategoria)..."
-                       value="{{ search }}">
+                       value="{{ search }}"
+                       hx-get="{{ url_for('products.items') }}"
+                       hx-trigger="input changed delay:400ms, search"
+                       hx-include="closest form"
+                       hx-replace-url="true">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
                 {% if search %}
                 <a href="{{ url_for('products.items', per_page=per_page) }}" class="btn btn-outline-secondary" title="Wyczysc"><i class="bi bi-x-lg"></i></a>
@@ -33,7 +38,9 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="d-flex align-items-center gap-2">
             <label class="mb-0 text-nowrap small">Na stronie:</label>
-            <select class="form-select form-select-sm" style="width: auto;" @change="const u = new URL(window.location); u.searchParams.set('per_page', $el.value); u.searchParams.set('page', '1'); window.location = u.toString()">
+            <select class="form-select form-select-sm" style="width: auto;" name="per_page"
+                    hx-get="{{ url_for('products.items', page=1, search=search) }}"
+                    hx-trigger="change">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -94,7 +101,7 @@
 
 {# Paginacja #}
 {% if total_pages > 1 %}
-<nav aria-label="Paginacja produktow" class="mt-3">
+<nav aria-label="Paginacja produktow" class="mt-3" hx-boost="true">
     <ul class="pagination pagination-sm justify-content-center">
         <li class="page-item {% if not has_prev %}disabled{% endif %}">
             <a class="page-link" href="{{ url_for('products.items', page=page-1, search=search, per_page=per_page) }}">
@@ -122,6 +129,7 @@
 </nav>
 {% endif %}
 
+</div>
 </div>
 
 {% endblock %}
