@@ -1,15 +1,17 @@
-"""Persistent settings service backed by the SQLite database."""
+"""Persistent settings service backed by the database."""
 
 from __future__ import annotations
 
 import logging
 import os
-import sqlite3
 from collections import OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from types import SimpleNamespace
 from typing import Iterable, Mapping, Optional
+
+from sqlalchemy import text
 
 from . import settings_io
 
@@ -23,7 +25,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT,
-    updated_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now'))
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 """
 
@@ -33,7 +35,7 @@ def _default_db_path() -> Path:
 
 
 class SettingsStore:
-    """Store application configuration in the SQLite database."""
+    """Store application configuration in the database."""
 
     def __init__(self) -> None:
         self._lock = RLock()
@@ -85,36 +87,71 @@ class SettingsStore:
             self._loaded = True
             self._db_last_updated_at = db_updated_at
 
-    def _connect(self, db_path: Optional[Path] = None) -> Optional[sqlite3.Connection]:
-        path = db_path or self._db_path
-        if not path:
-            return None
+    def _load_via_engine(self, eng):
+        """Laduje ustawienia z bazy przez SQLAlchemy engine."""
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(path)
-        except sqlite3.Error as exc:
-            LOGGER.warning("Failed to connect to settings database: %s", exc)
+            with eng.connect() as conn:
+                try:
+                    rows = conn.execute(
+                        text("SELECT key, value, updated_at FROM app_settings ORDER BY key")
+                    ).fetchall()
+                    has_updated_at = True
+                except Exception as exc:
+                    conn.rollback()
+                    err = str(exc).lower()
+                    if "no such table" in err or "does not exist" in err:
+                        return OrderedDict(), None
+                    if "no such column" in err:
+                        try:
+                            rows = conn.execute(
+                                text("SELECT key, value FROM app_settings ORDER BY key")
+                            ).fetchall()
+                            has_updated_at = False
+                        except Exception:
+                            conn.rollback()
+                            return OrderedDict(), None
+                    else:
+                        LOGGER.warning("Failed to query app_settings: %s", exc)
+                        return None
+
+                data: "OrderedDict[str, str]" = OrderedDict()
+                latest: Optional[str] = None
+                for row in rows:
+                    data[row[0]] = row[1] if row[1] is not None else ""
+                    if has_updated_at:
+                        val = row[2]
+                        if isinstance(val, str) and (latest is None or val > latest):
+                            latest = val
+                return data, latest
+        except Exception as exc:
+            LOGGER.warning("Failed to read settings from engine: %s", exc)
             return None
-        return conn
 
     def _load_from_db(
         self, db_path: Path
     ) -> Optional[tuple["OrderedDict[str, str]", Optional[str]]]:
+        from .db import engine as _engine
+
+        if _engine is not None:
+            return self._load_via_engine(_engine)
+
+        # Engine nie skonfigurowany - bezposredni fallback SQLite
         if not db_path.exists():
             return None
         try:
-            conn = sqlite3.connect(db_path)
-        except sqlite3.Error as exc:
+            import sqlite3 as _sqlite3
+            conn = _sqlite3.connect(str(db_path))
+        except Exception as exc:
             LOGGER.warning("Failed to read settings from %s: %s", db_path, exc)
             return None
         try:
-            conn.row_factory = sqlite3.Row
+            conn.row_factory = _sqlite3.Row
             cursor = conn.cursor()
             try:
                 cursor.execute(
                     "SELECT key, value, updated_at FROM app_settings ORDER BY key"
                 )
-            except sqlite3.OperationalError as exc:
+            except Exception as exc:
                 if "no such column" in str(exc).lower():
                     cursor.execute("SELECT key, value FROM app_settings ORDER BY key")
                     rows = cursor.fetchall()
@@ -125,7 +162,7 @@ class SettingsStore:
                     return data, None
                 raise
             rows = cursor.fetchall()
-        except sqlite3.OperationalError as exc:
+        except Exception as exc:
             if "no such table" in str(exc).lower():
                 return OrderedDict(), None
             LOGGER.warning("Failed to query app_settings: %s", exc)
@@ -145,110 +182,106 @@ class SettingsStore:
         return data, latest
 
     def _fetch_last_updated_at(self, db_path: Optional[Path] = None) -> Optional[str]:
-        conn = self._connect(db_path)
-        if conn is None:
+        from .db import engine as _engine
+
+        if _engine is None:
             return None
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT MAX(updated_at) FROM app_settings")
-            row = cursor.fetchone()
-            if not row:
-                return None
-            value = row[0]
-            return value if isinstance(value, str) else None
-        except sqlite3.OperationalError as exc:
-            if "no such column" in str(exc).lower():
+            with _engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT MAX(updated_at) FROM app_settings")
+                ).fetchone()
+                if not row:
+                    return None
+                value = row[0]
+                return value if isinstance(value, str) else None
+        except Exception as exc:
+            err = str(exc).lower()
+            if "no such column" in err or "does not exist" in err or "no such table" in err:
                 return None
             LOGGER.debug("Failed to read app_settings.updated_at: %s", exc)
             return None
-        finally:
-            conn.close()
 
     def _persist_many(self, values: Mapping[str, str], db_path: Optional[Path] = None) -> bool:
         if not values:
             return True
 
-        conn = self._connect(db_path)
-        if conn is None:
-            raise SettingsPersistenceError(
-                "Failed to persist settings: the database is unavailable"
-            )
+        from .db import db_connect as _db_connect
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+        rows = [
+            {"key": key, "value": "" if value is None else str(value), "now": now}
+            for key, value in values.items()
+        ]
 
         try:
-            cursor = conn.cursor()
-            cursor.execute(SCHEMA)
-            rows = [
-                (key, "" if value is None else str(value))
-                for key, value in values.items()
-            ]
-            cursor.executemany(
-                """
-                INSERT INTO app_settings(key, value, updated_at)
-                VALUES (?, ?, STRFTIME('%Y-%m-%d %H:%M:%f', 'now'))
-                ON CONFLICT(key) DO UPDATE SET
-                    value=excluded.value,
-                    updated_at=STRFTIME('%Y-%m-%d %H:%M:%f', 'now')
-                """,
-                rows,
-            )
-            conn.commit()
-            try:
-                cursor.execute("SELECT MAX(updated_at) FROM app_settings")
-                row = cursor.fetchone()
-            except sqlite3.OperationalError as exc:
-                if "no such column" in str(exc).lower():
+            with _db_connect() as conn:
+                conn.execute(text(SCHEMA))
+                conn.execute(
+                    text("""
+                        INSERT INTO app_settings(key, value, updated_at)
+                        VALUES (:key, :value, :now)
+                        ON CONFLICT(key) DO UPDATE SET
+                            value = excluded.value,
+                            updated_at = excluded.updated_at
+                    """),
+                    rows,
+                )
+                conn.commit()
+                try:
+                    row = conn.execute(
+                        text("SELECT MAX(updated_at) FROM app_settings")
+                    ).fetchone()
+                except Exception:
+                    conn.rollback()
                     row = None
-                else:
-                    raise
-            if row:
-                latest = row[0]
-                if isinstance(latest, str):
-                    self._db_last_updated_at = latest
-            return True
-        except sqlite3.Error as exc:
+                if row:
+                    latest = row[0]
+                    if isinstance(latest, str):
+                        self._db_last_updated_at = latest
+                return True
+        except SettingsPersistenceError:
+            raise
+        except Exception as exc:
             LOGGER.exception("Failed to persist settings to database: %s", exc)
             raise SettingsPersistenceError(
                 "Failed to persist settings to the database"
             ) from exc
-        finally:
-            conn.close()
 
     def _delete_keys(self, keys: Iterable[str], db_path: Optional[Path] = None) -> bool:
         keys = list(keys)
         if not keys:
             return True
 
-        conn = self._connect(db_path)
-        if conn is None:
-            raise SettingsPersistenceError(
-                "Failed to delete settings: the database is unavailable"
-            )
+        from .db import db_connect as _db_connect
 
         try:
-            cursor = conn.cursor()
-            cursor.execute(SCHEMA)
-            cursor.executemany("DELETE FROM app_settings WHERE key=?", [(key,) for key in keys])
-            conn.commit()
-            try:
-                cursor.execute("SELECT MAX(updated_at) FROM app_settings")
-                row = cursor.fetchone()
-            except sqlite3.OperationalError as exc:
-                if "no such column" in str(exc).lower():
+            with _db_connect() as conn:
+                conn.execute(text(SCHEMA))
+                conn.execute(
+                    text("DELETE FROM app_settings WHERE key = :key"),
+                    [{"key": k} for k in keys],
+                )
+                conn.commit()
+                try:
+                    row = conn.execute(
+                        text("SELECT MAX(updated_at) FROM app_settings")
+                    ).fetchone()
+                except Exception:
+                    conn.rollback()
                     row = None
-                else:
-                    raise
-            if row:
-                latest = row[0]
-                if isinstance(latest, str):
-                    self._db_last_updated_at = latest
-            return True
-        except sqlite3.Error as exc:
+                if row:
+                    latest = row[0]
+                    if isinstance(latest, str):
+                        self._db_last_updated_at = latest
+                return True
+        except SettingsPersistenceError:
+            raise
+        except Exception as exc:
             LOGGER.exception("Failed to delete settings from database: %s", exc)
             raise SettingsPersistenceError(
                 "Failed to delete settings from the database"
             ) from exc
-        finally:
-            conn.close()
 
     def _build_namespace(self, values: Mapping[str, str]) -> SimpleNamespace:
         processed_values = {}

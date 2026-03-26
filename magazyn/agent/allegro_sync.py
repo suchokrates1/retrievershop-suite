@@ -8,7 +8,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Callable
 
-from ..db import sqlite_connect
+from sqlalchemy import text
+
+from ..db import db_connect
 from ..notifications import send_messenger
 from ..utils import short_preview
 from ..allegro_api import (
@@ -82,11 +84,10 @@ class AllegroSyncService:
         if not discussions:
             return
         
-        with sqlite_connect(self.db_file) as conn:
-            cur = conn.cursor()
+        with db_connect() as conn:
             for discussion in discussions:
                 self._process_discussion(
-                    cur, discussion, access_token, 
+                    conn, discussion, access_token, 
                     auto_enabled, auto_reply_text
                 )
         
@@ -94,7 +95,7 @@ class AllegroSyncService:
     
     def _process_discussion(
         self, 
-        cur, 
+        conn, 
         discussion: Dict[str, Any],
         access_token: str,
         auto_enabled: bool,
@@ -109,17 +110,18 @@ class AllegroSyncService:
         subject = discussion.get("subject") or buyer
         
         # Upsert watku
-        cur.execute("SELECT id FROM threads WHERE id = ?", (discussion_id,))
-        exists = cur.fetchone()
+        exists = conn.execute(
+            text("SELECT id FROM threads WHERE id = :tid"), {"tid": discussion_id}
+        ).fetchone()
         if not exists:
-            cur.execute(
-                "INSERT INTO threads (id, title, author, type, read) VALUES (?, ?, ?, ?, ?)",
-                (discussion_id, subject, buyer, "dyskusja", 1),
+            conn.execute(
+                text("INSERT INTO threads (id, title, author, type, read) VALUES (:id, :title, :author, :type, :read)"),
+                {"id": discussion_id, "title": subject, "author": buyer, "type": "dyskusja", "read": 1},
             )
         else:
-            cur.execute(
-                "UPDATE threads SET title = ?, author = ? WHERE id = ?",
-                (subject, buyer, discussion_id),
+            conn.execute(
+                text("UPDATE threads SET title = :title, author = :author WHERE id = :id"),
+                {"title": subject, "author": buyer, "id": discussion_id},
             )
         
         # Pobierz wiadomosci
@@ -141,8 +143,7 @@ class AllegroSyncService:
                 continue
             msg_id = str(msg_id_raw)
             
-            cur.execute("SELECT 1 FROM messages WHERE id = ?", (msg_id,))
-            if cur.fetchone():
+            if conn.execute(text("SELECT 1 FROM messages WHERE id = :mid"), {"mid": msg_id}).fetchone():
                 latest_timestamp = msg.get("date") or latest_timestamp
                 continue
             
@@ -151,9 +152,9 @@ class AllegroSyncService:
             content = msg.get("text", "")
             created_at = msg.get("date") or datetime.now(timezone.utc).isoformat()
             
-            cur.execute(
-                "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                (msg_id, discussion_id, author_login, content, created_at),
+            conn.execute(
+                text("INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (:id, :tid, :author, :content, :cat)"),
+                {"id": msg_id, "tid": discussion_id, "author": author_login, "content": content, "cat": created_at},
             )
             latest_timestamp = created_at
             
@@ -163,12 +164,12 @@ class AllegroSyncService:
                     "text": content,
                     "created_at": created_at,
                 }
-                cur.execute("UPDATE threads SET read = 0 WHERE id = ?", (discussion_id,))
+                conn.execute(text("UPDATE threads SET read = 0 WHERE id = :tid"), {"tid": discussion_id})
         
         if latest_timestamp:
-            cur.execute(
-                "UPDATE threads SET last_message_at = ? WHERE id = ?",
-                (latest_timestamp, discussion_id),
+            conn.execute(
+                text("UPDATE threads SET last_message_at = :ts WHERE id = :tid"),
+                {"ts": latest_timestamp, "tid": discussion_id},
             )
         
         # Powiadomienie i autoresponder
@@ -185,24 +186,23 @@ class AllegroSyncService:
     
     def _send_auto_reply_discussion(
         self, 
-        cur, 
+        conn, 
         access_token: str, 
         discussion_id: str, 
         reply_text: str
     ) -> None:
         """Wysyla autoresponder do dyskusji jesli jeszcze nie wyslano."""
-        cur.execute(
-            "SELECT discussion_id FROM allegro_replied_discussions WHERE discussion_id = ?",
-            (discussion_id,),
-        )
-        if cur.fetchone():
+        if conn.execute(
+            text("SELECT discussion_id FROM allegro_replied_discussions WHERE discussion_id = :did"),
+            {"did": discussion_id},
+        ).fetchone():
             return
         
         try:
             send_discussion_message(access_token, discussion_id, reply_text)
-            cur.execute(
-                "INSERT INTO allegro_replied_discussions (discussion_id, replied_at) VALUES (?, ?)",
-                (discussion_id, datetime.now(timezone.utc).isoformat()),
+            conn.execute(
+                text("INSERT INTO allegro_replied_discussions (discussion_id, replied_at) VALUES (:did, :rat)"),
+                {"did": discussion_id, "rat": datetime.now(timezone.utc).isoformat()},
             )
         except Exception as exc:
             logger.error("Blad wysylania autorespondera do dyskusji %s: %s", discussion_id, exc)
@@ -225,11 +225,10 @@ class AllegroSyncService:
         if not threads:
             return
         
-        with sqlite_connect(self.db_file) as conn:
-            cur = conn.cursor()
+        with db_connect() as conn:
             for thread in threads:
                 self._process_message_thread(
-                    cur, thread, access_token,
+                    conn, thread, access_token,
                     auto_enabled, auto_reply_text
                 )
         
@@ -237,7 +236,7 @@ class AllegroSyncService:
     
     def _process_message_thread(
         self,
-        cur,
+        conn,
         thread: Dict[str, Any],
         access_token: str,
         auto_enabled: bool,
@@ -253,17 +252,18 @@ class AllegroSyncService:
         is_read_remote = bool(thread.get("read", True))
         
         # Upsert watku
-        cur.execute("SELECT id FROM threads WHERE id = ?", (thread_id,))
-        exists = cur.fetchone()
+        exists = conn.execute(
+            text("SELECT id FROM threads WHERE id = :tid"), {"tid": thread_id}
+        ).fetchone()
         if not exists:
-            cur.execute(
-                "INSERT INTO threads (id, title, author, type, read) VALUES (?, ?, ?, ?, ?)",
-                (thread_id, interlocutor, interlocutor, "wiadomość", 1 if is_read_remote else 0),
+            conn.execute(
+                text("INSERT INTO threads (id, title, author, type, read) VALUES (:id, :title, :author, :type, :read)"),
+                {"id": thread_id, "title": interlocutor, "author": interlocutor, "type": "wiadomość", "read": 1 if is_read_remote else 0},
             )
         else:
-            cur.execute(
-                "UPDATE threads SET title = ?, author = ? WHERE id = ?",
-                (thread.get("topic") or interlocutor, interlocutor, thread_id),
+            conn.execute(
+                text("UPDATE threads SET title = :title, author = :author WHERE id = :id"),
+                {"title": thread.get("topic") or interlocutor, "author": interlocutor, "id": thread_id},
             )
         
         # Pobierz wiadomosci
@@ -292,8 +292,7 @@ class AllegroSyncService:
                 continue
             msg_id = str(msg_id_raw)
             
-            cur.execute("SELECT 1 FROM messages WHERE id = ?", (msg_id,))
-            if cur.fetchone():
+            if conn.execute(text("SELECT 1 FROM messages WHERE id = :mid"), {"mid": msg_id}).fetchone():
                 latest_timestamp = msg.get("createdAt") or latest_timestamp
                 continue
             
@@ -302,9 +301,9 @@ class AllegroSyncService:
             content = msg.get("text", "")
             created_at = msg.get("createdAt") or datetime.now(timezone.utc).isoformat()
             
-            cur.execute(
-                "INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                (msg_id, thread_id, author_login, content, created_at),
+            conn.execute(
+                text("INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (:id, :tid, :author, :content, :cat)"),
+                {"id": msg_id, "tid": thread_id, "author": author_login, "content": content, "cat": created_at},
             )
             latest_timestamp = created_at
             
@@ -314,12 +313,12 @@ class AllegroSyncService:
                     "text": content,
                     "created_at": created_at,
                 }
-                cur.execute("UPDATE threads SET read = 0 WHERE id = ?", (thread_id,))
+                conn.execute(text("UPDATE threads SET read = 0 WHERE id = :tid"), {"tid": thread_id})
         
         if latest_timestamp:
-            cur.execute(
-                "UPDATE threads SET last_message_at = ? WHERE id = ?",
-                (latest_timestamp, thread_id),
+            conn.execute(
+                text("UPDATE threads SET last_message_at = :ts WHERE id = :tid"),
+                {"ts": latest_timestamp, "tid": thread_id},
             )
         
         # Powiadomienie i autoresponder
@@ -331,29 +330,28 @@ class AllegroSyncService:
             
             if auto_enabled:
                 self._send_auto_reply_thread(
-                    cur, access_token, thread_id, auto_reply_text
+                    conn, access_token, thread_id, auto_reply_text
                 )
     
     def _send_auto_reply_thread(
         self,
-        cur,
+        conn,
         access_token: str,
         thread_id: str,
         reply_text: str
     ) -> None:
         """Wysyla autoresponder do watku jesli jeszcze nie wyslano."""
-        cur.execute(
-            "SELECT thread_id FROM allegro_replied_threads WHERE thread_id = ?",
-            (thread_id,),
-        )
-        if cur.fetchone():
+        if conn.execute(
+            text("SELECT thread_id FROM allegro_replied_threads WHERE thread_id = :tid"),
+            {"tid": thread_id},
+        ).fetchone():
             return
         
         try:
             send_thread_message(access_token, thread_id, reply_text)
-            cur.execute(
-                "INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (?, ?)",
-                (thread_id, datetime.now(timezone.utc).isoformat()),
+            conn.execute(
+                text("INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (:tid, :rat)"),
+                {"tid": thread_id, "rat": datetime.now(timezone.utc).isoformat()},
             )
         except Exception as exc:
             logger.error("Blad wysylania autorespondera do watku %s: %s", thread_id, exc)
