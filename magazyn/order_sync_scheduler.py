@@ -281,12 +281,14 @@ def _sync_allegro_fulfillment(app):
 
 
 def _process_pending_invoices():
-    """Automatyczne wystawianie faktur dla zamowien z want_invoice=True.
+    """Automatyczne wystawianie faktur dla wszystkich zamowien.
 
     Szuka zamowien ktore:
-    - maja want_invoice=True
     - nie maja jeszcze wystawionej faktury (wfirma_invoice_id IS NULL)
     - maja przynajmniej jeden produkt
+
+    Faktura jest wystawiana ZAWSZE - niezaleznie od want_invoice,
+    bo kazda sprzedaz musi byc udokumentowana dla celow ksiegowych.
 
     Returns
     -------
@@ -296,15 +298,19 @@ def _process_pending_invoices():
     from .db import get_session
     from .models import Order
     from .services.invoice_service import generate_and_send_invoice
+    import time
 
     stats = {"processed": 0, "success": 0, "errors": 0}
+
+    # Tylko zamowienia z ostatnich 7 dni (zeby nie wystawiac wstecz)
+    cutoff = int(time.time()) - 7 * 24 * 3600
 
     with get_session() as db:
         orders = (
             db.query(Order)
             .filter(
-                Order.want_invoice.is_(True),
                 Order.wfirma_invoice_id.is_(None),
+                Order.date_add >= cutoff,
             )
             .all()
         )
