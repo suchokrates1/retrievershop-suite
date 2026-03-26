@@ -578,7 +578,12 @@ def order_detail(order_id: str):
             for k in email_types_map
             if emails_sent.get(k)
         ]
+        all_email_types = [
+            {"type": k, "label": v, "sent": bool(emails_sent.get(k))}
+            for k, v in email_types_map.items()
+        ]
         context["email_log"] = email_log
+        context["all_email_types"] = all_email_types
         context["emails_sent"] = emails_sent
 
         # Faktura wFirma
@@ -1071,16 +1076,28 @@ def _dispatch_status_email(db, order_id: str, status: str):
     """
     email_type = _STATUS_EMAIL_MAP.get(status)
     if not email_type:
+        logger.debug("Email dispatch: brak mapowania dla statusu '%s'", status)
         return
 
     from .services.invoice_service import _was_email_sent, _mark_email_sent
 
     order = db.query(Order).filter(Order.order_id == order_id).first()
     if not order or not order.email:
+        logger.warning(
+            "Email dispatch: brak zamowienia lub adresu email dla %s", order_id
+        )
         return
 
     if _was_email_sent(order, email_type):
+        logger.debug(
+            "Email '%s' juz wyslany dla %s - pomijam", email_type, order_id
+        )
         return
+
+    logger.info(
+        "Wysylam email '%s' dla zamowienia %s na %s",
+        email_type, order_id, order.email,
+    )
 
     try:
         from .services.email_service import (
@@ -1105,10 +1122,15 @@ def _dispatch_status_email(db, order_id: str, status: str):
             logger.info(
                 "Email '%s' wyslany dla zamowienia %s", email_type, order_id
             )
+        else:
+            logger.warning(
+                "Email '%s' NIE wyslany dla zamowienia %s (send zwrocilo False)",
+                email_type, order_id,
+            )
     except Exception as exc:
         logger.error(
             "Blad wysylki emaila '%s' dla zamowienia %s: %s",
-            email_type, order_id, exc,
+            email_type, order_id, exc, exc_info=True,
         )
 
 
