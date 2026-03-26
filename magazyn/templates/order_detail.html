@@ -418,35 +418,30 @@
         {# Right column - szybkie akcje, platnosc, komunikacja, dokumenty #}
         <div class="col-lg-4">
             {# Quick actions #}
-            {% if order.external_order_id and order.platform == 'allegro' %}
             <div class="card mb-3">
                 <div class="card-header">
                     <i class="bi bi-lightning"></i> Szybkie akcje
                 </div>
                 <div class="card-body">
+                    {% if order.external_order_id and order.platform == 'allegro' %}
                     <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
                        target="_blank" class="btn btn-outline-secondary w-100 mb-2">
                         <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
                     </a>
+                    {% endif %}
                     {% if customer_page_url %}
-                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
+                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100 mb-2">
                         <i class="bi bi-person-lines-fill"></i> Strona klienta
                     </a>
                     {% endif %}
+                    {% if return_info and not return_info.refund_processed and return_info.allegro_return_id and return_info.status in ['delivered', 'completed'] %}
+                    <button type="button" class="btn btn-danger w-100 mt-1" id="refundBtnQuick"
+                            data-bs-toggle="modal" data-bs-target="#refundModal">
+                        <i class="bi bi-currency-exchange"></i> Zwroc pieniadze
+                    </button>
+                    {% endif %}
                 </div>
             </div>
-            {% elif customer_page_url %}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-lightning"></i> Szybkie akcje
-                </div>
-                <div class="card-body">
-                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100">
-                        <i class="bi bi-person-lines-fill"></i> Strona klienta
-                    </a>
-                </div>
-            </div>
-            {% endif %}
 
             {# Przesylka - metoda, nr, etykiety #}
             <div class="card mb-3">
@@ -625,21 +620,28 @@
                     <i class="bi bi-envelope"></i> Komunikacja z klientem
                 </div>
                 <div class="card-body">
-                    {% if email_log %}
                     <ul class="list-unstyled mb-0">
-                        {% for em in email_log %}
+                        {% for em in all_email_types %}
                         <li class="d-flex align-items-center mb-2">
+                            {% if em.sent %}
                             <span class="badge bg-success me-2"><i class="bi bi-check"></i></span>
-                            {{ em.label }}
+                            <span>{{ em.label }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary me-2"><i class="bi bi-dash"></i></span>
+                            <span class="text-muted">{{ em.label }}</span>
+                            {% endif %}
                         </li>
                         {% endfor %}
                     </ul>
-                    {% else %}
-                    <p class="text-muted mb-0">Brak wyslanych emaili</p>
+
+                    {% if order.user_login %}
+                    <hr>
+                    <a href="{{ url_for('discussions.discussions_list') }}" class="btn btn-sm btn-outline-primary w-100 mb-2">
+                        <i class="bi bi-chat-dots"></i> Chat z {{ order.user_login }}
+                    </a>
                     {% endif %}
 
                     {% if order.email %}
-                    <hr>
                     <p class="mb-0 small text-muted">
                         <i class="bi bi-at"></i> {{ order.email }}
                     </p>
@@ -882,7 +884,7 @@ details[open] summary::before {
 </style>
 
 {# Modal potwierdzenia zwrotu pieniędzy #}
-{% if return_info and return_info.status in ['delivered', 'in_transit'] and return_info.allegro_return_id %}
+{% if return_info and return_info.status in ['delivered', 'in_transit', 'completed'] and return_info.allegro_return_id %}
 <div x-data="refundModal()" x-cloak>
 <div class="modal fade" id="refundModal" tabindex="-1" aria-labelledby="refundModalLabel" aria-hidden="true"
      x-ref="modal" @show-bs-modal.window="checkEligibility()">
