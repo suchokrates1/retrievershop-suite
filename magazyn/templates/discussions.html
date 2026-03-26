@@ -548,12 +548,12 @@
                      @keydown.space.prevent="selectThread(thread)">
                     <div class="thread-item-header">
                         <div class="thread-title-row">
-                            <h6 class="thread-title" x-text="thread.title"></h6>
+                            <h6 class="thread-title" x-text="thread.customer_name || thread.title"></h6>
                             <time class="thread-timestamp" x-text="formatDate(thread.last_message_iso)"></time>
                         </div>
                         <div class="thread-item-meta">
                             <span class="thread-author"
-                                  x-text="thread.last_message_author ? '@' + thread.last_message_author : 'Nieznany nadawca'"></span>
+                                  x-text="'@' + thread.author"></span>
                             <span class="thread-type-pill"
                                   :class="thread.type === 'dyskusja' ? 'pill-discussion' : 'pill-message'">
                                 <i class="bi"
@@ -562,8 +562,9 @@
                             </span>
                         </div>
                     </div>
-                    <p class="thread-preview"
-                       x-text="thread.last_message_preview || 'Brak wiadomości w tym wątku.'"></p>
+                    <template x-if="thread.last_message_preview">
+                        <p class="thread-preview" x-text="thread.last_message_preview"></p>
+                    </template>
                     <span class="unread-dot" aria-hidden="true" x-show="!thread.read"></span>
                 </div>
             </template>
@@ -735,7 +736,16 @@ document.addEventListener('alpine:init', () => {
                 }
             }
 
-            const first = this.threads.find(t => !t.read) || this.threads[0];
+            // Automatyczne otwarcie watku z parametru ?user=
+            const params = new URLSearchParams(window.location.search);
+            const targetUser = params.get('user');
+            let first = null;
+            if (targetUser) {
+                first = this.threads.find(t => t.author === targetUser);
+            }
+            if (!first) {
+                first = this.threads.find(t => !t.read) || this.threads[0];
+            }
             if (first) {
                 this.selectThread(first);
             }
