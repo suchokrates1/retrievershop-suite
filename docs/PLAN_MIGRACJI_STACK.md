@@ -1,7 +1,7 @@
 # Plan migracji stacku technologicznego - retrievershop-suite
 
 **Data utworzenia**: 2026-03-26
-**Ostatnia aktualizacja**: 2026-03-26
+**Ostatnia aktualizacja**: 2026-03-26 (po wdrozeniu fazy 1+2)
 **Autor**: Dawid Suchodolski + Copilot
 
 ---
@@ -19,7 +19,7 @@ i odwracalna. Flask + Bootstrap + Docker Compose to wlasciwy stack dla tej skali
 | Baza danych | SQLite (WAL) | **PostgreSQL 16** | KRYTYCZNY |
 | Framework | Flask 3.0.3 + Gunicorn | Flask (zostaje) | - |
 | Frontend JS | Vanilla JS + Alpine.js | Alpine.js + **htmx** | WYSOKI |
-| UI Framework | Bootstrap 5 (czyste) | **Tabler** (motyw Bootstrap) | SREDNI |
+| UI Framework | Bootstrap 5 (czyste) | Bootstrap 5 (zostaje) | ODRZUCONE |
 | Kolejka zadan | SQLite `label_queue` | APScheduler (zostaje) | NISKI |
 | Cache | Brak | Opcjonalnie Redis w przyszlosci | NISKI |
 | Deploy | git pull + docker compose | **GitHub Actions -> SSH** | WYSOKI |
@@ -134,33 +134,17 @@ htmx dziala z Jinja2 - zero przepisywania istniejacych templatek.
 
 ---
 
-## Faza 3: Tabler - motyw dashboard UI
+## Faza 3: ~~Tabler~~ - ODRZUCONE
 
-### Cel
-Zamiana czystego Bootstrap 5 na Tabler (https://tabler.io) - gotowy motyw dashboard.
-Drop-in replacement, bazuje na Bootstrap, ladniejszy layout, gotowe komponenty (karty, wykresy, tabele).
+### Decyzja
+Tabler **odrzucony**. Powody:
+- Wymaga przepisania layoutu HTML kazdego template'u (wlasne klasy `.page`, `.page-wrapper`)
+- Zastepuje (nie rozszerza) Bootstrap - nie mozna ich laczyc
+- Bundle 2x wiekszy od czystego Bootstrap (~60KB vs ~25KB gzip)
+- Tabler JS koliduje z Alpine.js (dropdown, modals)
+- Brak proporcjonalnych korzysci przy obecnej skali projektu
 
-### Kroki
-
-1. **Instalacja** - zastapic CDN Bootstrap na CDN Tabler
-   ```html
-   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
-   <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
-   ```
-
-2. **Migracja base.html**
-   - Zamiana layoutu na Tabler sidebar + header
-   - Klasy Bootstrap (`container`, `row`, `col`) zostaja - Tabler je rozszerza
-
-3. **Przyrostowa zamiana komponentow**
-   - Tabele -> Tabler responsive tables
-   - Karty -> Tabler cards z headerami
-   - Badge -> Tabler status dots
-   - Dashboard -> Tabler grid + charts
-
-### Ryzyko
-- **Srednie** - moze wymagac dopasowania customowych CSS
-- Testowac na kazdej stronie osobno
+**Alternatywa**: Customowy motyw CSS (zmienne Bootstrap), Tabler Icons (same ikony bez frameworka).
 
 ---
 
@@ -250,7 +234,10 @@ Faza 4 (GitHub Actions) --- niezalezne
 ```
 
 - **Faza 1** jest jedyna KRYTYCZNA - reszta to usprawnienia
-- Fazy 2, 3, 4 mozna realizowac rownolegle i przyrostowo
+- **Faza 1 STATUS**: infrastruktura gotowa (db.py, compose, skrypt migracji). PG kontener dziala. Aplikacja dalej na SQLite. Nastepny krok: uruchomienie migracji danych i przelaczenie.
+- **Faza 2 STATUS**: htmx 2.0.4 dodany do base.html z CSRF. Gotowe do uzycia.
+- **Faza 3 STATUS**: ODRZUCONE (Tabler). Zostajemy przy Bootstrap 5.3.3.
+- Faza 4 mozna realizowac niezaleznie
 - Faza 5 zalezy od Fazy 1 (backup PostgreSQL)
 
 ---
@@ -263,10 +250,7 @@ Obecny minipc (N100 / 16GB RAM) powinien obsluzyc caly stack:
 |--------|--------------|-----|
 | Flask + Gunicorn (6 workerow) | ~600 MB | niska |
 | PostgreSQL | ~256 MB | niska |
-| Redis | ~128 MB | minimalna |
-| Celery worker (2 procesy) | ~400 MB | niska |
-| Celery beat | ~100 MB | minimalna |
-| **Razem nowy stack** | **~1.5 GB** | <50% N100 |
+| **Razem nowy stack** | **~860 MB** | <30% N100 |
 
 Mamy 16 GB RAM - duzy zapas.
 
