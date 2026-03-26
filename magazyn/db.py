@@ -1,4 +1,5 @@
 import datetime
+import os
 from contextlib import contextmanager
 import logging
 from pathlib import Path
@@ -35,6 +36,7 @@ def to_decimal(value) -> Decimal:
 
 engine = None
 SessionLocal = None
+_is_postgres = False
 
 
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
@@ -43,6 +45,11 @@ SQLITE_CONNECT_ARGS = {"check_same_thread": False, "timeout": 5}
 # WAL mode - wymaga montowania katalogu (nie pojedynczego pliku) w Docker
 SQLITE_JOURNAL_MODE = "WAL"
 SQLITE_BUSY_TIMEOUT_MS = 30000
+
+
+def is_postgres() -> bool:
+    """Zwraca True jesli silnik to PostgreSQL."""
+    return _is_postgres
 
 
 def _configure_sqlite_connection(dbapi_connection):
@@ -102,24 +109,45 @@ def sqlite_connect(db_path=None, *, apply_pragmas=True, **kwargs):
     return conn
 
 
-def configure_engine(db_path):
-    """Create SQLAlchemy engine and session factory for ``db_path``."""
-    global engine, SessionLocal
-    print(f"Configuring engine for {db_path}")
-    engine = create_engine(
-        f"sqlite:///{db_path}",
-        future=True,
-        connect_args=SQLITE_CONNECT_ARGS,
-    )
+def configure_engine(db_path=None):
+    """Create SQLAlchemy engine and session factory.
 
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragmas(dbapi_connection, _record):  # pragma: no cover - SQLAlchemy hook
-        _configure_sqlite_connection(dbapi_connection)
+    Jesli zmienna DATABASE_URL jest ustawiona, laczy sie z PostgreSQL.
+    W przeciwnym razie uzywa SQLite pod sciezka ``db_path``.
+    """
+    global engine, SessionLocal, _is_postgres
+
+    database_url = os.environ.get("DATABASE_URL", "")
+
+    if database_url.startswith("postgresql"):
+        _is_postgres = True
+        print(f"Configuring engine for PostgreSQL")
+        engine = create_engine(
+            database_url,
+            future=True,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+        )
+    else:
+        _is_postgres = False
+        if db_path is None:
+            raise ValueError("db_path is required when DATABASE_URL is not set")
+        print(f"Configuring engine for {db_path}")
+        engine = create_engine(
+            f"sqlite:///{db_path}",
+            future=True,
+            connect_args=SQLITE_CONNECT_ARGS,
+        )
+
+        @event.listens_for(engine, "connect")
+        def _set_sqlite_pragmas(dbapi_connection, _record):
+            _configure_sqlite_connection(dbapi_connection)
 
     SessionLocal = sessionmaker(
         bind=engine,
         autoflush=False,
-        expire_on_commit=False,  # keep returned objects usable after commit
+        expire_on_commit=False,
     )
     print(f"SessionLocal set to: {SessionLocal}")
 
@@ -147,15 +175,19 @@ def init_db():
     Base.metadata.create_all(engine)
 
 def reset_db():
-    """Drop all tables and recreate them.
-    This is useful for testing scenarios that require a completely
-    clean database state without losing the ability of :func:`init_db`
-    to preserve existing data."""
+    """Drop all tables and recreate them."""
+    from sqlalchemy import text
     Base.metadata.drop_all(engine)
-    with sqlite_connect() as conn:
-        conn.execute("DROP TABLE IF EXISTS alembic_version")
-        conn.execute("DROP TABLE IF EXISTS scraper_tasks")
-        conn.commit()
+    if _is_postgres:
+        with engine.connect() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            conn.execute(text("DROP TABLE IF EXISTS scraper_tasks"))
+            conn.commit()
+    else:
+        with sqlite_connect() as conn:
+            conn.execute("DROP TABLE IF EXISTS alembic_version")
+            conn.execute("DROP TABLE IF EXISTS scraper_tasks")
+            conn.commit()
     Base.metadata.create_all(engine)
 
 
