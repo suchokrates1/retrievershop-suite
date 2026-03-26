@@ -1,15 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
+<div id="page-content" hx-select="#page-content" hx-swap="outerHTML" hx-target="#page-content" hx-push-url="true" hx-indicator="#page-content">
 <h2 class="text-center mb-3">Sprzedaż</h2>
 
 {# Wyszukiwarka i kontrolki #}
 <div class="row mb-3">
     <div class="col-md-8">
-        <form method="get" action="{{ url_for('sales.list_sales') }}" class="d-flex gap-2">
+        <form method="get" action="{{ url_for('sales.list_sales') }}" class="d-flex gap-2" hx-boost="true">
             <input type="hidden" name="per_page" value="{{ per_page }}">
             <input type="text" name="search" class="form-control" 
                    placeholder="Wyszukaj (produkt, kolor, rozmiar)..."
-                   value="{{ search }}">
+                   value="{{ search }}"
+                   hx-get="{{ url_for('sales.list_sales') }}"
+                   hx-trigger="input changed delay:400ms, search"
+                   hx-include="closest form"
+                   hx-replace-url="true">
             <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
             {% if search %}
             <a href="{{ url_for('sales.list_sales', per_page=per_page) }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
@@ -19,7 +24,9 @@
     <div class="col-md-4 text-end">
         <div class="d-flex align-items-center justify-content-end gap-2">
             <label class="mb-0 text-nowrap small">Na stronie:</label>
-            <select class="form-select form-select-sm" style="width: auto;" onchange="location.href='{{ url_for('sales.list_sales') }}?per_page='+this.value+'&search={{ search }}'">
+            <select class="form-select form-select-sm" style="width: auto;" name="per_page"
+                    hx-get="{{ url_for('sales.list_sales', page=1, search=search) }}"
+                    hx-trigger="change">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -109,7 +116,7 @@
 
 {# Paginacja #}
 {% if total_pages > 1 %}
-<nav aria-label="Paginacja sprzedazy" class="mt-3">
+<nav aria-label="Paginacja sprzedazy" class="mt-3" hx-boost="true">
     <ul class="pagination pagination-sm justify-content-center">
         <li class="page-item {% if not has_prev %}disabled{% endif %}">
             <a class="page-link" href="{{ url_for('sales.list_sales', page=page-1, search=search, per_page=per_page) }}">
@@ -136,4 +143,5 @@
     </div>
 </nav>
 {% endif %}
+</div>
 {% endblock %}
