@@ -58,6 +58,7 @@ def find_contractor(
     }
 
     result = client.request("contractors/find", data=data)
+    logger.debug("find_contractor odpowiedz wFirma: %s", result)
     contractors = result.get("contractors", [])
 
     if not contractors:
@@ -122,6 +123,7 @@ def create_contractor(
     }
 
     result = client.request("contractors/add", data=data)
+    logger.info("create_contractor odpowiedz wFirma: %s", result)
     contractors = result.get("contractors", [])
 
     if not contractors:
@@ -160,10 +162,14 @@ def find_or_create_contractor(
     int
         ID kontrahenta w wFirma.
     """
+    logger.info("find_or_create_contractor: name=%r, nip=%r, street=%r, zip=%r, city=%r",
+                name, nip, street, zip_code, city)
     existing = find_contractor(client, nip=nip, name=name)
     if existing:
+        logger.info("Uzyto istniejacego kontrahenta id=%s dla %r", existing["id"], name)
         return existing["id"]
 
+    logger.info("Nie znaleziono kontrahenta %r, tworze nowego", name)
     result = create_contractor(
         client,
         name=name,
