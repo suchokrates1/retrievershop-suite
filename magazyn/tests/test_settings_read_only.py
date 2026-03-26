@@ -1,7 +1,9 @@
 import os
-import sqlite3
 
 import pytest
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine, text
 
 from magazyn import settings_io
 from magazyn.env_tokens import clear_allegro_tokens, update_allegro_tokens
@@ -23,22 +25,18 @@ def read_only_settings_store(tmp_path):
     env_path = tmp_path / ".env"
     db_path = tmp_path / "settings.db"
 
-    with sqlite3.connect(db_path) as conn:
-        conn.executescript(SCHEMA)
+    import magazyn.db as db_module
 
-    original_connect = sqlite3.connect
+    temp_engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    monkeypatch.setattr(db_module, "engine", temp_engine)
+    monkeypatch.setattr(db_module, "_is_postgres", False)
 
-    def read_only_connect(target, *args, **kwargs):
-        if str(target) == str(db_path):
-            ro_kwargs = dict(kwargs)
-            ro_kwargs.setdefault("uri", True)
-            return original_connect(
-                f"file:{db_path}?mode=ro", *args, **ro_kwargs
-            )
-        return original_connect(target, *args, **kwargs)
-
-    monkeypatch.setattr(sqlite3, "connect", read_only_connect)
-    monkeypatch.setattr("magazyn.settings_store.sqlite3.connect", read_only_connect)
+    with temp_engine.connect() as conn:
+        conn.execute(text(SCHEMA))
+        conn.commit()
 
     env_path.write_text(
         "\n".join(
@@ -57,6 +55,13 @@ def read_only_settings_store(tmp_path):
     monkeypatch.setenv("DB_PATH", str(db_path))
 
     settings_store.reload()
+
+    # Symulacja bazy read-only: db_connect rzuca wyjatek przy probie zapisu
+    @contextmanager
+    def failing_db_connect():
+        raise RuntimeError("attempt to write a readonly database")
+
+    monkeypatch.setattr(db_module, "db_connect", failing_db_connect)
 
     try:
         yield env_path

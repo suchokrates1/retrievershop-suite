@@ -20,7 +20,7 @@ from flask import (
 )
 from sqlalchemy import desc
 
-from ..db import get_session, sqlite_connect
+from ..db import get_session, db_connect
 from ..auth import login_required
 from ..models import PrintedOrder, OrderProduct, OrderStatusLog, ScanLog
 from ..domain.products import find_by_barcode
@@ -189,7 +189,7 @@ def _load_order_for_barcode(barcode: str):
     - DHL: krotki tracking (A003RFH916), JJD kod (JJD000030...), 2LPL referencja (2LPL22400+...)
     - Inne: package_id, delivery_package_nr
     """
-    import sqlite3
+    from sqlalchemy import text
     
     matched_order_id = None
     order_data = None
@@ -241,15 +241,15 @@ def _load_order_for_barcode(barcode: str):
         return matched_order_id, order_data
 
     try:
-        with sqlite_connect() as conn:
-            cur = conn.execute(
-                "SELECT order_id, last_order_data FROM label_queue"
-            )
-            for oid, data_json in cur.fetchall():
+        with db_connect() as conn:
+            rows = conn.execute(
+                text("SELECT order_id, last_order_data FROM label_queue")
+            ).fetchall()
+            for oid, data_json in rows:
                 data = _parse_last_order_data(data_json)
                 if barcode == oid or _match_barcode_to_order(data, barcode):
                     return oid, data
-    except sqlite3.Error:
+    except Exception:
         pass
 
     return None, None

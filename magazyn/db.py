@@ -8,7 +8,8 @@ import sqlite3
 from datetime import timezone
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
@@ -93,7 +94,11 @@ def _configure_sqlite_connection(dbapi_connection):
 
 
 def sqlite_connect(db_path=None, *, apply_pragmas=True, **kwargs):
-    """Return a SQLite connection with standard settings applied."""
+    """Return a SQLite connection with standard settings applied.
+
+    UWAGA: Uzywaj tylko do operacji specyficznych dla SQLite
+    (np. skrypty migracji). Do zapytan runtime uzywaj ``db_connect()``.
+    """
 
     if db_path is None:
         if engine is None:
@@ -107,6 +112,44 @@ def sqlite_connect(db_path=None, *, apply_pragmas=True, **kwargs):
     if apply_pragmas:
         _configure_sqlite_connection(conn)
     return conn
+
+
+@contextmanager
+def db_connect():
+    """Context manager dla raw SQL przez SQLAlchemy Connection.
+
+    Dziala na obu backendach (SQLite i PostgreSQL).
+    Uzywa ``text()`` do zapytan z ``:named`` parametrami.
+
+    Przyklad::
+
+        with db_connect() as conn:
+            conn.execute(text("INSERT INTO t(k) VALUES (:v)"), {"v": 1})
+    """
+    if engine is None:
+        raise RuntimeError("Database not configured. Call configure_engine() first.")
+    with engine.connect() as conn:
+        yield conn
+        conn.commit()
+
+
+def table_has_column(table_name: str, column_name: str) -> bool:
+    """Sprawdza czy tabela ma kolumne. Dziala na SQLite i PostgreSQL."""
+    with engine.connect() as conn:
+        if _is_postgres:
+            row = conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = :tbl AND column_name = :col"
+                ),
+                {"tbl": table_name, "col": column_name},
+            ).fetchone()
+            return row is not None
+        else:
+            rows = conn.execute(
+                text(f"PRAGMA table_info({table_name})")
+            ).fetchall()
+            return column_name in [r[1] for r in rows]
 
 
 def configure_engine(db_path=None):
