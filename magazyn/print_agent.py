@@ -1891,6 +1891,16 @@ class LabelAgent:
                     if order_id in queued_order_ids:
                         continue
 
+                    # Blokada druku dla nieopłaconych zamówień (nie dotyczy COD)
+                    payment_done = float(order.get("payment_done") or 0)
+                    is_cod = str(order.get("payment_method_cod", "0")) == "1"
+                    if not is_cod and payment_done <= 0:
+                        self.logger.info(
+                            "Pomijam %s - nieoplacone (payment_done=%.2f, cod=%s)",
+                            order_id, payment_done, is_cod,
+                        )
+                        continue
+
                     try:
                         packages = self._retry(
                             self.get_order_packages,
