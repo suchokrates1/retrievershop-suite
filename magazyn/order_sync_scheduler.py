@@ -346,13 +346,13 @@ def _process_pending_invoices():
 
 
 def _sync_worker(app):
-    """Background worker that syncs orders and parcel statuses every hour."""
+    """Background worker that syncs orders and parcel statuses every 10 minutes."""
     from .parcel_tracking import sync_parcel_statuses
     from .returns import sync_returns
     
     global _last_offer_sync_date
     
-    logger.info("Order sync scheduler started - will sync every 1 hour")
+    logger.info("Order sync scheduler started - will sync every 10 minutes")
     
     while not _stop_event.is_set():
         try:
@@ -430,8 +430,8 @@ def _sync_worker(app):
         except Exception as e:
             logger.error(f"Error in automatic sync: {e}", exc_info=True)
         
-        # Wait 1 hour (3600 seconds) or until stop event
-        _stop_event.wait(3600)
+        # Wait 10 minutes (600 seconds) or until stop event
+        _stop_event.wait(600)
     
     logger.info("Order sync scheduler stopped")
 
