@@ -432,6 +432,45 @@
                 </div>
                 {% endif %}
 
+                {# Dokumenty - faktura/korekta do pobrania #}
+                {% if wfirma_invoice_id or wfirma_correction_id %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-file-earmark-pdf me-1"></i> Dokumenty
+                    </div>
+                    <div class="card-body">
+                        {% if wfirma_invoice_id %}
+                        <div class="d-flex justify-content-between align-items-center{% if wfirma_correction_id %} mb-3{% endif %}">
+                            <div>
+                                <strong style="font-size:0.9rem">Faktura</strong>
+                                {% if wfirma_invoice_number %}
+                                <br><small class="text-muted">{{ wfirma_invoice_number }}</small>
+                                {% endif %}
+                            </div>
+                            <a href="{{ url_for('customer_order.customer_invoice_pdf', token=order.customer_token) }}"
+                               target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> Pobierz PDF
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if wfirma_correction_id %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong style="font-size:0.9rem">Korekta faktury</strong>
+                                {% if wfirma_correction_number %}
+                                <br><small class="text-muted">{{ wfirma_correction_number }}</small>
+                                {% endif %}
+                            </div>
+                            <a href="{{ url_for('customer_order.customer_correction_pdf', token=order.customer_token) }}"
+                               target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> Pobierz PDF
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
                 {# Historia statusow #}
                 {% if status_history %}
                 <div class="card mb-3">

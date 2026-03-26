@@ -356,37 +356,6 @@
                     
                     <hr class="my-3">
                     {% endif %}
-                    
-                    <p class="mb-2">
-                        <strong>Metoda:</strong> {{ order.delivery_method or '-' }}
-                    </p>
-                    {% if order.delivery_package_nr %}
-                    <p class="mb-2">
-                        <strong>Nr przesyłki:</strong> 
-                        {% if tracking_url %}
-                        <a href="{{ tracking_url }}" target="_blank" class="text-decoration-none">
-                            <code>{{ order.delivery_package_nr }}</code>
-                            <i class="bi bi-box-arrow-up-right ms-1"></i>
-                        </a>
-                        {% else %}
-                        <code>{{ order.delivery_package_nr }}</code>
-                        {% endif %}
-                    </p>
-                    {% endif %}
-                    <div class="d-flex gap-2 mt-3">
-                        <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-primary"
-                                    onclick="return confirm('Wydrukować etykietę?');">
-                                <i class="bi bi-printer"></i> Drukuj
-                            </button>
-                        </form>
-                        <form action="{{ url_for('orders.download_label', order_id=order.order_id) }}" method="get" class="mb-0">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-download"></i> Pobierz
-                            </button>
-                        </form>
-                    </div>
                 </div>
             </div>
 
@@ -478,6 +447,45 @@
                 </div>
             </div>
             {% endif %}
+
+            {# Przesylka - metoda, nr, etykiety #}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-box-seam"></i> Przesylka
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>Metoda:</strong> {{ order.delivery_method or '-' }}
+                    </p>
+                    {% if order.delivery_package_nr %}
+                    <p class="mb-2">
+                        <strong>Nr przesyłki:</strong> 
+                        {% if tracking_url %}
+                        <a href="{{ tracking_url }}" target="_blank" class="text-decoration-none">
+                            <code>{{ order.delivery_package_nr }}</code>
+                            <i class="bi bi-box-arrow-up-right ms-1"></i>
+                        </a>
+                        {% else %}
+                        <code>{{ order.delivery_package_nr }}</code>
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                    <div class="d-flex gap-2 mt-3">
+                        <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                    onclick="return confirm('Wydrukować etykietę?');">
+                                <i class="bi bi-printer"></i> Drukuj
+                            </button>
+                        </form>
+                        <form action="{{ url_for('orders.download_label', order_id=order.order_id) }}" method="get" class="mb-0">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> Pobierz
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
 
             {# Payment info #}
             <div class="card mb-3">

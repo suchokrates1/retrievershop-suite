@@ -8,7 +8,7 @@ Strona zamowienia z danymi, trackingiem, faktura.
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, render_template, abort, current_app
+from flask import Blueprint, render_template, abort, current_app, Response
 
 from ..db import get_session
 from ..models import Order, OrderProduct, OrderStatusLog
@@ -187,6 +187,64 @@ def customer_order_page(token):
             "status_history": status_history,
             "invoice_data": invoice_data,
             "date_add": _unix_to_datetime(order.date_add),
+            "wfirma_invoice_id": order.wfirma_invoice_id,
+            "wfirma_invoice_number": order.wfirma_invoice_number,
+            "wfirma_correction_id": order.wfirma_correction_id,
+            "wfirma_correction_number": order.wfirma_correction_number,
         }
 
         return render_template("customer/order_status.html", **context)
+
+
+@bp.route("/zamowienie/<token>/faktura")
+def customer_invoice_pdf(token):
+    """Pobierz PDF faktury - autoryzacja przez token."""
+    if not token or len(token) < 16:
+        abort(404)
+
+    with get_session() as db:
+        order = db.query(Order).filter(Order.customer_token == token).first()
+        if not order or not order.wfirma_invoice_id:
+            abort(404)
+
+        try:
+            from ..wfirma_api import WFirmaClient, download_invoice_pdf
+            client = WFirmaClient.from_settings()
+            pdf_data = download_invoice_pdf(client, order.wfirma_invoice_id)
+        except Exception as exc:
+            logger.error("Blad pobierania PDF faktury klienta %s: %s", order.wfirma_invoice_number, exc)
+            abort(500)
+
+        safe_nr = (order.wfirma_invoice_number or "faktura").replace("/", "_").replace("\\", "_")
+        return Response(
+            pdf_data,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"inline; filename={safe_nr}.pdf"},
+        )
+
+
+@bp.route("/zamowienie/<token>/korekta")
+def customer_correction_pdf(token):
+    """Pobierz PDF korekty faktury - autoryzacja przez token."""
+    if not token or len(token) < 16:
+        abort(404)
+
+    with get_session() as db:
+        order = db.query(Order).filter(Order.customer_token == token).first()
+        if not order or not order.wfirma_correction_id:
+            abort(404)
+
+        try:
+            from ..wfirma_api import WFirmaClient, download_invoice_pdf
+            client = WFirmaClient.from_settings()
+            pdf_data = download_invoice_pdf(client, order.wfirma_correction_id)
+        except Exception as exc:
+            logger.error("Blad pobierania PDF korekty klienta %s: %s", order.wfirma_correction_number, exc)
+            abort(500)
+
+        safe_nr = (order.wfirma_correction_number or "korekta").replace("/", "_").replace("\\", "_")
+        return Response(
+            pdf_data,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"inline; filename={safe_nr}.pdf"},
+        )
