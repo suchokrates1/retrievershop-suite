@@ -93,29 +93,47 @@ def generate_and_send_invoice(order_id: str) -> dict:
             result["errors"].append(f"Blad inicjalizacji klienta wFirma: {exc}")
             return result
 
-        # 1. Znajdz/utworz kontrahenta
-        try:
-            contractor_id = find_or_create_contractor(
-                client,
-                name=contractor_name,
-                street=order.invoice_address or order.delivery_address or "",
-                zip_code=order.invoice_postcode or order.delivery_postcode or "",
-                city=order.invoice_city or order.delivery_city or "",
-                country=order.invoice_country or "PL",
-                nip=order.invoice_nip or None,
-                email=order.email or None,
-                phone=order.phone or None,
-            )
-        except Exception as exc:
-            logger.error("Blad tworzenia kontrahenta dla %s: %s", order_id, exc, exc_info=True)
-            result["errors"].append(f"Blad tworzenia kontrahenta wFirma: {exc}")
-            return result
+        # 1. Przygotuj dane kontrahenta
+        nip = (order.invoice_nip or "").strip()
+        is_company = bool(nip)
+        contractor_id = None
+        contractor_data = None
+
+        if is_company:
+            # Firma - tworzymy/szukamy kontrahenta w wFirma
+            try:
+                contractor_id = find_or_create_contractor(
+                    client,
+                    name=contractor_name,
+                    street=order.invoice_address or order.delivery_address or "",
+                    zip_code=order.invoice_postcode or order.delivery_postcode or "",
+                    city=order.invoice_city or order.delivery_city or "",
+                    country=order.invoice_country or "PL",
+                    nip=nip,
+                    email=order.email or None,
+                    phone=order.phone or None,
+                )
+            except Exception as exc:
+                logger.error("Blad tworzenia kontrahenta dla %s: %s", order_id, exc, exc_info=True)
+                result["errors"].append(f"Blad tworzenia kontrahenta wFirma: {exc}")
+                return result
+        else:
+            # Osoba fizyczna - dane inline (bez tworzenia kontrahenta)
+            contractor_data = {
+                "name": contractor_name,
+                "street": order.invoice_address or order.delivery_address or "",
+                "zip": order.invoice_postcode or order.delivery_postcode or "",
+                "city": order.invoice_city or order.delivery_city or "",
+                "country": order.invoice_country or "PL",
+            }
+            logger.info("Faktura imienna dla %s: %s", order_id, contractor_name)
 
         # 2. Wystaw fakture
         try:
             inv = create_invoice(
                 client,
                 contractor_id=contractor_id,
+                contractor_data=contractor_data,
                 items=items,
                 payment_method="transfer",
                 invoice_type="bill",
