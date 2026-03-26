@@ -440,6 +440,11 @@ class LabelAgent:
         except (DBAPIError, Exception) as exc:
             if self._handle_readonly_error("database migrations", exc):
                 return
+            # Ignoruj race condition: wielu workerow probuje rownoczesnie stworzyc tabele
+            err_msg = str(exc).lower()
+            if "unique" in err_msg and ("pg_type" in err_msg or "already exists" in err_msg):
+                self.logger.debug("ensure_db: tabele juz istnieja (race condition) - pomijam")
+                return
             self.logger.error("Blad ensure_db: %s", exc)
             raise
 
