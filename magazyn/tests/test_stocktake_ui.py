@@ -14,10 +14,20 @@ Uruchomienie:
 """
 import threading
 import time
+import os
 import pytest
 from collections import OrderedDict
 
-from playwright.sync_api import Page, expect
+try:
+    from playwright.sync_api import Page, expect
+    _PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    _PLAYWRIGHT_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(
+    not _PLAYWRIGHT_AVAILABLE or os.getenv("CI") == "true",
+    reason="Testy UI wymagaja Playwright z zainstalowana przegladarka",
+)
 
 
 EAN = "6900000000001"

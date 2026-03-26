@@ -34,12 +34,12 @@ def test_settings_list_all_keys(app_mod, client, login):
 
 
 def test_store_populates_database_when_empty(app_mod):
-    from magazyn import DB_PATH
-    from magazyn.db import sqlite_connect
+    from magazyn.db import get_session
+    from sqlalchemy import text
 
-    with sqlite_connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM app_settings")
-        conn.commit()
+    with get_session() as session:
+        session.execute(text("DELETE FROM app_settings"))
+        session.commit()
 
     settings_store.reload()
     values = settings_store.as_ordered_dict(include_hidden=True)

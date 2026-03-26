@@ -64,10 +64,11 @@ def order_with_token(app):
 @pytest.fixture
 def order_with_invoice(app):
     """Zamowienie z danymi do faktury."""
+    import time
     token = secrets.token_urlsafe(32)
     with app.app_context():
         with get_session() as db:
-            order = Order(order_id="TEST-ORDER-002")
+            order = Order(order_id="allegro_TEST-ORDER-002")
             order.customer_token = token
             order.customer_name = "Firma Testowa"
             order.email = "firma@test.pl"
@@ -77,7 +78,7 @@ def order_with_invoice(app):
             order.delivery_postcode = "30-001"
             order.delivery_price = 0
             order.payment_done = 100.00
-            order.date_add = 1700000000
+            order.date_add = int(time.time())
             order.want_invoice = True
             order.invoice_company = "Firma Testowa Sp. z o.o."
             order.invoice_nip = "1234567890"
@@ -89,7 +90,7 @@ def order_with_invoice(app):
             db.flush()
 
             op = OrderProduct(
-                order_id="TEST-ORDER-002",
+                order_id="allegro_TEST-ORDER-002",
                 name="Smycz premium",
                 quantity=1,
                 price_brutto=100.00,
@@ -564,14 +565,14 @@ class TestProcessPendingInvoices:
                 stats = _process_pending_invoices()
                 assert stats["processed"] == 1
                 assert stats["success"] == 1
-                mock_gen.assert_called_once_with("TEST-ORDER-002")
+                mock_gen.assert_called_once_with("allegro_TEST-ORDER-002")
 
     def test_process_skips_already_invoiced(self, app, order_with_invoice):
         """Zamowienia z istniejaca faktura sa pomijane."""
         with app.app_context():
             with get_session() as db:
                 order = db.query(Order).filter(
-                    Order.order_id == "TEST-ORDER-002"
+                    Order.order_id == "allegro_TEST-ORDER-002"
                 ).first()
                 order.wfirma_invoice_id = 12345
                 db.commit()
