@@ -489,10 +489,16 @@ def orders_list():
             ]
             
             # Sprawdz czy zamowienie ma aktywny zwrot
-            has_return = db.query(Return).filter(
+            active_return = db.query(Return).filter(
                 Return.order_id == order.order_id,
                 Return.status != "cancelled"
-            ).first() is not None
+            ).first()
+            return_info = None
+            if active_return:
+                return_info = {
+                    "status": active_return.status,
+                    "refund_processed": active_return.refund_processed,
+                }
             
             orders_data.append({
                 "order_id": order.order_id,
@@ -509,7 +515,7 @@ def orders_list():
                 "status_class": status_class,
                 "product_summary": product_lines,
                 "tracking_number": order.delivery_package_nr,
-                "has_return": has_return,
+                "return_info": return_info,
             })
         
         # Calculate pagination
