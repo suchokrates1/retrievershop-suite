@@ -109,11 +109,17 @@ def _find_delivery_service_id(delivery_method_name: str) -> Optional[str]:
 
 
 def _default_packages(total_qty: int = 1) -> list[dict]:
-    """Domyslna paczka dla zamowienia. Gabaryt A do 5 szt, B powyzej."""
+    """Domyslna paczka dla zamowienia. Gabaryt A do 5 szt, B powyzej.
+
+    Gabaryty InPost Paczkomat:
+      A: max  8 x 38 x 64 cm
+      B: max 19 x 38 x 64 cm
+      C: max 41 x 38 x 64 cm
+    """
     if total_qty > 5:
-        dims = {"length": 40, "width": 30, "height": 20}
+        dims = {"length": 64, "width": 38, "height": 19}  # Gabaryt B
     else:
-        dims = {"length": 30, "width": 20, "height": 10}
+        dims = {"length": 64, "width": 38, "height": 8}   # Gabaryt A
     return [{
         "weight": {"value": 1.0, "unit": "KILOGRAM"},
         "dimensions": {

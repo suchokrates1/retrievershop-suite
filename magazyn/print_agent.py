@@ -930,14 +930,16 @@ class LabelAgent:
         if point_id:
             receiver["point"] = point_id
 
-        # Paczki wg dokumentacji API
-        # Gabaryt A (domyslny) do 5 produktow, B powyzej 5
+        # Gabaryty InPost Paczkomat:
+        #   A: max  8 x 38 x 64 cm
+        #   B: max 19 x 38 x 64 cm
+        #   C: max 41 x 38 x 64 cm
         products = order_data.get("products", [])
         total_qty = sum(p.get("quantity", 1) for p in products)
         if total_qty > 5:
-            pkg_dims = {"length": 40, "width": 30, "height": 20}
+            pkg_dims = {"length": 64, "width": 38, "height": 19}  # Gabaryt B
         else:
-            pkg_dims = {"length": 30, "width": 20, "height": 10}
+            pkg_dims = {"length": 64, "width": 38, "height": 8}   # Gabaryt A
 
         packages = [
             {
