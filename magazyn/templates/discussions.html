@@ -119,6 +119,7 @@
     .thread-item.active {
         background: #1c2128;
         border-color: #58a6ff;
+        box-shadow: inset 3px 0 0 #58a6ff;
     }
 
     .thread-item.unread {
@@ -748,6 +749,12 @@ document.addEventListener('alpine:init', () => {
             }
             if (first) {
                 this.selectThread(first);
+                this.$nextTick(() => {
+                    const activeEl = this.$el.querySelector('.thread-item.active');
+                    if (activeEl) {
+                        activeEl.scrollIntoView({ block: 'center', behavior: 'instant' });
+                    }
+                });
             }
 
             this._requestNotificationPermission();
