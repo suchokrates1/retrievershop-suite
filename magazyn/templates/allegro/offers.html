@@ -6,15 +6,15 @@
     <button type="submit" class="btn btn-primary">Odśwież</button>
     </form>
 {% macro render_offers_table(offers) -%}
-<div class="table-responsive">
-    <table class="table table-striped align-middle">
+<div class="overflow-x-auto">
+    <table class="table table-zebra">
         <thead>
             <tr>
                 <th scope="col">ID</th>
                 <th scope="col">EAN</th>
                 <th scope="col">Tytuł</th>
                 <th scope="col">Cena</th>
-                <th scope="col" class="w-50">Powiązanie z magazynem</th>
+                <th scope="col" class="w-1/2">Powiązanie z magazynem</th>
             </tr>
         </thead>
         <tbody>
@@ -25,25 +25,25 @@
                 <td>{{ offer.title }}</td>
                 <td>{{ offer.price }}</td>
                 <td>
-                    <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
+                    <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="flex items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="dropdown flex-grow-1" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
+                        <div class="dropdown grow" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
                             <input type="hidden" name="product_id" :value="productId">
                             <input type="hidden" name="product_size_id" :value="sizeId">
-                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
+                            <button class="btn btn-ghost w-full text-left" type="button" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
                             </button>
-                            <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
-                                <input type="text" class="form-control form-control-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
-                                <div class="list-group">
-                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('none', '', 'Wybierz z magazynu')">
-                                        <div class="fw-semibold">Brak powiązania</div>
-                                        <div class="small text-muted">Zostaw ofertę bez przypisania</div>
+                            <div class="dropdown-content bg-base-200 w-full p-3">
+                                <input type="text" class="input input-bordered input-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
+                                <div class="flex flex-col gap-1">
+                                    <button type="button" class="btn btn-ghost justify-start text-left w-full" @click="selectOption('none', '', 'Wybierz z magazynu')">
+                                        <div class="font-semibold">Brak powiązania</div>
+                                        <div class="small text-base-content/60">Zostaw ofertę bez przypisania</div>
                                     </button>
                                     {% for item in inventory %}
-                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
-                                        <div class="fw-semibold">{{ item.label }}</div>
-                                        <div class="small text-muted">
-                                            <span class="badge bg-secondary me-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
+                                    <button type="button" class="btn btn-ghost justify-start text-left w-full" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
+                                        <div class="font-semibold">{{ item.label }}</div>
+                                        <div class="small text-base-content/60">
+                                            <span class="badge badge-neutral mr-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
                                         </div>
                                     </button>
                                     {% endfor %}
@@ -56,7 +56,7 @@
             </tr>
         {% else %}
             <tr>
-                <td colspan="4" class="text-center text-muted">Brak ofert w tej sekcji.</td>
+                <td colspan="4" class="text-center text-base-content/60">Brak ofert w tej sekcji.</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -65,17 +65,17 @@
 {%- endmacro %}
 
 <section id="unlinked-offers" class="mb-5">
-    <div class="d-flex align-items-center gap-2 mb-3">
+    <div class="flex items-center gap-2 mb-3">
         <h2 class="h4 mb-0">Oferty wymagające przypięcia</h2>
-        <span class="badge bg-secondary" data-offers-count>{{ unlinked_offers|length }}</span>
+        <span class="badge badge-neutral" data-offers-count>{{ unlinked_offers|length }}</span>
     </div>
     {{ render_offers_table(unlinked_offers) }}
 </section>
 
 <section id="linked-offers">
-    <div class="d-flex align-items-center gap-2 mb-3">
+    <div class="flex items-center gap-2 mb-3">
         <h2 class="h4 mb-0">Oferty powiązane z magazynem</h2>
-        <span class="badge bg-secondary" data-offers-count>{{ linked_offers|length }}</span>
+        <span class="badge badge-neutral" data-offers-count>{{ linked_offers|length }}</span>
     </div>
     {{ render_offers_table(linked_offers) }}
 </section>

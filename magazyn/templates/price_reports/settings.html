@@ -1,39 +1,39 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="flex justify-between items-center mb-4">
     <div>
-        <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline-secondary btn-sm mb-2">
+        <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline btn-sm mb-2">
             <i class="bi bi-arrow-left"></i> Powrot do listy
         </a>
         <h2>Ustawienia raportow cenowych</h2>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-6">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
         <form method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             
-            <div class="card">
-                <div class="card-header">
+            <div class="card bg-base-200">
+                <div class="card-body border-b border-base-300 font-semibold py-3">
                     <h5 class="mb-0"><i class="bi bi-sliders"></i> Parametry</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <label for="max_discount" class="form-label">
+                        <label for="max_discount" class="label-text">
                             Maksymalna znizka dla sugestii cen (%)
                         </label>
-                        <input type="number" class="form-control" id="max_discount" name="max_discount" 
+                        <input type="number" class="input input-bordered w-full" id="max_discount" name="max_discount" 
                                value="{{ max_discount }}" min="0" max="50" step="0.5">
-                        <div class="form-text">
+                        <div class="text-sm text-base-content/60">
                             Sugestie cen beda pokazywane tylko gdy wymagana obnizka nie przekracza tego procentu.
                             <br>
                             Np. przy 5%: jesli nasza cena to 100 zl, sugestia pojawi sie tylko gdy konkurent ma min. 95 zl.
                         </div>
                     </div>
                 </div>
-                <div class="card-footer">
+                <div class="card-body border-t border-base-300">
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check"></i> Zapisz ustawienia
                     </button>
@@ -41,8 +41,8 @@
             </div>
         </form>
         
-        <div class="card mt-4">
-            <div class="card-header">
+        <div class="card bg-base-200 mt-4">
+            <div class="card-body border-b border-base-300 font-semibold py-3">
                 <h5 class="mb-0"><i class="bi bi-clock"></i> Harmonogram automatyczny</h5>
             </div>
             <div class="card-body">
@@ -64,24 +64,24 @@
         </div>
     </div>
     
-    <div class="col-md-6">
+    <div>
         <!-- Wykluczeni sprzedawcy -->
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card bg-base-200">
+            <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">
                 <h5 class="mb-0"><i class="bi bi-person-x"></i> Wykluczeni sprzedawcy</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small">
+                <p class="text-base-content/60 text-sm">
                     Sprzedawcy na tej liscie beda pomijani przy porownywaniu cen konkurencji.
                 </p>
                 
                 <!-- Formularz dodawania -->
                 <form method="post" action="{{ url_for('price_reports.exclude_seller') }}" class="mb-3">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="input-group">
-                        <input type="text" class="form-control" name="seller_name" 
+                    <div class="join w-full">
+                        <input type="text" class="input input-bordered join-item w-full" name="seller_name" 
                                placeholder="Nick sprzedawcy na Allegro" required>
-                        <button type="submit" class="btn btn-outline-danger">
+                        <button type="submit" class="btn btn-outline btn-error join-item">
                             <i class="bi bi-plus"></i> Wyklucz
                         </button>
                     </div>
@@ -89,12 +89,12 @@
                 
                 <!-- Lista wykluczonych -->
                 {% if excluded_sellers %}
-                <table class="table table-sm table-hover">
+                <table class="table table-sm">
                     <thead>
                         <tr>
                             <th>Sprzedawca</th>
                             <th>Data wykluczenia</th>
-                            <th class="text-end">Akcja</th>
+                            <th class="text-right">Akcja</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -103,17 +103,17 @@
                             <td>
                                 <strong>{{ seller.seller_name }}</strong>
                                 {% if seller.reason %}
-                                <br><small class="text-muted">{{ seller.reason }}</small>
+                                <br><small class="text-base-content/60">{{ seller.reason }}</small>
                                 {% endif %}
                             </td>
                             <td>
                                 <small>{{ seller.excluded_at.strftime('%Y-%m-%d %H:%M') if seller.excluded_at else '-' }}</small>
                             </td>
-                            <td class="text-end">
+                            <td class="text-right">
                                 <form method="post" action="{{ url_for('price_reports.remove_excluded_seller', seller_id=seller.id) }}" 
-                                      style="display: inline;">
+                                      class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success" 
+                                    <button type="submit" class="btn btn-sm btn-outline btn-success" 
                                             title="Przywroc sprzedawce">
                                         <i class="bi bi-arrow-counterclockwise"></i>
                                     </button>
@@ -124,8 +124,8 @@
                     </tbody>
                 </table>
                 {% else %}
-                <div class="text-center text-muted py-3">
-                    <i class="bi bi-check-circle fs-4"></i>
+                <div class="text-center text-base-content/60 py-3">
+                    <i class="bi bi-check-circle text-xl"></i>
                     <p class="mb-0 mt-2">Brak wykluczonych sprzedawcow</p>
                 </div>
                 {% endif %}

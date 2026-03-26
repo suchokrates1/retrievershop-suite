@@ -6,24 +6,24 @@
     {% set barcode_error_message = 'Nie znaleziono paczki dla zeskanowanej etykiety.' %}
 {% endblock %}
 {% block content %}
-    <div class="container text-center">
+    <div class="container mx-auto text-center">
         <h2 class="mb-4">Skanuj etykietę paczki</h2>
         <p class="lead">Przyłóż kod kreskowy z etykiety lub wpisz numer ręcznie, aby odsłuchać produkty w paczce.</p>
-        <form class="row justify-content-center">
-            <div class="col-md-6">
-                <label for="label-barcode-input" class="form-label visually-hidden">Kod etykiety</label>
+        <form class="flex flex-wrap justify-center gap-4">
+            <div class="w-full md:w-1/2">
+                <label for="label-barcode-input" class="label-text sr-only">Kod etykiety</label>
                 <input type="text"
                        id="label-barcode-input"
-                       class="form-control form-control-lg text-center"
+                       class="input input-bordered input-lg w-full text-center"
                        placeholder="Przyłóż czytnik lub wpisz kod z etykiety"
                        autocomplete="off"
                        data-barcode-source="manual">
             </div>
         </form>
-        <div class="alert alert-success mt-4 d-none" data-barcode-result></div>
-        <div class="alert alert-danger mt-4 d-none" data-barcode-error></div>
+        <div class="alert alert-success mt-4 hidden" data-barcode-result></div>
+        <div class="alert alert-error mt-4 hidden" data-barcode-error></div>
         <div class="mt-3">
-            <a href="{{ next or url_for('products.items') }}" class="btn btn-outline-secondary">Wróć</a>
+            <a href="{{ next or url_for('products.items') }}" class="btn btn-outline">Wróć</a>
         </div>
     </div>
 {% endblock %}

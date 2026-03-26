@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="col-md-8 mx-auto">
+<div class="w-full md:w-2/3 mx-auto">
     <h2 class="text-center mb-4">Import faktury</h2>
 
-    <div class="card mb-4">
+    <div class="card bg-base-200 mb-4">
         <div class="card-body">
             <form action="{{ url_for('products.import_invoice') }}" method="POST" enctype="multipart/form-data"
                   x-data="fileUpload()" @submit="if (!hasFile) $event.preventDefault()">
@@ -19,22 +19,22 @@
                      @dragover.prevent="dragging = true"
                      @dragleave.prevent="dragging = false"
                      @drop.prevent="handleDrop($event)">
-                    <i class="bi bi-cloud-arrow-up fs-1 text-muted"></i>
+                    <i class="bi bi-cloud-arrow-up text-4xl text-base-content/60"></i>
                     <p class="mt-2 mb-1">Przeciągnij plik tutaj lub kliknij aby wybrać</p>
-                    <small class="text-muted">Obsługiwane formaty: PDF, XLSX, XLS</small>
-                    <input type="file" name="file" required class="d-none" x-ref="fileInput" accept=".pdf,.xlsx,.xls"
+                    <small class="text-base-content/60">Obsługiwane formaty: PDF, XLSX, XLS</small>
+                    <input type="file" name="file" required class="hidden" x-ref="fileInput" accept=".pdf,.xlsx,.xls"
                            @change="if ($refs.fileInput.files.length) selectFile($refs.fileInput.files[0])">
                 </div>
 
                 {# Informacja o wybranym pliku #}
-                <div class="alert alert-secondary mb-3" x-show="hasFile" x-cloak>
-                    <div class="d-flex align-items-center justify-content-between">
+                <div class="alert mb-3" x-show="hasFile" x-cloak>
+                    <div class="flex items-center justify-between">
                         <div>
-                            <i class="bi bi-file-earmark me-2"></i>
+                            <i class="bi bi-file-earmark mr-2"></i>
                             <strong x-text="selectedName"></strong>
-                            <small class="text-muted ms-2" x-text="selectedSize"></small>
+                            <small class="text-base-content/60 ml-2" x-text="selectedSize"></small>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-danger" @click.stop="clearFile()" title="Usuń plik">
+                        <button type="button" class="btn btn-sm btn-outline btn-error" @click.stop="clearFile()" title="Usuń plik">
                             <i class="bi bi-x-lg"></i>
                         </button>
                     </div>
@@ -42,15 +42,15 @@
 
                 <div class="text-center">
                     <button type="submit" class="btn btn-primary btn-lg" :disabled="!hasFile">
-                        <i class="bi bi-upload me-2"></i>Zaimportuj
+                        <i class="bi bi-upload mr-2"></i>Zaimportuj
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><i class="bi bi-info-circle me-2"></i>Informacje o importie</div>
+    <div class="card bg-base-200">
+        <div class="card-body border-b border-base-300 font-semibold py-3"><i class="bi bi-info-circle mr-2"></i>Informacje o importie</div>
         <div class="card-body">
             <h6>Formaty plików:</h6>
             <ul class="mb-3">

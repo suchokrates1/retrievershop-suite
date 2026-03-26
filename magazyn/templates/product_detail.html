@@ -3,27 +3,27 @@
 {% set full_width = True %}
 {% endblock %}
 {% block content %}
-<div class="container-fluid">
+<div class="w-full px-4">
     {# Header #}
-    <div class="row mb-4">
-        <div class="col">
-            <a href="{{ url_for('products.items') }}" class="btn btn-outline-secondary mb-2">
+    <div class="grid grid-cols-12 gap-4 mb-4">
+        <div class="col-span-12">
+            <a href="{{ url_for('products.items') }}" class="btn btn-outline mb-2">
                 <i class="bi bi-arrow-left"></i> Powrót do listy
             </a>
-            <div class="d-flex justify-content-between align-items-start">
+            <div class="flex justify-between items-start">
                 <div>
                     <h2>
                         {{ product.category }}
                         {% if product.brand %}{{ product.brand }}{% endif %}
                         {% if product.series %}{{ product.series }}{% endif %}
                     </h2>
-                    <p class="text-muted mb-1">
+                    <p class="text-base-content/60 mb-1">
                         <strong>Marka:</strong> {{ product.brand or 'Truelove' }} |
                         <strong>Kategoria:</strong> {{ product.category }}
                         {% if product.series %} | <strong>Seria:</strong> {{ product.series }}{% endif %}
                     </p>
                     {% if product.color %}
-                    <span class="badge bg-secondary fs-6">{{ product.color }}</span>
+                    <span class="badge badge-neutral text-base">{{ product.color }}</span>
                     {% endif %}
                 </div>
                 <a href="{{ url_for('products.edit_item', product_id=product.id) }}" class="btn btn-primary">
@@ -34,62 +34,62 @@
     </div>
 
     {# Summary cards #}
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card text-center">
+    <div class="grid grid-cols-12 gap-4 mb-4">
+        <div class="col-span-12 md:col-span-3">
+            <div class="card bg-base-200 text-center">
                 <div class="card-body">
                     <h3 class="text-success">{{ total_in_stock }}</h3>
-                    <p class="text-muted mb-0">Na stanie</p>
+                    <p class="text-base-content/60 mb-0">Na stanie</p>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center">
+        <div class="col-span-12 md:col-span-3">
+            <div class="card bg-base-200 text-center">
                 <div class="card-body">
                     <h3 class="text-primary">{{ total_sold }}</h3>
-                    <p class="text-muted mb-0">Sprzedano</p>
+                    <p class="text-base-content/60 mb-0">Sprzedano</p>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center">
+        <div class="col-span-12 md:col-span-3">
+            <div class="card bg-base-200 text-center">
                 <div class="card-body">
                     <h3 class="text-info">{{ total_delivered }}</h3>
-                    <p class="text-muted mb-0">Dostarczono</p>
+                    <p class="text-base-content/60 mb-0">Dostarczono</p>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center">
+        <div class="col-span-12 md:col-span-3">
+            <div class="card bg-base-200 text-center">
                 <div class="card-body">
                     {% if avg_purchase_price %}
                     <h3 class="text-warning">{{ '%.2f'|format(avg_purchase_price) }} zł</h3>
                     {% else %}
-                    <h3 class="text-muted">-</h3>
+                    <h3 class="text-base-content/60">-</h3>
                     {% endif %}
-                    <p class="text-muted mb-0">Śr. cena zakupu</p>
+                    <p class="text-base-content/60 mb-0">Śr. cena zakupu</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
+    <div class="grid grid-cols-12 gap-4">
         {# Left column - Product info and sizes #}
-        <div class="col-lg-6">
+        <div class="col-span-12 lg:col-span-6">
             {# Sizes table #}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 mb-3">
+                <div class="card-body border-b border-base-300 font-semibold py-3">
                     <i class="bi bi-rulers"></i> Rozmiary i stany
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
+                    <table class="table table-zebra mb-0">
                         <thead>
                             <tr>
                                 <th>Rozmiar</th>
                                 <th>EAN / Kod kreskowy</th>
-                                <th class="text-end">Ilość</th>
-                                <th class="text-end">Ostatnia cena</th>
-                                <th class="text-end">Śr. cena</th>
+                                <th class="text-right">Ilość</th>
+                                <th class="text-right">Ostatnia cena</th>
+                                <th class="text-right">Śr. cena</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -101,37 +101,37 @@
                                     {% if size.barcode %}
                                     <code>{{ size.barcode }}</code>
                                     {% else %}
-                                    <span class="text-muted">-</span>
+                                    <span class="text-base-content/60">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end">
+                                <td class="text-right">
                                     {% if size.quantity > 0 %}
-                                    <span class="badge bg-success">{{ size.quantity }}</span>
+                                    <span class="badge badge-success">{{ size.quantity }}</span>
                                     {% elif size.quantity == 0 %}
-                                    <span class="badge bg-warning text-dark">0</span>
+                                    <span class="badge badge-warning">0</span>
                                     {% else %}
-                                    <span class="badge bg-danger">{{ size.quantity }}</span>
+                                    <span class="badge badge-error">{{ size.quantity }}</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end">
+                                <td class="text-right">
                                     {% if size.purchase_price %}
                                     {{ '%.2f'|format(size.purchase_price) }} zł
                                     {% else %}
-                                    <span class="text-muted">-</span>
+                                    <span class="text-base-content/60">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end">
+                                <td class="text-right">
                                     {% if size.avg_purchase_price %}
                                     {{ '%.2f'|format(size.avg_purchase_price) }} zł
                                     {% else %}
-                                    <span class="text-muted">-</span>
+                                    <span class="text-base-content/60">-</span>
                                     {% endif %}
                                 </td>
                             </tr>
                             {% endif %}
                         {% else %}
                             <tr>
-                                <td colspan="5" class="text-center text-muted">Brak rozmiarów</td>
+                                <td colspan="5" class="text-center text-base-content/60">Brak rozmiarów</td>
                             </tr>
                         {% endfor %}
                         </tbody>
@@ -140,37 +140,37 @@
             </div>
 
             {# Delivery history #}
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card bg-base-200 mb-3">
+                <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">
                     <span><i class="bi bi-truck"></i> Historia dostaw (FIFO)</span>
-                    <span class="badge bg-info">{{ delivery_history|length }}</span>
+                    <span class="badge badge-info">{{ delivery_history|length }}</span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped table-sm mb-0">
+                    <table class="table table-zebra table-sm mb-0">
                         <thead>
                             <tr>
                                 <th>Data</th>
                                 <th>Rozmiar</th>
-                                <th class="text-end">Kupiono</th>
-                                <th class="text-end">Zostało</th>
-                                <th class="text-end">Cena jedn.</th>
+                                <th class="text-right">Kupiono</th>
+                                <th class="text-right">Zostało</th>
+                                <th class="text-right">Cena jedn.</th>
                                 <th>Faktura / Dostawca</th>
                             </tr>
                         </thead>
                         <tbody>
                         {% for delivery in delivery_history %}
-                            <tr{% if delivery.remaining == 0 %} class="text-muted"{% endif %}>
+                            <tr{% if delivery.remaining == 0 %} class="text-base-content/60"{% endif %}>
                                 <td>{{ delivery.date[:10] if delivery.date else '-' }}</td>
                                 <td>{{ delivery.size }}</td>
-                                <td class="text-end">{{ delivery.quantity }}</td>
-                                <td class="text-end">
+                                <td class="text-right">{{ delivery.quantity }}</td>
+                                <td class="text-right">
                                     {% if delivery.remaining > 0 %}
-                                    <span class="badge bg-success">{{ delivery.remaining }}</span>
+                                    <span class="badge badge-success">{{ delivery.remaining }}</span>
                                     {% else %}
-                                    <span class="badge bg-secondary">0</span>
+                                    <span class="badge badge-neutral">0</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end">
+                                <td class="text-right">
                                     {% if delivery.price %}
                                     {{ '%.2f'|format(delivery.price) }} zł
                                     {% else %}
@@ -181,16 +181,16 @@
                                     {% if delivery.invoice_number or delivery.supplier %}
                                     <small>
                                         {% if delivery.invoice_number %}{{ delivery.invoice_number }}{% endif %}
-                                        {% if delivery.supplier %}<br><span class="text-muted">{{ delivery.supplier }}</span>{% endif %}
+                                        {% if delivery.supplier %}<br><span class="text-base-content/60">{{ delivery.supplier }}</span>{% endif %}
                                     </small>
                                     {% else %}
-                                    <span class="text-muted">-</span>
+                                    <span class="text-base-content/60">-</span>
                                     {% endif %}
                                 </td>
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-3">
+                                <td colspan="6" class="text-center text-base-content/60 py-3">
                                     Brak historii dostaw
                                 </td>
                             </tr>
@@ -199,22 +199,22 @@
                     </table>
                 </div>
                 {% if delivery_history|length >= 100 %}
-                <div class="card-footer text-center" x-data="lazyHistory('deliveries', {{ product.id }}, {{ delivery_history|length }})">
+                <div class="card-body border-t border-base-300 py-3 text-center" x-data="lazyHistory('deliveries', {{ product.id }}, {{ delivery_history|length }})">
                     <template x-for="(item, i) in extraItems" :key="'d-' + i">
                         <tr x-ref="injected"></tr>
                     </template>
                     <template x-if="hasMore">
                         <div>
-                            <button class="btn btn-sm btn-outline-primary" @click="loadMore()" :disabled="loading">
-                                <template x-if="loading"><span class="spinner-border spinner-border-sm"></span></template>
+                            <button class="btn btn-sm btn-outline btn-primary" @click="loadMore()" :disabled="loading">
+                                <template x-if="loading"><span class="loading loading-spinner loading-sm"></span></template>
                                 <template x-if="!loading"><i class="bi bi-arrow-down-circle"></i></template>
                                 <span x-text="loading ? ' Ładowanie...' : ' Załaduj więcej dostaw'"></span>
                             </button>
-                            <div class="text-muted mt-1"><small>Wyświetlono <span x-text="currentCount"></span> dostaw</small></div>
+                            <div class="text-base-content/60 mt-1"><small>Wyświetlono <span x-text="currentCount"></span> dostaw</small></div>
                         </div>
                     </template>
                     <template x-if="!hasMore && extraItems.length > 0">
-                        <small class="text-muted" x-text="'Wyświetlono wszystkie rekordy (' + currentCount + ')'"></small>
+                        <small class="text-base-content/60" x-text="'Wyświetlono wszystkie rekordy (' + currentCount + ')'"></small>
                     </template>
                 </div>
                 {% endif %}
@@ -222,15 +222,15 @@
         </div>
 
         {# Right column - Allegro offers and Order history #}
-        <div class="col-lg-6">
+        <div class="col-span-12 lg:col-span-6">
             {# Allegro offers #}
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card bg-base-200 mb-3">
+                <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">
                     <span><i class="bi bi-shop"></i> Oferty Allegro</span>
-                    <span class="badge bg-primary">{{ allegro_offers|length }}</span>
+                    <span class="badge badge-primary">{{ allegro_offers|length }}</span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped table-sm mb-0">
+                    <table class="table table-zebra table-sm mb-0">
                         <thead>
                             <tr>
                                 <th>ID oferty</th>
@@ -244,7 +244,7 @@
                         {% for offer in allegro_offers %}
                             <tr>
                                 <td>
-                                    <a href="https://allegro.pl/oferta/{{ offer.offer_id }}" target="_blank" class="text-decoration-none">
+                                    <a href="https://allegro.pl/oferta/{{ offer.offer_id }}" target="_blank" class="no-underline">
                                         {{ offer.offer_id }}
                                     </a>
                                 </td>
@@ -256,26 +256,26 @@
                                 </td>
                                 <td>
                                     {% if offer.matched_size %}
-                                    <span class="badge bg-success">{{ offer.matched_size }}</span>
+                                    <span class="badge badge-success">{{ offer.matched_size }}</span>
                                     {% else %}
-                                    <span class="badge bg-secondary">Produkt</span>
+                                    <span class="badge badge-neutral">Produkt</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end fw-bold">{{ '%.2f'|format(offer.price) }} zł</td>
+                                <td class="text-right font-bold">{{ '%.2f'|format(offer.price) }} zł</td>
                                 <td>
                                     {% if offer.publication_status == 'ACTIVE' %}
-                                    <span class="badge bg-success">Aktywna</span>
+                                    <span class="badge badge-success">Aktywna</span>
                                     {% elif offer.publication_status == 'ENDED' %}
-                                    <span class="badge bg-secondary">Zakończona</span>
+                                    <span class="badge badge-neutral">Zakończona</span>
                                     {% else %}
-                                    <span class="badge bg-warning">{{ offer.publication_status }}</span>
+                                    <span class="badge badge-warning">{{ offer.publication_status }}</span>
                                     {% endif %}
                                 </td>
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-3">
-                                    <i class="bi bi-shop fs-3"></i>
+                                <td colspan="5" class="text-center text-base-content/60 py-3">
+                                    <i class="bi bi-shop text-2xl"></i>
                                     <p class="mb-0 mt-2">Brak powiązanych ofert Allegro</p>
                                     <small>Powiąż oferty na stronie Oferty i ceny</small>
                                 </td>
@@ -287,28 +287,28 @@
             </div>
 
             {# Order history #}
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card bg-base-200">
+                <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">
                     <span><i class="bi bi-bag-check"></i> Historia zamówień ({{ total_sold }} szt. sprzedanych)</span>
-                    <span class="badge bg-primary">{{ order_history|length }}{% if order_history|length >= 50 %} / {{ total_sold }}{% endif %}</span>
+                    <span class="badge badge-primary">{{ order_history|length }}{% if order_history|length >= 50 %} / {{ total_sold }}{% endif %}</span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped table-sm mb-0">
+                    <table class="table table-zebra table-sm mb-0">
                         <thead>
                             <tr>
                                 <th>Nr zamówienia</th>
                                 <th>Data</th>
                                 <th>Klient</th>
                                 <th>Rozmiar</th>
-                                <th class="text-end">Ilość</th>
-                                <th class="text-end">Cena</th>
+                                <th class="text-right">Ilość</th>
+                                <th class="text-right">Cena</th>
                             </tr>
                         </thead>
                         <tbody>
                         {% for order in order_history %}
                             <tr class="clickable-row" onclick="window.location='{{ url_for('orders.order_detail', order_id=order.order_id) }}'">
                                 <td>
-                                    <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="text-decoration-none">
+                                    <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="no-underline">
                                         LP{{ order.lp }}
                                     </a>
                                 </td>
@@ -321,8 +321,8 @@
                                 </td>
                                 <td>{{ order.customer or '-' }}</td>
                                 <td>{{ order.size or '-' }}</td>
-                                <td class="text-end">{{ order.quantity }}</td>
-                                <td class="text-end">
+                                <td class="text-right">{{ order.quantity }}</td>
+                                <td class="text-right">
                                     {% if order.price %}
                                     {{ '%.2f'|format(order.price) }}
                                     {% else %}
@@ -332,8 +332,8 @@
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-3">
-                                    <i class="bi bi-inbox fs-3"></i>
+                                <td colspan="6" class="text-center text-base-content/60 py-3">
+                                    <i class="bi bi-inbox text-2xl"></i>
                                     <p class="mb-0 mt-2">Brak historii zamówień</p>
                                     <small>Zamówienia pojawią się po zsynchronizowaniu z Allegro</small>
                                 </td>
@@ -343,19 +343,19 @@
                     </table>
                 </div>
                 {% if order_history|length >= 50 %}
-                <div class="card-footer text-center" x-data="lazyHistory('orders', {{ product.id }}, {{ order_history|length }}, {{ total_sold }})">
+                <div class="card-body border-t border-base-300 py-3 text-center" x-data="lazyHistory('orders', {{ product.id }}, {{ order_history|length }}, {{ total_sold }})">
                     <template x-if="hasMore">
                         <div>
-                            <button class="btn btn-sm btn-outline-primary" @click="loadMore()" :disabled="loading">
-                                <template x-if="loading"><span class="spinner-border spinner-border-sm"></span></template>
+                            <button class="btn btn-sm btn-outline btn-primary" @click="loadMore()" :disabled="loading">
+                                <template x-if="loading"><span class="loading loading-spinner loading-sm"></span></template>
                                 <template x-if="!loading"><i class="bi bi-arrow-down-circle"></i></template>
                                 <span x-text="loading ? ' Ładowanie...' : ' Załaduj więcej zamówień'"></span>
                             </button>
-                            <div class="text-muted mt-1"><small>Wyświetlono <span x-text="currentCount"></span> z {{ total_sold }} zamówień</small></div>
+                            <div class="text-base-content/60 mt-1"><small>Wyświetlono <span x-text="currentCount"></span> z {{ total_sold }} zamówień</small></div>
                         </div>
                     </template>
                     <template x-if="!hasMore && extraItems.length > 0">
-                        <small class="text-muted" x-text="'Wyświetlono wszystkie rekordy (' + currentCount + ')'"></small>
+                        <small class="text-base-content/60" x-text="'Wyświetlono wszystkie rekordy (' + currentCount + ')'"></small>
                     </template>
                 </div>
                 {% endif %}
@@ -401,30 +401,30 @@ document.addEventListener('alpine:init', () => {
                         tr.className = 'clickable-row';
                         tr.onclick = () => { window.location = `/orders/${item.order_id}`; };
                         tr.innerHTML = `
-                            <td><a href="/orders/${item.order_id}" class="text-decoration-none">LP${item.lp}</a></td>
+                            <td><a href="/orders/${item.order_id}" class="no-underline">LP${item.lp}</a></td>
                             <td>${dateStr}</td>
                             <td>${item.customer || '-'}</td>
                             <td>${item.size || '-'}</td>
-                            <td class="text-end">${item.quantity}</td>
-                            <td class="text-end">${item.price ? item.price.toFixed(2) : '-'}</td>
+                            <td class="text-right">${item.quantity}</td>
+                            <td class="text-right">${item.price ? item.price.toFixed(2) : '-'}</td>
                         `;
                     } else {
                         const remaining = item.remaining > 0
-                            ? `<span class="badge bg-success">${item.remaining}</span>`
-                            : `<span class="badge bg-secondary">0</span>`;
+                            ? `<span class="badge badge-success">${item.remaining}</span>`
+                            : `<span class="badge badge-neutral">0</span>`;
                         const price = item.price ? item.price.toFixed(2) + ' zł' : '-';
                         const invoiceInfo = item.invoice_number || item.supplier
-                            ? `<small>${item.invoice_number || ''}${item.supplier ? '<br><span class="text-muted">' + item.supplier + '</span>' : ''}</small>`
-                            : '<span class="text-muted">-</span>';
+                            ? `<small>${item.invoice_number || ''}${item.supplier ? '<br><span class="text-base-content/60">' + item.supplier + '</span>' : ''}</small>`
+                            : '<span class="text-base-content/60">-</span>';
                         tr.innerHTML = `
                             <td>${item.date ? item.date.substring(0, 10) : '-'}</td>
                             <td>${item.size || '-'}</td>
-                            <td class="text-end">${item.quantity}</td>
-                            <td class="text-end">${remaining}</td>
-                            <td class="text-end">${price}</td>
+                            <td class="text-right">${item.quantity}</td>
+                            <td class="text-right">${remaining}</td>
+                            <td class="text-right">${price}</td>
                             <td>${invoiceInfo}</td>
                         `;
-                        if (item.remaining === 0) tr.classList.add('text-muted');
+                        if (item.remaining === 0) tr.classList.add('text-base-content/60');
                     }
                     tbody.appendChild(tr);
                 });
