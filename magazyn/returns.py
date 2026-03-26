@@ -629,6 +629,7 @@ def expire_stale_returns() -> Dict[str, int]:
                 )
                 add_order_status(
                     db, ret.order_id, "zakończono",
+                    allow_backwards=True,
                     notes="Zwrot wygasl (brak nadania w terminie) - przywrocono status zakonczonego zamowienia",
                 )
                 stats["expired"] += 1
