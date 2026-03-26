@@ -11,6 +11,7 @@ Jinja2==3.1.6
 # Database
 SQLAlchemy==2.0.41
 alembic
+psycopg2-binary==2.9.9
 
 # HTTP / API
 requests==2.32.4
