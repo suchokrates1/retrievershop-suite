@@ -99,6 +99,10 @@ def generate_and_send_invoice(order_id: str) -> dict:
         contractor_id = None
         contractor_data = None
 
+        # Normalizuj kraj do kodu ISO 2-literowego
+        raw_country = (order.invoice_country or "").strip()
+        country = raw_country if len(raw_country) == 2 and raw_country.isalpha() else "PL"
+
         if is_company:
             # Firma - tworzymy/szukamy kontrahenta w wFirma
             try:
@@ -108,7 +112,7 @@ def generate_and_send_invoice(order_id: str) -> dict:
                     street=order.invoice_address or order.delivery_address or "",
                     zip_code=order.invoice_postcode or order.delivery_postcode or "",
                     city=order.invoice_city or order.delivery_city or "",
-                    country=order.invoice_country or "PL",
+                    country=country,
                     nip=nip,
                     email=order.email or None,
                     phone=order.phone or None,
@@ -124,7 +128,7 @@ def generate_and_send_invoice(order_id: str) -> dict:
                 "street": order.invoice_address or order.delivery_address or "",
                 "zip": order.invoice_postcode or order.delivery_postcode or "",
                 "city": order.invoice_city or order.delivery_city or "",
-                "country": order.invoice_country or "PL",
+                "country": country,
             }
             logger.info("Faktura imienna dla %s: %s", order_id, contractor_name)
 
