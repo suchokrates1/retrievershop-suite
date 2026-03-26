@@ -22,6 +22,7 @@ try:
     from playwright.sync_api import Page, expect
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
+    Page = None
     _PLAYWRIGHT_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
