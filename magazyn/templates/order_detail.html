@@ -3,49 +3,47 @@
 {% set full_width = True %}
 {% endblock %}
 {% block content %}
-<div class="container-fluid">
+<div class="w-full px-4">
     {# Header with back button and order ID #}
-    <div class="row mb-4">
-        <div class="col">
-            <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary mb-2">
-                <i class="bi bi-arrow-left"></i> Powrot do listy
-            </a>
-            <h2>
-                Zamowienie #{{ order.order_id }}
-                <span class="badge {{ current_status.status_class }} fs-6">{{ current_status.status_text }}</span>
-                {% if return_info %}
-                <span class="badge bg-danger fs-6 ms-1">
-                    <i class="bi bi-arrow-return-left"></i> ZWROT
-                </span>
-                {% endif %}
-                {% if is_promoted_sale %}
-                <span class="badge {% if promotion_type == 'allegro_ads' %}bg-primary{% else %}bg-info{% endif %} fs-6 ms-1" title="Sprzedaz z {{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznionej oferty' }}">
-                    <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %}"></i>
-                    {{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznione' }}
-                </span>
-                {% endif %}
-            </h2>
-            {% if order.platform %}
-            <span class="badge bg-secondary">{{ order.platform }}</span>
+    <div class="mb-4">
+        <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline btn-sm mb-2">
+            <i class="bi bi-arrow-left"></i> Powrot do listy
+        </a>
+        <h2 class="text-2xl font-bold">
+            Zamowienie #{{ order.order_id }}
+            <span class="badge {{ current_status.status_class }} text-sm">{{ current_status.status_text }}</span>
+            {% if return_info %}
+            <span class="badge badge-error text-sm ml-1">
+                <i class="bi bi-arrow-return-left"></i> ZWROT
+            </span>
             {% endif %}
-            {% if date_add %}
-            <span class="text-muted ms-2">{{ date_add | format_dt }}</span>
+            {% if is_promoted_sale %}
+            <span class="badge {% if promotion_type == 'allegro_ads' %}badge-primary{% else %}badge-info{% endif %} text-sm ml-1" title="Sprzedaz z {{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznionej oferty' }}">
+                <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %}"></i>
+                {{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznione' }}
+            </span>
             {% endif %}
-        </div>
+        </h2>
+        {% if order.platform %}
+        <span class="badge badge-neutral">{{ order.platform }}</span>
+        {% endif %}
+        {% if date_add %}
+        <span class="text-base-content/60 ml-2">{{ date_add | format_dt }}</span>
+        {% endif %}
     </div>
 
-    <div class="row">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {# Left column - Order info #}
-        <div class="col-lg-8">
+        <div class="lg:col-span-8">
             {# Customer & Contact #}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-person"></i> Dane klienta
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="text-muted">Kontakt</h6>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h6 class="text-base-content/60 font-semibold">Kontakt</h6>
                             <p class="mb-1">
                                 <strong>{{ order.customer_name or order.delivery_fullname or '-' }}</strong>
                             </p>
@@ -68,12 +66,12 @@
                             </p>
                             {% endif %}
                         </div>
-                        <div class="col-md-6">
-                            <h6 class="text-muted">Adres dostawy</h6>
+                        <div>
+                            <h6 class="text-base-content/60 font-semibold">Adres dostawy</h6>
                             {% if order.delivery_point_name %}
                             {# Paczkomat/punkt odbioru #}
                             <p class="mb-1">
-                                <span class="badge bg-info">Punkt odbioru</span>
+                                <span class="badge badge-info">Punkt odbioru</span>
                             </p>
                             <p class="mb-1">
                                 <strong>{{ order.delivery_point_name }}</strong>
@@ -105,8 +103,8 @@
 
             {# Invoice data (if requested) #}
             {% if order.want_invoice %}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-receipt"></i> Dane do faktury
                 </div>
                 <div class="card-body">
@@ -124,19 +122,20 @@
             {% endif %}
 
             {# Products #}
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl flex justify-between items-center">
                     <span><i class="bi bi-box"></i> Produkty</span>
-                    <span class="badge bg-primary">{{ products|length }} szt.</span>
+                    <span class="badge badge-primary">{{ products|length }} szt.</span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
+                    <div class="overflow-x-auto">
+                    <table class="table table-zebra">
                         <thead>
                             <tr>
                                 <th>Produkt</th>
                                 <th>EAN</th>
-                                <th class="text-center">Ilość</th>
-                                <th class="text-end">Cena</th>
+                                <th class="text-center">Ilosc</th>
+                                <th class="text-right">Cena</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -144,34 +143,34 @@
                             <tr>
                                 <td>
                                     {% if product.warehouse_product %}
-                                    <a href="{{ url_for('products.product_detail', product_id=product.warehouse_product.id) }}" class="text-decoration-none">
+                                    <a href="{{ url_for('products.product_detail', product_id=product.warehouse_product.id) }}" class="no-underline">
                                         <strong>{{ product.name or '-' }}</strong>
-                                        <span class="badge bg-success ms-1">{{ product.warehouse_product.quantity_in_stock }} szt.</span>
+                                        <span class="badge badge-success ml-1">{{ product.warehouse_product.quantity_in_stock }} szt.</span>
                                     </a>
                                     {% else %}
                                     <strong>{{ product.name or '-' }}</strong>
                                     {% if product.ean %}
-                                    <span class="badge bg-warning text-dark ms-1" title="Brak powiązania z magazynem">
+                                    <span class="badge badge-warning ml-1" title="Brak powiazania z magazynem">
                                         <i class="bi bi-exclamation-triangle"></i>
                                     </span>
                                     {% endif %}
                                     {% endif %}
                                     {% if product.attributes %}
-                                    <br><small class="text-muted">{{ product.attributes }}</small>
+                                    <br><span class="text-sm text-base-content/60">{{ product.attributes }}</span>
                                     {% endif %}
                                     {% if product.sku %}
-                                    <br><small class="text-muted">SKU: {{ product.sku }}</small>
+                                    <br><span class="text-sm text-base-content/60">SKU: {{ product.sku }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if product.ean %}
                                     <code>{{ product.ean }}</code>
                                     {% else %}
-                                    <span class="text-muted">-</span>
+                                    <span class="text-base-content/60">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">{{ product.quantity }}</td>
-                                <td class="text-end">
+                                <td class="text-right">
                                     {% if product.price_brutto %}
                                     {{ '%.2f'|format(product.price_brutto) }}
                                     {% else %}
@@ -181,30 +180,31 @@
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="4" class="text-center text-muted">Brak produktów</td>
+                                <td colspan="4" class="text-center text-base-content/60">Brak produktow</td>
                             </tr>
                         {% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
 
             {# Comments #}
             {% if order.user_comments or order.admin_comments %}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-chat-text"></i> Komentarze
                 </div>
                 <div class="card-body">
                     {% if order.user_comments %}
                     <div class="mb-3">
-                        <h6 class="text-muted">Komentarz kupującego:</h6>
+                        <h6 class="text-base-content/60 font-semibold">Komentarz kupujacego:</h6>
                         <p class="mb-0">{{ order.user_comments }}</p>
                     </div>
                     {% endif %}
                     {% if order.admin_comments %}
                     <div>
-                        <h6 class="text-muted">Notatki sprzedawcy:</h6>
+                        <h6 class="text-base-content/60 font-semibold">Notatki sprzedawcy:</h6>
                         <p class="mb-0">{{ order.admin_comments }}</p>
                     </div>
                     {% endif %}
@@ -213,27 +213,29 @@
             {% endif %}
 
             {# Shipping info with Timeline #}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-truck"></i> Wysylka
                 </div>
                 <div class="card-body">
                     {% if return_info %}
                     {# === SEKCJA ZWROTU === #}
                     <div class="return-section mb-4">
-                        <div class="alert alert-danger mb-3">
-                            <h6 class="mb-2"><i class="bi bi-arrow-return-left"></i> Zwrot w toku</h6>
-                            <p class="mb-1"><strong>Status:</strong> {{ return_info.status_text }}</p>
-                            {% if return_info.return_tracking_number %}
-                            <p class="mb-1"><strong>Nr sledzenia:</strong> <code>{{ return_info.return_tracking_number }}</code></p>
-                            {% endif %}
-                            {% if return_info.notes %}
-                            <p class="mb-0"><small>{{ return_info.notes }}</small></p>
-                            {% endif %}
+                        <div class="alert alert-error mb-3">
+                            <div>
+                                <h6 class="mb-2 font-semibold"><i class="bi bi-arrow-return-left"></i> Zwrot w toku</h6>
+                                <p class="mb-1"><strong>Status:</strong> {{ return_info.status_text }}</p>
+                                {% if return_info.return_tracking_number %}
+                                <p class="mb-1"><strong>Nr sledzenia:</strong> <code>{{ return_info.return_tracking_number }}</code></p>
+                                {% endif %}
+                                {% if return_info.notes %}
+                                <p class="mb-0"><span class="text-sm">{{ return_info.notes }}</span></p>
+                                {% endif %}
+                            </div>
                         </div>
                         
                         {# Timeline zwrotu #}
-                        <h6 class="text-muted mb-3">Przebieg zwrotu</h6>
+                        <h6 class="text-base-content/60 font-semibold mb-3">Przebieg zwrotu</h6>
                         <div class="shipping-timeline mb-3">
                             <div class="timeline-track">
                                 {% for stage_key, stage_label, stage_icon, stage_desc in return_stages %}
@@ -256,8 +258,8 @@
                         {# Informacje o zwroconych produktach #}
                         {% if return_info.return_items %}
                         <div class="return-items mb-3">
-                            <h6 class="text-muted">Zwracane produkty:</h6>
-                            <ul class="list-unstyled mb-0">
+                            <h6 class="text-base-content/60 font-semibold">Zwracane produkty:</h6>
+                            <ul class="list-none mb-0">
                                 {% for item in return_info.return_items %}
                                 <li><i class="bi bi-box"></i> {{ item.name }} x{{ item.quantity }}</li>
                                 {% endfor %}
@@ -266,19 +268,19 @@
                         {% endif %}
                         
                         {# Status przywrocenia stanu #}
-                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <div class="flex gap-2 items-center flex-wrap">
                             {% if return_info.messenger_notified %}
-                            <span class="badge bg-success"><i class="bi bi-check"></i> Powiadomienie wyslane</span>
+                            <span class="badge badge-success"><i class="bi bi-check"></i> Powiadomienie wyslane</span>
                             {% else %}
-                            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass"></i> Oczekuje na powiadomienie</span>
+                            <span class="badge badge-warning"><i class="bi bi-hourglass"></i> Oczekuje na powiadomienie</span>
                             {% endif %}
                             {% if return_info.stock_restored %}
-                            <span class="badge bg-success"><i class="bi bi-check"></i> Stan przywrocony</span>
+                            <span class="badge badge-success"><i class="bi bi-check"></i> Stan przywrocony</span>
                             {% else %}
-                            <span class="badge bg-secondary"><i class="bi bi-hourglass"></i> Stan do przywrocenia</span>
-                            <form action="{{ url_for('orders.restore_return_stock', order_id=order.order_id) }}" method="POST" class="d-inline ms-2">
+                            <span class="badge badge-neutral"><i class="bi bi-hourglass"></i> Stan do przywrocenia</span>
+                            <form action="{{ url_for('orders.restore_return_stock', order_id=order.order_id) }}" method="POST" class="inline ml-2">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Przywrocic stan magazynowy dla tego zwrotu?')">
+                                <button type="submit" class="btn btn-outline btn-success btn-sm" onclick="return confirm('Przywrocic stan magazynowy dla tego zwrotu?')">
                                     <i class="bi bi-arrow-counterclockwise"></i> Przywroc stan
                                 </button>
                             </form>
@@ -287,19 +289,19 @@
                         
                         {# Przycisk zwrotu pieniędzy #}
                         {% if return_info.refund_processed %}
-                        <div class="mt-3 pt-3 border-top">
-                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
+                        <div class="mt-3 pt-3 border-t border-base-300">
+                            <span class="badge badge-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
                         </div>
                         {% elif return_info.allegro_return_id and return_info.status in ['delivered', 'in_transit', 'completed'] %}
-                        <div class="mt-3 pt-3 border-top">
-                            <h6 class="text-danger mb-2"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
-                            <button type="button" class="btn btn-danger btn-sm" id="refundBtn"
-                                    data-bs-toggle="modal" data-bs-target="#refundModal">
+                        <div class="mt-3 pt-3 border-t border-base-300">
+                            <h6 class="text-error mb-2 font-semibold"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
+                            <button type="button" class="btn btn-error btn-sm" id="refundBtn"
+                                    onclick="document.getElementById('refundModal').showModal()">
                                 <i class="bi bi-currency-exchange"></i> Zwroc pieniadze klientowi
                             </button>
-                            <small class="d-block text-muted mt-1">
+                            <span class="block text-sm text-base-content/60 mt-1">
                                 Ta operacja jest NIEODWRACALNA. Upewnij sie, ze paczka dotarla i produkty sa sprawdzone.
-                            </small>
+                            </span>
                         </div>
                         {% endif %}
                     </div>
@@ -308,7 +310,7 @@
                     
                     {# Zwinieta historia wysylki do klienta #}
                     <details class="mb-3">
-                        <summary class="text-muted cursor-pointer">
+                        <summary class="text-base-content/60 cursor-pointer">
                             <i class="bi bi-clock-history"></i> Historia wysylki do klienta (przed zwrotem)
                         </summary>
                         <div class="mt-3">
@@ -361,87 +363,87 @@
 
             {# Status history #}
             {% if status_history %}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-clock-history"></i> Historia statusow{% if return_info %} (wysylka){% endif %}
                 </div>
                 <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
+                    <div class="divide-y divide-base-300">
                     {% for log in status_history %}
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-start">
+                        <div class="p-3">
+                            <div class="flex justify-between items-start">
                                 <div>
                                     <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
                                     {% if log.tracking_number %}
-                                    <br><small class="text-muted">Nr: {{ log.tracking_number }}</small>
+                                    <br><span class="text-sm text-base-content/60">Nr: {{ log.tracking_number }}</span>
                                     {% endif %}
                                     {% if log.notes %}
-                                    <br><small class="text-muted">{{ log.notes }}</small>
+                                    <br><span class="text-sm text-base-content/60">{{ log.notes }}</span>
                                     {% endif %}
                                 </div>
-                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
+                                <span class="text-sm text-base-content/60">{{ log.timestamp | format_dt }}</span>
                             </div>
-                        </li>
+                        </div>
                     {% endfor %}
-                    </ul>
+                    </div>
                 </div>
             </div>
             {% endif %}
 
             {# Return status history (if return exists) #}
             {% if return_info and return_status_history %}
-            <div class="card mb-3 border-danger">
-                <div class="card-header bg-danger text-white">
+            <div class="card bg-base-200 shadow-sm mb-3 border border-error">
+                <div class="px-4 py-3 font-semibold bg-error text-error-content rounded-t-2xl">
                     <i class="bi bi-arrow-return-left"></i> Historia zwrotu
                 </div>
                 <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
+                    <div class="divide-y divide-base-300">
                     {% for log in return_status_history %}
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-start">
+                        <div class="p-3">
+                            <div class="flex justify-between items-start">
                                 <div>
                                     <span class="badge {{ log.status_class }}">{{ log.status_text }}</span>
                                     {% if log.notes %}
-                                    <br><small class="text-muted">{{ log.notes }}</small>
+                                    <br><span class="text-sm text-base-content/60">{{ log.notes }}</span>
                                     {% endif %}
                                 </div>
-                                <small class="text-muted">{{ log.timestamp | format_dt }}</small>
+                                <span class="text-sm text-base-content/60">{{ log.timestamp | format_dt }}</span>
                             </div>
-                        </li>
+                        </div>
                     {% endfor %}
-                    </ul>
+                    </div>
                 </div>
             </div>
             {% endif %}
         </div>
 
         {# Right column - szybkie akcje, platnosc, komunikacja, dokumenty #}
-        <div class="col-lg-4">
+        <div class="lg:col-span-4">
             {# Quick actions #}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-lightning"></i> Szybkie akcje
                 </div>
                 <div class="card-body">
                     {% if order.external_order_id and order.platform == 'allegro' %}
                     <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}" 
-                       target="_blank" class="btn btn-outline-secondary w-100 mb-2">
-                        <i class="bi bi-box-arrow-up-right"></i> Otwórz w Allegro
+                       target="_blank" class="btn btn-outline w-full mb-2">
+                        <i class="bi bi-box-arrow-up-right"></i> Otworz w Allegro
                     </a>
                     {% endif %}
                     {% if customer_page_url %}
-                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline-info w-100 mb-2">
+                    <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline btn-info w-full mb-2">
                         <i class="bi bi-person-lines-fill"></i> Strona klienta
                     </a>
                     {% endif %}
                     {% if order.user_login %}
-                    <a href="{{ url_for('discussions.discussions_list') }}?user={{ order.user_login }}" class="btn btn-outline-primary w-100 mb-2">
+                    <a href="{{ url_for('discussions.discussions_list') }}?user={{ order.user_login }}" class="btn btn-outline btn-primary w-full mb-2">
                         <i class="bi bi-chat-dots"></i> Chat z {{ order.customer_name or order.user_login }}
                     </a>
                     {% endif %}
                     {% if return_info and not return_info.refund_processed and return_info.allegro_return_id and return_info.status in ['delivered', 'completed'] %}
-                    <button type="button" class="btn btn-danger w-100 mt-1" id="refundBtnQuick"
-                            data-bs-toggle="modal" data-bs-target="#refundModal">
+                    <button type="button" class="btn btn-error w-full mt-1" id="refundBtnQuick"
+                            onclick="document.getElementById('refundModal').showModal()">
                         <i class="bi bi-currency-exchange"></i> Zwroc pieniadze
                     </button>
                     {% endif %}
@@ -449,8 +451,8 @@
             </div>
 
             {# Przesylka - metoda, nr, etykiety #}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-box-seam"></i> Przesylka
                 </div>
                 <div class="card-body">
@@ -459,27 +461,27 @@
                     </p>
                     {% if order.delivery_package_nr %}
                     <p class="mb-2">
-                        <strong>Nr przesyłki:</strong> 
+                        <strong>Nr przesylki:</strong> 
                         {% if tracking_url %}
-                        <a href="{{ tracking_url }}" target="_blank" class="text-decoration-none">
+                        <a href="{{ tracking_url }}" target="_blank" class="no-underline">
                             <code>{{ order.delivery_package_nr }}</code>
-                            <i class="bi bi-box-arrow-up-right ms-1"></i>
+                            <i class="bi bi-box-arrow-up-right ml-1"></i>
                         </a>
                         {% else %}
                         <code>{{ order.delivery_package_nr }}</code>
                         {% endif %}
                     </p>
                     {% endif %}
-                    <div class="d-flex gap-2 mt-3">
+                    <div class="flex gap-2 mt-3">
                         <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-primary"
-                                    onclick="return confirm('Wydrukować etykietę?');">
+                            <button type="submit" class="btn btn-outline btn-primary btn-sm"
+                                    onclick="return confirm('Wydrukowac etykiete?');">
                                 <i class="bi bi-printer"></i> Drukuj
                             </button>
                         </form>
                         <form action="{{ url_for('orders.download_label', order_id=order.order_id) }}" method="get" class="mb-0">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <button type="submit" class="btn btn-outline btn-primary btn-sm">
                                 <i class="bi bi-download"></i> Pobierz
                             </button>
                         </form>
@@ -488,34 +490,34 @@
             </div>
 
             {# Payment info #}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-credit-card"></i> Płatność i Zysk
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
+                    <i class="bi bi-credit-card"></i> Platnosc i Zysk
                 </div>
                 <div class="card-body">
                     <p class="mb-2">
                         <strong>Metoda:</strong> {{ order.payment_method or '-' }}
                         {% if order.payment_method_cod %}
-                        <span class="badge bg-warning text-dark">Pobranie</span>
+                        <span class="badge badge-warning">Pobranie</span>
                         {% endif %}
                     </p>
                     <p class="mb-2">
-                        <strong>Zapłacono:</strong> 
+                        <strong>Zaplacono:</strong> 
                         {% if order.payment_done %}
-                        <span class="text-success fw-bold">
+                        <span class="text-success font-bold">
                             {{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}
                         </span>
                         {% else %}
-                        <span class="text-danger">Nie opłacono</span>
+                        <span class="text-error">Nie oplacono</span>
                         {% endif %}
                     </p>
-                    <hr>
-                    <h6 class="text-muted mb-2">
+                    <div class="divider my-1"></div>
+                    <h6 class="text-base-content/60 font-semibold mb-2">
                         Koszty Allegro:
                         {% if billing_data_available %}
-                        <span class="badge bg-success small">Dane z API</span>
+                        <span class="badge badge-success text-xs">Dane z API</span>
                         {% else %}
-                        <span class="badge bg-warning text-dark small">Szacunkowo</span>
+                        <span class="badge badge-warning text-xs">Szacunkowo</span>
                         {% endif %}
                     </h6>
                     
@@ -528,15 +530,15 @@
                                 {% if fee.is_bonus %}
                                 <span class="text-success">
                                     +{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
-                                    <i class="bi bi-gift ms-1" title="Bonus z kampanii Allegro Ads"></i>
+                                    <i class="bi bi-gift ml-1" title="Bonus z kampanii Allegro Ads"></i>
                                 </span>
                                 {% elif fee.is_estimate %}
                                 <span class="text-warning">
                                     -{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
-                                    <i class="bi bi-calculator ms-1" title="Szacowany koszt"></i>
+                                    <i class="bi bi-calculator ml-1" title="Szacowany koszt"></i>
                                 </span>
                                 {% else %}
-                                <span class="text-danger">
+                                <span class="text-error">
                                     -{{ '%.2f'|format(fee.amount) }} {{ order.currency or 'PLN' }}
                                 </span>
                                 {% endif %}
@@ -547,100 +549,100 @@
                             {% if allegro_commission > 0 %}
                             <p class="mb-1 small">
                                 <strong>Prowizja od sprzedazy:</strong> 
-                                <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
+                                <span class="text-error">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
                             </p>
                             {% endif %}
                             {% if listing_fee > 0 %}
                             <p class="mb-1 small">
                                 <strong>Oplata za wystawienie:</strong> 
-                                <span class="text-danger">-{{ '%.2f'|format(listing_fee) }} {{ order.currency or 'PLN' }}</span>
+                                <span class="text-error">-{{ '%.2f'|format(listing_fee) }} {{ order.currency or 'PLN' }}</span>
                             </p>
                             {% endif %}
                             {% if promo_fee > 0 %}
                             <p class="mb-1 small">
                                 <strong>Oplaty promocyjne:</strong> 
-                                <span class="text-danger">-{{ '%.2f'|format(promo_fee) }} {{ order.currency or 'PLN' }}</span>
+                                <span class="text-error">-{{ '%.2f'|format(promo_fee) }} {{ order.currency or 'PLN' }}</span>
                             </p>
                             {% endif %}
                             {% if other_fees > 0 %}
                             <p class="mb-1 small">
                                 <strong>Inne oplaty:</strong> 
-                                <span class="text-danger">-{{ '%.2f'|format(other_fees) }} {{ order.currency or 'PLN' }}</span>
+                                <span class="text-error">-{{ '%.2f'|format(other_fees) }} {{ order.currency or 'PLN' }}</span>
                             </p>
                             {% endif %}
                         {% endif %}
                         
-                        <p class="mb-1 small fw-bold">
+                        <p class="mb-1 text-sm font-bold">
                             <strong>Suma oplat Allegro:</strong> 
-                            <span class="text-danger">-{{ '%.2f'|format(total_allegro_fees) }} {{ order.currency or 'PLN' }}</span>
+                            <span class="text-error">-{{ '%.2f'|format(total_allegro_fees) }} {{ order.currency or 'PLN' }}</span>
                         </p>
                     {% else %}
                         {# Szacunkowe dane (brak API) #}
                         <p class="mb-1 small">
                             <strong>Marza Allegro (~12.3%):</strong> 
-                            <span class="text-danger">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
+                            <span class="text-error">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
                         </p>
                     {% endif %}
                     
                     {% if purchase_cost > 0 %}
                     <p class="mb-1 small">
                         <strong>Koszt zakupu:</strong> 
-                        <span class="text-danger">-{{ '%.2f'|format(purchase_cost) }} {{ order.currency or 'PLN' }}</span>
+                        <span class="text-error">-{{ '%.2f'|format(purchase_cost) }} {{ order.currency or 'PLN' }}</span>
                     </p>
                     {% endif %}
                     {% if packaging_cost > 0 %}
                     <p class="mb-2 small">
                         <strong>Koszt pakowania:</strong> 
-                        <span class="text-danger">-{{ '%.2f'|format(packaging_cost) }} {{ order.currency or 'PLN' }}</span>
+                        <span class="text-error">-{{ '%.2f'|format(packaging_cost) }} {{ order.currency or 'PLN' }}</span>
                     </p>
                     {% endif %}
-                    <hr>
+                    <div class="divider my-1"></div>
                     <p class="mb-0">
                         <strong>Realny zysk:</strong> 
-                        <span class="{% if real_profit >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold fs-5">
+                        <span class="{% if real_profit >= 0 %}text-success{% else %}text-error{% endif %} font-bold text-xl">
                             {{ '%.2f'|format(real_profit) }} {{ order.currency or 'PLN' }}
                         </span>
                     </p>
                     {% if is_promoted_sale and promoted_commission > 0 %}
-                    <div class="alert {% if promotion_type == 'allegro_ads' %}alert-primary{% else %}alert-info{% endif %} mt-3 mb-0 py-2 px-3">
-                        <small>
-                            <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %} me-1"></i>
+                    <div class="alert {% if promotion_type == 'allegro_ads' %}alert-info{% else %}alert-info{% endif %} mt-3 mb-0 py-2 px-3">
+                        <span class="text-sm">
+                            <i class="bi bi-{% if promotion_type == 'allegro_ads' %}megaphone{% else %}star{% endif %} mr-1"></i>
                             <strong>{{ 'Allegro Ads' if promotion_type == 'allegro_ads' else 'Wyroznione' }}:</strong>
                             Prowizja promowana (BRG): {{ '%.2f'|format(promoted_commission) }} {{ order.currency or 'PLN' }}
                             (dodatkowa do SUC {{ '%.2f'|format(allegro_commission - promoted_commission) }} {{ order.currency or 'PLN' }})
                             {% if campaign_bonus > 0 %}
-                            <br><i class="bi bi-gift me-1"></i>
+                            <br><i class="bi bi-gift mr-1"></i>
                             Bonus z kampanii (CB2): <span class="text-success">+{{ '%.2f'|format(campaign_bonus) }} {{ order.currency or 'PLN' }}</span>
                             (zwrot ~{{ '%.0f'|format(campaign_bonus / promoted_commission * 100) }}% BRG)
                             {% endif %}
-                        </small>
+                        </span>
                     </div>
                     {% endif %}
                 </div>
             </div>
 
             {# Komunikacja z klientem #}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-envelope"></i> Komunikacja z klientem
                 </div>
                 <div class="card-body">
-                    <ul class="list-unstyled mb-0">
+                    <ul class="list-none mb-0">
                         {% for em in all_email_types %}
-                        <li class="d-flex align-items-center mb-2">
+                        <li class="flex items-center mb-2">
                             {% if em.sent %}
-                            <span class="badge bg-success me-2"><i class="bi bi-check"></i></span>
+                            <span class="badge badge-success mr-2"><i class="bi bi-check"></i></span>
                             <span>{{ em.label }}</span>
                             {% else %}
-                            <span class="badge bg-secondary me-2"><i class="bi bi-dash"></i></span>
-                            <span class="text-muted">{{ em.label }}</span>
+                            <span class="badge badge-neutral mr-2"><i class="bi bi-dash"></i></span>
+                            <span class="text-base-content/60">{{ em.label }}</span>
                             {% endif %}
                         </li>
                         {% endfor %}
                     </ul>
 
                     {% if order.email %}
-                    <p class="mb-0 small text-muted">
+                    <p class="mb-0 text-sm text-base-content/60">
                         <i class="bi bi-at"></i> {{ order.email }}
                     </p>
                     {% endif %}
@@ -649,8 +651,8 @@
 
             {# Faktura wFirma #}
             {% if wfirma_invoice_id or order.want_invoice %}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-receipt"></i> Faktura
                 </div>
                 <div class="card-body">
@@ -658,13 +660,13 @@
                     <p class="mb-2">
                         <strong>Nr:</strong> {{ wfirma_invoice_number }}
                     </p>
-                    <div class="d-flex gap-2">
+                    <div class="flex gap-2">
                         <a href="{{ url_for('orders.download_invoice_pdf', order_id=order.order_id) }}"
-                           target="_blank" class="btn btn-sm btn-outline-primary">
+                           target="_blank" class="btn btn-outline btn-primary btn-sm">
                             <i class="bi bi-eye"></i> Podglad
                         </a>
                         <a href="{{ url_for('orders.download_invoice_pdf', order_id=order.order_id) }}"
-                           download class="btn btn-sm btn-outline-secondary">
+                           download class="btn btn-outline btn-sm">
                             <i class="bi bi-download"></i> Pobierz
                         </a>
                     </div>
@@ -679,21 +681,21 @@
 
             {# Korekta faktury wFirma #}
             {% if wfirma_correction_id %}
-            <div class="card mb-3">
-                <div class="card-header">
+            <div class="card bg-base-200 shadow-sm mb-3">
+                <div class="px-4 py-3 font-semibold bg-base-300 rounded-t-2xl">
                     <i class="bi bi-receipt-cutoff"></i> Korekta faktury
                 </div>
                 <div class="card-body">
                     <p class="mb-2">
                         <strong>Nr:</strong> {{ wfirma_correction_number }}
                     </p>
-                    <div class="d-flex gap-2">
+                    <div class="flex gap-2">
                         <a href="{{ url_for('orders.download_correction_pdf', order_id=order.order_id) }}"
-                           target="_blank" class="btn btn-sm btn-outline-primary">
+                           target="_blank" class="btn btn-outline btn-primary btn-sm">
                             <i class="bi bi-eye"></i> Podglad
                         </a>
                         <a href="{{ url_for('orders.download_correction_pdf', order_id=order.order_id) }}"
-                           download class="btn btn-sm btn-outline-secondary">
+                           download class="btn btn-outline btn-sm">
                             <i class="bi bi-download"></i> Pobierz
                         </a>
                     </div>
@@ -884,92 +886,90 @@ details[open] summary::before {
 {# Modal potwierdzenia zwrotu pieniędzy #}
 {% if return_info and return_info.status in ['delivered', 'in_transit', 'completed'] and return_info.allegro_return_id %}
 <div x-data="refundModal()" x-cloak>
-<div class="modal fade" id="refundModal" tabindex="-1" aria-labelledby="refundModalLabel" aria-hidden="true"
-     x-ref="modal" @show-bs-modal.window="checkEligibility()">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="refundModalLabel">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    Potwierdzenie zwrotu pieniędzy
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Zamknij"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-danger mb-3">
-                    <strong>UWAGA!</strong> Ta operacja jest <strong>NIEODWRACALNA</strong>.
-                    Pieniądze zostaną zwrócone klientowi poprzez Allegro.
-                </div>
-
-                <div x-show="loading" class="text-center py-3">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Sprawdzanie...</span>
-                    </div>
-                    <p class="mt-2 mb-0">Sprawdzanie kwalifikowalności zwrotu...</p>
-                </div>
-
-                <div x-show="!loading && checked">
-                    <div x-show="eligible">
-                        <h6>Szczegóły zwrotu:</h6>
-                        <table class="table table-sm table-bordered">
-                            <tr>
-                                <td><strong>Kwota do zwrotu:</strong></td>
-                                <td class="text-success fw-bold" x-text="details.totalAmount"></td>
-                            </tr>
-                            <tr>
-                                <td><strong>W tym koszt dostawy:</strong></td>
-                                <td x-text="details.deliveryAmount"></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Status Allegro:</strong></td>
-                                <td x-text="details.allegroStatus"></td>
-                            </tr>
-                        </table>
-
-                        <div class="form-check mt-3">
-                            <input class="form-check-input" type="checkbox" id="deliveryCostCovered" x-model="deliveryCostCovered">
-                            <label class="form-check-label" for="deliveryCostCovered">
-                                Zwróć także koszt dostawy
-                            </label>
-                        </div>
-
-                        <div class="mt-3">
-                            <label for="refundReason" class="form-label">Komentarz (opcjonalnie):</label>
-                            <textarea class="form-control" id="refundReason" rows="2" maxlength="500"
-                                      placeholder="Np. Towar zwrócony w pełnym stanie" x-model="reason"></textarea>
-                        </div>
-
-                        <div class="form-check mt-3">
-                            <input class="form-check-input" type="checkbox" id="confirmRefund" x-model="confirmed" required>
-                            <label class="form-check-label text-danger" for="confirmRefund">
-                                <strong>Potwierdzam zwrot pieniędzy klientowi</strong>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div x-show="!eligible" class="alert alert-warning">
-                        <i class="bi bi-x-circle me-2"></i>
-                        <span x-text="notEligibleReason"></span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
-                <form action="{{ url_for('orders.process_refund', order_id=order.order_id) }}" method="POST"
-                      @submit="handleSubmit($event)">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="confirm" value="true">
-                    <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id }}">
-                    <input type="hidden" name="delivery_cost_covered" :value="deliveryCostCovered ? 'true' : 'false'">
-                    <input type="hidden" name="reason" :value="reason">
-                    <button type="submit" class="btn btn-danger" :disabled="!confirmed">
-                        <i class="bi bi-currency-exchange"></i> Zwróć pieniądze
-                    </button>
-                </form>
+<dialog id="refundModal" class="modal" x-ref="modal">
+    <div class="modal-box max-w-lg">
+        <h3 class="font-bold text-lg text-error mb-4">
+            <i class="bi bi-exclamation-triangle-fill mr-2"></i>
+            Potwierdzenie zwrotu pieniedzy
+        </h3>
+        <div class="alert alert-error mb-3">
+            <div>
+                <strong>UWAGA!</strong> Ta operacja jest <strong>NIEODWRACALNA</strong>.
+                Pieniadze zostana zwrocone klientowi poprzez Allegro.
             </div>
         </div>
+
+        <div x-show="loading" class="text-center py-3">
+            <span class="loading loading-spinner loading-md"></span>
+            <p class="mt-2 mb-0">Sprawdzanie kwalifikowalnosci zwrotu...</p>
+        </div>
+
+        <div x-show="!loading && checked">
+            <div x-show="eligible">
+                <h6 class="font-semibold">Szczegoly zwrotu:</h6>
+                <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>Kwota do zwrotu:</strong></td>
+                        <td class="text-success font-bold" x-text="details.totalAmount"></td>
+                    </tr>
+                    <tr>
+                        <td><strong>W tym koszt dostawy:</strong></td>
+                        <td x-text="details.deliveryAmount"></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status Allegro:</strong></td>
+                        <td x-text="details.allegroStatus"></td>
+                    </tr>
+                </table>
+                </div>
+
+                <div class="form-control mt-3">
+                    <label class="label cursor-pointer justify-start gap-2">
+                        <input type="checkbox" class="checkbox" id="deliveryCostCovered" x-model="deliveryCostCovered">
+                        <span class="label-text">Zwroc takze koszt dostawy</span>
+                    </label>
+                </div>
+
+                <div class="mt-3">
+                    <label for="refundReason" class="label"><span class="label-text">Komentarz (opcjonalnie):</span></label>
+                    <textarea class="textarea textarea-bordered w-full" id="refundReason" rows="2" maxlength="500"
+                              placeholder="Np. Towar zwrocony w pelnym stanie" x-model="reason"></textarea>
+                </div>
+
+                <div class="form-control mt-3">
+                    <label class="label cursor-pointer justify-start gap-2">
+                        <input type="checkbox" class="checkbox checkbox-error" id="confirmRefund" x-model="confirmed" required>
+                        <span class="label-text text-error font-bold">Potwierdzam zwrot pieniedzy klientowi</span>
+                    </label>
+                </div>
+            </div>
+
+            <div x-show="!eligible" class="alert alert-warning">
+                <i class="bi bi-x-circle mr-2"></i>
+                <span x-text="notEligibleReason"></span>
+            </div>
+        </div>
+
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn">Anuluj</button>
+            </form>
+            <form action="{{ url_for('orders.process_refund', order_id=order.order_id) }}" method="POST"
+                  @submit="handleSubmit($event)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="confirm" value="true">
+                <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id }}">
+                <input type="hidden" name="delivery_cost_covered" :value="deliveryCostCovered ? 'true' : 'false'">
+                <input type="hidden" name="reason" :value="reason">
+                <button type="submit" class="btn btn-error" :disabled="!confirmed">
+                    <i class="bi bi-currency-exchange"></i> Zwroc pieniadze
+                </button>
+            </form>
+        </div>
     </div>
-</div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 </div>
 
 <script>
@@ -991,7 +991,14 @@ document.addEventListener('alpine:init', () => {
         init() {
             const modalEl = this.$refs.modal;
             if (modalEl) {
-                modalEl.addEventListener('show.bs.modal', () => this.checkEligibility());
+                modalEl.addEventListener('close', () => {
+                    this.confirmed = false;
+                });
+                // Auto-check on show
+                const observer = new MutationObserver(() => {
+                    if (modalEl.open) this.checkEligibility();
+                });
+                observer.observe(modalEl, { attributes: true, attributeFilter: ['open'] });
             }
         },
 

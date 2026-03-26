@@ -105,8 +105,8 @@
     color: var(--ds-muted);
     margin: 0;
 }
-/* Accordion redesign */
-.settings-page .accordion-item {
+/* Collapse (accordion) redesign */
+.settings-page .collapse {
     border: 1px solid var(--ds-border);
     border-radius: var(--ds-radius) !important;
     margin-bottom: 0.75rem;
@@ -114,10 +114,10 @@
     box-shadow: var(--ds-shadow-sm);
     transition: box-shadow 200ms ease;
 }
-.settings-page .accordion-item:hover {
+.settings-page .collapse:hover {
     box-shadow: var(--ds-shadow-md);
 }
-.settings-page .accordion-button {
+.settings-page .collapse-title {
     font-family: 'Inter', system-ui, sans-serif;
     font-weight: 600;
     font-size: 0.9rem;
@@ -127,16 +127,15 @@
     border: none;
     transition: background 200ms ease;
 }
-.settings-page .accordion-button:not(.collapsed) {
+.settings-page .collapse > input:checked ~ .collapse-title {
     background: var(--ds-bg);
     color: var(--ds-primary);
-    box-shadow: none;
 }
-.settings-page .accordion-button:focus {
+.settings-page .collapse-title:focus {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
     border-color: var(--ds-primary);
 }
-.settings-page .accordion-button .badge {
+.settings-page .collapse-title .badge {
     font-weight: 500;
     font-size: 0.7rem;
     padding: 0.25em 0.6em;
@@ -166,7 +165,7 @@
 .settings-page .settings-table tr:hover {
     background: var(--ds-bg);
 }
-.settings-page .settings-table .text-muted {
+.settings-page .settings-table small.text-base-content\/60 {
     color: var(--ds-muted) !important;
 }
 /* Formularze redesign */
@@ -331,7 +330,7 @@
 <div class="settings-page">
     <!-- Naglowek strony -->
     <div class="page-header">
-        <h2><i class="bi bi-gear me-2"></i>Ustawienia</h2>
+        <h2><i class="bi bi-gear mr-2"></i>Ustawienia</h2>
         <p>Konfiguracja aplikacji, integracje i koszty stale</p>
     </div>
 
@@ -359,27 +358,22 @@
     <form method="post" id="settingsForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <div class="accordion" id="settingsAccordion">
+        <div class="join join-vertical w-full" id="settingsAccordion">
         {% for group_name, group_data in grouped_settings.items() %}
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}"
-                            aria-expanded="{{ 'true' if loop.first else 'false' }}">
-                        <i class="{{ group_data.icon }} me-2"></i>{{ group_name }}
-                        <span class="badge ms-2">{{ group_data.entries|length }}</span>
-                    </button>
-                </h2>
-                <div id="group-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
-                     data-bs-parent="#settingsAccordion">
-                    <div class="accordion-body p-0">
+            <div class="collapse collapse-arrow join-item border border-base-300 bg-base-200">
+                <input type="radio" name="settings-accordion" {% if loop.first %}checked{% endif %} />
+                <div class="collapse-title font-semibold text-base">
+                    <i class="{{ group_data.icon }} mr-2"></i>{{ group_name }}
+                    <span class="badge ml-2">{{ group_data.entries|length }}</span>
+                </div>
+                <div class="collapse-content p-0">
                         <table class="table settings-table table-sm mb-0">
                             <tbody>
                             {% for item in group_data.entries %}
                             <tr>
                                 <th scope="row" style="width: 40%;">
                                     {{ item.label }}
-                                    {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
+                                    {% if item.desc %}<br><small class="text-base-content/60">{{ item.desc }}</small>{% endif %}
                                 </th>
                                 <td>
                                     {% set lower = item.key.lower() %}
@@ -411,9 +405,9 @@
                                         or 'key' in lower
                                     %}
                                     {% if is_sensitive %}
-                                    <div class="input-group input-group-sm" x-data="{ show: false }">
+                                    <div class="flex items-stretch" x-data="{ show: false }">
                                         <input :type="show ? 'text' : 'password'" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
-                                        <span class="input-group-text" style="cursor:pointer" @click="show = !show">
+                                        <span class="flex items-center px-2 bg-base-300 rounded-r-lg cursor-pointer" @click="show = !show">
                                             <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
                                         </span>
                                     </div>
@@ -426,7 +420,6 @@
                             {% endfor %}
                             </tbody>
                         </table>
-                    </div>
                 </div>
             </div>
         {% endfor %}
@@ -436,12 +429,12 @@
     <!-- Sticky save bar -->
     <div class="save-bar">
         <button type="submit" form="settingsForm" class="btn btn-ds-primary">
-            <i class="bi bi-check-lg me-1"></i>Zapisz ustawienia
+            <i class="bi bi-check-lg mr-1"></i>Zapisz ustawienia
         </button>
-        <form method="post" action="{{ url_for('allegro.authorize') }}" class="d-inline">
+        <form method="post" action="{{ url_for('allegro.authorize') }}" class="inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-ds-outline">
-                <i class="bi bi-shop me-1"></i>Połącz z Allegro
+                <i class="bi bi-shop mr-1"></i>Połącz z Allegro
             </button>
         </form>
     </div>
@@ -463,39 +456,39 @@
 
     <div class="ds-card">
         <div class="ds-card-body">
-            <p class="text-muted" style="font-size: 0.82rem; margin-bottom: 1rem;">
+            <p class="text-base-content/60" style="font-size: 0.82rem; margin-bottom: 1rem;">
                 Koszty stale sa automatycznie odejmowane od miesiecznego zysku na stronie glownej i w raportach.
                 Mozesz dodawac rowniez wartosci ujemne (np. dotacje, zwroty).
             </p>
 
             <!-- Formularz dodawania -->
-            <form method="post" action="{{ url_for('add_fixed_cost') }}" class="row g-2 mb-4 align-items-end">
+            <form method="post" action="{{ url_for('add_fixed_cost') }}" class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-4 items-end">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="col-md-4">
-                    <label for="new_cost_name" class="form-label small fw-medium">Nazwa kosztu</label>
+                <div class="md:col-span-4">
+                    <label for="new_cost_name" class="block mb-1 text-sm font-medium">Nazwa kosztu</label>
                     <input type="text" class="form-control form-control-sm" id="new_cost_name" name="name"
                            placeholder="np. Ksiegowosc, ZUS, Hosting..." required>
                 </div>
-                <div class="col-md-2">
-                    <label for="new_cost_amount" class="form-label small fw-medium">Kwota (PLN)</label>
+                <div class="md:col-span-2">
+                    <label for="new_cost_amount" class="block mb-1 text-sm font-medium">Kwota (PLN)</label>
                     <input type="number" step="0.01" class="form-control form-control-sm" id="new_cost_amount"
                            name="amount" placeholder="0.00" required>
                 </div>
-                <div class="col-md-4">
-                    <label for="new_cost_desc" class="form-label small fw-medium">Opis (opcjonalnie)</label>
+                <div class="md:col-span-4">
+                    <label for="new_cost_desc" class="block mb-1 text-sm font-medium">Opis (opcjonalnie)</label>
                     <input type="text" class="form-control form-control-sm" id="new_cost_desc" name="description"
                            placeholder="Dodatkowe informacje...">
                 </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-ds-cta btn-sm w-100" style="padding: 0.375rem 0.5rem; font-size: 0.82rem;">
-                        <i class="bi bi-plus-lg me-1"></i>Dodaj
+                <div class="md:col-span-2">
+                    <button type="submit" class="btn btn-ds-cta btn-sm w-full" style="padding: 0.375rem 0.5rem; font-size: 0.82rem;">
+                        <i class="bi bi-plus-lg mr-1"></i>Dodaj
                     </button>
                 </div>
             </form>
 
             <!-- Lista kosztow -->
             {% if fixed_costs %}
-            <div class="table-responsive">
+            <div class="overflow-x-auto">
                 <table class="table settings-table table-sm">
                     <thead>
                         <tr style="border-bottom: 2px solid var(--ds-border);">
@@ -503,7 +496,7 @@
                             <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Kwota</th>
                             <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Opis</th>
                             <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Status</th>
-                            <th class="text-end" style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Akcje</th>
+                            <th class="text-right" style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Akcje</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -525,23 +518,23 @@
                                 <span class="badge" style="background: #F1F5F9; color: #64748B; font-weight: 500;">Nieaktywny</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">
-                                <button type="button" class="btn btn-sm btn-outline-secondary border-0"
-                                        data-bs-toggle="modal" data-bs-target="#editModal{{ cost.id }}"
+                            <td class="text-right">
+                                <button type="button" class="btn btn-sm btn-outline border-0"
+                                        onclick="document.getElementById('editModal{{ cost.id }}').showModal()"
                                         title="Edytuj" style="cursor: pointer;">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <form method="post" action="{{ url_for('toggle_fixed_cost', cost_id=cost.id) }}" class="d-inline">
+                                <form method="post" action="{{ url_for('toggle_fixed_cost', cost_id=cost.id) }}" class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary border-0"
+                                    <button type="submit" class="btn btn-sm btn-outline border-0"
                                             title="{{ 'Dezaktywuj' if cost.is_active else 'Aktywuj' }}" style="cursor: pointer;">
                                         <i class="bi bi-{{ 'pause-circle' if cost.is_active else 'play-circle' }}"></i>
                                     </button>
                                 </form>
-                                <form method="post" action="{{ url_for('delete_fixed_cost', cost_id=cost.id) }}" class="d-inline"
+                                <form method="post" action="{{ url_for('delete_fixed_cost', cost_id=cost.id) }}" class="inline"
                                       onsubmit="return confirm('Na pewno usunac koszt {{ cost.name }}?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0"
+                                    <button type="submit" class="btn btn-sm btn-outline btn-error border-0"
                                             title="Usuń" style="cursor: pointer;">
                                         <i class="bi bi-trash3"></i>
                                     </button>
@@ -550,40 +543,38 @@
                         </tr>
 
                         <!-- Modal edycji -->
-                        <div class="modal fade" id="editModal{{ cost.id }}" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content" style="border-radius: var(--ds-radius); border: none; box-shadow: var(--ds-shadow-lg);">
+                        <dialog id="editModal{{ cost.id }}" class="modal">
+                            <div class="modal-box" style="border-radius: var(--ds-radius); box-shadow: var(--ds-shadow-lg);">
                                     <form method="post" action="{{ url_for('edit_fixed_cost', cost_id=cost.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <div class="modal-header" style="border-bottom: 1px solid var(--ds-border);">
-                                            <h5 class="modal-title" style="font-weight: 600;">Edytuj koszt: {{ cost.name }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
+                                        <h3 class="font-bold text-lg" style="border-bottom: 1px solid var(--ds-border); padding-bottom: 0.75rem;">
+                                            Edytuj koszt: {{ cost.name }}
+                                        </h3>
+                                        <div class="py-4">
                                             <div class="mb-3">
-                                                <label class="form-label fw-medium small">Nazwa</label>
+                                                <label class="block mb-1 text-sm font-medium">Nazwa</label>
                                                 <input type="text" class="form-control" name="name" value="{{ cost.name }}" required>
                                             </div>
                                             <div class="mb-3">
-                                                <label class="form-label fw-medium small">Kwota (PLN)</label>
+                                                <label class="block mb-1 text-sm font-medium">Kwota (PLN)</label>
                                                 <input type="number" step="0.01" class="form-control" name="amount"
                                                        value="{{ cost.amount }}" required>
                                                 <small style="color: var(--ds-muted);">Wartosc ujemna = przychod/dotacja</small>
                                             </div>
                                             <div class="mb-3">
-                                                <label class="form-label fw-medium small">Opis</label>
+                                                <label class="block mb-1 text-sm font-medium">Opis</label>
                                                 <input type="text" class="form-control" name="description"
                                                        value="{{ cost.description or '' }}">
                                             </div>
                                         </div>
-                                        <div class="modal-footer" style="border-top: 1px solid var(--ds-border);">
-                                            <button type="button" class="btn btn-ds-outline btn-sm" data-bs-dismiss="modal" style="padding: 0.375rem 1rem;">Anuluj</button>
+                                        <div class="modal-action" style="border-top: 1px solid var(--ds-border); padding-top: 0.75rem;">
+                                            <button type="button" class="btn btn-ds-outline btn-sm" onclick="this.closest('dialog').close()" style="padding: 0.375rem 1rem;">Anuluj</button>
                                             <button type="submit" class="btn btn-ds-primary btn-sm" style="padding: 0.375rem 1rem;">Zapisz</button>
                                         </div>
                                     </form>
-                                </div>
                             </div>
-                        </div>
+                            <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                        </dialog>
                         {% endfor %}
                     </tbody>
                 </table>

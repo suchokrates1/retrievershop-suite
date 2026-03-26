@@ -1,15 +1,25 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="pl" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Retriever Shop - Magazyn</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-          crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    brand: '#17383E',
+                    'brand-hover': '#145360',
+                }
+            }
+        }
+    }
+    </script>
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
           integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
@@ -23,7 +33,7 @@
     <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
     {% block styles %}{% endblock %}
 </head>
-<body>
+<body class="bg-base-100 text-base-content min-h-screen">
     {% if show_menu is not defined %}
         {% set show_menu = True %}
     {% endif %}
@@ -31,63 +41,64 @@
         {% set full_width = False %}
     {% endif %}
     {% block page_vars %}{% endblock %}
-    <div class="page-wrapper">
+    <div class="page-wrapper flex flex-col min-h-screen">
     <div x-data="{ menuOpen: false }">
-    <nav class="navbar navbar-dark bg-dark fixed-top">
-        <div class="container">
-            <div class="d-flex flex-column w-100">
-                <div class="d-flex align-items-center w-100">
-                    <span class="navbar-brand mb-2 mb-md-0">
-                        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo">
-                    </span>
-                    <span class="flex-grow-1 text-center fs-3">Witaj w aplikacji magazynowej</span>
+    <nav class="navbar bg-base-300 fixed top-0 left-0 right-0 z-50">
+        <div class="container mx-auto">
+            <div class="flex flex-col w-full">
+                <div class="flex items-center w-full">
+                    <a class="text-xl" href="{{ url_for('home') }}">
+                        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-[140px]">
+                    </a>
+                    <span class="grow text-center text-2xl">Witaj w aplikacji magazynowej</span>
                     {% if show_menu %}
-                    <div class="d-flex align-items-center ms-auto">
-                        <div x-data="wakeLock({{ wake_lock_default|default(false)|tojson }})" x-cloak class="d-inline-block">
+                    <div class="flex items-center ml-auto">
+                        <div x-data="wakeLock({{ wake_lock_default|default(false)|tojson }})" x-cloak class="inline-block">
                             <button x-show="supported"
                                     @click="toggle()"
-                                    class="btn btn-sm ms-2"
-                                    :class="active ? 'btn-warning' : 'btn-outline-secondary'"
+                                    class="btn btn-sm ml-2"
+                                    :class="active ? 'btn-warning' : 'btn-outline'"
                                     :title="active ? 'Ekran nie wygasa (kliknij aby wyłączyć)' : 'Nie wygaszaj ekranu'">
                                 <i class="bi" :class="active ? 'bi-brightness-high-fill' : 'bi-brightness-high'"></i>
                             </button>
                         </div>
-                        <a href="{{ url_for('logout') }}" class="btn btn-danger ms-md-3 d-none d-md-inline-block">Wyloguj się</a>
-                        <button @click="menuOpen = !menuOpen" class="navbar-toggler d-md-none ms-2" type="button">
-                            <span class="navbar-toggler-icon"></span>
+                        <a href="{{ url_for('logout') }}" class="btn btn-error hidden md:inline-flex ml-3">Wyloguj się</a>
+                        <button @click="menuOpen = !menuOpen" class="btn btn-ghost md:hidden ml-2" type="button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                         </button>
                     </div>
                     {% endif %}
                 </div>
                 {% if show_menu %}
-                <ul class="navbar-nav flex-row flex-nowrap gap-3 d-none d-md-flex align-items-center mt-2">
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('home') }}">Strona główna</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="{{ url_for('discussions.discussions_list') }}">
+                <ul class="menu menu-horizontal flex-nowrap gap-1 hidden md:flex items-center mt-2 p-0">
+                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('home') }}">Strona główna</a></li>
+                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('products.items') }}">Przedmioty</a></li>
+                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
+                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
+                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
+                    <li>
+                        <a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('discussions.discussions_list') }}">
                             Wiadomości / Dyskusje
                             {% if unread_count > 0 %}
-                                <span class="badge bg-danger">{{ unread_count }}</span>
+                                <span class="badge badge-error">{{ unread_count }}</span>
                             {% endif %}
                         </a>
                     </li>
-                    <li class="nav-item dropdown" x-data="{ open: false }"
+                    <li x-data="{ open: false }" class="relative"
                         @mouseenter="if(window.innerWidth >= 768) open = true"
                         @mouseleave="if(window.innerWidth >= 768) open = false">
-                        <a class="nav-link dropdown-toggle text-white" href="#"
+                        <a class="text-base-content hover:bg-base-content/20 rounded-lg" href="#"
                            @click.prevent="if(window.innerWidth < 768) open = !open"
                            :aria-expanded="open">
                             Ustawienia
+                            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-dark" :class="{ show: open }">
-                            <li><a class="dropdown-item" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('agent_logs') }}">Logi</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+                        <ul x-show="open" x-transition class="menu bg-base-200 rounded-box absolute top-full left-0 z-50 w-52 p-2 shadow-lg">
+                            <li><a href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+                            <li><a href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
+                            <li><a href="{{ url_for('agent_logs') }}">Logi</a></li>
+                            <li><a href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
+                            <li><a href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -98,51 +109,51 @@
 
 
     {% if show_menu %}
-    <div class="mobile-menu d-md-none" :class="{ open: menuOpen }" @click.outside="menuOpen = false">
-        <button @click="menuOpen = false" class="mobile-close btn btn-link text-white custom-btn" type="button" aria-label="Zamknij">&times;</button>
-        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="mobile-logo mx-auto mb-3">
-        <ul class="nav flex-column h-100">
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
-            <li class="nav-item">
-                <a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('discussions.discussions_list') }}">
+    <div class="mobile-menu md:hidden" :class="{ open: menuOpen }" @click.outside="menuOpen = false">
+        <button @click="menuOpen = false" class="btn btn-ghost btn-sm absolute top-2 right-2 text-white" type="button" aria-label="Zamknij">&times;</button>
+        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-10 mx-auto mb-3">
+        <ul class="menu flex flex-col h-full p-0">
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('products.items') }}">Przedmioty</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
+            <li>
+                <a class="text-white" @click="menuOpen = false" href="{{ url_for('discussions.discussions_list') }}">
                     Wiadomości / Dyskusje
                     {% if unread_count > 0 %}
-                        <span class="badge bg-danger">{{ unread_count }}</span>
+                        <span class="badge badge-error">{{ unread_count }}</span>
                     {% endif %}
                 </a>
             </li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('agent_logs') }}">Logi</a></li>
-            <li class="nav-item"><a class="nav-link text-white" @click="menuOpen = false" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
-            <li class="nav-item mt-auto text-center">
-                <a class="btn btn-danger w-100 custom-btn" @click="menuOpen = false" href="{{ url_for('logout') }}">Wyloguj się</a>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('agent_logs') }}">Logi</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+            <li class="mt-auto text-center">
+                <a class="btn btn-error w-full" @click="menuOpen = false" href="{{ url_for('logout') }}">Wyloguj się</a>
             </li>
         </ul>
     </div>
     {% endif %}
     </div>{# /x-data menuOpen #}
 
-    <main x-data class="container-fluid mt-4 pt-4{% if full_width %} full-width{% endif %}">
+    <main x-data class="w-full mt-4 pt-4 px-4 flex-1{% if full_width %} max-w-none{% endif %}">
         {% if not full_width %}
-        <div class="container">
+        <div class="container mx-auto">
         {% endif %}
             {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
     {% for category, message in messages %}
-      {% if category == 'error' %}{% set cat = 'danger' %}{% elif category in ['success','warning','info','danger'] %}{% set cat = category %}{% else %}{% set cat = 'info' %}{% endif %}
-      <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert"
+      {% if category == 'error' %}{% set cat = 'error' %}{% elif category == 'danger' %}{% set cat = 'error' %}{% elif category in ['success','warning','info'] %}{% set cat = category %}{% else %}{% set cat = 'info' %}{% endif %}
+      <div class="alert alert-{{ cat }} mb-3 shadow-lg"
            x-data="{ show: true }" x-show="show" x-transition.duration.300ms
            x-init="setTimeout(() => show = false, 5000)">
-        {% if cat == 'success' %}<i class="bi bi-check-circle-fill me-2"></i>
-        {% elif cat == 'danger' %}<i class="bi bi-exclamation-triangle-fill me-2"></i>
-        {% elif cat == 'warning' %}<i class="bi bi-exclamation-circle-fill me-2"></i>
-        {% else %}<i class="bi bi-info-circle-fill me-2"></i>{% endif %}
-        {{ message }}
-        <button type="button" class="btn-close" @click="show = false" aria-label="Zamknij"></button>
+        {% if cat == 'success' %}<i class="bi bi-check-circle-fill mr-2"></i>
+        {% elif cat == 'error' %}<i class="bi bi-exclamation-triangle-fill mr-2"></i>
+        {% elif cat == 'warning' %}<i class="bi bi-exclamation-circle-fill mr-2"></i>
+        {% else %}<i class="bi bi-info-circle-fill mr-2"></i>{% endif %}
+        <span>{{ message }}</span>
+        <button type="button" class="btn btn-ghost btn-sm" @click="show = false" aria-label="Zamknij">&times;</button>
       </div>
     {% endfor %}
   {% endif %}
@@ -153,26 +164,24 @@
         </div>
         {% endif %}
     </main>
-    <footer>
-        <p>&copy; 2024-{{ current_year }} <a href="https://retrievershop.pl/">Retriever Shop</a> - Magazyn</p>
+    <footer class="footer footer-center p-4 text-base-content mt-auto">
+        <p>&copy; 2024-{{ current_year }} <a href="https://retrievershop.pl/" class="link link-hover text-brand">Retriever Shop</a> - Magazyn</p>
     </footer>
 
     <div id="barcode-feedback" class="barcode-feedback">
-        <div class="alert alert-success d-none" role="status" data-barcode-result></div>
-        <div class="alert alert-danger d-none" role="alert" data-barcode-error></div>
+        <div class="alert alert-success hidden" role="status" data-barcode-result></div>
+        <div class="alert alert-error hidden" role="alert" data-barcode-error></div>
     </div>
 
-    {# Globalny overlay ładowania #}
-    <div id="loading-overlay" class="loading-overlay d-none">
+    {# Globalny overlay ladowania #}
+    <div id="loading-overlay" class="loading-overlay hidden">
         <div class="loading-spinner">
-            <div class="spinner-border text-light" role="status">
-                <span class="visually-hidden">Ładowanie...</span>
-            </div>
-            <div class="text-light mt-2 small" id="loading-text">Przetwarzanie...</div>
+            <span class="loading loading-spinner loading-lg text-base-content"></span>
+            <div class="text-base-content mt-2 text-sm" id="loading-text">Przetwarzanie...</div>
         </div>
     </div>
 
-    <div class="visually-hidden">
+    <div class="sr-only">
         <label for="barcode-scanner-input">Skaner kodów kreskowych</label>
         <input type="text"
                id="barcode-scanner-input"
@@ -188,9 +197,6 @@
          data-barcode-error="{{ barcode_error_message|default('Nie znaleziono produktu o podanym kodzie kreskowym.') }}">
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            crossorigin="anonymous"></script>
     <script src="{{ url_for('static', filename='barcode-scanner.js') }}?v=20260308d"></script>
     
     <!-- Socket.IO for real-time features -->
@@ -255,15 +261,15 @@
         if (!overlay) return;
         document.addEventListener('submit', function(e) {
             var form = e.target;
-            if (form.classList.contains('d-inline') || form.dataset.noLoader) return;
+            if (form.classList.contains('inline') || form.dataset.noLoader) return;
             var btn = form.querySelector('button[type="submit"]:not(.btn-sm)');
             if (btn) {
                 btn.disabled = true;
                 var origHTML = btn.innerHTML;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + origHTML;
+                btn.innerHTML = '<span class="loading loading-spinner loading-xs mr-1"></span>' + origHTML;
                 btn.dataset.origHtml = origHTML;
             }
-            overlay.classList.remove('d-none');
+            overlay.classList.remove('hidden');
         });
     })();
     </script>

@@ -5,7 +5,7 @@
 {% block content %}
 <h2 class="text-center">Historia drukowania</h2>
 
-<div class="col-md-6 mx-auto mb-3" x-data="{ search: '' }" x-init="$watch('search', val => {
+<div class="md:w-1/2 mx-auto mb-3" x-data="{ search: '' }" x-init="$watch('search', val => {
     const q = val.toLowerCase();
     const rows = document.getElementById('historyBody').getElementsByTagName('tr');
     let visible = 0;
@@ -16,12 +16,12 @@
     }
     document.getElementById('historyCount').textContent = 'Wyświetlono: ' + visible + ' z ' + rows.length;
 })">
-    <input type="text" class="form-control" placeholder="Wyszukaj (ID zamówienia, nazwa, kolor)..." x-model.debounce.200ms="search">
+    <input type="text" class="input input-bordered w-full" placeholder="Wyszukaj (ID zamówienia, nazwa, kolor)..." x-model.debounce.200ms="search">
 </div>
 
 {# .table-responsive ensures horizontal scrolling when needed #}
-<div class="table-responsive">
-<table class="table table-striped table-hover table-sm w-100 history-table">
+<div class="overflow-x-auto">
+<table class="table table-zebra table-sm w-full history-table">
     <colgroup>
         <col style="width:8.33%">
         <col style="width:33.33%">
@@ -31,7 +31,7 @@
         <col style="width:16.67%">
         <col style="width:8.33%">
     </colgroup>
-    <thead class="table-dark"><tr><th>ID zamówienia</th><th>Nazwa</th><th>Kolor</th><th>Rozmiar</th><th>Kurier</th><th>Czas</th><th>Akcje</th></tr></thead>
+    <thead><tr><th>ID zamówienia</th><th>Nazwa</th><th>Kolor</th><th>Rozmiar</th><th>Kurier</th><th>Czas</th><th>Akcje</th></tr></thead>
     <tbody id="historyBody">
     {% for item in printed %}
     <tr>
@@ -42,7 +42,7 @@
         <td>{{ item.last_order_data.courier_code or '' }}</td>
         <td>{{ item.printed_at | format_dt }}</td>
         <td>
-            <form class="d-inline" method="post" action="{{ url_for('history.reprint_label', order_id=item.order_id) }}">
+            <form class="inline" method="post" action="{{ url_for('history.reprint_label', order_id=item.order_id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-printer"></i></button>
             </form>
@@ -56,7 +56,7 @@
         <td>{{ item.last_order_data.color or '' }}</td>
         <td>{{ item.last_order_data.size or '' }}</td>
         <td>{{ item.last_order_data.courier_code or '' }}</td>
-        <td><span class="badge bg-warning text-dark">w kolejce</span></td>
+        <td><span class="badge badge-warning">w kolejce</span></td>
         <td></td>
     </tr>
     {% endfor %}
@@ -64,7 +64,7 @@
 </table>
 </div>
 
-<div class="text-center text-muted small" id="historyCount">
+<div class="text-center text-base-content/60 small" id="historyCount">
     Razem: {{ printed|length }} wydrukowanych, {{ queue|length }} w kolejce
 </div>
 

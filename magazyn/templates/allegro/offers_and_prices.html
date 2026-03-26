@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
 <div id="page-content" hx-select="#page-content" hx-swap="outerHTML" hx-target="#page-content" hx-push-url="true" hx-indicator="#page-content">
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="flex justify-between items-center mb-4">
     <div>
         <h1 class="mb-0">Oferty Allegro</h1>
         <div class="mt-2">
-            <span class="badge bg-primary fs-6">Pobrane: {{ total_offers }}</span>
-            <span class="badge bg-success fs-6">Powiązane: {{ matched_offers }}</span>
-            <span class="badge bg-warning fs-6">Niepowiązane: {{ total_offers - matched_offers }}</span>
+            <span class="badge badge-primary text-sm">Pobrane: {{ total_offers }}</span>
+            <span class="badge badge-success text-sm">Powiązane: {{ matched_offers }}</span>
+            <span class="badge badge-warning text-warning-content text-sm">Niepowiązane: {{ total_offers - matched_offers }}</span>
         </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="flex gap-2">
         <form method="post" action="{{ url_for('allegro.refresh') }}" class="mb-0">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-primary">
@@ -21,12 +21,12 @@
 </div>
 
 {# Filtry i wyszukiwanie #}
-<div class="row mb-3 g-2">
-    <div class="col-md-6">
-        <form method="get" action="{{ url_for('allegro.offers_and_prices') }}" class="d-flex gap-2" hx-boost="true">
+<div class="grid grid-cols-12 gap-2 mb-3">
+    <div class="col-span-12 md:col-span-6">
+        <form method="get" action="{{ url_for('allegro.offers_and_prices') }}" class="flex gap-2" hx-boost="true">
             <input type="hidden" name="status" value="{{ status_filter }}">
             <input type="hidden" name="per_page" value="{{ per_page }}">
-            <input type="text" name="search" class="form-control" 
+            <input type="text" name="search" class="input input-bordered w-full" 
                    placeholder="Szukaj po tytule, ID, EAN, nazwie produktu..."
                    value="{{ search }}"
                    hx-get="{{ url_for('allegro.offers_and_prices') }}"
@@ -35,40 +35,40 @@
                    hx-replace-url="true">
             <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
             {% if search %}
-            <a href="{{ url_for('allegro.offers_and_prices', status=status_filter, per_page=per_page) }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+            <a href="{{ url_for('allegro.offers_and_prices', status=status_filter, per_page=per_page) }}" class="btn btn-outline"><i class="bi bi-x-lg"></i></a>
             {% endif %}
         </form>
     </div>
-    <div class="col-md-6">
-        <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-            <div class="btn-group btn-group-sm" role="group" hx-boost="true">
+    <div class="col-span-12 md:col-span-6">
+        <div class="flex items-center justify-end gap-2 flex-wrap">
+            <div class="join" role="group" hx-boost="true">
                 <a href="{{ url_for('allegro.offers_and_prices', search=search, per_page=per_page, status='all') }}"
-                   class="btn btn-outline-secondary {{ 'active' if status_filter == 'all' }}">Wszystkie</a>
+                   class="btn btn-outline btn-sm join-item {{ 'btn-active' if status_filter == 'all' }}">Wszystkie</a>
                 <a href="{{ url_for('allegro.offers_and_prices', search=search, per_page=per_page, status='linked') }}"
-                   class="btn btn-outline-success {{ 'active' if status_filter == 'linked' }}">Powiązane</a>
+                   class="btn btn-outline btn-success btn-sm join-item {{ 'btn-active' if status_filter == 'linked' }}">Powiązane</a>
                 <a href="{{ url_for('allegro.offers_and_prices', search=search, per_page=per_page, status='unlinked') }}"
-                   class="btn btn-outline-warning {{ 'active' if status_filter == 'unlinked' }}">Niepowiązane</a>
+                   class="btn btn-outline btn-warning btn-sm join-item {{ 'btn-active' if status_filter == 'unlinked' }}">Niepowiązane</a>
             </div>
-            <select class="form-select form-select-sm" style="width: auto;" name="per_page"
+            <select class="select select-bordered select-sm w-auto" name="per_page"
                     hx-get="{{ url_for('allegro.offers_and_prices', page=1, search=search, status=status_filter) }}"
                     hx-trigger="change">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
             </select>
-            <span class="text-muted small text-nowrap">{{ total_filtered }} wyników</span>
+            <span class="text-base-content/60 text-sm whitespace-nowrap">{{ total_filtered }} wyników</span>
         </div>
     </div>
 </div>
 
-<div class="alert alert-info small py-2" role="alert">
+<div class="alert alert-info text-sm py-2" role="alert">
     <strong>Jak to działa?</strong>
     1. Kliknij "Odśwież oferty" aby pobrać najnowsze oferty z Allegro.
     2. Powiąż oferty z produktami z magazynu używając dropdownów.
 </div>
 
-<div class="table-responsive">
-    <table class="table table-striped table-hover table-sm align-middle">
+<div class="overflow-x-auto">
+    <table class="table table-zebra table-sm align-middle">
         <colgroup>
             <col style="width: 100px;">
             <col style="width: 120px;">
@@ -76,7 +76,7 @@
             <col style="width: 100px;">
             <col style="width: 350px;">
         </colgroup>
-        <thead class="table-dark">
+        <thead>
             <tr>
                 <th scope="col">ID</th>
                 <th scope="col">EAN</th>
@@ -91,48 +91,48 @@
                 <td>{{ offer.offer_id }}</td>
                 <td>{{ offer.ean or '-' }}</td>
                 <td>
-                    <div class="fw-semibold">{{ offer.title }}</div>
+                    <div class="font-semibold">{{ offer.title }}</div>
                     {% if offer.is_linked %}
-                        <span class="badge bg-success">Powiązana</span>
+                        <span class="badge badge-success">Powiązana</span>
                     {% else %}
-                        <span class="badge bg-warning">Niepowiązana</span>
+                        <span class="badge badge-warning text-warning-content">Niepowiązana</span>
                     {% endif %}
                 </td>
-                <td class="fw-semibold">{{ offer.price }}</td>
+                <td class="font-semibold">{{ offer.price }}</td>
                 <td>
-                    <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="d-flex align-items-center gap-2 flex-wrap">
+                    <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="flex items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="dropdown flex-grow-1" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
+                        <div class="dropdown grow" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
                             <input type="hidden" name="product_id" :value="productId">
                             <input type="hidden" name="product_size_id" :value="sizeId">
-                            <button class="btn btn-outline-light dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
+                            <button class="btn btn-outline dropdown-toggle w-full text-left" type="button" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
                             </button>
-                            <div class="dropdown-menu dropdown-menu-dark w-100 p-3">
-                                <input type="text" class="form-control form-control-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
-                                <div class="list-group">
-                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('none', '', 'Wybierz z magazynu')">
-                                        <div class="fw-semibold">Brak powiązania</div>
-                                        <div class="small text-muted">Zostaw ofertę bez przypisania</div>
+                            <div class="dropdown-content menu bg-base-200 w-full p-3">
+                                <input type="text" class="input input-bordered input-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
+                                <div class="menu">
+                                    <button type="button" class="btn btn-ghost justify-start" @click="selectOption('none', '', 'Wybierz z magazynu')">
+                                        <div class="font-semibold">Brak powiązania</div>
+                                        <div class="text-sm text-base-content/60">Zostaw ofertę bez przypisania</div>
                                     </button>
                                     {% for item in inventory %}
-                                    <button type="button" class="list-group-item list-group-item-action" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
-                                        <div class="fw-semibold">{{ item.label }}</div>
-                                        <div class="small text-muted">
-                                            <span class="badge bg-secondary me-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
+                                    <button type="button" class="btn btn-ghost justify-start" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
+                                        <div class="font-semibold">{{ item.label }}</div>
+                                        <div class="text-sm text-base-content/60">
+                                            <span class="badge badge-neutral mr-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
                                         </div>
                                     </button>
                                     {% endfor %}
                                 </div>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-outline-primary">Zapisz</button>
+                        <button type="submit" class="btn btn-sm btn-outline btn-primary">Zapisz</button>
                     </form>
                 </td>
             </tr>
         {% else %}
             <tr>
-                <td colspan="5" class="text-center text-muted py-4">
-                    <i class="bi bi-inbox fs-1"></i>
+                <td colspan="5" class="text-center text-base-content/60 py-4">
+                    <i class="bi bi-inbox text-4xl"></i>
                     <p class="mt-2 mb-0">Brak ofert do wyświetlenia</p>
                 </td>
             </tr>
@@ -144,28 +144,22 @@
 {# Paginacja #}
 {% if total_pages > 1 %}
 <nav aria-label="Paginacja ofert" class="mt-3" hx-boost="true">
-    <ul class="pagination pagination-sm justify-content-center">
-        <li class="page-item {% if not has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('allegro.offers_and_prices', page=page-1, search=search, per_page=per_page, status=status_filter) }}">
-                <i class="bi bi-chevron-left"></i>
-            </a>
-        </li>
+    <div class="join flex justify-center">
+        <a class="btn btn-sm join-item {% if not has_prev %}btn-disabled{% endif %}" href="{{ url_for('allegro.offers_and_prices', page=page-1, search=search, per_page=per_page, status=status_filter) }}">
+            <i class="bi bi-chevron-left"></i>
+        </a>
         {% for p in range(1, total_pages + 1) %}
             {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-                <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('allegro.offers_and_prices', page=p, search=search, per_page=per_page, status=status_filter) }}">{{ p }}</a>
-                </li>
+                <a class="btn btn-sm join-item {% if p == page %}btn-active{% endif %}" href="{{ url_for('allegro.offers_and_prices', page=p, search=search, per_page=per_page, status=status_filter) }}">{{ p }}</a>
             {% elif p == page - 3 or p == page + 3 %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
+                <span class="btn btn-sm join-item btn-disabled">...</span>
             {% endif %}
         {% endfor %}
-        <li class="page-item {% if not has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('allegro.offers_and_prices', page=page+1, search=search, per_page=per_page, status=status_filter) }}">
-                <i class="bi bi-chevron-right"></i>
-            </a>
-        </li>
-    </ul>
-    <div class="text-center text-muted small">
+        <a class="btn btn-sm join-item {% if not has_next %}btn-disabled{% endif %}" href="{{ url_for('allegro.offers_and_prices', page=page+1, search=search, per_page=per_page, status=status_filter) }}">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+    </div>
+    <div class="text-center text-base-content/60 text-sm">
         Strona {{ page }} z {{ total_pages }} (wyświetlono {{ offers|length }} z {{ total_filtered }})
     </div>
 </nav>

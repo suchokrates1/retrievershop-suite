@@ -4,21 +4,21 @@
     {% set barcode_endpoint = url_for('scanning.barcode_scan') %}
 {% endblock %}
 {% block content %}
-    <div class="container text-center">
+    <div class="container mx-auto text-center">
         <h2 class="mb-4">Skanuj kod kreskowy</h2>
         <p class="lead">Przyłóż czytnik kodów kreskowych do produktu lub wpisz kod ręcznie.</p>
-        <form id="barcode-form" class="row justify-content-center">
-            <div class="col-md-6">
-                <label for="barcode-input" class="form-label visually-hidden">Kod kreskowy</label>
+        <form id="barcode-form" class="flex flex-wrap justify-center gap-4">
+            <div class="w-full md:w-1/2">
+                <label for="barcode-input" class="label-text sr-only">Kod kreskowy</label>
                 <input type="text"
                        id="barcode-input"
-                       class="form-control form-control-lg text-center"
+                       class="input input-bordered input-lg w-full text-center"
                        placeholder="Przyłóż czytnik lub wpisz kod"
                        autocomplete="off"
                        data-barcode-source="manual">
             </div>
         </form>
-        <div class="alert alert-success mt-4 d-none" data-barcode-result></div>
-        <div class="alert alert-danger mt-4 d-none" data-barcode-error></div>
+        <div class="alert alert-success mt-4 hidden" data-barcode-result></div>
+        <div class="alert alert-error mt-4 hidden" data-barcode-error></div>
     </div>
 {% endblock %}

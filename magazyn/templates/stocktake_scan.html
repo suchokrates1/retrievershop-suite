@@ -144,12 +144,12 @@
   <!-- Nagłówek -->
   <div class="st-header">
     <div class="st-title">Remanent #{{ stocktake_id }}</div>
-    <div class="d-flex gap-2">
+    <div class="flex gap-2">
       <button class="btn btn-warning" @click="undo()">
-        <i class="bi bi-arrow-counterclockwise me-1"></i>Cofnij
+        <i class="bi bi-arrow-counterclockwise mr-1"></i>Cofnij
       </button>
-      <button class="btn btn-danger" @click="finish()">
-        <i class="bi bi-check-circle me-1"></i>Zakończ
+      <button class="btn btn-error" @click="finish()">
+        <i class="bi bi-check-circle mr-1"></i>Zakończ
       </button>
     </div>
   </div>
@@ -262,9 +262,9 @@ document.addEventListener('alpine:init', () => {
         // --- Formatowanie badge ---
         badgeClass(scanned, expected) {
             const diff = scanned - expected;
-            if (diff > 0) return 'bg-danger';
-            if (diff === 0) return 'bg-success';
-            return 'bg-warning text-dark';
+            if (diff > 0) return 'badge-error';
+            if (diff === 0) return 'badge-success';
+            return 'badge-warning';
         },
 
         badgeText(scanned, expected) {

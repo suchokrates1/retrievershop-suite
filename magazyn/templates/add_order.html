@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="flex justify-between items-center mb-3">
     <h2 class="mb-0">Dodaj zamówienie ręczne</h2>
-    <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline-secondary">
+    <a href="{{ url_for('orders.orders_list') }}" class="btn btn-outline">
         <i class="bi bi-arrow-left"></i> Powrót
     </a>
 </div>
@@ -11,91 +11,91 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     {# Platforma i dane klienta #}
-    <div class="card mb-3">
-        <div class="card-header"><strong>Dane zamówienia</strong></div>
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3"><strong>Dane zamówienia</strong></div>
         <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label for="platform" class="form-label">Platforma</label>
-                    <select name="platform" id="platform" class="form-select" required>
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-3">
+                    <label for="platform" class="label-text">Platforma</label>
+                    <select name="platform" id="platform" class="select select-bordered w-full" required>
                         <option value="olx">OLX</option>
                         <option value="allegro_manual">Allegro (ręczne)</option>
                         <option value="shop">Sklep</option>
                         <option value="inne">Inne</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="external_order_id" class="form-label">Nr zamówienia (zewn.)</label>
-                    <input type="text" name="external_order_id" id="external_order_id" class="form-control"
+                <div class="col-span-12 md:col-span-3">
+                    <label for="external_order_id" class="label-text">Nr zamówienia (zewn.)</label>
+                    <input type="text" name="external_order_id" id="external_order_id" class="input input-bordered w-full"
                            placeholder="np. numer OLX">
                 </div>
-                <div class="col-md-3">
-                    <label for="payment_method" class="form-label">Metoda płatności</label>
-                    <select name="payment_method" id="payment_method" class="form-select">
+                <div class="col-span-12 md:col-span-3">
+                    <label for="payment_method" class="label-text">Metoda płatności</label>
+                    <select name="payment_method" id="payment_method" class="select select-bordered w-full">
                         <option value="przelew">Przelew</option>
                         <option value="za_pobraniem">Za pobraniem</option>
                         <option value="gotowka">Gotówka</option>
                         <option value="blik">BLIK</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="payment_done" class="form-label">Zapłacono (PLN)</label>
-                    <input type="number" step="0.01" min="0" name="payment_done" id="payment_done" class="form-control" value="0">
+                <div class="col-span-12 md:col-span-3">
+                    <label for="payment_done" class="label-text">Zapłacono (PLN)</label>
+                    <input type="number" step="0.01" min="0" name="payment_done" id="payment_done" class="input input-bordered w-full" value="0">
                 </div>
             </div>
         </div>
     </div>
 
     {# Dane klienta #}
-    <div class="card mb-3">
-        <div class="card-header"><strong>Klient</strong></div>
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3"><strong>Klient</strong></div>
         <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label for="customer_name" class="form-label">Imię i nazwisko</label>
-                    <input type="text" name="customer_name" id="customer_name" class="form-control" required>
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="customer_name" class="label-text">Imię i nazwisko</label>
+                    <input type="text" name="customer_name" id="customer_name" class="input input-bordered w-full" required>
                 </div>
-                <div class="col-md-4">
-                    <label for="email" class="form-label">Email</label>
-                    <input type="email" name="email" id="email" class="form-control">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="email" class="label-text">Email</label>
+                    <input type="email" name="email" id="email" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-4">
-                    <label for="phone" class="form-label">Telefon</label>
-                    <input type="text" name="phone" id="phone" class="form-control">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="phone" class="label-text">Telefon</label>
+                    <input type="text" name="phone" id="phone" class="input input-bordered w-full">
                 </div>
             </div>
         </div>
     </div>
 
     {# Adres dostawy #}
-    <div class="card mb-3">
-        <div class="card-header"><strong>Adres dostawy</strong></div>
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3"><strong>Adres dostawy</strong></div>
         <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label for="delivery_fullname" class="form-label">Imię i nazwisko odbiorcy</label>
-                    <input type="text" name="delivery_fullname" id="delivery_fullname" class="form-control">
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-6">
+                    <label for="delivery_fullname" class="label-text">Imię i nazwisko odbiorcy</label>
+                    <input type="text" name="delivery_fullname" id="delivery_fullname" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-6">
-                    <label for="delivery_company" class="form-label">Firma (opcjonalnie)</label>
-                    <input type="text" name="delivery_company" id="delivery_company" class="form-control">
+                <div class="col-span-12 md:col-span-6">
+                    <label for="delivery_company" class="label-text">Firma (opcjonalnie)</label>
+                    <input type="text" name="delivery_company" id="delivery_company" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-6">
-                    <label for="delivery_address" class="form-label">Adres</label>
-                    <input type="text" name="delivery_address" id="delivery_address" class="form-control" required>
+                <div class="col-span-12 md:col-span-6">
+                    <label for="delivery_address" class="label-text">Adres</label>
+                    <input type="text" name="delivery_address" id="delivery_address" class="input input-bordered w-full" required>
                 </div>
-                <div class="col-md-3">
-                    <label for="delivery_postcode" class="form-label">Kod pocztowy</label>
-                    <input type="text" name="delivery_postcode" id="delivery_postcode" class="form-control"
+                <div class="col-span-12 md:col-span-3">
+                    <label for="delivery_postcode" class="label-text">Kod pocztowy</label>
+                    <input type="text" name="delivery_postcode" id="delivery_postcode" class="input input-bordered w-full"
                            pattern="\d{2}-\d{3}" placeholder="00-000">
                 </div>
-                <div class="col-md-3">
-                    <label for="delivery_city" class="form-label">Miasto</label>
-                    <input type="text" name="delivery_city" id="delivery_city" class="form-control" required>
+                <div class="col-span-12 md:col-span-3">
+                    <label for="delivery_city" class="label-text">Miasto</label>
+                    <input type="text" name="delivery_city" id="delivery_city" class="input input-bordered w-full" required>
                 </div>
-                <div class="col-md-4">
-                    <label for="delivery_method" class="form-label">Metoda dostawy</label>
-                    <select name="delivery_method" id="delivery_method" class="form-select" x-model="deliveryMethod">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="delivery_method" class="label-text">Metoda dostawy</label>
+                    <select name="delivery_method" id="delivery_method" class="select select-bordered w-full" x-model="deliveryMethod">
                         <option value="Kurier InPost">Kurier InPost</option>
                         <option value="InPost Paczkomat">InPost Paczkomat</option>
                         <option value="Kurier DPD">Kurier DPD</option>
@@ -104,13 +104,13 @@
                         <option value="Inna">Inna</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label for="delivery_price" class="form-label">Koszt dostawy (PLN)</label>
-                    <input type="number" step="0.01" min="0" name="delivery_price" id="delivery_price" class="form-control" value="0">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="delivery_price" class="label-text">Koszt dostawy (PLN)</label>
+                    <input type="number" step="0.01" min="0" name="delivery_price" id="delivery_price" class="input input-bordered w-full" value="0">
                 </div>
-                <div class="col-md-4">
-                    <label for="delivery_package_nr" class="form-label">Nr paczki / śledzenia</label>
-                    <input type="text" name="delivery_package_nr" id="delivery_package_nr" class="form-control"
+                <div class="col-span-12 md:col-span-4">
+                    <label for="delivery_package_nr" class="label-text">Nr paczki / śledzenia</label>
+                    <input type="text" name="delivery_package_nr" id="delivery_package_nr" class="input input-bordered w-full"
                            placeholder="np. numer InPost">
                 </div>
             </div>
@@ -118,48 +118,48 @@
     </div>
 
     {# Punkt odbioru #}
-    <div class="card mb-3" x-show="deliveryMethod === 'InPost Paczkomat'" x-cloak>
-        <div class="card-header"><strong>Punkt odbioru (paczkomat)</strong></div>
+    <div class="card bg-base-200 mb-3" x-show="deliveryMethod === 'InPost Paczkomat'" x-cloak>
+        <div class="card-body border-b border-base-300 font-semibold py-3"><strong>Punkt odbioru (paczkomat)</strong></div>
         <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label for="delivery_point_id" class="form-label">ID paczkomatu</label>
-                    <input type="text" name="delivery_point_id" id="delivery_point_id" class="form-control"
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="delivery_point_id" class="label-text">ID paczkomatu</label>
+                    <input type="text" name="delivery_point_id" id="delivery_point_id" class="input input-bordered w-full"
                            placeholder="np. KRA01A">
                 </div>
-                <div class="col-md-4">
-                    <label for="delivery_point_address" class="form-label">Adres paczkomatu</label>
-                    <input type="text" name="delivery_point_address" id="delivery_point_address" class="form-control">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="delivery_point_address" class="label-text">Adres paczkomatu</label>
+                    <input type="text" name="delivery_point_address" id="delivery_point_address" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-4">
-                    <label for="delivery_point_city" class="form-label">Miasto</label>
-                    <input type="text" name="delivery_point_city" id="delivery_point_city" class="form-control">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="delivery_point_city" class="label-text">Miasto</label>
+                    <input type="text" name="delivery_point_city" id="delivery_point_city" class="input input-bordered w-full">
                 </div>
             </div>
         </div>
     </div>
 
     {# Prowizja #}
-    <div class="card mb-3">
-        <div class="card-header"><strong>Prowizja platformy</strong></div>
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3"><strong>Prowizja platformy</strong></div>
         <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label for="commission_type" class="form-label">Typ prowizji</label>
-                    <select name="commission_type" id="commission_type" class="form-select" x-model="commissionType">
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="commission_type" class="label-text">Typ prowizji</label>
+                    <select name="commission_type" id="commission_type" class="select select-bordered w-full" x-model="commissionType">
                         <option value="percent">Procent (%)</option>
                         <option value="amount">Kwota (PLN)</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label for="commission_value" class="form-label">
+                <div class="col-span-12 md:col-span-4">
+                    <label for="commission_value" class="label-text">
                         <span x-text="commissionType === 'percent' ? 'Prowizja (%)' : 'Prowizja (PLN)'"></span>
                     </label>
                     <input type="number" step="0.01" min="0" name="commission_value" id="commission_value"
-                           class="form-control" value="10.0">
+                           class="input input-bordered w-full" value="10.0">
                 </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <small class="text-muted">
+                <div class="col-span-12 md:col-span-4 flex items-end">
+                    <small class="text-base-content/60">
                         Domyślnie 10% (Allegro). Dla OLX zwykle ~5-8%.
                     </small>
                 </div>
@@ -168,59 +168,59 @@
     </div>
 
     {# Produkty #}
-    <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">
             <strong>Produkty</strong>
-            <button type="button" class="btn btn-sm btn-outline-primary" @click="addProduct()">
+            <button type="button" class="btn btn-sm btn-outline btn-primary" @click="addProduct()">
                 <i class="bi bi-plus-lg"></i> Dodaj kolejny produkt
             </button>
         </div>
         <div class="card-body">
             <template x-for="(product, index) in products" :key="index">
                 <div class="product-row mb-3 p-2 border rounded">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-5">
-                            <label class="form-label">Szukaj produktu</label>
+                    <div class="grid grid-cols-12 gap-2 items-end">
+                        <div class="col-span-12 md:col-span-5">
+                            <label class="label-text">Szukaj produktu</label>
                             <div class="position-relative">
-                                <input type="text" class="form-control form-control-sm"
+                                <input type="text" class="input input-bordered input-sm w-full"
                                        placeholder="Wpisz nazwę, EAN lub kolor..." autocomplete="off"
                                        x-model="product.searchQuery"
                                        @input.debounce.300ms="searchProduct(index)"
                                        @click.outside="product.showSuggestions = false">
-                                <div class="list-group position-absolute w-100" style="z-index:1000;"
+                                <div class="menu absolute w-full" style="z-index:1000;"
                                      x-show="product.showSuggestions && product.suggestions.length > 0" x-cloak>
                                     <template x-for="(item, si) in product.suggestions" :key="si">
-                                        <a href="#" class="list-group-item list-group-item-action py-1 px-2 small"
+                                        <a href="#" class="btn btn-ghost justify-start py-1 px-2 text-sm"
                                            x-text="item.label"
                                            @click.prevent="selectProduct(index, item)"></a>
                                     </template>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-7">
-                            <div class="row g-2 align-items-end">
-                                <div class="col">
-                                    <label class="form-label">Nazwa produktu</label>
-                                    <input type="text" name="prod_name[]" class="form-control form-control-sm"
+                        <div class="col-span-12 md:col-span-7">
+                            <div class="grid grid-cols-12 gap-2 items-end">
+                                <div class="col-span-12 md:col-span-4">
+                                    <label class="label-text">Nazwa produktu</label>
+                                    <input type="text" name="prod_name[]" class="input input-bordered input-sm w-full"
                                            x-model="product.name" required>
                                 </div>
                                 <div class="col-auto" style="width:120px">
-                                    <label class="form-label">EAN</label>
-                                    <input type="text" name="prod_ean[]" class="form-control form-control-sm"
+                                    <label class="label-text">EAN</label>
+                                    <input type="text" name="prod_ean[]" class="input input-bordered input-sm w-full"
                                            x-model="product.ean">
                                 </div>
                                 <div class="col-auto" style="width:70px">
-                                    <label class="form-label">Ilość</label>
-                                    <input type="number" name="prod_qty[]" class="form-control form-control-sm"
+                                    <label class="label-text">Ilość</label>
+                                    <input type="number" name="prod_qty[]" class="input input-bordered input-sm w-full"
                                            min="1" x-model="product.qty" required>
                                 </div>
                                 <div class="col-auto" style="width:110px">
-                                    <label class="form-label">Cena sprzedaży</label>
+                                    <label class="label-text">Cena sprzedaży</label>
                                     <input type="number" step="0.01" min="0" name="prod_price[]"
-                                           class="form-control form-control-sm" x-model="product.price" required>
+                                           class="input input-bordered input-sm w-full" x-model="product.price" required>
                                 </div>
                                 <div class="col-auto">
-                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                    <button type="button" class="btn btn-sm btn-outline btn-error"
                                             @click="removeProduct(index)" title="Usuń"
                                             x-show="products.length > 1">
                                         <i class="bi bi-trash"></i>
@@ -229,69 +229,69 @@
                             </div>
                         </div>
                     </div>
-                    <div class="text-muted small mt-1" x-show="product.info" x-text="product.info"></div>
+                    <div class="text-base-content/60 text-sm mt-1" x-show="product.info" x-text="product.info"></div>
                 </div>
             </template>
         </div>
     </div>
 
     {# Faktura #}
-    <div class="card mb-3">
-        <div class="card-header">
-            <div class="form-check">
-                <input type="checkbox" name="want_invoice" id="want_invoice" class="form-check-input" value="1"
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="want_invoice" id="want_invoice" class="checkbox" value="1"
                        x-model="wantInvoice">
-                <label class="form-check-label" for="want_invoice"><strong>Faktura VAT</strong></label>
+                <label class="label cursor-pointer" for="want_invoice"><strong>Faktura VAT</strong></label>
             </div>
         </div>
         <div class="card-body" x-show="wantInvoice" x-cloak>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label for="invoice_fullname" class="form-label">Nazwa / Imię i nazwisko</label>
-                    <input type="text" name="invoice_fullname" id="invoice_fullname" class="form-control">
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-6">
+                    <label for="invoice_fullname" class="label-text">Nazwa / Imię i nazwisko</label>
+                    <input type="text" name="invoice_fullname" id="invoice_fullname" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-6">
-                    <label for="invoice_company" class="form-label">Firma</label>
-                    <input type="text" name="invoice_company" id="invoice_company" class="form-control">
+                <div class="col-span-12 md:col-span-6">
+                    <label for="invoice_company" class="label-text">Firma</label>
+                    <input type="text" name="invoice_company" id="invoice_company" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-3">
-                    <label for="invoice_nip" class="form-label">NIP</label>
-                    <input type="text" name="invoice_nip" id="invoice_nip" class="form-control">
+                <div class="col-span-12 md:col-span-3">
+                    <label for="invoice_nip" class="label-text">NIP</label>
+                    <input type="text" name="invoice_nip" id="invoice_nip" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-5">
-                    <label for="invoice_address" class="form-label">Adres</label>
-                    <input type="text" name="invoice_address" id="invoice_address" class="form-control">
+                <div class="col-span-12 md:col-span-5">
+                    <label for="invoice_address" class="label-text">Adres</label>
+                    <input type="text" name="invoice_address" id="invoice_address" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-2">
-                    <label for="invoice_postcode" class="form-label">Kod pocztowy</label>
-                    <input type="text" name="invoice_postcode" id="invoice_postcode" class="form-control">
+                <div class="col-span-12 md:col-span-2">
+                    <label for="invoice_postcode" class="label-text">Kod pocztowy</label>
+                    <input type="text" name="invoice_postcode" id="invoice_postcode" class="input input-bordered w-full">
                 </div>
-                <div class="col-md-2">
-                    <label for="invoice_city" class="form-label">Miasto</label>
-                    <input type="text" name="invoice_city" id="invoice_city" class="form-control">
+                <div class="col-span-12 md:col-span-2">
+                    <label for="invoice_city" class="label-text">Miasto</label>
+                    <input type="text" name="invoice_city" id="invoice_city" class="input input-bordered w-full">
                 </div>
             </div>
         </div>
     </div>
 
     {# Uwagi #}
-    <div class="card mb-3">
-        <div class="card-header"><strong>Uwagi</strong></div>
+    <div class="card bg-base-200 mb-3">
+        <div class="card-body border-b border-base-300 font-semibold py-3"><strong>Uwagi</strong></div>
         <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label for="user_comments" class="form-label">Komentarz klienta</label>
-                    <textarea name="user_comments" id="user_comments" class="form-control" rows="2"></textarea>
+            <div class="grid grid-cols-12 gap-3">
+                <div class="col-span-12 md:col-span-6">
+                    <label for="user_comments" class="label-text">Komentarz klienta</label>
+                    <textarea name="user_comments" id="user_comments" class="textarea textarea-bordered w-full" rows="2"></textarea>
                 </div>
-                <div class="col-md-6">
-                    <label for="admin_comments" class="form-label">Notatka wewnętrzna</label>
-                    <textarea name="admin_comments" id="admin_comments" class="form-control" rows="2"></textarea>
+                <div class="col-span-12 md:col-span-6">
+                    <label for="admin_comments" class="label-text">Notatka wewnętrzna</label>
+                    <textarea name="admin_comments" id="admin_comments" class="textarea textarea-bordered w-full" rows="2"></textarea>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="text-end mb-4">
+    <div class="text-right mb-4">
         <button type="submit" class="btn btn-primary btn-lg">
             <i class="bi bi-check-lg"></i> Zapisz zamówienie
         </button>

@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zamówienie - Retriever Shop</title>
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-          crossorigin="anonymous">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
           integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
@@ -254,12 +252,12 @@
 <body>
     {# ===== HEADER ===== #}
     <header class="site-header">
-        <div class="container">
-            <div class="d-flex align-items-center justify-content-between">
-                <a href="https://retrievershop.pl" class="d-flex align-items-center gap-2 text-decoration-none">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between">
+                <a href="https://retrievershop.pl" class="flex items-center gap-2 no-underline">
                     <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png"
                          alt="Retriever Shop" class="logo-img">
-                    <span class="brand-name d-none d-sm-inline">Retriever Shop</span>
+                    <span class="brand-name hidden sm:inline">Retriever Shop</span>
                 </a>
                 <span class="nav-label">Status zamówienia</span>
             </div>
@@ -267,7 +265,7 @@
     </header>
 
     {# ===== TRESC ===== #}
-    <main class="container py-4">
+    <main class="container mx-auto px-4 py-4">
         {# Status glowny #}
         <div class="hero-status mb-4">
             <div class="mb-2">
@@ -278,7 +276,7 @@
             </div>
             <h4 class="mb-1">Zamówienie #{{ order.order_id[:20] }}{% if order.order_id|length > 20 %}...{% endif %}</h4>
             {% if date_add %}
-            <p class="text-muted mb-0" style="font-size:0.9rem">z dnia {{ date_add.strftime('%d.%m.%Y, %H:%M') }}</p>
+            <p class="text-base-content/60 mb-0" style="font-size:0.9rem">z dnia {{ date_add.strftime('%d.%m.%Y, %H:%M') }}</p>
             {% endif %}
         </div>
 
@@ -290,7 +288,7 @@
                     <div class="progress-bg"></div>
                     {% set fill_pct = (current_stage / (stages|length - 1) * 84) if stages|length > 1 else 0 %}
                     <div class="progress-fill" style="width: {{ fill_pct }}%"></div>
-                    <div class="d-flex justify-content-between">
+                    <div class="flex justify-between">
                         {% for key, label, icon in stages %}
                         <div class="stage {% if loop.index0 < current_stage %}done{% elif loop.index0 == current_stage %}active{% endif %}">
                             <span class="stage-circle">
@@ -305,22 +303,22 @@
         </div>
         {% endif %}
 
-        <div class="row g-4">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
             {# Lewa kolumna #}
-            <div class="col-lg-7">
+            <div class="lg:col-span-7">
                 {# Tracking #}
                 {% if tracking_number %}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-truck me-1"></i> Śledzenie przesyłki
+                        <i class="bi bi-truck mr-1"></i> Śledzenie przesyłki
                     </div>
                     <div class="card-body">
                         <p class="mb-2">
-                            <span class="text-muted" style="font-size:0.85rem">Numer przesyłki</span><br>
+                            <span class="text-base-content/60" style="font-size:0.85rem">Numer przesyłki</span><br>
                             <code style="font-size:1rem">{{ tracking_number }}</code>
                         </p>
                         {% if delivery_method %}
-                        <p class="mb-3 text-muted" style="font-size:0.85rem">{{ delivery_method }}</p>
+                        <p class="mb-3 text-base-content/60" style="font-size:0.85rem">{{ delivery_method }}</p>
                         {% endif %}
                         {% if tracking_url %}
                         <a href="{{ tracking_url }}" target="_blank" rel="noopener" class="tracking-btn">
@@ -334,17 +332,17 @@
 
                 {# Produkty #}
                 <div class="card mb-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-bag me-1"></i> Produkty</span>
-                        <span class="badge bg-secondary rounded-pill">{{ total_products }} szt.</span>
+                    <div class="card-header flex justify-between items-center">
+                        <span><i class="bi bi-bag mr-1"></i> Produkty</span>
+                        <span class="badge badge-neutral">{{ total_products }} szt.</span>
                     </div>
                     <div class="card-body p-0">
                         <table class="table products-table mb-0">
                             <thead>
-                                <tr class="table-light">
+                                <tr class="bg-base-200">
                                     <th>Produkt</th>
                                     <th class="text-center" style="width:60px">Ilość</th>
-                                    <th class="text-end" style="width:100px">Cena</th>
+                                    <th class="text-right" style="width:100px">Cena</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -353,28 +351,28 @@
                                     <td>
                                         <strong>{{ product.name }}</strong>
                                         {% if product.attributes %}
-                                        <br><small class="text-muted">{{ product.attributes }}</small>
+                                        <br><small class="text-base-content/60">{{ product.attributes }}</small>
                                         {% endif %}
                                     </td>
                                     <td class="text-center">{{ product.quantity }}</td>
-                                    <td class="text-end">{{ '%.2f'|format(product.price * product.quantity) }} zł</td>
+                                    <td class="text-right">{{ '%.2f'|format(product.price * product.quantity) }} zł</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                             <tfoot>
-                                <tr class="table-light">
+                                <tr class="bg-base-200">
                                     <td colspan="2">Produkty</td>
-                                    <td class="text-end fw-semibold">{{ '%.2f'|format(products_total) }} zł</td>
+                                    <td class="text-right font-semibold">{{ '%.2f'|format(products_total) }} zł</td>
                                 </tr>
                                 {% if delivery_cost > 0 %}
-                                <tr class="table-light">
+                                <tr class="bg-base-200">
                                     <td colspan="2">Wysyłka</td>
-                                    <td class="text-end">{{ '%.2f'|format(delivery_cost) }} zł</td>
+                                    <td class="text-right">{{ '%.2f'|format(delivery_cost) }} zł</td>
                                 </tr>
                                 {% endif %}
-                                <tr class="table-light fw-bold">
+                                <tr class="bg-base-200 font-bold">
                                     <td colspan="2">Razem</td>
-                                    <td class="text-end">{{ '%.2f'|format(order_total) }} zł</td>
+                                    <td class="text-right">{{ '%.2f'|format(order_total) }} zł</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -383,27 +381,27 @@
             </div>
 
             {# Prawa kolumna #}
-            <div class="col-lg-5">
+            <div class="lg:col-span-5">
                 {# Adres dostawy #}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-geo-alt me-1"></i> Adres dostawy
+                        <i class="bi bi-geo-alt mr-1"></i> Adres dostawy
                     </div>
                     <div class="card-body" style="font-size:0.9rem">
                         {% if order.delivery_point_name %}
                         <p class="mb-1">
-                            <span class="badge bg-info rounded-pill">Punkt odbioru</span>
+                            <span class="badge badge-info">Punkt odbioru</span>
                         </p>
-                        <p class="mb-1 fw-semibold">{{ order.delivery_point_name }}</p>
+                        <p class="mb-1 font-semibold">{{ order.delivery_point_name }}</p>
                         <p class="mb-1">{{ order.delivery_point_address }}</p>
-                        <p class="mb-0 text-muted">{{ order.delivery_point_postcode }} {{ order.delivery_point_city }}</p>
+                        <p class="mb-0 text-base-content/60">{{ order.delivery_point_postcode }} {{ order.delivery_point_city }}</p>
                         {% else %}
-                        <p class="mb-1 fw-semibold">{{ order.delivery_fullname or order.customer_name or '-' }}</p>
+                        <p class="mb-1 font-semibold">{{ order.delivery_fullname or order.customer_name or '-' }}</p>
                         {% if order.delivery_company %}
                         <p class="mb-1">{{ order.delivery_company }}</p>
                         {% endif %}
                         <p class="mb-1">{{ order.delivery_address or '-' }}</p>
-                        <p class="mb-0 text-muted">
+                        <p class="mb-0 text-base-content/60">
                             {{ order.delivery_postcode or '' }} {{ order.delivery_city or '' }}
                         </p>
                         {% endif %}
@@ -414,11 +412,11 @@
                 {% if invoice_data %}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-receipt me-1"></i> Dane do faktury
+                        <i class="bi bi-receipt mr-1"></i> Dane do faktury
                     </div>
                     <div class="card-body" style="font-size:0.9rem">
                         {% if invoice_data.company %}
-                        <p class="mb-1 fw-semibold">{{ invoice_data.company }}</p>
+                        <p class="mb-1 font-semibold">{{ invoice_data.company }}</p>
                         {% endif %}
                         {% if invoice_data.nip %}
                         <p class="mb-1">NIP: {{ invoice_data.nip }}</p>
@@ -427,7 +425,7 @@
                         <p class="mb-1">{{ invoice_data.name }}</p>
                         {% endif %}
                         <p class="mb-1">{{ invoice_data.address or '' }}</p>
-                        <p class="mb-0 text-muted">{{ invoice_data.postcode or '' }} {{ invoice_data.city or '' }}</p>
+                        <p class="mb-0 text-base-content/60">{{ invoice_data.postcode or '' }} {{ invoice_data.city or '' }}</p>
                     </div>
                 </div>
                 {% endif %}
@@ -436,33 +434,33 @@
                 {% if wfirma_invoice_id or wfirma_correction_id %}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-file-earmark-pdf me-1"></i> Dokumenty
+                        <i class="bi bi-file-earmark-pdf mr-1"></i> Dokumenty
                     </div>
                     <div class="card-body">
                         {% if wfirma_invoice_id %}
-                        <div class="d-flex justify-content-between align-items-center{% if wfirma_correction_id %} mb-3{% endif %}">
+                        <div class="flex justify-between items-center{% if wfirma_correction_id %} mb-3{% endif %}">
                             <div>
                                 <strong style="font-size:0.9rem">Faktura</strong>
                                 {% if wfirma_invoice_number %}
-                                <br><small class="text-muted">{{ wfirma_invoice_number }}</small>
+                                <br><small class="text-base-content/60">{{ wfirma_invoice_number }}</small>
                                 {% endif %}
                             </div>
                             <a href="{{ url_for('customer_order.customer_invoice_pdf', token=order.customer_token) }}"
-                               target="_blank" class="btn btn-sm btn-outline-primary">
+                               target="_blank" class="btn btn-sm btn-outline btn-primary">
                                 <i class="bi bi-download"></i> Pobierz PDF
                             </a>
                         </div>
                         {% endif %}
                         {% if wfirma_correction_id %}
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="flex justify-between items-center">
                             <div>
                                 <strong style="font-size:0.9rem">Korekta faktury</strong>
                                 {% if wfirma_correction_number %}
-                                <br><small class="text-muted">{{ wfirma_correction_number }}</small>
+                                <br><small class="text-base-content/60">{{ wfirma_correction_number }}</small>
                                 {% endif %}
                             </div>
                             <a href="{{ url_for('customer_order.customer_correction_pdf', token=order.customer_token) }}"
-                               target="_blank" class="btn btn-sm btn-outline-primary">
+                               target="_blank" class="btn btn-sm btn-outline btn-primary">
                                 <i class="bi bi-download"></i> Pobierz PDF
                             </a>
                         </div>
@@ -475,7 +473,7 @@
                 {% if status_history %}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-clock-history me-1"></i> Historia realizacji
+                        <i class="bi bi-clock-history mr-1"></i> Historia realizacji
                     </div>
                     <div class="card-body">
                         {% for entry in status_history|reverse %}
@@ -486,7 +484,7 @@
                             <div>
                                 <strong style="font-size:0.9rem">{{ entry.label }}</strong>
                                 <br>
-                                <small class="text-muted">
+                                <small class="text-base-content/60">
                                     {{ entry.timestamp.strftime('%d.%m.%Y, %H:%M') }}
                                 </small>
                             </div>
@@ -499,18 +497,18 @@
                 {# Platnosc #}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-credit-card me-1"></i> Płatność
+                        <i class="bi bi-credit-card mr-1"></i> Płatność
                     </div>
                     <div class="card-body" style="font-size:0.9rem">
                         {% if order.payment_method %}
                         <p class="mb-1">
-                            <span class="text-muted">Metoda:</span> {{ order.payment_method }}
+                            <span class="text-base-content/60">Metoda:</span> {{ order.payment_method }}
                         </p>
                         {% endif %}
                         {% if order.payment_done %}
                         <p class="mb-0">
-                            <span class="text-muted">Zapłacono:</span>
-                            <span class="text-success fw-semibold">{{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}</span>
+                            <span class="text-base-content/60">Zapłacono:</span>
+                            <span class="text-success font-semibold">{{ '%.2f'|format(order.payment_done) }} {{ order.currency or 'PLN' }}</span>
                         </p>
                         {% endif %}
                     </div>
@@ -521,29 +519,29 @@
 
     {# ===== FOOTER ===== #}
     <footer class="site-footer">
-        <div class="container">
-            <div class="row align-items-start">
-                <div class="col-md-4 mb-3 mb-md-0">
-                    <div class="d-flex align-items-center gap-2 mb-2">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                <div class="md:col-span-4 mb-3 md:mb-0">
+                    <div class="flex items-center gap-2 mb-2">
                         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png"
                              alt="Retriever Shop" style="height:28px; filter:brightness(1.1)">
                         <span class="footer-brand">Retriever Shop</span>
                     </div>
                     <p class="mb-0" style="font-size:0.8rem">Akcesoria dla psów z pasją do jakości.</p>
                 </div>
-                <div class="col-md-4 mb-3 mb-md-0">
-                    <p class="fw-semibold text-white mb-2" style="font-size:0.85rem">Kontakt</p>
+                <div class="md:col-span-4 mb-3 md:mb-0">
+                    <p class="font-semibold text-white mb-2" style="font-size:0.85rem">Kontakt</p>
                     <p class="mb-1">
-                        <i class="bi bi-envelope me-1"></i>
+                        <i class="bi bi-envelope mr-1"></i>
                         <a href="mailto:kontakt@retrievershop.pl">kontakt@retrievershop.pl</a>
                     </p>
                     <p class="mb-0">
-                        <i class="bi bi-globe me-1"></i>
+                        <i class="bi bi-globe mr-1"></i>
                         <a href="https://retrievershop.pl" target="_blank" rel="noopener">retrievershop.pl</a>
                     </p>
                 </div>
-                <div class="col-md-4 text-md-end">
-                    <p class="fw-semibold text-white mb-2" style="font-size:0.85rem">Pomoc</p>
+                <div class="md:col-span-4 md:text-right">
+                    <p class="font-semibold text-white mb-2" style="font-size:0.85rem">Pomoc</p>
                     <p class="mb-0">Masz pytania? Napisz do nas przez
                         <a href="https://allegro.pl/pomoc" target="_blank" rel="noopener">wiadomości Allegro</a>
                         lub email.
@@ -557,8 +555,5 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            crossorigin="anonymous"></script>
 </body>
 </html>

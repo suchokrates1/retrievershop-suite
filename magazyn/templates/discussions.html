@@ -527,7 +527,7 @@
                 <i class="bi bi-chat-left-text-fill"></i>
                 Wiadomości
             </h5>
-            <div class="input-group input-group-sm search-group">
+            <div class="flex items-stretch search-group">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" x-model="searchQuery" placeholder="Szukaj rozmów...">
             </div>
@@ -569,9 +569,9 @@
                     <span class="unread-dot" aria-hidden="true" x-show="!thread.read"></span>
                 </div>
             </template>
-            <div class="threads-empty text-muted text-center px-3 py-4"
+            <div class="threads-empty text-base-content/60 text-center px-3 py-4"
                  x-show="threads.length === 0" x-cloak>
-                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                <i class="bi bi-inbox text-3xl block mb-2"></i>
                 Brak rozmów. Poczekaj na synchronizację z Allegro.
             </div>
         </div>
@@ -591,7 +591,7 @@
                        :class="currentThread?.type === 'dyskusja' ? 'bi-chat-dots-fill' : 'bi-envelope-fill'"></i>
                     <span x-text="currentThread?.type === 'dyskusja' ? 'Dyskusja' : 'Wiadomość'"></span>
                 </span>
-                <button type="button" class="btn btn-outline-light btn-sm"
+                <button type="button" class="btn btn-outline btn-sm"
                         @click="refreshThread()"
                         title="Odśwież wiadomości" aria-label="Odśwież wiadomości">
                     <i class="bi bi-arrow-clockwise"></i>
@@ -600,20 +600,20 @@
         </header>
         <div class="chat-status" role="status" aria-live="polite"
              x-show="statusMessage"
-             :class="'chat-status alert alert-' + statusVariant"
+             :class="'chat-status alert alert-' + (statusVariant === 'danger' ? 'error' : statusVariant)"
              x-text="statusMessage"
              x-cloak></div>
         <div class="messages-area" x-ref="messagesArea">
             <div class="chat-placeholder" x-show="!currentThreadId && !loading">
-                <i class="bi bi-chat-text fs-2 d-block mb-3"></i>
+                <i class="bi bi-chat-text text-3xl block mb-3"></i>
                 Wybierz wątek po lewej, aby zobaczyć historię wiadomości.
             </div>
             <div class="chat-loading" x-show="loading" x-cloak>
-                <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                <div class="loading loading-spinner text-primary" role="status" aria-hidden="true"></div>
                 <span>Ładuję wiadomości...</span>
             </div>
             <div class="chat-placeholder" x-show="currentThreadId && !loading && messages.length === 0" x-cloak>
-                <i class="bi bi-inboxes fs-2 d-block mb-3"></i>
+                <i class="bi bi-inboxes text-3xl block mb-3"></i>
                 Nie znaleziono wiadomości w tym wątku.
             </div>
             <template x-for="(msg, msgIndex) in messages" :key="msg.id || msgIndex">
@@ -634,8 +634,8 @@
         <footer class="composer">
             {% if can_reply %}
             <form class="composer-form" @submit.prevent="sendMessage()">
-                <label for="message-input" class="visually-hidden">Treść wiadomości</label>
-                <textarea id="message-input" class="form-control" rows="3"
+                <label for="message-input" class="sr-only">Treść wiadomości</label>
+                <textarea id="message-input" class="textarea textarea-bordered" rows="3"
                           x-model="newMessage"
                           x-ref="messageInput"
                           @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); sendMessage() }"
@@ -643,15 +643,15 @@
                           :disabled="!currentThreadId"></textarea>
                 <div class="composer-actions">
                     <small>Enter = wyślij &bull; Shift+Enter = nowa linia</small>
-                    <div class="d-flex align-items-center gap-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="btn btn-outline btn-sm"
                                 @click="newMessage = ''; $refs.messageInput.focus()">
-                            <i class="bi bi-x-circle me-1"></i>Wyczyść
+                            <i class="bi bi-x-circle mr-1"></i>Wyczyść
                         </button>
                         <button type="submit" class="btn btn-primary"
                                 :disabled="isSending || !currentThreadId">
-                            <span class="spinner-border spinner-border-sm me-2"
-                                  :class="{ 'd-none': !isSending }"
+                            <span class="loading loading-spinner loading-sm mr-2"
+                                  :class="{ 'hidden': !isSending }"
                                   role="status" aria-hidden="true"></span>
                             Wyślij
                         </button>

@@ -2,12 +2,12 @@
 {% block content %}
 <h2 class="text-center">Logi</h2>
 
-<div class="d-flex gap-2 mb-3 justify-content-center flex-wrap" x-data="{ level: 'all' }">
-    <button class="btn btn-sm btn-outline-light" :class="{ active: level === 'all' }" @click="level = 'all'; $dispatch('log-filter', { level: 'all' })">Wszystkie</button>
-    <button class="btn btn-sm btn-outline-danger" :class="{ active: level === 'ERROR' }" @click="level = 'ERROR'; $dispatch('log-filter', { level: 'ERROR' })">ERROR</button>
-    <button class="btn btn-sm btn-outline-warning" :class="{ active: level === 'WARNING' }" @click="level = 'WARNING'; $dispatch('log-filter', { level: 'WARNING' })">WARNING</button>
-    <button class="btn btn-sm btn-outline-info" :class="{ active: level === 'INFO' }" @click="level = 'INFO'; $dispatch('log-filter', { level: 'INFO' })">INFO</button>
-    <button class="btn btn-sm btn-outline-secondary" :class="{ active: level === 'DEBUG' }" @click="level = 'DEBUG'; $dispatch('log-filter', { level: 'DEBUG' })">DEBUG</button>
+<div class="flex gap-2 mb-3 justify-center flex-wrap" x-data="{ level: 'all' }">
+    <button class="btn btn-sm btn-outline" :class="{ active: level === 'all' }" @click="level = 'all'; $dispatch('log-filter', { level: 'all' })">Wszystkie</button>
+    <button class="btn btn-sm btn-outline btn-error" :class="{ active: level === 'ERROR' }" @click="level = 'ERROR'; $dispatch('log-filter', { level: 'ERROR' })">ERROR</button>
+    <button class="btn btn-sm btn-outline btn-warning" :class="{ active: level === 'WARNING' }" @click="level = 'WARNING'; $dispatch('log-filter', { level: 'WARNING' })">WARNING</button>
+    <button class="btn btn-sm btn-outline btn-info" :class="{ active: level === 'INFO' }" @click="level = 'INFO'; $dispatch('log-filter', { level: 'INFO' })">INFO</button>
+    <button class="btn btn-sm btn-outline" :class="{ active: level === 'DEBUG' }" @click="level = 'DEBUG'; $dispatch('log-filter', { level: 'DEBUG' })">DEBUG</button>
 </div>
 
 <div class="log-container mx-auto" x-data="logViewer()" @log-filter.window="filterLevel = $event.detail.level; applyFilter()">
