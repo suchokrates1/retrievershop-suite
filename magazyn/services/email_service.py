@@ -4,9 +4,15 @@ Serwis email do klienta - transakcyjne wiadomosci HTML.
 Obsluguje: potwierdzenie zamowienia, wyslanie przesylki,
 fakture (z PDF w zalaczniku) i potwierdzenie dostawy.
 Kazdy email zawiera link do personalizowanej strony zamowienia.
+
+UWAGA: Allegro wyswietla emaile wyslane na @allegromail.pl
+jako wiadomosci w Centrum Wiadomosci. Allegro stripuje HTML
+i wyswietla wersje plain text, dlatego kazdy email musi miec
+poprawna wersje tekstowa.
 """
 
 import logging
+import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -30,6 +36,46 @@ def _get_order_page_url(token: str) -> str:
     return f"{base}/zamowienie/{token}"
 
 
+def _html_to_plain_text(html: str) -> str:
+    """Konwertuj HTML na czytelny plain text.
+
+    Allegro wyswietla plain text czesc emaila w Centrum Wiadomosci,
+    wiec ta konwersja musi byc czytelna.
+    """
+    text = html
+    # Zamien <br> i <hr> na nowe linie
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<hr\s*/?>', '\n---\n', text, flags=re.IGNORECASE)
+    # Zamien naglowki na tekst z podkresleniem
+    text = re.sub(r'<h[1-3][^>]*>(.*?)</h[1-3]>', r'\n\1\n', text, flags=re.IGNORECASE | re.DOTALL)
+    # Zamien <p> na nowe linie
+    text = re.sub(r'<p[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+    # Zamien <li> na myslnik
+    text = re.sub(r'<li[^>]*>', '\n- ', text, flags=re.IGNORECASE)
+    # Zamien <td> na separator
+    text = re.sub(r'</td>\s*<td[^>]*>', ' | ', text, flags=re.IGNORECASE)
+    text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
+    # Wyciagnij linki: <a href="URL">text</a> -> text (URL)
+    text = re.sub(
+        r'<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+        r'\2 (\1)',
+        text, flags=re.IGNORECASE | re.DOTALL,
+    )
+    # Wyciagnij <strong>/<b> jako *text*
+    text = re.sub(r'<(?:strong|b)[^>]*>(.*?)</(?:strong|b)>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+    # Usun wszystkie pozostale tagi HTML
+    text = re.sub(r'<[^>]+>', '', text)
+    # Usun HTML entities
+    text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
+    text = text.replace('&lt;', '<').replace('&gt;', '>')
+    # Wyczysc wielokrotne puste linie
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Wyczysc spacje na poczatku/koncu linii
+    lines = [line.strip() for line in text.split('\n')]
+    return '\n'.join(lines).strip()
+
+
 def _send_html_email(
     to_email: str,
     subject: str,
@@ -37,7 +83,12 @@ def _send_html_email(
     attachment: bytes | None = None,
     attachment_filename: str | None = None,
 ) -> bool:
-    """Wyslij email HTML przez SMTP."""
+    """Wyslij email HTML przez SMTP.
+
+    Plain text jest automatycznie generowany z HTML, poniewaz
+    Allegro wyswietla emaile @allegromail.pl jako wiadomosci
+    w Centrum Wiadomosci, uzywajac wersji plain text.
+    """
     smtp_server = getattr(settings, "SMTP_SERVER", "") or ""
     if not smtp_server or not to_email:
         logger.warning(
@@ -57,8 +108,9 @@ def _send_html_email(
     msg["To"] = to_email
     msg["Reply-To"] = from_addr
 
-    # Wersja tekstowa jako fallback
-    msg.set_content("Otworz wiadomosc w kliencie obslugujacym HTML.")
+    # Wersja plain text - generowana z HTML (Allegro wyswietla te wersje)
+    plain_text = _html_to_plain_text(html_body)
+    msg.set_content(plain_text)
     msg.add_alternative(html_body, subtype="html")
 
     if attachment and attachment_filename:
