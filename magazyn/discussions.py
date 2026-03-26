@@ -19,7 +19,7 @@ from requests.exceptions import HTTPError, RequestException
 from .auth import login_required
 from .config import settings
 from .db import get_session
-from .models import Thread, Message
+from .models import Thread, Message, Order
 from . import allegro_api
 
 bp = Blueprint("discussions", __name__)
@@ -214,6 +214,21 @@ def discussions_list():
                 current_app.logger.warning("Nie udało się pobrać dyskusji: %s", e)
                 issues = []
             
+            # Pobierz mapowanie login -> nazwa klienta z zamowien
+            login_to_name = {}
+            try:
+                with get_session() as db:
+                    orders_with_login = (
+                        db.query(Order.user_login, Order.customer_name)
+                        .filter(Order.user_login.isnot(None), Order.user_login != "")
+                        .all()
+                    )
+                    for login, name in orders_with_login:
+                        if login and name:
+                            login_to_name[login] = name
+            except Exception as exc:
+                current_app.logger.warning("Blad pobierania nazw klientow: %s", exc)
+
             # Konwertuj wątki z Centrum Wiadomości
             for thread in messaging_threads:
                 last_msg_time = thread.get("lastMessageDateTime")
@@ -224,16 +239,19 @@ def discussions_list():
                     )
                     continue
                 
+                author = _get_thread_author(thread)
+                customer_name = login_to_name.get(author, "")
                 threads.append({
                     "id": thread.get("id"),
-                    "title": _get_thread_title(thread),
-                    "author": _get_thread_author(thread),
+                    "title": customer_name or _get_thread_title(thread),
+                    "author": author,
                     "type": "wiadomość",
                     "read": thread.get("read", False),
                     "last_message_at": last_msg_time,
                     "last_message_iso": last_msg_time,
-                    "last_message_preview": "Kliknij aby zobaczyć wiadomości",
+                    "last_message_preview": "",
                     "last_message_author": "",
+                    "customer_name": customer_name,
                     "source": "messaging",
                 })
             
@@ -242,12 +260,15 @@ def discussions_list():
                 chat = issue.get("chat", {})
                 last_msg = chat.get("lastMessage", {})
                 initial_msg = chat.get("initialMessage", {})
+                issue_author = issue.get("buyer", {}).get("login", "Nieznany")
+                issue_customer = login_to_name.get(issue_author, "")
                 threads.append({
                     "id": issue.get("id"),
                     "title": _get_issue_title(issue),
-                    "author": issue.get("buyer", {}).get("login", "Nieznany"),
+                    "author": issue_author,
                     "type": _get_issue_type_pl(issue.get("type")),
                     "read": last_msg.get("status") != "NEW",
+                    "customer_name": issue_customer,
                     "last_message_at": last_msg.get("createdAt"),
                     "last_message_iso": last_msg.get("createdAt"),
                     "last_message_preview": _message_preview(initial_msg.get("text")),

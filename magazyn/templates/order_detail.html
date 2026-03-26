@@ -636,8 +636,8 @@
 
                     {% if order.user_login %}
                     <hr>
-                    <a href="{{ url_for('discussions.discussions_list') }}" class="btn btn-sm btn-outline-primary w-100 mb-2">
-                        <i class="bi bi-chat-dots"></i> Chat z {{ order.user_login }}
+                    <a href="{{ url_for('discussions.discussions_list') }}?user={{ order.user_login }}" class="btn btn-sm btn-outline-primary w-100 mb-2">
+                        <i class="bi bi-chat-dots"></i> Chat z {{ order.customer_name or order.user_login }}
                     </a>
                     {% endif %}
 
