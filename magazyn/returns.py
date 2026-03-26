@@ -599,6 +599,48 @@ def process_delivered_returns() -> Dict[str, int]:
     return stats
 
 
+def expire_stale_returns() -> Dict[str, int]:
+    """
+    Zamknij zwroty, ktore nie zostaly nadane w ciagu 16 dni od zgloszenia.
+
+    Allegro daje kupujacemu 14 dni na nadanie paczki po wypelnieniu formularza.
+    Dodajemy 2 dni buforu na opoznienia kurierskie = 16 dni od created_at.
+    Jesli zwrot nadal ma status 'pending' i brak tracking number, uznajemy go za wygasly.
+    """
+    from datetime import timedelta
+    from .orders import add_order_status
+
+    stats = {"expired": 0, "errors": 0}
+    cutoff = datetime.utcnow() - timedelta(days=16)
+
+    with get_session() as db:
+        stale = db.query(Return).filter(
+            Return.status == RETURN_STATUS_PENDING,
+            Return.return_tracking_number.is_(None),
+            Return.created_at < cutoff,
+        ).all()
+
+        for ret in stale:
+            try:
+                ret.status = RETURN_STATUS_CANCELLED
+                _add_return_status_log(
+                    db, ret.id, RETURN_STATUS_CANCELLED,
+                    "Zwrot wygasl - brak nadania przesylki w ciagu 16 dni od zgloszenia",
+                )
+                add_order_status(
+                    db, ret.order_id, "zakończono",
+                    notes="Zwrot wygasl (brak nadania w terminie) - przywrocono status zakonczonego zamowienia",
+                )
+                stats["expired"] += 1
+                logger.info(f"Zwrot #{ret.id} (zamowienie {ret.order_id}) wygasl - brak nadania w 16 dni")
+            except Exception as e:
+                logger.error(f"Blad wygaszania zwrotu #{ret.id}: {e}")
+                stats["errors"] += 1
+        db.commit()
+
+    return stats
+
+
 def sync_returns() -> Dict[str, Any]:
     """
     Glowna funkcja synchronizacji zwrotow.
@@ -608,6 +650,7 @@ def sync_returns() -> Dict[str, Any]:
     2. Wyslanie powiadomien Messenger
     3. Sprawdzenie statusow paczek zwrotnych (tracking)
     4. Przetworzenie dostarczonych zwrotow (przywrocenie stanow)
+    5. Wygaszenie zwrotow bez nadania po 16 dniach
     
     Returns:
         Slownik ze statystykami wszystkich operacji
@@ -619,6 +662,7 @@ def sync_returns() -> Dict[str, Any]:
         "notifications": send_pending_return_notifications(),
         "tracking_update": check_and_update_return_statuses(),
         "stock_restore": process_delivered_returns(),
+        "expired": expire_stale_returns(),
     }
     
     logger.info(f"Synchronizacja zwrotow zakonczona: {results}")
