@@ -32,16 +32,7 @@ jobs:
           SECRET_KEY: test-ci-key
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          pytest magazyn/tests/ -q --tb=line \
-            --ignore=magazyn/tests/test_stocktake_ui.py \
-            --ignore=magazyn/tests/test_allegro_refresh.py \
-            --ignore=magazyn/tests/test_base_template.py \
-            --ignore=magazyn/tests/test_courier_code.py \
-            --ignore=magazyn/tests/test_customer_email.py \
-            --ignore=magazyn/tests/test_env_permissions.py \
-            --ignore=magazyn/tests/test_history.py \
-            --ignore=magazyn/tests/test_settings.py \
-            --ignore=magazyn/tests/test_factory.py
+          pytest magazyn/tests/ -q --tb=line
 
   deploy:
     name: Deploy na minipc

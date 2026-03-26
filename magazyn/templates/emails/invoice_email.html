@@ -34,6 +34,14 @@
                         {% endfor %}
                     </ul>
                     <p style="color:#666666;"><b>Laczna kwota: </b>{{ '%.2f'|format(order_total) }} zl</p>
+
+                    {% if invoice_data %}
+                    <h3 style="color:#333333;">Dane do faktury:</h3>
+                    {% if invoice_data.company %}<p style="color:#666666;"><b>Firma:</b> {{ invoice_data.company }}</p>{% endif %}
+                    {% if invoice_data.nip %}<p style="color:#666666;"><b>NIP:</b> {{ invoice_data.nip }}</p>{% endif %}
+                    {% if invoice_data.name %}<p style="color:#666666;"><b>Imie i nazwisko:</b> {{ invoice_data.name }}</p>{% endif %}
+                    {% if invoice_data.address %}<p style="color:#666666;"><b>Adres:</b> {{ invoice_data.address }}{% if invoice_data.postcode %}, {{ invoice_data.postcode }}{% endif %} {{ invoice_data.city }}</p>{% endif %}
+                    {% endif %}
                 </td>
             </tr>
 
