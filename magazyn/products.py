@@ -1,5 +1,4 @@
 import json
-import sqlite3
 import re
 
 from flask import (

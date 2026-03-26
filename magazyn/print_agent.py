@@ -22,11 +22,12 @@ from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, 
 from zoneinfo import ZoneInfo
 
 import requests
-import sqlite3
 from requests.exceptions import HTTPError
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from .config import load_config, settings
-from .db import sqlite_connect
+from .db import db_connect, is_postgres, table_has_column
 from .notifications import send_report, send_messenger
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary
@@ -235,14 +236,13 @@ class LabelAgent:
         db.configure_engine(self.config.db_file)
 
     @staticmethod
-    def _is_readonly_error(exc: sqlite3.OperationalError) -> bool:
-        return "readonly" in str(exc).lower()
+    def _is_readonly_error(exc: Exception) -> bool:
+        return "readonly" in str(exc).lower() or "read-only" in str(exc).lower()
 
-    def _handle_readonly_error(self, action: str, exc: sqlite3.OperationalError) -> bool:
+    def _handle_readonly_error(self, action: str, exc: Exception) -> bool:
         if self._is_readonly_error(exc):
             self.logger.warning(
-                "Database %s is read-only; skipping %s: %s",
-                self.config.db_file,
+                "Database is read-only; skipping %s: %s",
                 action,
                 exc,
             )
@@ -377,71 +377,52 @@ class LabelAgent:
             raise ConfigError("Missing environment variables: " + ", ".join(missing))
 
     def ensure_db(self) -> None:
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
         try:
-            try:
-                cur.execute(
-                    "CREATE TABLE IF NOT EXISTS printed_orders("  # noqa: S608 - static SQL
+            with db_connect() as conn:
+                conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS printed_orders("
                     "order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
-                )
-                cur.execute("PRAGMA table_info(printed_orders)")
-                cols = [row[1] for row in cur.fetchall()]
-                if "last_order_data" not in cols:
-                    cur.execute(
+                ))
+                if not table_has_column("printed_orders", "last_order_data"):
+                    conn.execute(text(
                         "ALTER TABLE printed_orders ADD COLUMN last_order_data TEXT"
-                    )
-                    conn.commit()
-                cur.execute(
-                    "CREATE TABLE IF NOT EXISTS label_queue("  # noqa: S608 - static SQL
-                    "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT, queued_at TEXT, status TEXT)"
-                )
-                cur.execute(
-                    "CREATE TABLE IF NOT EXISTS agent_state("  # noqa: S608 - static SQL
+                    ))
+                conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS label_queue("
+                    "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT,"
+                    " queued_at TEXT, status TEXT, retry_count INTEGER DEFAULT 0)"
+                ))
+                conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS agent_state("
                     "key TEXT PRIMARY KEY, value TEXT)"
-                )
-                cur.execute(
-                    "CREATE TABLE IF NOT EXISTS allegro_replied_threads("  # noqa: S608 - static SQL
+                ))
+                conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS allegro_replied_threads("
                     "thread_id TEXT PRIMARY KEY, replied_at TEXT)"
-                )
-                cur.execute("PRAGMA table_info(label_queue)")
-                queue_cols = [row[1] for row in cur.fetchall()]
-                if "queued_at" not in queue_cols:
-                    try:
-                        cur.execute("ALTER TABLE label_queue ADD COLUMN queued_at TEXT")
-                        conn.commit()
-                    except sqlite3.OperationalError:
-                        pass  # kolumna już istnieje (race condition z innym workerem)
-                if "status" not in queue_cols:
-                    try:
-                        cur.execute(
-                            "ALTER TABLE label_queue ADD COLUMN status TEXT DEFAULT 'queued'"
-                        )
-                        conn.commit()
-                    except sqlite3.OperationalError:
-                        pass  # kolumna już istnieje (race condition z innym workerem)
-                if "retry_count" not in queue_cols:
-                    try:
-                        cur.execute(
-                            "ALTER TABLE label_queue ADD COLUMN retry_count INTEGER DEFAULT 0"
-                        )
-                        conn.commit()
-                    except sqlite3.OperationalError:
-                        pass  # kolumna już istnieje (race condition z innym workerem)
-                conn.commit()
-            except sqlite3.OperationalError as exc:
-                if self._handle_readonly_error("database migrations", exc):
-                    return
-                raise
+                ))
+                for col, default in [
+                    ("queued_at", None),
+                    ("status", "'queued'"),
+                    ("retry_count", "0"),
+                ]:
+                    if not table_has_column("label_queue", col):
+                        ddl = f"ALTER TABLE label_queue ADD COLUMN {col}"
+                        ddl += f" TEXT DEFAULT {default}" if default and col != "retry_count" else ""
+                        if col == "retry_count":
+                            ddl += " INTEGER DEFAULT 0"
+                        try:
+                            conn.execute(text(ddl))
+                        except (DBAPIError, Exception):
+                            pass
 
-            # clean entries where product name was replaced with customer name
-            try:
-                cur.execute("SELECT order_id, last_order_data FROM printed_orders")
-                rows = cur.fetchall()
+                # Czyszczenie wpisow gdzie nazwa produktu zostala zamieniona na klienta
+                rows = conn.execute(text(
+                    "SELECT order_id, last_order_data FROM printed_orders"
+                )).fetchall()
                 for oid, data_json in rows:
                     try:
                         data = json.loads(data_json) if data_json else {}
-                    except Exception:  # pragma: no cover - defensive
+                    except Exception:
                         continue
                     name = (data.get("name") or "").strip()
                     cust = (data.get("customer") or "").strip()
@@ -452,32 +433,25 @@ class LabelAgent:
                         data["name"] = prod_name
                         data["size"] = size
                         data["color"] = color
-                        cur.execute(
-                            "UPDATE printed_orders SET last_order_data=? WHERE order_id=?",
-                            (json.dumps(data), oid),
+                        conn.execute(
+                            text("UPDATE printed_orders SET last_order_data = :data WHERE order_id = :oid"),
+                            {"data": json.dumps(data), "oid": oid},
                         )
-                conn.commit()
-            except sqlite3.OperationalError as exc:
-                if self._handle_readonly_error("printed order cleanup", exc):
-                    return
-                raise
-            except Exception as exc:  # pragma: no cover - defensive
-                self.logger.error("Błąd migracji last_order_data: %s", exc)
-        finally:
-            conn.close()
+        except (DBAPIError, Exception) as exc:
+            if self._handle_readonly_error("database migrations", exc):
+                return
+            self.logger.error("Blad ensure_db: %s", exc)
+            raise
 
     def ensure_db_init(self) -> None:
         self.ensure_db()
 
     def load_printed_orders(self) -> List[Dict[str, Any]]:
         self.ensure_db()
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT order_id, printed_at, last_order_data FROM printed_orders ORDER BY printed_at DESC"
-        )
-        rows = cur.fetchall()
-        conn.close()
+        with db_connect() as conn:
+            rows = conn.execute(text(
+                "SELECT order_id, printed_at, last_order_data FROM printed_orders ORDER BY printed_at DESC"
+            )).fetchall()
         items: List[Dict[str, Any]] = []
         for oid, ts, data_json in rows:
             try:
@@ -496,25 +470,21 @@ class LabelAgent:
     def mark_as_printed(
         self, order_id: str, last_order_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
+        data_json = json.dumps(last_order_data or {})
         try:
-            data_json = json.dumps(last_order_data or {})
-            cur.execute(
-                "INSERT OR IGNORE INTO printed_orders(order_id, printed_at, last_order_data) VALUES (?, ?, ?)",
-                (order_id, datetime.now().isoformat(), data_json),
-            )
-            cur.execute(
-                "UPDATE printed_orders SET last_order_data=? WHERE order_id=?",
-                (data_json, order_id),
-            )
-            conn.commit()
-        except sqlite3.OperationalError as exc:
+            with db_connect() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO printed_orders(order_id, printed_at, last_order_data) "
+                        "VALUES (:oid, :ts, :data) "
+                        "ON CONFLICT(order_id) DO UPDATE SET last_order_data = excluded.last_order_data"
+                    ),
+                    {"oid": order_id, "ts": datetime.now().isoformat(), "data": data_json},
+                )
+        except (DBAPIError, Exception) as exc:
             if self._handle_readonly_error("mark_as_printed", exc):
                 return
             raise
-        finally:
-            conn.close()
         
         # Also update order status in orders table
         try:
@@ -534,33 +504,30 @@ class LabelAgent:
 
     def _load_state_value(self, key: str) -> Optional[str]:
         self.ensure_db()
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
-        cur.execute("SELECT value FROM agent_state WHERE key=?", (key,))
-        row = cur.fetchone()
-        conn.close()
+        with db_connect() as conn:
+            row = conn.execute(
+                text("SELECT value FROM agent_state WHERE key = :k"), {"k": key}
+            ).fetchone()
         return row[0] if row else None
 
     def _save_state_value(self, key: str, value: Optional[str]) -> None:
         self.ensure_db()
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
         try:
-            if value is None:
-                cur.execute("DELETE FROM agent_state WHERE key=?", (key,))
-            else:
-                cur.execute(
-                    "INSERT INTO agent_state(key, value) VALUES (?, ?) "
-                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                    (key, value),
-                )
-            conn.commit()
-        except sqlite3.OperationalError as exc:
+            with db_connect() as conn:
+                if value is None:
+                    conn.execute(text("DELETE FROM agent_state WHERE key = :k"), {"k": key})
+                else:
+                    conn.execute(
+                        text(
+                            "INSERT INTO agent_state(key, value) VALUES (:k, :v) "
+                            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+                        ),
+                        {"k": key, "v": value},
+                    )
+        except (DBAPIError, Exception) as exc:
             if self._handle_readonly_error("save agent state", exc):
                 return
             raise
-        finally:
-            conn.close()
 
     def load_last_success_marker(self) -> SuccessMarker:
         return SuccessMarker(
@@ -579,20 +546,16 @@ class LabelAgent:
 
     def clean_old_printed_orders(self) -> None:
         threshold = datetime.now() - timedelta(days=self.config.printed_expiry_days)
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
         try:
-            cur.execute(
-                "DELETE FROM printed_orders WHERE printed_at < ?",
-                (threshold.isoformat(),),
-            )
-            conn.commit()
-        except sqlite3.OperationalError as exc:
+            with db_connect() as conn:
+                conn.execute(
+                    text("DELETE FROM printed_orders WHERE printed_at < :ts"),
+                    {"ts": threshold.isoformat()},
+                )
+        except (DBAPIError, Exception) as exc:
             if self._handle_readonly_error("clean_old_printed_orders", exc):
                 return
             raise
-        finally:
-            conn.close()
 
     def _deduplicate_queue(self, queue: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         items = list(queue)
@@ -639,23 +602,10 @@ class LabelAgent:
 
     def load_queue(self) -> List[Dict[str, Any]]:
         self.ensure_db()
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
-        try:
-            cur.execute(
+        with db_connect() as conn:
+            rows = conn.execute(text(
                 "SELECT order_id, label_data, ext, last_order_data, queued_at, status, retry_count FROM label_queue"
-            )
-            rows = cur.fetchall()
-        except sqlite3.OperationalError as exc:
-            if "no such column" in str(exc).lower():
-                cur.execute(
-                    "SELECT order_id, label_data, ext, last_order_data, queued_at, status FROM label_queue"
-                )
-                rows = cur.fetchall()
-            else:
-                conn.close()
-                raise
-        conn.close()
+            )).fetchall()
         items: List[Dict[str, Any]] = []
         for row in rows:
             order_id, label_data, ext, last_order_json, queued_at, status = row[:6]
@@ -689,31 +639,29 @@ class LabelAgent:
     def save_queue(self, items: Iterable[Dict[str, Any]]) -> None:
         items_list = self._update_queue_metrics(items)
 
-        conn = sqlite_connect(self.config.db_file)
-        cur = conn.cursor()
         try:
-            cur.execute("DELETE FROM label_queue")
-            for item in items_list:
-                cur.execute(
-                    "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at, status, retry_count)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        item.get("order_id"),
-                        item.get("label_data"),
-                        item.get("ext"),
-                        json.dumps(item.get("last_order_data", {}), default=str),
-                        item.get("queued_at"),
-                        item.get("status", "queued"),
-                        item.get("retry_count", 0),
-                    ),
-                )
-            conn.commit()
-        except sqlite3.OperationalError as exc:
+            with db_connect() as conn:
+                conn.execute(text("DELETE FROM label_queue"))
+                for item in items_list:
+                    conn.execute(
+                        text(
+                            "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at, status, retry_count)"
+                            " VALUES (:oid, :ldata, :ext, :odata, :qat, :st, :rc)"
+                        ),
+                        {
+                            "oid": item.get("order_id"),
+                            "ldata": item.get("label_data"),
+                            "ext": item.get("ext"),
+                            "odata": json.dumps(item.get("last_order_data", {}), default=str),
+                            "qat": item.get("queued_at"),
+                            "st": item.get("status", "queued"),
+                            "rc": item.get("retry_count", 0),
+                        },
+                    )
+        except (DBAPIError, Exception) as exc:
             if self._handle_readonly_error("save_queue", exc):
                 return
             raise
-        finally:
-            conn.close()
 
     # ------------------------------------------------------------------
     # External integrations
