@@ -1,0 +1,74 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Testy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalacja zaleznosci
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-flask
+
+      - name: Uruchomienie testow
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+          pytest magazyn/tests/ -x -q --tb=short
+
+  deploy:
+    name: Deploy na minipc
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Polaczenie Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Deploy przez SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 100.110.194.46
+          username: suchokrates1
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            cd /home/suchokrates1/retrievershop-suite
+            git pull origin main
+            docker compose up -d --build magazyn_app
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 100.110.194.46
+          username: suchokrates1
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 2m
+          script: |
+            sleep 30
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' retrievershop-magazyn 2>/dev/null || echo "unknown")
+            echo "Health status: $STATUS"
+            if [ "$STATUS" != "healthy" ]; then
+              echo "UWAGA: kontener nie jest healthy po 30s, sprawdzam logi..."
+              docker logs --tail 30 retrievershop-magazyn
+              exit 1
+            fi
+            echo "Deploy OK - kontener healthy"

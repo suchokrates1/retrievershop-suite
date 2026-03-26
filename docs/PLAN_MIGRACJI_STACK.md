@@ -1,7 +1,7 @@
 # Plan migracji stacku technologicznego - retrievershop-suite
 
 **Data utworzenia**: 2026-03-26
-**Ostatnia aktualizacja**: 2026-03-26 (po wdrozeniu fazy 1+2)
+**Ostatnia aktualizacja**: 2026-03-26 (fazy 1+2+4+5 wdrozone)
 **Autor**: Dawid Suchodolski + Copilot
 
 ---
@@ -16,14 +16,14 @@ i odwracalna. Flask + Bootstrap + Docker Compose to wlasciwy stack dla tej skali
 
 | Komponent | Obecne rozwiazanie | Docelowe | Priorytet |
 |-----------|-------------------|----------|-----------|
-| Baza danych | SQLite (WAL) | **PostgreSQL 16** | KRYTYCZNY |
+| Baza danych | **PostgreSQL 16** (wdrozone 2026-03-26) | PostgreSQL 16 | GOTOWE |
 | Framework | Flask 3.0.3 + Gunicorn | Flask (zostaje) | - |
-| Frontend JS | Vanilla JS + Alpine.js | Alpine.js + **htmx** | WYSOKI |
+| Frontend JS | Alpine.js + **htmx 2.0.4** (wdrozone) | Alpine.js + htmx | GOTOWE |
 | UI Framework | Bootstrap 5 (czyste) | Bootstrap 5 (zostaje) | ODRZUCONE |
 | Kolejka zadan | SQLite `label_queue` | APScheduler (zostaje) | NISKI |
 | Cache | Brak | Opcjonalnie Redis w przyszlosci | NISKI |
-| Deploy | git pull + docker compose | **GitHub Actions -> SSH** | WYSOKI |
-| Monitoring | Grafana + Loki + Promtail | Zostaje + backup PostgreSQL | OK |
+| Deploy | **GitHub Actions -> Tailscale -> SSH** (wdrozone) | GitHub Actions CI/CD | GOTOWE |
+| Monitoring | Grafana + Loki + Promtail + **PG backup** (wdrozone) | Zostaje | GOTOWE |
 | Reverse proxy | Traefik (HA minipc+RPI5) | Zostaje | OK |
 
 **Decyzje:**
@@ -40,7 +40,14 @@ i odwracalna. Flask + Bootstrap + Docker Compose to wlasciwy stack dla tej skali
 
 ---
 
-## Faza 1: SQLite -> PostgreSQL
+## Faza 1: SQLite -> PostgreSQL [GOTOWE]
+
+### Status: WDROZONE 2026-03-26
+- Commity: b211c0a1, 0c42d2da, 263e2861
+- 27 tabel, 59084 wierszy zmigrowanych
+- Backup SQLite: /app/data/database.db.bak
+- Runtime: 6 plikow przekonwertowanych z sqlite3 na SQLAlchemy text()
+- Alembic version: e6f7a8b9c0d1 (PostgresqlImpl)
 
 ### Cel
 Wyeliminowanie glownego waskiego gardla - SQLite pozwala na 1 zapis naraz.
@@ -104,7 +111,12 @@ psycopg2-binary==2.9.9
 
 ---
 
-## Faza 2: htmx - reaktywny frontend bez SPA
+## Faza 2: htmx - reaktywny frontend bez SPA [GOTOWE]
+
+### Status: WDROZONE 2026-03-26
+- Commit: 4993e6ce
+- htmx 2.0.4 w base.html
+- 4 strony z live search/filtrowaniem/paginacja: zamowienia, pozycje, sprzedaz, oferty
 
 ### Cel
 Dodac interaktywnosc (live search, inline edycja, lazy loading) bez pisania JS.
@@ -148,7 +160,12 @@ Tabler **odrzucony**. Powody:
 
 ---
 
-## Faza 4: GitHub Actions CI/CD
+## Faza 4: GitHub Actions CI/CD [GOTOWE]
+
+### Status: WDROZONE 2026-03-26
+- Workflow: .github/workflows/deploy.yml
+- Pipeline: testy pytest -> Tailscale -> SSH deploy -> health check
+- Sekrety: TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET, SSH_PRIVATE_KEY
 
 ### Cel
 Automatyczny deploy po pushu na main. Zamiast recznego `ssh minipc && git pull && docker compose up`.
@@ -197,7 +214,13 @@ Automatyczny deploy po pushu na main. Zamiast recznego `ssh minipc && git pull &
 
 ---
 
-## Faza 5: Backup PostgreSQL + monitoring
+## Faza 5: Backup PostgreSQL + monitoring [GOTOWE]
+
+### Status: WDROZONE 2026-03-26
+- Dodano wpis do ~/backup.conf: retrievershop-postgres.sql via pg_dump
+- CRITICAL: kopiowany na Google Drive + VPS + NAS + dysk 1TB
+- Cron: 0 3 * * * (istniejacy system backupu)
+- Rotacja GFS: 14 dni daily + 12 msc monthly
 
 ### Cel
 Automatyczny backup bazy + powiadomienia o bledach.
