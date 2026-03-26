@@ -107,6 +107,7 @@ def generate_and_send_invoice(order_id: str) -> dict:
                 phone=order.phone or None,
             )
         except Exception as exc:
+            logger.error("Blad tworzenia kontrahenta dla %s: %s", order_id, exc, exc_info=True)
             result["errors"].append(f"Blad tworzenia kontrahenta wFirma: {exc}")
             return result
 
