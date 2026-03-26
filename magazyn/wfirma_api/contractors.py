@@ -64,11 +64,12 @@ def find_contractor(
     if not contractors:
         return None
 
-    # wFirma zwraca dict gdy 1 wynik, liste gdy wiecej
-    if isinstance(contractors, dict):
-        contractor = contractors.get("contractor", {})
-    else:
+    # wFirma zwraca dict z numerycznym kluczem lub liste
+    if isinstance(contractors, list):
         contractor = contractors[0].get("contractor", {})
+    else:
+        first_key = next((k for k in sorted(contractors) if k != "parameters"), None)
+        contractor = contractors[first_key].get("contractor", {}) if first_key else {}
     logger.debug("Znaleziono kontrahenta wFirma: %s (id=%s)", contractor.get("name"), contractor.get("id"))
     return contractor
 
@@ -133,11 +134,12 @@ def create_contractor(
     if not contractors:
         raise WFirmaError("wFirma nie zwrocil danych kontrahenta", details=result)
 
-    # wFirma zwraca dict gdy 1 wynik, liste gdy wiecej
-    if isinstance(contractors, dict):
-        new_contractor = contractors.get("contractor", {})
-    else:
+    # wFirma zwraca dict z numerycznym kluczem lub liste
+    if isinstance(contractors, list):
         new_contractor = contractors[0].get("contractor", {})
+    else:
+        first_key = next((k for k in sorted(contractors) if k != "parameters"), None)
+        new_contractor = contractors[first_key].get("contractor", {}) if first_key else {}
     contractor_id = new_contractor.get("id")
 
     logger.info("Utworzono kontrahenta wFirma: %s (id=%s)", name, contractor_id)

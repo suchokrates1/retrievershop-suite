@@ -127,11 +127,12 @@ def create_invoice(
     if not invoices:
         raise WFirmaError("wFirma nie zwrocil danych faktury", details=result)
 
-    # wFirma zwraca dict gdy 1 wynik, liste gdy wiecej
-    if isinstance(invoices, dict):
-        invoice = invoices.get("invoice", {})
-    else:
+    # wFirma zwraca dict z numerycznym kluczem lub liste
+    if isinstance(invoices, list):
         invoice = invoices[0].get("invoice", {})
+    else:
+        first_key = next((k for k in sorted(invoices) if k != "parameters"), None)
+        invoice = invoices[first_key].get("invoice", {}) if first_key else {}
     invoice_id = invoice.get("id")
     invoice_number = invoice.get("fullnumber", "")
     total = invoice.get("total", 0.0)
