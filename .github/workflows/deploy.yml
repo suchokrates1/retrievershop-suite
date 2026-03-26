@@ -27,6 +27,9 @@ jobs:
           pip install pytest pytest-flask
 
       - name: Uruchomienie testow
+        env:
+          DB_PATH: /tmp/test_magazyn.db
+          SECRET_KEY: test-ci-key
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
           pytest magazyn/tests/ -x -q --tb=short --ignore=magazyn/tests/test_stocktake_ui.py
