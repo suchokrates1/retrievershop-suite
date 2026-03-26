@@ -91,10 +91,18 @@ def convert_row(table, columns, row):
     """Konwertuj wiersz SQLite na dane kompatybilne z PostgreSQL."""
     bool_cols = BOOLEAN_COLUMNS.get(table, set())
     result = {}
+    created_at_val = None
     for col, val in zip(columns, row):
         if col in bool_cols and val is not None:
             val = bool(val)
+        if col == "created_at" and val is not None:
+            created_at_val = val
         result[col] = val
+
+    # Fallback: jesli updated_at jest NULL a model wymaga NOT NULL
+    if "updated_at" in result and result["updated_at"] is None:
+        result["updated_at"] = created_at_val or "2026-01-01 00:00:00"
+
     return result
 
 
@@ -141,7 +149,7 @@ def migrate(sqlite_path, database_url):
 
     print()
 
-    # 3. Kopiuj dane
+    # 3. Kopiuj dane (z wylaczonymi FK constraints)
     print("=== KOPIOWANIE DANYCH ===")
     stats = {}
     for table in tables_to_migrate:
@@ -165,26 +173,27 @@ def migrate(sqlite_path, database_url):
             stats[table] = 0
             continue
 
-        # Wyczysc tabele docelowa
+        # Wyczysc tabele docelowa i wstaw dane z wylaczonymi FK
         with pg_engine.connect() as conn:
             conn.execute(text(f'DELETE FROM "{table}"'))
-            conn.commit()
+            # Wylacz sprawdzanie FK na czas insertu
+            conn.execute(text("SET session_replication_role = 'replica'"))
 
-        # Wstaw dane batchowo
-        inserted = 0
-        for i in range(0, len(rows), BATCH_SIZE):
-            batch = rows[i:i + BATCH_SIZE]
-            params_list = []
-            for row in batch:
-                params_list.append(convert_row(table, common_cols, row))
+            inserted = 0
+            for i in range(0, len(rows), BATCH_SIZE):
+                batch = rows[i:i + BATCH_SIZE]
+                params_list = []
+                for row in batch:
+                    params_list.append(convert_row(table, common_cols, row))
 
-            placeholders = ", ".join(f":{c}" for c in common_cols)
-            insert_sql = f'INSERT INTO "{table}" ({cols_sql}) VALUES ({placeholders})'
-
-            with pg_engine.connect() as conn:
+                placeholders = ", ".join(f":{c}" for c in common_cols)
+                insert_sql = f'INSERT INTO "{table}" ({cols_sql}) VALUES ({placeholders})'
                 conn.execute(text(insert_sql), params_list)
-                conn.commit()
-            inserted += len(batch)
+                inserted += len(batch)
+
+            # Przywroc sprawdzanie FK
+            conn.execute(text("SET session_replication_role = 'origin'"))
+            conn.commit()
 
         print(f"  {table}: {inserted} wierszy")
         stats[table] = inserted

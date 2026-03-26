@@ -7,8 +7,10 @@ echo "Running database migrations..."
 cd /app
 alembic upgrade head
 
-echo "Running custom migrations..."
-python -c "
+# Migracje legacy (SQLite-only) - pomijaj na PostgreSQL
+if [ -z "$DATABASE_URL" ]; then
+    echo "Running custom SQLite migrations..."
+    python -c "
 from magazyn.migrations.create_price_reports_tables import upgrade
 from magazyn.migrations.create_excluded_sellers_table import upgrade as upgrade_excluded
 from magazyn.migrations.add_competitor_details_to_report_items import upgrade as upgrade_competitor_details
@@ -24,6 +26,9 @@ upgrade()
 upgrade_excluded(engine)
 upgrade_competitor_details()
 "
+else
+    echo "PostgreSQL detected - skipping legacy SQLite migrations (schema managed by SQLAlchemy)"
+fi
 
 echo "Starting Gunicorn..."
 exec gunicorn magazyn.wsgi:app --bind 0.0.0.0:8000 --config magazyn/gunicorn.conf.py
