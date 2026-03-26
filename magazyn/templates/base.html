@@ -19,7 +19,7 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"
             integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
             crossorigin="anonymous"></script>
-    <style>[x-cloak] { display: none !important; }</style>
+    <style>[x-cloak] { display: none !important; } #page-content.htmx-request { opacity: 0.65; transition: opacity 200ms ease-in; }</style>
     <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
     {% block styles %}{% endblock %}
 </head>
