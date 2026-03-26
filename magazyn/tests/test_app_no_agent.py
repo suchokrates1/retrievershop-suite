@@ -1,103 +1,48 @@
-import importlib
-import sys
-from collections import OrderedDict
-import magazyn.config as cfg
-import magazyn.db as db_mod
+"""Testy aplikacji bez agenta drukowania.
 
-
-def setup_app_missing_agent(tmp_path, monkeypatch):
-    db_path = tmp_path / "test_app_no_agent.db"
-    monkeypatch.setattr(cfg.settings, "DB_PATH", str(db_path))
-    monkeypatch.setattr(cfg.settings, "API_TOKEN", "")
-    monkeypatch.setattr(cfg.settings, "PAGE_ACCESS_TOKEN", "")
-    monkeypatch.setattr(cfg.settings, "RECIPIENT_ID", "")
-
-    from magazyn.settings_store import settings_store
-    monkeypatch.setattr(settings_store, '_loaded', False)
-    monkeypatch.setattr(settings_store, '_values', OrderedDict())
-    monkeypatch.setattr(settings_store, '_namespace', None)
-
-    import werkzeug
-
-    monkeypatch.setattr(werkzeug, "__version__", "0", raising=False)
-
-    init = importlib.import_module("magazyn.__init__")
-    importlib.reload(init)
-    monkeypatch.setitem(sys.modules, "__init__", init)
-
-    pa = importlib.import_module("magazyn.print_agent")
-    pa = importlib.reload(pa)
-    monkeypatch.setitem(sys.modules, "print_agent", pa)
-    monkeypatch.setattr(pa, "start_agent_thread", lambda: None)
-    monkeypatch.setattr(pa, "ensure_db_init", lambda: None)
-
-    import magazyn.app as app_mod
-
-    importlib.reload(app_mod)
-    from magazyn.factory import create_app
-
-    # Zachowaj oryginalny engine PRZED reloadem
-    saved_engine = db_mod.engine
-    saved_session_local = db_mod.SessionLocal
-
-    importlib.reload(db_mod)
-    db_mod.configure_engine(cfg.settings.DB_PATH)
-    from sqlalchemy.orm import sessionmaker
-
-    db_mod.SessionLocal = sessionmaker(
-        bind=db_mod.engine, autoflush=False
-    )
-
-    app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
-    with app.app_context():
-        db_mod.reset_db()
-    app_mod.app = app
-    return app_mod, saved_engine, saved_session_local
-
-
-def _restore_db(saved_engine, saved_session_local):
-    db_mod.engine = saved_engine
-    db_mod.SessionLocal = saved_session_local
-
-
-def test_app_response_without_agent(tmp_path, monkeypatch):
-    app_mod, saved_engine, saved_sl = setup_app_missing_agent(tmp_path, monkeypatch)
-    try:
-        client = app_mod.app.test_client()
-        resp = client.get("/login")
-        assert resp.status_code == 200
-    finally:
-        _restore_db(saved_engine, saved_sl)
-
+Weryfikuja ze app dziala poprawnie gdy agent nie jest uruchomiony.
+Uzywaja standardowego conftest.app fixture zamiast importlib.reload
+aby nie psuac globalnego stanu db_mod.engine dla kolejnych testow.
+"""
 import uuid
 
-def test_discussions_page_loads_without_error(tmp_path, monkeypatch):
-    app_mod, saved_engine, saved_sl = setup_app_missing_agent(tmp_path, monkeypatch)
-    try:
-        client = app_mod.app.test_client()
-        with app_mod.app.app_context():
-            with app_mod.get_session() as db:
-                from magazyn.models import User, Thread, Message
-                from werkzeug.security import generate_password_hash
+import pytest
 
-                # Use existing user or create if not exists (for production DB)
-                user = db.query(User).filter_by(username='test').first()
-                if not user:
-                    user = User(username='test', password=generate_password_hash('test'))
-                    db.add(user)
-                
-                # Create unique test thread
-                test_thread_id = str(uuid.uuid4())
-                thread = Thread(id=test_thread_id, title="Test Thread", author="test", type="dyskusja")
-                db.add(thread)
-                message = Message(id=str(uuid.uuid4()), thread_id=thread.id, author="test", content="Test message")
-                db.add(message)
-                db.commit()
 
-            with client:
-                client.post('/login', data={'username': 'test', 'password': 'test'})
-                resp = client.get("/discussions")
-                assert resp.status_code == 200
-                assert b"Test Thread" in resp.data
-    finally:
-        _restore_db(saved_engine, saved_sl)
+@pytest.fixture
+def app_no_agent(app):
+    """App fixture z wylaczonym agentem (juz wylaczony przez conftest)."""
+    return app
+
+
+def test_app_response_without_agent(app_no_agent):
+    client = app_no_agent.test_client()
+    resp = client.get("/login")
+    assert resp.status_code == 200
+
+
+def test_discussions_page_loads_without_error(app_no_agent):
+    from magazyn.models import User, Thread, Message
+    from magazyn.db import get_session
+    from werkzeug.security import generate_password_hash
+
+    with app_no_agent.app_context():
+        with get_session() as db:
+            user = db.query(User).filter_by(username='test').first()
+            if not user:
+                user = User(username='test', password=generate_password_hash('test'))
+                db.add(user)
+
+            test_thread_id = str(uuid.uuid4())
+            thread = Thread(id=test_thread_id, title="Test Thread", author="test", type="dyskusja")
+            db.add(thread)
+            message = Message(id=str(uuid.uuid4()), thread_id=thread.id, author="test", content="Test message")
+            db.add(message)
+            db.commit()
+
+        client = app_no_agent.test_client()
+        with client:
+            client.post('/login', data={'username': 'test', 'password': 'test'})
+            resp = client.get("/discussions")
+            assert resp.status_code == 200
+            assert b"Test Thread" in resp.data
