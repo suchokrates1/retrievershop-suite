@@ -43,18 +43,28 @@ def _html_to_plain_text(html: str) -> str:
     wiec ta konwersja musi byc czytelna.
     """
     text = html
+    # Usun komentarze HTML (w tym warunkowe <!--[if mso]-->)
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    # Usun bloki <style> i <script>
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Usun <head> caly blok
+    text = re.sub(r'<head[^>]*>.*?</head>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Usun <img> - zostaw tylko alt text
+    text = re.sub(r'<img\s[^>]*alt=["\']([^"\']*)["\'][^>]*>', r'\1', text, flags=re.IGNORECASE)
+    text = re.sub(r'<img[^>]*>', '', text, flags=re.IGNORECASE)
     # Zamien <br> i <hr> na nowe linie
     text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
     text = re.sub(r'<hr\s*/?>', '\n---\n', text, flags=re.IGNORECASE)
-    # Zamien naglowki na tekst z podkresleniem
+    # Zamien naglowki na tekst z nowa linia
     text = re.sub(r'<h[1-3][^>]*>(.*?)</h[1-3]>', r'\n\1\n', text, flags=re.IGNORECASE | re.DOTALL)
     # Zamien <p> na nowe linie
     text = re.sub(r'<p[^>]*>', '\n', text, flags=re.IGNORECASE)
-    text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '', text, flags=re.IGNORECASE)
     # Zamien <li> na myslnik
     text = re.sub(r'<li[^>]*>', '\n- ', text, flags=re.IGNORECASE)
-    # Zamien <td> na separator
-    text = re.sub(r'</td>\s*<td[^>]*>', ' | ', text, flags=re.IGNORECASE)
+    # Zamien <td> na separator (tabelka -> kolumny oddzielone spacja)
+    text = re.sub(r'</td>\s*<td[^>]*>', '  ', text, flags=re.IGNORECASE)
     text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
     # Wyciagnij linki: <a href="URL">text</a> -> text (URL)
     text = re.sub(
@@ -62,18 +72,30 @@ def _html_to_plain_text(html: str) -> str:
         r'\2 (\1)',
         text, flags=re.IGNORECASE | re.DOTALL,
     )
-    # Wyciagnij <strong>/<b> jako *text*
+    # Wyciagnij <strong>/<b>
     text = re.sub(r'<(?:strong|b)[^>]*>(.*?)</(?:strong|b)>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
     # Usun wszystkie pozostale tagi HTML
     text = re.sub(r'<[^>]+>', '', text)
     # Usun HTML entities
     text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
     text = text.replace('&lt;', '<').replace('&gt;', '>')
-    # Wyczysc wielokrotne puste linie
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    # Wyczysc spacje na poczatku/koncu linii
+    # Wyczysc spacje na poczatku/koncu linii i wielokrotne spacje
     lines = [line.strip() for line in text.split('\n')]
-    return '\n'.join(lines).strip()
+    # Usun puste linie na poczatku
+    while lines and not lines[0]:
+        lines.pop(0)
+    # Scal wielokrotne puste linie w jedna
+    result = []
+    prev_empty = False
+    for line in lines:
+        if not line:
+            if not prev_empty:
+                result.append('')
+            prev_empty = True
+        else:
+            result.append(line)
+            prev_empty = False
+    return '\n'.join(result).strip()
 
 
 def _send_html_email(
