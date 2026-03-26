@@ -1,9 +1,30 @@
 services:
+  postgres:
+    container_name: retrievershop-postgres
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: magazyn
+      POSTGRES_USER: magazyn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - proxy
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U magazyn"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   magazyn_app:
     container_name: retrievershop-magazyn
     build:
       context: .
       dockerfile: magazyn/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env
@@ -44,6 +65,8 @@ services:
       - "traefik.http.services.magazyn2.loadbalancer.server.port=8000"
       - "traefik.http.services.magazyn2.loadbalancer.server.scheme=http"
 
+volumes:
+  postgres_data:
 
 networks:
   proxy:
