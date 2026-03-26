@@ -2,21 +2,21 @@
 
 {% block content %}
     <h3 class="text-center">Edytuj przedmiot</h3>
-    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="row g-3 w-100">
+    <form method="POST" action="{{ url_for('products.edit_item', product_id=product['id']) }}" class="grid grid-cols-12 gap-3 w-full">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         
-        <div class="col-md-4">
-            <label for="category" class="form-label">Kategoria:</label>
-            <select id="category" name="category" required class="form-select">
+        <div class="col-span-12 md:col-span-4">
+            <label for="category" class="label-text">Kategoria:</label>
+            <select id="category" name="category" required class="select select-bordered w-full">
                 {% for cat in PRODUCT_CATEGORIES %}
                 <option value="{{ cat }}" {% if product['category'] == cat %}selected{% endif %}>{{ cat }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="col-md-4">
-            <label for="brand" class="form-label">Marka:</label>
-            <select id="brand" name="brand" class="form-select">
+        <div class="col-span-12 md:col-span-4">
+            <label for="brand" class="label-text">Marka:</label>
+            <select id="brand" name="brand" class="select select-bordered w-full">
                 {% for brand in PRODUCT_BRANDS %}
                 <option value="{{ brand }}" {% if product['brand'] == brand %}selected{% endif %}>{{ brand }}</option>
                 {% endfor %}
@@ -24,9 +24,9 @@
             </select>
         </div>
 
-        <div class="col-md-4">
-            <label for="series" class="form-label">Seria:</label>
-            <select id="series" name="series" class="form-select">
+        <div class="col-span-12 md:col-span-4">
+            <label for="series" class="label-text">Seria:</label>
+            <select id="series" name="series" class="select select-bordered w-full">
                 <option value="">-- Brak serii --</option>
                 {% for ser in PRODUCT_SERIES %}
                 <option value="{{ ser }}" {% if product['series'] == ser %}selected{% endif %}>{{ ser }}</option>
@@ -34,34 +34,34 @@
             </select>
         </div>
 
-        <div class="col-md-6">
-            <label for="color" class="form-label">Kolor:</label>
-            <input type="text" id="color" name="color" value="{{ product['color'] }}" class="form-control" required>
+        <div class="col-span-12 md:col-span-6">
+            <label for="color" class="label-text">Kolor:</label>
+            <input type="text" id="color" name="color" value="{{ product['color'] }}" class="input input-bordered w-full" required>
         </div>
 
 
-        <div class="col-12 text-center">
-            <label for="sizes" class="form-label">Ilości dla rozmiarów:</label>
+        <div class="col-span-12 text-center">
+            <label for="sizes" class="label-text">Ilości dla rozmiarów:</label>
         </div>
         {% for size in ALL_SIZES %}
             {% set info = product_sizes[size] %}
-            <div class="col-md-6">
-                <label class="form-label">Rozmiar: {{ size }}</label>
-                <div class="row g-2">
-                    <div class="col-4">
-                        <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="form-control" placeholder="Ilość">
+            <div class="col-span-12 md:col-span-6">
+                <label class="label-text">Rozmiar: {{ size }}</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <input type="number" name="quantity_{{ size }}" value="{{ info['quantity'] }}" min="0" class="input input-bordered w-full" placeholder="Ilość">
                     </div>
-                    <div class="col-4">
-                        <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="form-control" placeholder="Kod kreskowy">
+                    <div>
+                        <input type="text" name="barcode_{{ size }}" value="{{ info['barcode'] }}" class="input input-bordered w-full" placeholder="Kod kreskowy">
                     </div>
-                    <div class="col-4">
-                        <input type="number" name="purchase_price_{{ size }}" value="{{ info['purchase_price'] }}" step="0.01" min="0" class="form-control" placeholder="Cena zakupu">
+                    <div>
+                        <input type="number" name="purchase_price_{{ size }}" value="{{ info['purchase_price'] }}" step="0.01" min="0" class="input input-bordered w-full" placeholder="Cena zakupu">
                     </div>
                 </div>
             </div>
         {% endfor %}
 
-        <div class="col-12 text-center">
+        <div class="col-span-12 text-center">
             <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
         </div>
     </form>

@@ -4,14 +4,14 @@
 <p><strong>{{ offer.title }}</strong> (ID: {{ offer.offer_id }})</p>
 <form method="post">
     <div class="mb-3">
-        <label for="product_id" class="form-label">ID produktu</label>
-        <input type="number" name="product_id" id="product_id" class="form-control" value="{{ offer.product_id }}">
-        <div class="form-text">Pozostaw puste, jeśli chcesz wskazać konkretny rozmiar.</div>
+        <label for="product_id" class="label-text">ID produktu</label>
+        <input type="number" name="product_id" id="product_id" class="input input-bordered w-full" value="{{ offer.product_id }}">
+        <div class="text-sm text-base-content/60">Pozostaw puste, jeśli chcesz wskazać konkretny rozmiar.</div>
     </div>
     <div class="mb-3">
-        <label for="product_size_id" class="form-label">ID rozmiaru produktu</label>
-        <input type="number" name="product_size_id" id="product_size_id" class="form-control" value="{{ offer.product_size_id }}">
-        <div class="form-text">Wprowadź ID pozycji z magazynu, aby powiązać ofertę z konkretnym rozmiarem.</div>
+        <label for="product_size_id" class="label-text">ID rozmiaru produktu</label>
+        <input type="number" name="product_size_id" id="product_size_id" class="input input-bordered w-full" value="{{ offer.product_size_id }}">
+        <div class="text-sm text-base-content/60">Wprowadź ID pozycji z magazynu, aby powiązać ofertę z konkretnym rozmiarem.</div>
     </div>
     <button type="submit" class="btn btn-primary">Zapisz</button>
 </form>

@@ -1,7 +1,7 @@
 (function () {
     const SUCCESS_CLASS = 'alert-success';
-    const ERROR_CLASS = 'alert-danger';
-    const HIDDEN_CLASS = 'd-none';
+    const ERROR_CLASS = 'alert-error';
+    const HIDDEN_CLASS = 'hidden';
     const configElement = document.getElementById('barcode-config');
     const BARCODE_ENDPOINT = (configElement && configElement.dataset && configElement.dataset.barcodeEndpoint)
         ? configElement.dataset.barcodeEndpoint

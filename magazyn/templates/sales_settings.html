@@ -2,7 +2,7 @@
 
 {% block content %}
 <h2 class="mb-3 text-center">Ustawienia sprzedaży</h2>
-<form method="post" id="salesSettingsForm" class="row row-cols-1 row-cols-md-2 g-3 col-md-6 mx-auto">
+<form method="post" id="salesSettingsForm" class="grid grid-cols-1 md:grid-cols-2 gap-3 md:w-1/2 mx-auto">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <table class="table">
         <tbody>
@@ -10,7 +10,7 @@
         <tr>
             <th scope="row">
                 {{ item.label }}
-                {% if item.desc %}<br><small class="text-muted">{{ item.desc }}</small>{% endif %}
+                {% if item.desc %}<br><small class="text-base-content/60">{{ item.desc }}</small>{% endif %}
             </th>
             <td>
                 {% set lower = item.key.lower() %}
@@ -22,16 +22,16 @@
                     or 'key' in lower
                 %}
                 {% if is_sensitive %}
-                <div class="input-group" x-data="{ show: false }">
-                    <input :type="show ? 'text' : 'password'" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
-                    <span class="input-group-text" style="cursor:pointer" @click="show = !show">
+                <div class="flex" x-data="{ show: false }">
+                    <input :type="show ? 'text' : 'password'" class="input input-bordered w-full" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                    <span class="btn btn-ghost" style="cursor:pointer" @click="show = !show">
                         <i class="bi" :class="show ? 'bi-eye-slash' : 'bi-eye'"></i>
                     </span>
                 </div>
                 {% elif 'commission' in lower or 'port' in lower %}
-                <input type="number" step="0.01" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                <input type="number" step="0.01" class="input input-bordered w-full" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                 {% else %}
-                <input type="text" class="form-control" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
+                <input type="text" class="input input-bordered w-full" id="{{ item.key }}" name="{{ item.key }}" value="{{ item.value }}">
                 {% endif %}
             </td>
         </tr>

@@ -10,25 +10,25 @@
     line-height: 1.5;
 }
 </style>
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="flex justify-between items-center mb-4">
     <div>
-        <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline-secondary btn-sm mb-2">
+        <a href="{{ url_for('price_reports.reports_list') }}" class="btn btn-outline btn-sm mb-2">
             <i class="bi bi-arrow-left"></i> Powrót do listy
         </a>
         <h2>Raport cenowy #{{ report.id }}</h2>
-        <p class="text-muted mb-0">
+        <p class="text-base-content/60 mb-0">
             {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}
             {% if report.status == 'completed' %}
-                <span class="badge bg-success ms-2">Zakończony</span>
+                <span class="badge badge-success ml-2">Zakończony</span>
             {% elif report.status == 'completed_with_errors' %}
-                <span class="badge bg-warning text-dark ms-2">Zakończony z błędami</span>
+                <span class="badge badge-warning ml-2">Zakończony z błędami</span>
             {% elif report.status == 'running' %}
-                <span class="badge bg-primary ms-2">W toku ({{ report.items_checked }}/{{ report.items_total }})</span>
+                <span class="badge badge-primary ml-2">W toku ({{ report.items_checked }}/{{ report.items_total }})</span>
             {% endif %}
         </p>
     </div>
     <div>
-        <form action="{{ url_for('price_reports.restart_report', report_id=report.id) }}" method="post" class="d-inline">
+        <form action="{{ url_for('price_reports.restart_report', report_id=report.id) }}" method="post" class="inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-warning" 
                     onclick="return confirm('Restartować raport? Oferty z błędami zostaną sprawdzone ponownie.')">
@@ -39,49 +39,49 @@
 </div>
 
 <!-- Statystyki -->
-<div class="row mb-4">
-    <div class="col">
-        <div class="card text-center">
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+    <div>
+        <div class="card bg-base-200 shadow-sm text-center">
             <div class="card-body">
                 <h3 class="mb-0">{{ stats.total }}</h3>
-                <small class="text-muted">Sprawdzonych ofert</small>
+                <small class="text-base-content/60">Sprawdzonych ofert</small>
             </div>
         </div>
     </div>
-    <div class="col">
-        <div class="card text-center border-success">
+    <div>
+        <div class="card bg-base-200 shadow-sm text-center border-success">
             <div class="card-body text-success">
                 <h3 class="mb-0">{{ stats.cheapest }}</h3>
                 <small>Jesteśmy najtańsi</small>
             </div>
         </div>
     </div>
-    <div class="col">
-        <div class="card text-center border-danger">
-            <div class="card-body text-danger">
+    <div>
+        <div class="card bg-base-200 shadow-sm text-center border-error">
+            <div class="card-body text-error">
                 <h3 class="mb-0">{{ stats.not_cheapest }}</h3>
                 <small>Drożsi od konkurencji</small>
             </div>
         </div>
     </div>
-    <div class="col">
-        <div class="card text-center border-warning">
+    <div>
+        <div class="card bg-base-200 shadow-sm text-center border-warning">
             <div class="card-body text-warning">
                 <h3 class="mb-0">{{ stats.with_suggestion }}</h3>
-                <small>Z sugestią obniżki</small>
+                <small>Z sugestia obniżki</small>
             </div>
         </div>
     </div>
-    <div class="col">
-        <div class="card text-center border-primary">
+    <div>
+        <div class="card bg-base-200 shadow-sm text-center border-primary">
             <div class="card-body text-primary">
                 <h3 class="mb-0">{{ stats.with_raise_suggestion }}</h3>
                 <small>Można podnieść cenę</small>
             </div>
         </div>
     </div>
-    <div class="col">
-        <div class="card text-center border-info">
+    <div>
+        <div class="card bg-base-200 shadow-sm text-center border-info">
             <div class="card-body text-info">
                 <h3 class="mb-0">{{ stats.other_offer_ok }}</h3>
                 <small>Inna aukcja OK</small>
@@ -91,34 +91,34 @@
 </div>
 
 <!-- Filtry -->
-<div class="btn-group mb-3" role="group">
+<div class="join mb-3" role="group">
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='all') }}" 
-       class="btn btn-outline-primary {% if filter_mode == 'all' %}active{% endif %}">
+       class="btn btn-outline btn-primary join-item {% if filter_mode == 'all' %}btn-active{% endif %}">
         Wszystkie ({{ stats.total }})
     </a>
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='not_cheapest') }}" 
-       class="btn btn-outline-danger {% if filter_mode == 'not_cheapest' %}active{% endif %}">
+       class="btn btn-outline btn-error join-item {% if filter_mode == 'not_cheapest' %}btn-active{% endif %}">
         Drożsi ({{ stats.not_cheapest }})
     </a>
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='cheapest') }}" 
-       class="btn btn-outline-success {% if filter_mode == 'cheapest' %}active{% endif %}">
+       class="btn btn-outline btn-success join-item {% if filter_mode == 'cheapest' %}btn-active{% endif %}">
         Najtańsi ({{ stats.cheapest }})
     </a>
     {% if stats.errors > 0 %}
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='errors') }}" 
-       class="btn btn-outline-warning {% if filter_mode == 'errors' %}active{% endif %}">
+       class="btn btn-outline btn-warning join-item {% if filter_mode == 'errors' %}btn-active{% endif %}">
         Błędy ({{ stats.errors }})
     </a>
     {% endif %}
 </div>
 
 {% if items %}
-<div x-data="reportDetail()" class="table-responsive">
-    <table class="table table-striped table-hover table-sm" style="table-layout: fixed;">
-        <thead class="table-dark">
+<div x-data="reportDetail()" class="overflow-x-auto">
+    <table class="table table-zebra table-sm" style="table-layout: fixed;">
+        <thead class="bg-base-300 text-base-content">
             <tr>
                 <th style="width: 200px;">Produkt</th>
-                <th style="width: 110px;" class="text-end">Cena konkurenta</th>
+                <th style="width: 110px;" class="text-right">Cena konkurenta</th>
                 <th style="width: 120px;">Konkurent</th>
                 <th style="width: 70px;" class="text-center">Pozycja</th>
                 <th style="width: 65px;" class="text-center">Status</th>
@@ -128,10 +128,10 @@
         </thead>
         <tbody>
             {% for item in items %}
-            <tr class="{% if item.error %}table-warning{% elif not item.is_cheapest %}table-danger{% endif %}">
+            <tr class="{% if item.error %}bg-warning/10{% elif not item.is_cheapest %}bg-error/10{% endif %}">
                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     {% if item.product_id %}
-                    <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" class="text-decoration-none" title="{{ item.product_name }}">
+                    <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" class="no-underline" title="{{ item.product_name }}">
                         {{ item.product_name }}
                     </a>
                     {% else %}
@@ -140,14 +140,14 @@
                     </span>
                     {% endif %}
                     <br>
-                    <small class="text-muted">{{ item.offer_id }} | {% if item.our_price %}<strong>{{ "%.2f"|format(item.our_price) }} zł</strong>{% else %}-{% endif %}</small>
+                    <small class="text-base-content/60">{{ item.offer_id }} | {% if item.our_price %}<strong>{{ "%.2f"|format(item.our_price) }} zł</strong>{% else %}-{% endif %}</small>
                 </td>
-                <td class="text-end">
+                <td class="text-right">
                     {% if item.competitor_price %}
                         {{ "%.2f"|format(item.competitor_price) }} zł
                         {% if item.price_difference %}
                             <br>
-                            <small class="{% if item.price_difference > 0 %}text-danger{% else %}text-success{% endif %}">
+                            <small class="{% if item.price_difference > 0 %}text-error{% else %}text-success{% endif %}">
                                 {% if item.price_difference > 0 %}+{% endif %}{{ "%.2f"|format(item.price_difference) }} zł
                             </small>
                         {% endif %}
@@ -169,7 +169,7 @@
                     {% if item.our_position %}
                         {{ item.our_position }}/{{ item.total_offers }}
                         {% if item.competitors_all_count and item.competitors_all_count != (item.total_offers - 1) %}
-                            <br><small class="text-muted" title="Ofert na allegro łącznie (przed filtrem dostawy/wykluczonych)">({{ item.competitors_all_count + 1 }} łącznie)</small>
+                            <br><small class="text-base-content/60" title="Ofert na allegro łącznie (przed filtrem dostawy/wykluczonych)">({{ item.competitors_all_count + 1 }} łącznie)</small>
                         {% endif %}
                     {% else %}
                         -
@@ -177,28 +177,28 @@
                 </td>
                 <td class="text-center">
                     {% if item.error %}
-                        <span class="badge bg-warning" title="{{ item.error }}">Błąd</span>
+                        <span class="badge badge-warning" title="{{ item.error }}">Błąd</span>
                     {% elif item.is_cheapest %}
-                        <span class="badge bg-success"><i class="bi bi-check"></i> OK</span>
+                        <span class="badge badge-success"><i class="bi bi-check"></i> OK</span>
                     {% else %}
-                        <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drożsi</span>
+                        <span class="badge badge-error"><i class="bi bi-exclamation"></i> Drożsi</span>
                     {% endif %}
                 </td>
                 <td>
                     {% if item.suggestion and item.suggestion.type == 'decrease' %}
-                        <span class="badge bg-warning text-dark">
+                        <span class="badge badge-warning">
                             <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zł
                         </span>
                         <br>
-                        <small class="text-muted">-{{ "%.1f"|format(item.suggestion.discount_percent) }}%</small>
+                        <small class="text-base-content/60">-{{ "%.1f"|format(item.suggestion.discount_percent) }}%</small>
                     {% elif item.suggestion and item.suggestion.type == 'increase' %}
-                        <span class="badge bg-primary">
+                        <span class="badge badge-primary">
                             <i class="bi bi-arrow-up"></i> {{ "%.2f"|format(item.suggestion.target_price) }} zł
                         </span>
                         <br>
-                        <small class="text-muted">+{{ "%.1f"|format(item.suggestion.raise_percent) }}% (+{{ "%.2f"|format(item.suggestion.extra_profit) }} zł)</small>
+                        <small class="text-base-content/60">+{{ "%.1f"|format(item.suggestion.raise_percent) }}% (+{{ "%.2f"|format(item.suggestion.extra_profit) }} zł)</small>
                     {% elif item.suggestion_note == "inna_aukcja_ok" %}
-                        <span class="badge bg-info text-dark" title="Inna aukcja tego produktu jest najtańsza - cena ustawiona celowo">
+                        <span class="badge badge-info" title="Inna aukcja tego produktu jest najtańsza - cena ustawiona celowo">
                             <i class="bi bi-link-45deg"></i> Inna aukcja OK
                         </span>
                     {% else %}
@@ -206,35 +206,30 @@
                     {% endif %}
                 </td>
                 <td>
-                    <div class="btn-group btn-group-sm action-btns" role="group">
-                        <!-- Nasza oferta -->
+                    <div class="join action-btns" role="group">
                         <a href="https://allegro.pl/oferta/{{ item.offer_id }}" target="_blank" 
-                           class="btn btn-outline-primary" title="Nasza oferta" role="button">
+                           class="btn btn-outline btn-primary btn-sm join-item" title="Nasza oferta" role="button">
                             <i class="bi bi-box-arrow-up-right"></i>
                         </a>
                         {% if item.competitor_url %}
-                            <!-- Oferta konkurenta -->
                             <a href="{{ item.competitor_url }}" target="_blank" 
-                               class="btn btn-outline-secondary" title="Oferta konkurenta" role="button">
+                               class="btn btn-outline btn-sm join-item" title="Oferta konkurenta" role="button">
                                 <i class="bi bi-person"></i>
                             </a>
                         {% endif %}
-                        <!-- Sprawdź ponownie -->
-                        <button type="button" class="btn btn-outline-info btn-recheck" 
+                        <button type="button" class="btn btn-outline btn-info btn-sm join-item" 
                                 @click="recheck('{{ item.id }}', $event)" title="Sprawdź cenę ponownie">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         {% if item.suggestion %}
-                            <!-- Zmień cenę -->
-                            <button type="button" class="btn btn-outline-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-change-price" 
+                            <button type="button" class="btn btn-outline btn-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-sm join-item" 
                                     @click="openChangePrice('{{ item.id }}', '{{ item.our_price }}', '{{ item.suggestion.target_price }}', '{{ item.product_name[:30] }}', '{{ item.suggestion.type }}')"
                                     title="Zmień cenę na {{ item.suggestion.target_price }} zł">
                                 <i class="bi bi-cash-coin"></i>
                             </button>
                         {% endif %}
                         {% if item.competitor_seller %}
-                            <!-- Wyklucz sprzedawcę -->
-                            <button type="button" class="btn btn-outline-danger btn-exclude-seller" 
+                            <button type="button" class="btn btn-outline btn-error btn-sm join-item" 
                                     @click="openExcludeSeller('{{ item.competitor_seller }}')"
                                     title="Wyklucz sprzedawcę {{ item.competitor_seller }}">
                                 <i class="bi bi-person-x"></i>
@@ -248,64 +243,60 @@
     </table>
 
 <!-- Modal potwierdzenia zmiany ceny -->
-<div class="modal fade" id="changePriceModal" tabindex="-1" x-ref="changePriceModal">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Potwierdź zmianę ceny</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p><strong x-text="priceModal.productName"></strong></p>
-                <div class="alert alert-warning">
-                    <p class="mb-1">Czy na pewno chcesz zmienić cenę?</p>
-                    <p class="mb-0">
-                        <strong x-text="priceModal.currentPrice"></strong> zł
-                        <i class="bi" :class="priceModal.changeType === 'increase' ? 'bi-arrow-up text-success' : 'bi-arrow-down text-danger'"></i>
-                        <strong x-text="priceModal.targetPrice" :class="priceModal.changeType === 'increase' ? 'text-success' : 'text-danger'"></strong> zł
+<dialog id="changePriceModal" class="modal" x-ref="changePriceModal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Potwierdź zmianę ceny</h3>
+        <div class="py-4">
+            <p><strong x-text="priceModal.productName"></strong></p>
+            <div class="alert alert-warning">
+                <p class="mb-1">Czy na pewno chcesz zmienić cenę?</p>
+                <p class="mb-0">
+                    <strong x-text="priceModal.currentPrice"></strong> zł
+                    <i class="bi" :class="priceModal.changeType === 'increase' ? 'bi-arrow-up text-success' : 'bi-arrow-down text-error'"></i>
+                    <strong x-text="priceModal.targetPrice" :class="priceModal.changeType === 'increase' ? 'text-success' : 'text-error'"></strong> zł
                     </p>
                 </div>
                 <div class="mb-3">
                     <template x-if="profitCalc.loading">
-                        <p class="text-muted small mb-1">Ładowanie kalkulacji zysku...</p>
+                        <p class="text-base-content/60 text-sm mb-1">Ladowanie kalkulacji zysku...</p>
                     </template>
                     <template x-if="profitCalc.error">
-                        <p class="text-danger small" x-text="profitCalc.error"></p>
+                        <p class="text-error text-sm" x-text="profitCalc.error"></p>
                     </template>
                     <template x-if="profitCalc.data">
                         <div>
                             <table class="table table-sm mb-0">
                                 <tr>
                                     <td>Zmiana ceny:</td>
-                                    <td class="text-end text-danger" x-text="'-' + profitCalc.data.price_change_percent + '%'"></td>
+                                    <td class="text-right" x-text="'-' + profitCalc.data.price_change_percent + '%'"></td>
                                 </tr>
                                 <tr>
                                     <td>Aktualny zysk:</td>
-                                    <td class="text-end" x-text="profitCalc.data.current_profit.toFixed(2) + ' zł'"></td>
+                                    <td class="text-right" x-text="profitCalc.data.current_profit.toFixed(2) + ' zł'"></td>
                                 </tr>
                                 <tr>
                                     <td>Nowy zysk:</td>
-                                    <td class="text-end" x-text="profitCalc.data.new_profit.toFixed(2) + ' zł'"></td>
+                                    <td class="text-right" x-text="profitCalc.data.new_profit.toFixed(2) + ' zł'"></td>
                                 </tr>
-                                <tr :class="profitCalc.data.profit_change < 0 ? 'table-danger' : 'table-success'">
+                                <tr :class="profitCalc.data.profit_change < 0 ? 'bg-error/10' : 'bg-success/10'">
                                     <td><strong>Zmiana zysku:</strong></td>
-                                    <td class="text-end">
+                                    <td class="text-right">
                                         <strong x-text="(profitCalc.data.profit_change > 0 ? '+' : '') + profitCalc.data.profit_change.toFixed(2) + ' zł'"></strong>
                                     </td>
                                 </tr>
                             </table>
                             <template x-if="profitCalc.data.note">
-                                <p class="text-muted small mt-2 mb-0" x-text="profitCalc.data.note"></p>
+                                <p class="text-base-content/60 text-sm mt-2 mb-0" x-text="profitCalc.data.note"></p>
                             </template>
                         </div>
                     </template>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+            <div class="modal-action">
+                <form method="dialog"><button class="btn">Anuluj</button></form>
                 <button type="button" class="btn btn-warning" @click="confirmChangePrice()" :disabled="changingPrice">
                     <template x-if="changingPrice">
-                        <span><span class="spinner-border spinner-border-sm"></span> Zmieniam...</span>
+                        <span><span class="loading loading-spinner loading-sm"></span> Zmieniam...</span>
                     </template>
                     <template x-if="!changingPrice">
                         <span><i class="bi bi-check"></i> Zmień cenę</span>
@@ -313,74 +304,70 @@
                 </button>
             </div>
         </div>
-    </div>
-</div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
 
 <!-- Modal wykluczenia sprzedawcy -->
-<div class="modal fade" id="excludeSellerModal" tabindex="-1" x-ref="excludeSellerModal">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Wyklucz sprzedawcę</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Wykluczyć sprzedawcę <strong x-text="excludeSeller.name"></strong> z porównań cen?</p>
-                <form x-ref="excludeSellerForm" method="post" action="{{ url_for('price_reports.exclude_seller') }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="seller_name" :value="excludeSeller.name">
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
-                <button type="button" class="btn btn-danger" @click="confirmExcludeSeller()">
-                    <i class="bi bi-person-x"></i> Wyklucz
-                </button>
-            </div>
+<dialog id="excludeSellerModal" class="modal" x-ref="excludeSellerModal">
+    <div class="modal-box max-w-sm">
+        <h3 class="font-bold text-lg">Wyklucz sprzedawcę</h3>
+        <div class="py-4">
+            <p>Wykluczyć sprzedawcę <strong x-text="excludeSeller.name"></strong> z porównań cen?</p>
+            <form x-ref="excludeSellerForm" method="post" action="{{ url_for('price_reports.exclude_seller') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="seller_name" :value="excludeSeller.name">
+            </form>
+        </div>
+        <div class="modal-action">
+            <form method="dialog"><button class="btn">Anuluj</button></form>
+            <button type="button" class="btn btn-error" @click="confirmExcludeSeller()">
+                <i class="bi bi-person-x"></i> Wyklucz
+            </button>
         </div>
     </div>
-</div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 </div><!-- /x-data reportDetail + table-responsive -->
 {% else %}
-<div class="alert alert-secondary text-center">
-    <i class="bi bi-inbox fs-1"></i>
+<div class="alert text-center">
+    <i class="bi bi-inbox text-4xl"></i>
     <p class="mt-2 mb-0">Brak danych dla wybranego filtra</p>
 </div>
 {% endif %}
 
 <!-- Legenda -->
-<div class="card mt-4">
+<div class="card bg-base-200 shadow-sm mt-4">
     <div class="card-body">
-        <h6 class="card-title">Legenda</h6>
-        <ul class="list-inline mb-0">
-            <li class="list-inline-item">
-                <span class="badge bg-success"><i class="bi bi-check"></i> OK</span> - Jesteśmy najtańsi
+        <h6 class="font-semibold">Legenda</h6>
+        <ul class="flex flex-wrap gap-3 mb-0">
+            <li>
+                <span class="badge badge-success"><i class="bi bi-check"></i> OK</span> - Jesteśmy najtańsi
             </li>
-            <li class="list-inline-item">
-                <span class="badge bg-danger"><i class="bi bi-exclamation"></i> Drożsi</span> - Konkurent jest tańszy
+            <li>
+                <span class="badge badge-error"><i class="bi bi-exclamation"></i> Drożsi</span> - Konkurent jest tańszy
             </li>
-            <li class="list-inline-item">
-                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-down"></i></span> - Sugerowana obniżka (max {{ max_discount }}%)
+            <li>
+                <span class="badge badge-warning"><i class="bi bi-arrow-down"></i></span> - Sugerowana obniżka (max {{ max_discount }}%)
             </li>
-            <li class="list-inline-item">
-                <span class="badge bg-primary"><i class="bi bi-arrow-up"></i></span> - Sugerowana podwyżka (można podnieść i nadal być najtańszym)
+            <li>
+                <span class="badge badge-primary"><i class="bi bi-arrow-up"></i></span> - Sugerowana podwyżka (można podnieść i nadal być najtańszym)
             </li>
-            <li class="list-inline-item">
-                <span class="badge bg-warning">Błąd</span> - Nie udało się sprawdzić
+            <li>
+                <span class="badge badge-warning">Błąd</span> - Nie udało się sprawdzić
             </li>
-            <li class="list-inline-item">
+            <li>
                 <i class="bi bi-star-fill text-warning"></i> - Super Sprzedawca
             </li>
         </ul>
-        <hr>
-        <h6>Przyciski akcji:</h6>
-        <ul class="list-inline mb-0">
-            <li class="list-inline-item"><i class="bi bi-box-arrow-up-right text-primary"></i> - Nasza oferta</li>
-            <li class="list-inline-item"><i class="bi bi-person text-secondary"></i> - Oferta konkurenta</li>
-            <li class="list-inline-item"><i class="bi bi-arrow-clockwise text-info"></i> - Sprawdź ponownie</li>
-            <li class="list-inline-item"><i class="bi bi-cash-coin text-warning"></i> - Zmień cenę</li>
-            <li class="list-inline-item"><i class="bi bi-person-x text-danger"></i> - Wyklucz sprzedawcę</li>
+        <div class="divider my-2"></div>
+        <h6 class="font-semibold">Przyciski akcji:</h6>
+        <ul class="flex flex-wrap gap-3 mb-0">
+            <li><i class="bi bi-box-arrow-up-right text-primary"></i> - Nasza oferta</li>
+            <li><i class="bi bi-person text-base-content/60"></i> - Oferta konkurenta</li>
+            <li><i class="bi bi-arrow-clockwise text-info"></i> - Sprawdź ponownie</li>
+            <li><i class="bi bi-cash-coin text-warning"></i> - Zmień cenę</li>
+            <li><i class="bi bi-person-x text-error"></i> - Wyklucz sprzedawcę</li>
         </ul>
     </div>
 </div>
@@ -413,8 +400,8 @@ document.addEventListener('alpine:init', () => {
             this.profitCalc = { loading: true, data: null, error: null };
             this.changingPrice = false;
 
-            const modal = new bootstrap.Modal(this.$refs.changePriceModal);
-            modal.show();
+            const modal = this.$refs.changePriceModal;
+            modal.showModal();
 
             this._loadProfitCalc(itemId);
         },
@@ -449,7 +436,7 @@ document.addEventListener('alpine:init', () => {
                 const result = await response.json();
 
                 if (result.success) {
-                    bootstrap.Modal.getInstance(this.$refs.changePriceModal).hide();
+                    this.$refs.changePriceModal.close();
                     location.reload();
                 } else {
                     alert('Błąd: ' + result.error);
@@ -492,8 +479,7 @@ document.addEventListener('alpine:init', () => {
 
         openExcludeSeller(sellerName) {
             this.excludeSeller.name = sellerName;
-            const modal = new bootstrap.Modal(this.$refs.excludeSellerModal);
-            modal.show();
+            this.$refs.excludeSellerModal.showModal();
         },
 
         confirmExcludeSeller() {

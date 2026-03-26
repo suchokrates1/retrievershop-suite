@@ -2,19 +2,19 @@
 
 {% block content %}
 <h2 class="mb-3 text-center">Logowanie</h2>
-<form action="{{ url_for('login') }}" method="POST" class="row row-cols-1 row-cols-md-2 g-3 login-form col-md-6 mx-auto">
+<form action="{{ url_for('login') }}" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3 login-form md:w-1/2 mx-auto">
     {{ form.csrf_token }}
-    <div class="col-12">
-        <label for="username" class="form-label">Nazwa użytkownika:</label>
-        <input id="username" type="text" name="username" required class="form-control" autofocus>
+    <div class="col-span-12">
+        <label for="username" class="label-text">Nazwa użytkownika:</label>
+        <input id="username" type="text" name="username" required class="input input-bordered w-full" autofocus>
     </div>
 
-    <div class="col-12">
-        <label for="password" class="form-label">Hasło:</label>
-        <input id="password" type="password" name="password" required class="form-control">
+    <div class="col-span-12">
+        <label for="password" class="label-text">Hasło:</label>
+        <input id="password" type="password" name="password" required class="input input-bordered w-full">
     </div>
 
-    <div class="col-12 form-actions text-center">
+    <div class="col-span-12 form-actions text-center">
         <button type="submit" class="btn btn-primary">Zaloguj się</button>
     </div>
 </form>

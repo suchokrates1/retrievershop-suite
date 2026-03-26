@@ -12,7 +12,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .product-selector .dropdown-menu {
+    .product-selector .dropdown-content {
         min-width: 450px;
         max-height: 350px;
         overflow-y: auto;
@@ -77,8 +77,8 @@
 {% endif %}
 <form action="{{ url_for('products.confirm_invoice') }}" method="post" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="table-responsive">
-    <table class="table table-sm table-dark align-middle" style="table-layout: fixed; width: 100%;">
+    <div class="overflow-x-auto">
+    <table class="table table-sm align-middle" style="table-layout: fixed; width: 100%;">
         <colgroup>
             <col style="width: 3%;">  <!-- Lp. -->
             <col style="width: 4%;">  <!-- Akceptuj -->
@@ -110,38 +110,38 @@
                 <td class="text-center"><input type="checkbox" name="accept_{{ loop.index0 }}" checked></td>
                 <td>
                     <input type="text" name="name_{{ loop.index0 }}" value="{{ row['Nazwa'] }}" 
-                           class="form-control form-control-sm" style="font-size: 0.8rem;" title="{{ row['Nazwa'] }}">
+                           class="input input-bordered input-sm w-full" style="font-size: 0.8rem;" title="{{ row['Nazwa'] }}">
                 </td>
                 <td>
                     <input type="text" name="color_{{ loop.index0 }}" value="{{ row['Kolor'] }}" 
-                           class="form-control form-control-sm" style="font-size: 0.8rem;">
+                           class="input input-bordered input-sm w-full" style="font-size: 0.8rem;">
                 </td>
                 <td>
                     <input type="text" name="size_{{ loop.index0 }}" value="{{ row['Rozmiar'] }}" 
-                           class="form-control form-control-sm text-center" style="font-size: 0.8rem;">
+                           class="input input-bordered input-sm w-full text-center" style="font-size: 0.8rem;">
                 </td>
                 <td>
                     <input type="number" name="quantity_{{ loop.index0 }}" value="{{ row['Ilość'] }}" 
-                           class="form-control form-control-sm text-center" style="font-size: 0.8rem;">
+                           class="input input-bordered input-sm w-full text-center" style="font-size: 0.8rem;">
                 </td>
                 <td>
                     <input type="text" name="price_{{ loop.index0 }}" value="{{ row['Cena'] }}" 
-                           class="form-control form-control-sm text-end" style="font-size: 0.8rem;">
+                           class="input input-bordered input-sm w-full text-right" style="font-size: 0.8rem;">
                 </td>
                 <td>
                     <input type="text" name="barcode_{{ loop.index0 }}" value="{{ row['Barcode'] or row.get('EAN') or '' }}" 
-                           class="form-control form-control-sm" style="font-size: 0.75rem;">
+                           class="input input-bordered input-sm w-full" style="font-size: 0.75rem;">
                 </td>
                 <td>
                     <div class="product-selector dropdown" x-data="productSelector('{{ row.matched_ps_id or '' }}', '{{ row.matched_name|e if row.matched_ps_id else '+ Nowy produkt' }}')">
                         <input type="hidden" name="ps_id_{{ loop.index0 }}" :value="hiddenValue">
-                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-trigger dropdown-toggle" 
-                                data-bs-toggle="dropdown" aria-expanded="false"
+                        <button type="button" class="btn btn-sm btn-outline dropdown-trigger dropdown-toggle" 
+                                aria-expanded="false"
                                 x-ref="trigger" x-text="selectedLabel">
                         </button>
-                        <div class="dropdown-menu dropdown-menu-dark">
+                        <div class="dropdown-content menu bg-base-200">
                             <div class="dropdown-search">
-                                <input type="text" class="form-control form-control-sm" 
+                                <input type="text" class="input input-bordered input-sm w-full" 
                                        placeholder="Szukaj produktu..." x-model="searchTerm"
                                        x-ref="searchInput" @click.stop>
                             </div>
@@ -155,13 +155,13 @@
                                data-ps-id="{{ ps['ps_id'] }}"
                                data-search="{{ ps['name']|lower }} {{ ps['color']|lower }} {{ ps['size']|lower }} {{ ps['barcode'] or '' }}"
                                x-show="matchesSearch($el)">
-                                <strong>{{ ps['name'] }}</strong> ({{ ps['color'] }}) <span class="badge bg-secondary">{{ ps['size'] }}</span>
+                                <strong>{{ ps['name'] }}</strong> ({{ ps['color'] }}) <span class="badge badge-neutral">{{ ps['size'] }}</span>
                                 {% if ps['barcode'] %}<br><span class="product-barcode">EAN: {{ ps['barcode'] }}</span>{% endif %}
                             </div>
                             {% endfor %}
                         </div>
                     </div>
-                    <small class="d-block" style="font-size: 0.7rem;">
+                    <small class="block" style="font-size: 0.7rem;">
                         {% if row.match_type == 'ean' %}
                             <span class="match-ean" title="Dopasowano po kodzie EAN - pewne">✓ EAN</span>
                         {% elif row.match_type == 'sku' %}
@@ -187,7 +187,7 @@
             </small>
         </div>
         <button type="submit" class="btn btn-primary">Potwierdź import ({{ rows|length }} pozycji)</button>
-        <a href="{{ url_for('products.items') }}" class="btn btn-secondary">Anuluj</a>
+        <a href="{{ url_for('products.items') }}" class="btn btn-neutral">Anuluj</a>
     </div>
 </form>
 

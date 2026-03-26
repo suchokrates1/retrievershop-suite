@@ -3,66 +3,66 @@
 {% set full_width = True %}
 {% endblock %}
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+<div class="container mx-auto mt-4">
+    <div class="flex justify-between items-center mb-3">
         <h3>Raport remanentu #{{ stocktake.id }}</h3>
         <div>
             {% if stocktake.status == 'finished' %}
-            <form method="POST" action="{{ url_for('stocktake.stocktake_apply', stocktake_id=stocktake.id) }}" class="d-inline">
+            <form method="POST" action="{{ url_for('stocktake.stocktake_apply', stocktake_id=stocktake.id) }}" class="inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-success me-2" onclick="return confirm('Czy na pewno zastosowac wyniki remanentu? Stany magazynowe zostana zaktualizowane.')">
-                    <i class="bi bi-check2-all me-1"></i>Zastosuj stany
+                <button type="submit" class="btn btn-success mr-2" onclick="return confirm('Czy na pewno zastosowac wyniki remanentu? Stany magazynowe zostana zaktualizowane.')">
+                    <i class="bi bi-check2-all mr-1"></i>Zastosuj stany
                 </button>
             </form>
             {% endif %}
-            <a href="{{ url_for('stocktake.stocktake_pdf', stocktake_id=stocktake.id) }}" class="btn btn-outline-secondary me-2">
-                <i class="bi bi-file-pdf me-1"></i>PDF
+            <a href="{{ url_for('stocktake.stocktake_pdf', stocktake_id=stocktake.id) }}" class="btn btn-outline mr-2">
+                <i class="bi bi-file-pdf mr-1"></i>PDF
             </a>
-            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline-primary">
-                <i class="bi bi-arrow-left me-1"></i>Lista
+            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline btn-primary">
+                <i class="bi bi-arrow-left mr-1"></i>Lista
             </a>
         </div>
     </div>
 
     <!-- Informacje -->
-    <div class="row mb-3">
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary text-center">
+    <div class="grid grid-cols-12 gap-4 mb-3">
+        <div class="col-span-12 md:col-span-3">
+            <div class="card bg-base-300 border-secondary text-center">
                 <div class="card-body py-2">
-                    <div class="text-muted small">Rozpoczeto</div>
+                    <div class="text-base-content/60 text-sm">Rozpoczeto</div>
                     <div>{{ stocktake.started_at.strftime('%Y-%m-%d %H:%M') if stocktake.started_at else '-' }}</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary text-center">
+        <div class="col-span-12 md:col-span-3">
+            <div class="card bg-base-300 border-secondary text-center">
                 <div class="card-body py-2">
-                    <div class="text-muted small">Zakonczono</div>
+                    <div class="text-base-content/60 text-sm">Zakonczono</div>
                     <div>{{ stocktake.finished_at.strftime('%Y-%m-%d %H:%M') if stocktake.finished_at else '-' }}</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-dark border-secondary text-center">
+        <div class="col-span-12 md:col-span-2">
+            <div class="card bg-base-300 border-secondary text-center">
                 <div class="card-body py-2">
-                    <div class="text-muted small">Stan systemowy</div>
-                    <div class="fs-5 fw-bold">{{ total_expected }}</div>
+                    <div class="text-base-content/60 text-sm">Stan systemowy</div>
+                    <div class="text-lg font-bold">{{ total_expected }}</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-dark border-secondary text-center">
+        <div class="col-span-12 md:col-span-2">
+            <div class="card bg-base-300 border-secondary text-center">
                 <div class="card-body py-2">
-                    <div class="text-muted small">Stan faktyczny</div>
-                    <div class="fs-5 fw-bold">{{ total_scanned }}</div>
+                    <div class="text-base-content/60 text-sm">Stan faktyczny</div>
+                    <div class="text-lg font-bold">{{ total_scanned }}</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-dark border-{% if total_discrepancies > 0 %}danger{% else %}success{% endif %} text-center">
+        <div class="col-span-12 md:col-span-2">
+            <div class="card bg-base-300 border-{% if total_discrepancies > 0 %}error{% else %}success{% endif %} text-center">
                 <div class="card-body py-2">
-                    <div class="text-muted small">Rozbieznosci</div>
-                    <div class="fs-5 fw-bold {% if total_discrepancies > 0 %}text-danger{% else %}text-success{% endif %}">{{ total_discrepancies }}</div>
+                    <div class="text-base-content/60 text-sm">Rozbieznosci</div>
+                    <div class="text-lg font-bold {% if total_discrepancies > 0 %}text-error{% else %}text-success{% endif %}">{{ total_discrepancies }}</div>
                 </div>
             </div>
         </div>
@@ -70,13 +70,13 @@
 
     {% if stocktake.status == 'applied' %}
     <div class="alert alert-success">
-        <i class="bi bi-check-circle me-1"></i>Stany magazynowe zostaly zaktualizowane na podstawie tego remanentu.
+        <i class="bi bi-check-circle mr-1"></i>Stany magazynowe zostaly zaktualizowane na podstawie tego remanentu.
     </div>
     {% endif %}
 
     <!-- Filtr -->
     <div class="mb-3" x-data="{ filter: 'all' }">
-        <select class="form-select form-select-sm bg-dark text-white" style="width: auto; display: inline-block;"
+        <select class="select select-bordered select-sm w-auto inline-block"
                 x-model="filter"
                 @change="document.querySelectorAll('#report-table tbody tr').forEach(row => {
                     const s = row.dataset.status;
@@ -95,8 +95,8 @@
     </div>
 
     <!-- Tabela -->
-    <div class="table-responsive">
-        <table class="table table-dark table-striped table-sm align-middle" id="report-table">
+    <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm align-middle" id="report-table">
             <thead>
                 <tr>
                     <th>Lp.</th>
@@ -116,14 +116,14 @@
                     <td>{{ item.series or item.category or item.product_name }}</td>
                     <td>{{ item.color }}</td>
                     <td>{{ item.size }}</td>
-                    <td><small class="text-muted">{{ item.barcode }}</small></td>
+                    <td><small class="text-base-content/60">{{ item.barcode }}</small></td>
                     <td class="text-center">{{ item.expected_qty }}</td>
                     <td class="text-center">{{ item.scanned_qty }}</td>
                     <td class="text-center">
                         {% if item.difference < 0 %}
-                        <span class="text-danger fw-bold">{{ item.difference }}</span>
+                        <span class="text-error font-bold">{{ item.difference }}</span>
                         {% elif item.difference > 0 %}
-                        <span class="text-primary fw-bold">+{{ item.difference }}</span>
+                        <span class="text-primary font-bold">+{{ item.difference }}</span>
                         {% else %}
                         <span class="text-success">0</span>
                         {% endif %}

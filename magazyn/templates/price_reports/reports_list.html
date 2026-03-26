@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="flex justify-between items-center mb-4">
     <h2>Raporty cenowe</h2>
     <div>
-        <a href="{{ url_for('price_reports.settings') }}" class="btn btn-outline-secondary me-2">
+        <a href="{{ url_for('price_reports.settings') }}" class="btn btn-outline mr-2">
             <i class="bi bi-gear"></i> Ustawienia
         </a>
-        <form action="{{ url_for('price_reports.start_manual_report') }}" method="post" class="d-inline">
+        <form action="{{ url_for('price_reports.start_manual_report') }}" method="post" class="inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-primary" onclick="return confirm('Rozpocząć generowanie raportu cenowego?')">
                 <i class="bi bi-play-fill"></i> Uruchom raport ręcznie
@@ -19,17 +19,17 @@
 <!-- Status bieżącego raportu -->
 <div x-data="reportStatus()" x-cloak>
     <div class="alert alert-info mb-4" x-show="visible" x-transition>
-        <div class="d-flex align-items-center justify-content-between">
-            <div class="d-flex align-items-center">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <div class="loading loading-spinner loading-sm mr-2" role="status"></div>
                 <div>
                     <strong>Raport #<span x-text="reportId">-</span> w toku:</strong>
                     <span x-text="progress">0</span>/<span x-text="total">0</span> ofert
                     (<span x-text="percent">0</span>%)
-                    <small class="text-muted ms-2">Aktualizacja co 5s</small>
+                    <small class="text-base-content/60 ml-2">Aktualizacja co 5s</small>
                 </div>
             </div>
-            <a :href="reportLink" class="btn btn-sm btn-outline-primary">
+            <a :href="reportLink" class="btn btn-sm btn-outline btn-primary">
                 <i class="bi bi-eye"></i> Zobacz szczegóły
             </a>
         </div>
@@ -40,9 +40,9 @@
 </div>
 
 {% if reports %}
-<div class="table-responsive">
-    <table class="table table-striped table-hover">
-        <thead class="table-dark">
+<div class="overflow-x-auto">
+    <table class="table table-zebra">
+        <thead>
             <tr>
                 <th>#</th>
                 <th>Data utworzenia</th>
@@ -59,15 +59,15 @@
                 <td>{{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else '-' }}</td>
                 <td>
                     {% if report.status == 'completed' %}
-                        <span class="badge bg-success">Zakończony</span>
+                        <span class="badge badge-success">Zakończony</span>
                     {% elif report.status == 'completed_with_errors' %}
-                        <span class="badge bg-warning text-dark">Zakończony z błędami</span>
+                        <span class="badge badge-warning">Zakończony z błędami</span>
                     {% elif report.status == 'running' %}
-                        <span class="badge bg-primary">W toku</span>
+                        <span class="badge badge-primary">W toku</span>
                     {% elif report.status == 'pending' %}
-                        <span class="badge bg-warning">Oczekuje</span>
+                        <span class="badge badge-warning">Oczekuje</span>
                     {% else %}
-                        <span class="badge bg-danger">{{ report.status }}</span>
+                        <span class="badge badge-error">{{ report.status }}</span>
                     {% endif %}
                 </td>
                 <td>{{ report.total_offers }}</td>
@@ -78,11 +78,11 @@
                 </td>
                 <td>
                     {% if report.we_are_not_cheapest > 0 %}
-                        <span class="text-danger">
+                        <span class="text-error">
                             <i class="bi bi-exclamation-triangle"></i> {{ report.we_are_not_cheapest }}
                         </span>
                     {% else %}
-                        <span class="text-muted">0</span>
+                        <span class="text-base-content/60">0</span>
                     {% endif %}
                 </td>
             </tr>
@@ -91,14 +91,14 @@
     </table>
 </div>
 {% else %}
-<div class="alert alert-secondary text-center">
-    <i class="bi bi-inbox fs-1"></i>
+<div class="alert text-center">
+    <i class="bi bi-inbox text-4xl"></i>
     <p class="mt-2 mb-0">Brak raportów cenowych</p>
-    <p class="text-muted">Raporty są generowane automatycznie w weekendy lub możesz uruchomić ręcznie.</p>
+    <p class="text-base-content/60">Raporty są generowane automatycznie w weekendy lub możesz uruchomić ręcznie.</p>
 </div>
 {% endif %}
 
-<div class="card mt-4">
+<div class="card bg-base-200 mt-4">
     <div class="card-body">
         <h5 class="card-title"><i class="bi bi-info-circle"></i> Informacje</h5>
         <ul class="mb-0">
