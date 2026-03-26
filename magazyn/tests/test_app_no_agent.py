@@ -1,5 +1,6 @@
 import importlib
 import sys
+from collections import OrderedDict
 import magazyn.config as cfg
 
 
@@ -9,6 +10,11 @@ def setup_app_missing_agent(tmp_path, monkeypatch):
     monkeypatch.setattr(cfg.settings, "API_TOKEN", "")
     monkeypatch.setattr(cfg.settings, "PAGE_ACCESS_TOKEN", "")
     monkeypatch.setattr(cfg.settings, "RECIPIENT_ID", "")
+
+    from magazyn.settings_store import settings_store
+    monkeypatch.setattr(settings_store, '_loaded', False)
+    monkeypatch.setattr(settings_store, '_values', OrderedDict())
+    monkeypatch.setattr(settings_store, '_namespace', None)
 
     import werkzeug
 

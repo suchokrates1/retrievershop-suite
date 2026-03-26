@@ -8,8 +8,14 @@ def test_create_app_initializes_agent_and_migrations(tmp_path, monkeypatch, requ
     tmp_db_path = tmp_path / "app.db"
     monkeypatch.setattr(settings, "DB_PATH", str(tmp_db_path))
 
+    from magazyn.settings_store import settings_store
+    from collections import OrderedDict
+    monkeypatch.setattr(settings_store, '_loaded', False)
+    monkeypatch.setattr(settings_store, '_values', OrderedDict())
+    monkeypatch.setattr(settings_store, '_namespace', None)
+
     db_mod.configure_engine(settings.DB_PATH)
-    request.addfinalizer(lambda: db_mod.configure_engine(original_db_path))
+    request.addfinalizer(lambda: db_mod.configure_engine(original_db_path) if original_db_path else None)
 
     call_order = []
     original_ensure = factory.ensure_db_initialized

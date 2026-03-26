@@ -1071,7 +1071,7 @@ def test_sync_offers_uses_tokens_from_external_process(
     assert calls["fetch"] == 2
 
 
-def test_token_refresher_refreshes_tokens_automatically(monkeypatch):
+def test_token_refresher_refreshes_tokens_automatically(app, monkeypatch):
     _set_tokens("initial-token", "refresh-token")
     update_allegro_tokens("initial-token", "refresh-token", 1)
 
@@ -1122,7 +1122,7 @@ def test_token_refresher_refreshes_tokens_automatically(monkeypatch):
     _set_tokens()
 
 
-def test_token_refresher_retries_after_failure(monkeypatch):
+def test_token_refresher_retries_after_failure(app, monkeypatch):
     _set_tokens("initial-token", "refresh-token")
     update_allegro_tokens("initial-token", "refresh-token", 1)
 
@@ -1178,7 +1178,7 @@ def test_token_refresher_retries_after_failure(monkeypatch):
 
     _set_tokens()
 
-def test_refresh_token_uses_settings_store_even_if_env_present(monkeypatch):
+def test_refresh_token_uses_settings_store_even_if_env_present(app, monkeypatch):
     original_values = {}
     for key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
         try:
@@ -1222,7 +1222,7 @@ def test_refresh_token_uses_settings_store_even_if_env_present(monkeypatch):
     assert result == {"access_token": "new-token", "refresh_token": "new-refresh"}
 
 
-def test_refresh_token_uses_settings_store_when_env_missing(monkeypatch):
+def test_refresh_token_uses_settings_store_when_env_missing(app, monkeypatch):
     original_values = {}
     for key in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"):
         try:
