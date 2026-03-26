@@ -14,8 +14,15 @@ def test_create_app_initializes_agent_and_migrations(tmp_path, monkeypatch, requ
     monkeypatch.setattr(settings_store, '_values', OrderedDict())
     monkeypatch.setattr(settings_store, '_namespace', None)
 
+    original_engine = db_mod.engine
+    original_session_local = db_mod.SessionLocal
+
     db_mod.configure_engine(settings.DB_PATH)
-    request.addfinalizer(lambda: db_mod.configure_engine(original_db_path) if original_db_path else None)
+
+    def _restore():
+        db_mod.engine = original_engine
+        db_mod.SessionLocal = original_session_local
+    request.addfinalizer(_restore)
 
     call_order = []
     original_ensure = factory.ensure_db_initialized
