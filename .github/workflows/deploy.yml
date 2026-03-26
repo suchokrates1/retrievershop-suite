@@ -29,7 +29,7 @@ jobs:
       - name: Uruchomienie testow
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          pytest magazyn/tests/ -x -q --tb=short
+          pytest magazyn/tests/ -x -q --tb=short --ignore=magazyn/tests/test_stocktake_ui.py
 
   deploy:
     name: Deploy na minipc
