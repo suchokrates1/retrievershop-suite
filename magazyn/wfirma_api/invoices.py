@@ -127,7 +127,11 @@ def create_invoice(
     if not invoices:
         raise WFirmaError("wFirma nie zwrocil danych faktury", details=result)
 
-    invoice = invoices[0].get("invoice", {})
+    # wFirma zwraca dict gdy 1 wynik, liste gdy wiecej
+    if isinstance(invoices, dict):
+        invoice = invoices.get("invoice", {})
+    else:
+        invoice = invoices[0].get("invoice", {})
     invoice_id = invoice.get("id")
     invoice_number = invoice.get("fullnumber", "")
     total = invoice.get("total", 0.0)
