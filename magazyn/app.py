@@ -571,9 +571,10 @@ def edit_fixed_cost(cost_id):
 @login_required
 def agent_logs():
     try:
+        import html as html_mod
         with open(print_agent.LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()[-200:]
-        log_text = "<br>".join(line.rstrip() for line in lines[::-1])
+        log_text = "<br>".join(html_mod.escape(line.rstrip()) for line in lines[::-1])
     except Exception as e:
         log_text = f"Blad czytania logow: {e}"
     return render_template("logs.html", logs=log_text)

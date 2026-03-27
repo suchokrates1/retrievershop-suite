@@ -8,27 +8,46 @@
 
 **Project:** RetrieverShop Magazyn
 **Generated:** 2026-03-25 14:00:22
-**Category:** Banking/Traditional Finance
+**Updated:** 2026-03-27 (ciemny motyw)
+**Category:** Internal Warehouse Management System
 
 ---
 
 ## Global Rules
 
+### Motyw: Ciemny (DaisyUI dark)
+
+Aplikacja uzywa `data-theme="dark"` z DaisyUI 4.12.23 z nadpisanymi zmiennymi:
+
 ### Color Palette
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#2563EB` | `--color-primary` |
-| Secondary | `#3B82F6` | `--color-secondary` |
-| CTA/Accent | `#F97316` | `--color-cta` |
-| Background | `#F8FAFC` | `--color-background` |
-| Text | `#1E293B` | `--color-text` |
+| Role | Wartosc | Uzycie |
+|------|---------|--------|
+| base-100 | `oklch(0.145 0 0)` / ~#1d1d1d | Tlo glowne |
+| base-200 | `oklch(0.12 0 0)` / ~#1a1a1a | Tlo kart |
+| base-300 | `oklch(0.18 0 0)` / ~#262626 | Naglowki kart, zebra stripes |
+| base-content | `oklch(0.93 0 0)` / ~#ededed | Tekst glowny |
+| brand | `#17383E` | Navbar, header, branding |
+| primary | DaisyUI dark default | Akcenty niebieskie |
+| success | DaisyUI dark default | Stany pozytywne |
+| error | DaisyUI dark default | Stany negatywne |
+| warning | DaisyUI dark default | Ostrzezenia |
+| info | DaisyUI dark default | Informacje |
+
+### Naglowki kart (wzorzec)
+
+Zamiast pelnych nasyconych tel (bg-error, bg-success), uzywamy:
+```html
+<div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-{kolor}">
+    <i class="bi bi-icon mr-2 text-{kolor}"></i>Tytul karty
+</div>
+```
+Kolor akcentu przez lewy border + ikone -- tlo zawsze ciemne.
 
 ### Typography
 
-- **Heading Font:** Inter
-- **Body Font:** Inter
-- **Mood:** Professional + Trustworthy typography
+- **Font:** System font (DaisyUI default)
+- **Styl:** Czytelny, kompaktowy, bez zdobnikow
 
 ### Spacing Variables
 
@@ -145,38 +164,38 @@
 
 ## Style Guidelines
 
-**Style:** Exaggerated Minimalism
+**Style:** Ciemny minimalizm przemyslowy
 
-**Keywords:** Bold minimalism, oversized typography, high contrast, negative space, loud minimal, statement design
+**Keywords:** Dark theme, minimal, compact, data-dense, high readability, functional
 
-**Best For:** Fashion, architecture, portfolios, agency landing pages, luxury brands, editorial
+**Best For:** Wewnetrzne systemy magazynowe, panele administracyjne, dashboardy operacyjne
 
-**Key Effects:** font-size: clamp(3rem 10vw 12rem), font-weight: 900, letter-spacing: -0.05em, massive whitespace
+### Wzorzec kolorow w tabelach
 
-### Page Pattern
+- Tabele uzywaja `table table-zebra table-sm` z DaisyUI
+- Zebra stripes sa subtelne (oklch 0.16 vs 0.145)
+- Naglowki tabel: `bg-base-200` lub `bg-base-300`
+- Badge w tabelach: `badge-error`, `badge-success`, `badge-primary` (te moga byc nasycone)
 
-**Pattern Name:** App Store Style Landing
+### Stat cards (dashboard)
 
-- **Conversion Strategy:** Show real screenshots. Include ratings (4.5+ stars). QR code for mobile. Platform-specific CTAs.
-- **CTA Placement:** Download buttons prominent (App Store + Play Store) throughout
-- **Section Order:** 1. Hero with device mockup, 2. Screenshots carousel, 3. Features with icons, 4. Reviews/ratings, 5. Download CTAs
+```html
+<div class="card bg-base-200 border-l-4 border-{kolor} h-full">
+    <!-- kolor: success/primary/warning/info -->
+</div>
+```
 
 ---
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Playful design
-- ❌ Poor security UX
-- ❌ AI purple/pink gradients
-
-### Additional Forbidden Patterns
-
-- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
-- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
-- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
-- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
-- ❌ **Instant state changes** — Always use transitions (150-300ms)
-- ❌ **Invisible focus states** — Focus states must be visible for a11y
+- NIE uzywaj jasnych/bialych tel na kartach i tabelach
+- NIE uzywaj pelnych nasyconych tel na naglowkach kart (bg-error, bg-success) -- zamiast tego border-l-4
+- NIE uzywaj AI gradient purpurowo-rozowych
+- NIE uzywaj hardcoded jasnych kolorow (#fff, #f8f8f8, #ccc) -- uzywaj zmiennych DaisyUI
+- NIE uzywaj emojis jako ikon -- Bootstrap Icons (bi-*)
+- NIE zapominaj o cursor:pointer na klikalnych elementach
+- NIE rob natychmiastowych zmian stanow -- uzywaj transitions (150-300ms)
 
 ---
 
@@ -184,13 +203,11 @@
 
 Before delivering any UI code, verify:
 
-- [ ] No emojis used as icons (use SVG instead)
-- [ ] All icons from consistent icon set (Heroicons/Lucide)
-- [ ] `cursor-pointer` on all clickable elements
-- [ ] Hover states with smooth transitions (150-300ms)
-- [ ] Light mode: text contrast 4.5:1 minimum
-- [ ] Focus states visible for keyboard navigation
-- [ ] `prefers-reduced-motion` respected
-- [ ] Responsive: 375px, 768px, 1024px, 1440px
-- [ ] No content hidden behind fixed navbars
-- [ ] No horizontal scroll on mobile
+- [ ] Ciemny motyw -- brak jasnych tel, brak bialych elementow
+- [ ] Kolory z DaisyUI variables, nie hardcoded hex
+- [ ] Ikony z Bootstrap Icons (bi-*)
+- [ ] `cursor-pointer` na klikalnych elementach
+- [ ] Hover states z transitions (150-300ms)
+- [ ] Responsywnosc: 375px, 768px, 1024px+
+- [ ] Brak horizontal scroll na mobile
+- [ ] Naglowki kart: bg-base-300 + border-l-4 (nie pelne nasycone tla)
