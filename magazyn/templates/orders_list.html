@@ -133,15 +133,15 @@
             {% if order.return_info %}
             {% set rs = order.return_info.status %}
             {% if order.return_info.refund_processed %}
-            <span class="badge badge-neutral mr-1" title="Zwrot zakonczony"><i class="bi bi-arrow-return-left"></i> zakonczony</span>
+            <span class="badge badge-outline border-base-content/30 text-base-content/70 mr-1" title="Zwrot zakonczony"><i class="bi bi-arrow-return-left"></i> zakonczony</span>
             {% elif rs == 'completed' %}
-            <span class="badge badge-success mr-1" title="Zwrot odebrano"><i class="bi bi-arrow-return-left"></i> odebrano</span>
+            <span class="badge badge-success mr-1" title="Zwrot przyjety"><i class="bi bi-arrow-return-left"></i> przyjety</span>
             {% elif rs == 'delivered' %}
             <span class="badge badge-warning text-warning-content mr-1" title="Paczka dostarczona"><i class="bi bi-arrow-return-left"></i> dostarczona</span>
             {% elif rs == 'in_transit' %}
-            <span class="badge badge-info mr-1" title="Paczka w drodze"><i class="bi bi-arrow-return-left"></i> w drodze</span>
+            <span class="badge badge-info text-info-content mr-1" title="Paczka w drodze"><i class="bi bi-arrow-return-left"></i> w drodze</span>
             {% else %}
-            <span class="badge badge-error mr-1" title="Zwrot zgloszony"><i class="bi bi-arrow-return-left"></i> zgloszony</span>
+            <span class="badge badge-error text-error-content mr-1" title="Zwrot zgloszony"><i class="bi bi-arrow-return-left"></i> zgloszony</span>
             {% endif %}
             {% endif %}<a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="font-bold no-underline">#{{ order.lp }}</a>
         </td>
