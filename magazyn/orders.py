@@ -1087,6 +1087,10 @@ def _dispatch_status_email(db, order_id: str, status: str):
 
     from .services.invoice_service import _was_email_sent, _mark_email_sent
 
+    # Flush sesji aby nowo dodane obiekty (zamowienie, produkty) byly
+    # widoczne w zapytaniach - SessionLocal ma autoflush=False.
+    db.flush()
+
     order = db.query(Order).filter(Order.order_id == order_id).first()
     if not order or not order.email:
         logger.warning(
@@ -1106,14 +1110,6 @@ def _dispatch_status_email(db, order_id: str, status: str):
     )
 
     try:
-        from flask import has_app_context
-        if not has_app_context():
-            logger.error(
-                "Email dispatch: brak Flask app_context dla zamowienia %s - email '%s' nie wyslany",
-                order_id, email_type,
-            )
-            return
-
         from .services.email_service import (
             send_order_confirmation,
             send_shipment_notification,
