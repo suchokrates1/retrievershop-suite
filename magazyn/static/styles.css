@@ -1,12 +1,24 @@
+/* ===== Motyw ciemny -- nadpisanie kolorow DaisyUI ===== */
+[data-theme="dark"] {
+    --b1: 0.145 0 0;          /* base-100: #1d1d1d */
+    --b2: 0.12 0 0;           /* base-200: #1a1a1a */
+    --b3: 0.18 0 0;           /* base-300: #262626 */
+    --bc: 0.93 0 0;           /* base-content: #ededed */
+}
+
+/* Subtelniejsze zebra stripes */
+.table-zebra tbody tr:nth-child(even) {
+    background-color: oklch(0.16 0 0);
+}
+
 html, body {
     height: 100%;
 }
 body {
     margin: 0;
-    /* Increase top padding to fully expose content below the fixed header */
     padding-top: 210px;
-    background-color: #121212;
-    color: #f0f0f0;
+    background-color: oklch(var(--b1));
+    color: oklch(var(--bc));
 }
 .page-wrapper {
     /* Subtract navbar height so short pages avoid unnecessary scrolling */
@@ -118,11 +130,9 @@ footer a:hover {
 
 /* Ustawienie szerokości tabeli */
 table {
-    width: 100%; /* Zmniejsz szerokość, aby tabela była bardziej kompaktowa */
+    width: 100%;
     border-collapse: collapse;
     margin-top: 5px;
-    background-color: #fff;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 /* Ustawienie węższej szerokości dla kolumn rozmiarów */
@@ -152,9 +162,7 @@ td:nth-child(n+3):nth-child(-n+8) {
 
 /* Nagłówki tabeli */
 th {
-    padding: 8px 12px; /* Zachowaj odstępy tylko w nagłówkach */
-    background-color: #17383E;
-    color: #fff;
+    padding: 8px 12px;
 }
 
 /* Stylizacja przycisków wewnątrz tabeli */
@@ -193,8 +201,8 @@ th {
     max-height: 600px;
     overflow-y: auto;
     padding: 10px;
-    border: 1px solid #ccc;
-    background-color: #f8f8f8;
+    border: 1px solid oklch(var(--b3));
+    background-color: oklch(var(--b2));
     margin: 20px auto;
     width: 90%;
 }
@@ -316,12 +324,7 @@ th {
 
 
 
-.form-control,
-.form-select {
-    background-color: #333;
-    color: #f0f0f0;
-    border-color: #555;
-}
+/* Formularze stylowane przez DaisyUI */
 
 /* Additional mobile menu styling */
 .mobile-logo {

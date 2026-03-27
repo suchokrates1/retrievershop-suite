@@ -41,54 +41,54 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <!-- Orders Today -->
         <div>
-            <div class="card bg-success text-success-content h-full">
+            <div class="card bg-base-200 border-l-4 border-success h-full">
                 <div class="card-body">
                     <div class="flex justify-between items-start">
                         <div>
-                            <h6 class="text-sm opacity-75 mb-2">Zamówienia dziś</h6>
+                            <h6 class="text-sm text-base-content/60 mb-2">Zamówienia dziś</h6>
                             <h2 class="text-3xl font-bold mb-0">{{ dashboard.orders.today }}</h2>
                         </div>
-                        <i class="bi bi-cart-check text-4xl opacity-50"></i>
+                        <i class="bi bi-cart-check text-4xl text-success/40"></i>
                     </div>
                 </div>
                 <div class="px-6 pb-4 pt-0">
-                    <small><i class="bi bi-calendar-week mr-1"></i>Tydzień: {{ dashboard.orders.week }}</small>
+                    <small class="text-base-content/60"><i class="bi bi-calendar-week mr-1"></i>Tydzień: {{ dashboard.orders.week }}</small>
                 </div>
             </div>
         </div>
 
         <!-- Revenue Today -->
         <div>
-            <div class="card bg-primary text-primary-content h-full">
+            <div class="card bg-base-200 border-l-4 border-primary h-full">
                 <div class="card-body">
                     <div class="flex justify-between items-start">
                         <div>
-                            <h6 class="text-sm opacity-75 mb-2">Przychód dziś</h6>
+                            <h6 class="text-sm text-base-content/60 mb-2">Przychód dziś</h6>
                             <h2 class="text-3xl font-bold mb-0">{{ "%.0f"|format(dashboard.revenue.today) }} zł</h2>
                         </div>
-                        <i class="bi bi-cash-stack text-4xl opacity-50"></i>
+                        <i class="bi bi-cash-stack text-4xl text-primary/40"></i>
                     </div>
                 </div>
                 <div class="px-6 pb-4 pt-0">
-                    <small><i class="bi bi-calendar-week mr-1"></i>Tydzień: {{ "%.0f"|format(dashboard.revenue.week) }} zł</small>
+                    <small class="text-base-content/60"><i class="bi bi-calendar-week mr-1"></i>Tydzień: {{ "%.0f"|format(dashboard.revenue.week) }} zł</small>
                 </div>
             </div>
         </div>
 
         <!-- Pending Orders -->
         <div>
-            <div class="card {% if dashboard.orders.pending > 0 %}bg-warning text-warning-content{% else %}bg-neutral text-neutral-content{% endif %} h-full">
+            <div class="card {% if dashboard.orders.pending > 0 %}bg-base-200 border-l-4 border-warning{% else %}bg-base-200 border-l-4 border-neutral{% endif %} h-full">
                 <div class="card-body">
                     <div class="flex justify-between items-start">
                         <div>
-                            <h6 class="text-sm opacity-75 mb-2">Do wysłania</h6>
+                            <h6 class="text-sm text-base-content/60 mb-2">Do wysłania</h6>
                             <h2 class="text-3xl font-bold mb-0">{{ dashboard.orders.pending }}</h2>
                         </div>
-                        <i class="bi bi-box-seam text-4xl opacity-50"></i>
+                        <i class="bi bi-box-seam text-4xl {% if dashboard.orders.pending > 0 %}text-warning/40{% else %}text-neutral/40{% endif %}"></i>
                     </div>
                 </div>
                 <div class="px-6 pb-4 pt-0">
-                    <a href="{{ url_for('orders.orders_list') }}" class="{% if dashboard.orders.pending > 0 %}text-warning-content{% else %}text-neutral-content{% endif %} no-underline">
+                    <a href="{{ url_for('orders.orders_list') }}" class="text-base-content/60 hover:text-base-content no-underline">
                         <small><i class="bi bi-arrow-right mr-1"></i>Zobacz zamówienia</small>
                     </a>
                 </div>
@@ -97,18 +97,18 @@
 
         <!-- Inventory Status -->
         <div>
-            <div class="card bg-info text-info-content h-full">
+            <div class="card bg-base-200 border-l-4 border-info h-full">
                 <div class="card-body">
                     <div class="flex justify-between items-start">
                         <div>
-                            <h6 class="text-sm opacity-75 mb-2">Stan magazynu</h6>
+                            <h6 class="text-sm text-base-content/60 mb-2">Stan magazynu</h6>
                             <h2 class="text-3xl font-bold mb-0">{{ dashboard.inventory.total_stock }}</h2>
                         </div>
-                        <i class="bi bi-archive text-4xl opacity-50"></i>
+                        <i class="bi bi-archive text-4xl text-info/40"></i>
                     </div>
                 </div>
                 <div class="px-6 pb-4 pt-0">
-                    <small>
+                    <small class="text-base-content/60">
                         <i class="bi bi-exclamation-triangle mr-1"></i>Brak: {{ dashboard.inventory.out_of_stock }}
                     </small>
                 </div>
@@ -193,7 +193,7 @@
         <div class="md:col-span-4">
             <div class="card bg-base-200 shadow-sm h-full" :class="{'border-warning border': promotions?.renewing_tomorrow_count > 0}">
                 <div class="px-4 py-3 font-semibold rounded-t-2xl"
-                     :class="promotions?.renewing_tomorrow_count > 0 ? 'bg-warning text-warning-content' : 'bg-base-300'">
+                     :class="promotions?.renewing_tomorrow_count > 0 ? 'bg-base-300 border-l-4 border-warning' : 'bg-base-300'">
                     <i class="bi bi-shop mr-2"></i>Allegro
                     <span class="badge badge-success float-right ml-1">{{ dashboard.allegro.total_offers }} ofert</span>
                     <template x-if="promotions && !promotions.error">
@@ -363,8 +363,8 @@
         <div class="lg:col-span-3">
             <!-- Low Stock Alert -->
             <div class="card bg-base-200 shadow-sm mb-3">
-                <div class="bg-error text-error-content px-4 py-3 font-semibold rounded-t-2xl">
-                    <i class="bi bi-exclamation-triangle mr-2"></i>Niski stan magazynu
+                <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-error">
+                    <i class="bi bi-exclamation-triangle mr-2 text-error"></i>Niski stan magazynu
                 </div>
                 <div class="card-body p-0">
                     <div class="divide-y divide-base-300" style="max-height: 200px; overflow-y: auto;">
@@ -491,8 +491,8 @@
     <div class="grid grid-cols-1 mt-4 gap-3" id="trends-section">
         <div>
             <div class="card bg-base-200 shadow-sm">
-                <div class="px-4 py-3 font-semibold rounded-t-2xl" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                    <i class="bi bi-graph-up-arrow mr-2"></i>Trend tygodniowy (porównanie do poprzedniego tygodnia)
+                <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-info">
+                    <i class="bi bi-graph-up-arrow mr-2 text-info"></i>Trend tygodniowy (porównanie do poprzedniego tygodnia)
                 </div>
                 <div class="card-body">
                     <template x-if="loading">
@@ -536,8 +536,8 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 mt-4 gap-3" id="bestsellers-section">
         <div>
             <div class="card bg-base-200 shadow-sm h-full">
-                <div class="bg-error text-error-content px-4 py-3 font-semibold rounded-t-2xl">
-                    <i class="bi bi-fire mr-2"></i>Trendy tygodnia (Top 5)
+                <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-error">
+                    <i class="bi bi-fire mr-2 text-error"></i>Trendy tygodnia (Top 5)
                 </div>
                 <div class="card-body p-0">
                     <template x-if="loading">
@@ -576,8 +576,8 @@
         </div>
         <div>
             <div class="card bg-base-200 shadow-sm h-full">
-                <div class="bg-success text-success-content px-4 py-3 font-semibold rounded-t-2xl">
-                    <i class="bi bi-trophy mr-2"></i>Bestsellery miesiąca (Top 10)
+                <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-success">
+                    <i class="bi bi-trophy mr-2 text-success"></i>Bestsellery miesiąca (Top 10)
                 </div>
                 <div class="card-body p-0">
                     <template x-if="loading">
@@ -617,8 +617,8 @@
         </div>
         <div>
             <div class="card bg-base-200 shadow-sm h-full">
-                <div class="bg-primary text-primary-content px-4 py-3 font-semibold rounded-t-2xl">
-                    <i class="bi bi-star-fill mr-2"></i>Bestsellery wszechczasów
+                <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-primary">
+                    <i class="bi bi-star-fill mr-2 text-primary"></i>Bestsellery wszechczasów
                 </div>
                 <div class="card-body p-0">
                     <template x-if="loading">
@@ -663,8 +663,8 @@
         <div class="mt-4" id="slow-moving-section">
             <div>
                 <div class="card bg-base-200 shadow-sm border border-warning">
-                    <div class="bg-warning text-warning-content px-4 py-3 font-semibold rounded-t-2xl">
-                        <i class="bi bi-exclamation-triangle mr-2"></i>Produkty wolnoobrotowe - rozważ promocję
+                    <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-warning">
+                        <i class="bi bi-exclamation-triangle mr-2 text-warning"></i>Produkty wolnoobrotowe - rozważ promocję
                         <small class="float-right">(stan >= 5 szt., sprzedaż &lt; 2 szt. w 30 dni)</small>
                     </div>
                     <div class="card-body p-0">
