@@ -43,15 +43,18 @@
         gap: 0.5rem;
     }
 
-    .search-group .input-group-text {
+    .search-group .search-icon {
         background: #0d1117;
         color: #8b949e;
         border: 1px solid #30363d;
         border-right: none;
         border-radius: 12px 0 0 12px;
+        display: flex;
+        align-items: center;
+        padding: 0 0.75rem;
     }
 
-    .search-group .form-control {
+    .search-group .search-input {
         background: #0d1117;
         border: 1px solid #30363d;
         border-left: none;
@@ -60,14 +63,14 @@
         padding: 0.5rem 0.75rem;
     }
 
-    .search-group .form-control:focus {
+    .search-group .search-input:focus {
         background: #161b22;
         border-color: #58a6ff;
         box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
         outline: none;
     }
 
-    .search-group .form-control::placeholder {
+    .search-group .search-input::placeholder {
         color: #6e7681;
     }
 
@@ -528,8 +531,8 @@
                 Wiadomości
             </h5>
             <div class="flex items-stretch search-group">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" x-model="searchQuery" placeholder="Szukaj rozmów...">
+                <span class="search-icon"><i class="bi bi-search"></i></span>
+                <input type="text" class="search-input" x-model="searchQuery" placeholder="Szukaj rozmów...">
             </div>
             {% if autoresponder_enabled %}
             <div class="autoresponder-badge">
