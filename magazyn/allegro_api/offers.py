@@ -151,8 +151,6 @@ def fetch_product_listing(
             try:
                 token_data = refresh_token(refresh)
             except Exception as refresh_exc:
-                clear_allegro_tokens()
-                _force_clear_allegro_tokens()
                 record(
                     "Listing Allegro: odświeżanie nieudane",
                     str(refresh_exc),
@@ -161,8 +159,6 @@ def fetch_product_listing(
 
             new_token = token_data.get("access_token")
             if not new_token:
-                clear_allegro_tokens()
-                _force_clear_allegro_tokens()
                 record(
                     "Listing Allegro: brak tokenu po odświeżeniu",
                     token_data,

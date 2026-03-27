@@ -16,7 +16,7 @@ from .parsing import parse_offer_title, normalize_color
 from .env_tokens import clear_allegro_tokens, update_allegro_tokens
 from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
 from .domain import allegro_prices
-from .settings_store import settings_store
+from .settings_store import settings_store, SettingsPersistenceError
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +93,9 @@ def sync_offers():
                 refresh = new_refresh
             if token:
                 update_allegro_tokens(token, refresh, expires_in=expires_in)
+        except SettingsPersistenceError as exc:
+            _raise_settings_store_read_only(exc)
         except Exception as exc:
-            _clear_cached_tokens()
             logger.exception("Failed to refresh Allegro token")
             ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
             raise RuntimeError(
