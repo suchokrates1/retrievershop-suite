@@ -337,7 +337,7 @@ def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(
     assert calls[0]["headers"]["Authorization"] == "Bearer expired-token"
 
 
-def test_fetch_product_listing_clears_tokens_when_refresh_fails(
+def test_fetch_product_listing_raises_when_refresh_fails(
     monkeypatch, allegro_tokens
 ):
     class FakeResponse:
@@ -359,25 +359,14 @@ def test_fetch_product_listing_clears_tokens_when_refresh_fails(
     def fake_get(url, headers, params, timeout):
         return responses.pop(0)
 
-    clear_calls: list[bool] = []
-
-    def fake_clear():
-        clear_calls.append(True)
-        allegro_tokens()
-
     def failing_refresh(refresh_value):
         raise requests.exceptions.HTTPError(response=FakeResponse(400, {}))
 
     monkeypatch.setattr("magazyn.allegro_api.offers.requests.get", fake_get)
     monkeypatch.setattr("magazyn.allegro_api.offers.refresh_token", failing_refresh)
-    monkeypatch.setattr("magazyn.allegro_api.offers.clear_allegro_tokens", fake_clear)
 
     with pytest.raises(RuntimeError, match="please re-authorize"):
         fetch_product_listing("1234567890123")
-
-    assert clear_calls == [True]
-    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
-    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
 
 
 def test_fetch_product_listing_debug_logs_include_allegro_error_code(

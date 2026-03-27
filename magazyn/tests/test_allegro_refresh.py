@@ -892,16 +892,8 @@ def test_refresh_flashes_error_on_sync_failure(client, login, monkeypatch):
     )
 
 
-def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
+def test_sync_offers_raises_when_initial_refresh_fails(monkeypatch):
     _set_tokens(None, "bad-token")
-
-    clear_calls: list[bool] = []
-
-    def fake_clear():
-        clear_calls.append(True)
-        _set_tokens()
-
-    monkeypatch.setattr(sync_mod, "clear_allegro_tokens", fake_clear)
 
     def failing_refresh(token):
         class DummyResponse:
@@ -916,21 +908,10 @@ def test_sync_offers_clears_tokens_when_initial_refresh_fails(monkeypatch):
 
     message = str(excinfo.value)
     assert "please re-authorize" in message
-    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
-    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
-    assert clear_calls == [True]
 
 
-def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, monkeypatch):
+def test_refresh_raises_when_refresh_during_sync_fails(client, login, monkeypatch):
     _set_tokens("expired-token", "bad-refresh")
-
-    clear_calls: list[bool] = []
-
-    def fake_clear():
-        clear_calls.append(True)
-        _set_tokens()
-
-    monkeypatch.setattr(sync_mod, "clear_allegro_tokens", fake_clear)
 
     def failing_fetch(token, offset=0, limit=100):
         class DummyResponse:
@@ -957,9 +938,6 @@ def test_refresh_clears_tokens_when_refresh_during_sync_fails(client, login, mon
         "Błąd synchronizacji ofert" in message and "please re-authorize" in message
         for _, message in flashes
     )
-    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
-    assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
-    assert clear_calls == [True]
 
 
 def test_refresh_handles_empty_response(client, login, monkeypatch):

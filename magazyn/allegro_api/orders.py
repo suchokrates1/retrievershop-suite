@@ -61,16 +61,12 @@ def _refresh_allegro_token(current_refresh: str) -> str:
     try:
         token_data = _do_refresh_token(current_refresh)
     except Exception as exc:
-        clear_allegro_tokens()
-        _force_clear_allegro_tokens()
         raise RuntimeError(
             "Nie udalo sie odswiezyc tokenu Allegro - wymagana ponowna autoryzacja"
         ) from exc
 
     new_token = token_data.get("access_token")
     if not new_token:
-        clear_allegro_tokens()
-        _force_clear_allegro_tokens()
         raise RuntimeError("Brak tokenu po odswiezeniu - wymagana ponowna autoryzacja")
 
     new_refresh = token_data.get("refresh_token") or current_refresh
