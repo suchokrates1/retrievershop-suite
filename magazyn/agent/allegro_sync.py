@@ -116,7 +116,7 @@ class AllegroSyncService:
         if not exists:
             conn.execute(
                 text("INSERT INTO threads (id, title, author, type, read) VALUES (:id, :title, :author, :type, :read)"),
-                {"id": discussion_id, "title": subject, "author": buyer, "type": "dyskusja", "read": 1},
+                {"id": discussion_id, "title": subject, "author": buyer, "type": "dyskusja", "read": True},
             )
         else:
             conn.execute(
@@ -258,7 +258,7 @@ class AllegroSyncService:
         if not exists:
             conn.execute(
                 text("INSERT INTO threads (id, title, author, type, read) VALUES (:id, :title, :author, :type, :read)"),
-                {"id": thread_id, "title": interlocutor, "author": interlocutor, "type": "wiadomość", "read": 1 if is_read_remote else 0},
+                {"id": thread_id, "title": interlocutor, "author": interlocutor, "type": "wiadomość", "read": is_read_remote},
             )
         else:
             conn.execute(
