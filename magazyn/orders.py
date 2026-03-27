@@ -1106,6 +1106,14 @@ def _dispatch_status_email(db, order_id: str, status: str):
     )
 
     try:
+        from flask import has_app_context
+        if not has_app_context():
+            logger.error(
+                "Email dispatch: brak Flask app_context dla zamowienia %s - email '%s' nie wyslany",
+                order_id, email_type,
+            )
+            return
+
         from .services.email_service import (
             send_order_confirmation,
             send_shipment_notification,
