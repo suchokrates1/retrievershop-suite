@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import atexit
+import os
+import sys
 from typing import Optional, Mapping, Any
 
 from flask import Flask
@@ -124,6 +126,16 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     start_print_agent(app)
     
+    # Start token refresher only in dev mode (flask run / wsgi __main__).
+    # In production gunicorn.conf.py starts it in exactly one worker via file lock.
+    _is_gunicorn = "gunicorn" in sys.modules
+    if not _is_gunicorn:
+        from .allegro_token_refresher import token_refresher
+        try:
+            token_refresher.start()
+        except Exception as exc:
+            app.logger.error("Failed to start Allegro token refresher: %s", exc)
+
     # Store app instance for scheduler initialization from gunicorn hook
     global _app_instance
     _app_instance = app

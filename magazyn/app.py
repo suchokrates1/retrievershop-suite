@@ -33,7 +33,6 @@ from .db import get_session
 from .sales import _sales_keys
 from .auth import login_required
 from . import print_agent
-from .allegro_token_refresher import token_refresher
 from .env_info import ENV_INFO
 from .config import settings
 from .settings_store import SettingsPersistenceError, settings_store
@@ -213,10 +212,7 @@ def start_print_agent(app_obj=None):
         app_ctx.logger.error(f"Failed to start print agent: {e}")
         failed = True
     finally:
-        try:
-            token_refresher.start()
-        except Exception as exc:
-            app_ctx.logger.error("Failed to start Allegro token refresher: %s", exc)
+        pass  # Token refresher is started via gunicorn hook (single worker only)
     if failed:
         _print_agent_started = False
         return

@@ -170,7 +170,7 @@ def _sales_keys(values):
 @bp.route("/sales/settings", methods=["GET", "POST"])
 @login_required
 def sales_settings():
-    from .app import load_settings
+    from .settings_io import load_settings
 
     values = load_settings(include_hidden=True)
     keys = _sales_keys(values)
