@@ -1,31 +1,9 @@
 {% extends "base.html" %}
 
 {% block styles %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-    --ds-primary: #2563EB;
-    --ds-secondary: #3B82F6;
-    --ds-cta: #F97316;
-    --ds-bg: #F8FAFC;
-    --ds-text: #1E293B;
-    --ds-muted: #64748B;
-    --ds-border: #E2E8F0;
-    --ds-success: #16A34A;
-    --ds-danger: #DC2626;
-    --ds-warning: #F59E0B;
-    --ds-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --ds-shadow-md: 0 4px 6px rgba(0,0,0,0.07);
-    --ds-shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
-    --ds-radius: 12px;
-    --ds-radius-sm: 8px;
-}
 .settings-page {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    color: var(--ds-text);
-    max-width: 900px;
+    max-width: 1100px;
     margin: 0 auto;
 }
 .settings-page .page-header {
@@ -36,48 +14,22 @@
     font-weight: 700;
     font-size: 1.75rem;
     letter-spacing: -0.02em;
-    color: var(--ds-text);
     margin-bottom: 0.25rem;
 }
 .settings-page .page-header p {
-    color: var(--ds-muted);
+    color: oklch(var(--bc) / 0.6);
     font-size: 0.9rem;
 }
 .settings-page .ds-card {
-    background: #fff;
-    border: 1px solid var(--ds-border);
-    border-radius: var(--ds-radius);
-    box-shadow: var(--ds-shadow-sm);
-    transition: box-shadow 200ms ease, transform 200ms ease;
+    background: oklch(var(--b2));
+    border: 1px solid oklch(var(--bc) / 0.1);
+    border-radius: 12px;
     overflow: hidden;
     margin-bottom: 1.5rem;
-}
-.settings-page .ds-card:hover {
-    box-shadow: var(--ds-shadow-md);
-}
-.settings-page .ds-card-header {
-    padding: 1rem 1.25rem;
-    font-weight: 600;
-    font-size: 0.95rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--ds-border);
-}
-.settings-page .ds-card-header .header-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--ds-radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    flex-shrink: 0;
 }
 .settings-page .ds-card-body {
     padding: 1.25rem;
 }
-/* Sekcja naglowkowa */
 .settings-page .section-divider {
     display: flex;
     align-items: center;
@@ -93,149 +45,37 @@
     justify-content: center;
     font-size: 1.1rem;
     flex-shrink: 0;
+    background: oklch(var(--b3));
 }
 .settings-page .section-divider h4 {
     font-weight: 700;
     font-size: 1.15rem;
     margin: 0;
-    color: var(--ds-text);
 }
 .settings-page .section-divider .subtitle {
     font-size: 0.8rem;
-    color: var(--ds-muted);
+    color: oklch(var(--bc) / 0.6);
     margin: 0;
 }
-/* Collapse (accordion) redesign */
-.settings-page .collapse {
-    border: 1px solid var(--ds-border);
-    border-radius: var(--ds-radius) !important;
-    margin-bottom: 0.75rem;
-    overflow: hidden;
-    box-shadow: var(--ds-shadow-sm);
-    transition: box-shadow 200ms ease;
-}
-.settings-page .collapse:hover {
-    box-shadow: var(--ds-shadow-md);
-}
-.settings-page .collapse-title {
-    font-family: 'Inter', system-ui, sans-serif;
-    font-weight: 600;
-    font-size: 0.9rem;
-    padding: 0.875rem 1.25rem;
-    color: var(--ds-text);
-    background: #fff;
-    border: none;
-    transition: background 200ms ease;
-}
-.settings-page .collapse > input:checked ~ .collapse-title {
-    background: var(--ds-bg);
-    color: var(--ds-primary);
-}
-.settings-page .collapse-title:focus {
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-    border-color: var(--ds-primary);
-}
-.settings-page .collapse-title .badge {
-    font-weight: 500;
-    font-size: 0.7rem;
-    padding: 0.25em 0.6em;
-    border-radius: 999px;
-    background: var(--ds-primary) !important;
-}
-/* Tabela ustawien */
 .settings-page .settings-table {
     margin: 0;
     font-size: 0.85rem;
 }
 .settings-page .settings-table th {
     font-weight: 500;
-    color: var(--ds-text);
     padding: 0.75rem 1rem;
     vertical-align: top;
-    border-color: var(--ds-border);
     background: transparent;
 }
 .settings-page .settings-table td {
     padding: 0.75rem 1rem;
-    border-color: var(--ds-border);
 }
 .settings-page .settings-table tr {
     transition: background 150ms ease;
 }
 .settings-page .settings-table tr:hover {
-    background: var(--ds-bg);
+    background: oklch(var(--b3));
 }
-.settings-page .settings-table small.text-base-content\/60 {
-    color: var(--ds-muted) !important;
-}
-/* Formularze redesign */
-.settings-page .input,
-.settings-page .select {
-    font-family: 'Inter', system-ui, sans-serif;
-    border: 1px solid var(--ds-border);
-    border-radius: var(--ds-radius-sm);
-    transition: border-color 200ms ease, box-shadow 200ms ease;
-    font-size: 0.85rem;
-}
-.settings-page .input:focus,
-.settings-page .select:focus {
-    border-color: var(--ds-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-/* Przyciski redesign */
-.settings-page .btn-ds-primary {
-    background: var(--ds-primary);
-    color: #fff;
-    border: none;
-    padding: 0.625rem 1.75rem;
-    border-radius: var(--ds-radius-sm);
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: all 200ms ease;
-    cursor: pointer;
-}
-.settings-page .btn-ds-primary:hover {
-    background: #1D4ED8;
-    transform: translateY(-1px);
-    box-shadow: var(--ds-shadow-md);
-}
-.settings-page .btn-ds-primary:focus {
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
-}
-.settings-page .btn-ds-cta {
-    background: var(--ds-cta);
-    color: #fff;
-    border: none;
-    padding: 0.625rem 1.75rem;
-    border-radius: var(--ds-radius-sm);
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: all 200ms ease;
-    cursor: pointer;
-}
-.settings-page .btn-ds-cta:hover {
-    background: #EA580C;
-    transform: translateY(-1px);
-    box-shadow: var(--ds-shadow-md);
-    color: #fff;
-}
-.settings-page .btn-ds-outline {
-    background: transparent;
-    color: var(--ds-primary);
-    border: 2px solid var(--ds-primary);
-    padding: 0.5rem 1.5rem;
-    border-radius: var(--ds-radius-sm);
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: all 200ms ease;
-    cursor: pointer;
-}
-.settings-page .btn-ds-outline:hover {
-    background: var(--ds-primary);
-    color: #fff;
-    transform: translateY(-1px);
-}
-/* Koszty stale */
 .settings-page .cost-row td {
     vertical-align: middle;
 }
@@ -243,79 +83,12 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
-/* Alert redesign */
-.settings-page .ds-alert {
-    border-radius: var(--ds-radius-sm);
-    border: 1px solid;
-    padding: 0.875rem 1rem;
-    font-size: 0.85rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-}
-.settings-page .ds-alert-warning {
-    background: #FFFBEB;
-    border-color: #FDE68A;
-    color: #92400E;
-}
-.settings-page .ds-alert-info {
-    background: #EFF6FF;
-    border-color: #BFDBFE;
-    color: #1E40AF;
-}
-.settings-page .ds-alert-success {
-    background: #F0FDF4;
-    border-color: #BBF7D0;
-    color: #166534;
-}
-/* Stepper / lista */
-.settings-page .step-list {
-    counter-reset: steps;
-    list-style: none;
-    padding: 0;
-}
-.settings-page .step-list li {
-    counter-increment: steps;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-    font-size: 0.85rem;
-    color: var(--ds-text);
-}
-.settings-page .step-list li::before {
-    content: counter(steps);
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--ds-primary);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-.settings-page .feature-check {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.25rem 0;
-    font-size: 0.85rem;
-}
-.settings-page .feature-check i {
-    color: var(--ds-success);
-    font-size: 1rem;
-}
-/* Sticky save bar */
 .settings-page .save-bar {
     position: sticky;
     bottom: 0;
-    background: rgba(255,255,255,0.95);
+    background: oklch(var(--b1) / 0.95);
     backdrop-filter: blur(8px);
-    border-top: 1px solid var(--ds-border);
+    border-top: 1px solid oklch(var(--bc) / 0.1);
     padding: 0.875rem 0;
     margin: 0 -0.75rem;
     z-index: 10;
@@ -335,7 +108,7 @@
     </div>
 
     {% if db_path_notice %}
-    <div class="ds-alert ds-alert-warning mb-4">
+    <div class="alert alert-warning mb-4">
         <i class="bi bi-exclamation-triangle"></i>
         <span>Ścieżka bazy danych jest odczytywana tylko podczas uruchamiania aplikacji.
         Aby zmienić lokalizację, edytuj plik <code>.env</code> i zrestartuj serwer.</span>
@@ -346,7 +119,7 @@
     <!-- SEKCJA 1: Konfiguracja aplikacji             -->
     <!-- ============================================ -->
     <div class="section-divider">
-        <div class="divider-icon" style="background: #EFF6FF; color: var(--ds-primary);">
+        <div class="divider-icon text-primary">
             <i class="bi bi-sliders"></i>
         </div>
         <div>
@@ -428,12 +201,12 @@
 
     <!-- Sticky save bar -->
     <div class="save-bar">
-        <button type="submit" form="settingsForm" class="btn btn-ds-primary">
+        <button type="submit" form="settingsForm" class="btn btn-primary">
             <i class="bi bi-check-lg mr-1"></i>Zapisz ustawienia
         </button>
         <form method="post" action="{{ url_for('allegro.authorize') }}" class="inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-ds-outline">
+            <button type="submit" class="btn btn-outline btn-primary">
                 <i class="bi bi-shop mr-1"></i>Połącz z Allegro
             </button>
         </form>
@@ -443,13 +216,13 @@
     <!-- SEKCJA 2: Koszty stale                       -->
     <!-- ============================================ -->
     <div class="section-divider">
-        <div class="divider-icon" style="background: #FFFBEB; color: var(--ds-warning);">
+        <div class="divider-icon text-warning">
             <i class="bi bi-cash-stack"></i>
         </div>
         <div>
             <h4>Koszty stale</h4>
             <p class="subtitle">Miesieczne koszty odejmowane od zysku &mdash; suma:
-                <strong style="color: var(--ds-danger);">{{ '%.2f'|format(total_fixed_costs) }} PLN/mies.</strong>
+                <strong class="text-error">{{ '%.2f'|format(total_fixed_costs) }} PLN/mies.</strong>
             </p>
         </div>
     </div>
@@ -480,7 +253,7 @@
                            placeholder="Dodatkowe informacje...">
                 </div>
                 <div class="md:col-span-2">
-                    <button type="submit" class="btn btn-ds-cta btn-sm w-full" style="padding: 0.375rem 0.5rem; font-size: 0.82rem;">
+                    <button type="submit" class="btn btn-warning btn-sm w-full">
                         <i class="bi bi-plus-lg mr-1"></i>Dodaj
                     </button>
                 </div>
@@ -491,12 +264,12 @@
             <div class="overflow-x-auto">
                 <table class="table settings-table table-sm">
                     <thead>
-                        <tr style="border-bottom: 2px solid var(--ds-border);">
-                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Nazwa</th>
-                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Kwota</th>
-                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Opis</th>
-                            <th style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Status</th>
-                            <th class="text-right" style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ds-muted);">Akcje</th>
+                        <tr>
+                            <th class="text-xs uppercase tracking-wider text-base-content/60">Nazwa</th>
+                            <th class="text-xs uppercase tracking-wider text-base-content/60">Kwota</th>
+                            <th class="text-xs uppercase tracking-wider text-base-content/60">Opis</th>
+                            <th class="text-xs uppercase tracking-wider text-base-content/60">Status</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-base-content/60">Akcje</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -506,16 +279,16 @@
                                 <strong>{{ cost.name }}</strong>
                             </td>
                             <td>
-                                <span class="cost-amount {{ 'text-danger' if cost.amount > 0 else 'text-success' }}">
+                                <span class="cost-amount {{ 'text-error' if cost.amount > 0 else 'text-success' }}">
                                     {{ '%.2f'|format(cost.amount) }} PLN
                                 </span>
                             </td>
-                            <td class="small" style="color: var(--ds-muted);">{{ cost.description or '-' }}</td>
+                            <td class="small text-base-content/60">{{ cost.description or '-' }}</td>
                             <td>
                                 {% if cost.is_active %}
-                                <span class="badge" style="background: #DCFCE7; color: #166534; font-weight: 500;">Aktywny</span>
+                                <span class="badge badge-success">Aktywny</span>
                                 {% else %}
-                                <span class="badge" style="background: #F1F5F9; color: #64748B; font-weight: 500;">Nieaktywny</span>
+                                <span class="badge badge-ghost">Nieaktywny</span>
                                 {% endif %}
                             </td>
                             <td class="text-right">
@@ -544,10 +317,10 @@
 
                         <!-- Modal edycji -->
                         <dialog id="editModal{{ cost.id }}" class="modal">
-                            <div class="modal-box" style="border-radius: var(--ds-radius); box-shadow: var(--ds-shadow-lg);">
+                            <div class="modal-box">
                                     <form method="post" action="{{ url_for('edit_fixed_cost', cost_id=cost.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <h3 class="font-bold text-lg" style="border-bottom: 1px solid var(--ds-border); padding-bottom: 0.75rem;">
+                                        <h3 class="font-bold text-lg border-b border-base-300 pb-3">
                                             Edytuj koszt: {{ cost.name }}
                                         </h3>
                                         <div class="py-4">
@@ -559,7 +332,7 @@
                                                 <label class="block mb-1 text-sm font-medium">Kwota (PLN)</label>
                                                 <input type="number" step="0.01" class="input input-bordered w-full" name="amount"
                                                        value="{{ cost.amount }}" required>
-                                                <small style="color: var(--ds-muted);">Wartosc ujemna = przychod/dotacja</small>
+                                                <small class="text-base-content/60">Wartosc ujemna = przychod/dotacja</small>
                                             </div>
                                             <div class="mb-3">
                                                 <label class="block mb-1 text-sm font-medium">Opis</label>
@@ -567,9 +340,9 @@
                                                        value="{{ cost.description or '' }}">
                                             </div>
                                         </div>
-                                        <div class="modal-action" style="border-top: 1px solid var(--ds-border); padding-top: 0.75rem;">
-                                            <button type="button" class="btn btn-ds-outline btn-sm" onclick="this.closest('dialog').close()" style="padding: 0.375rem 1rem;">Anuluj</button>
-                                            <button type="submit" class="btn btn-ds-primary btn-sm" style="padding: 0.375rem 1rem;">Zapisz</button>
+                                        <div class="modal-action border-t border-base-300 pt-3">
+                                            <button type="button" class="btn btn-outline btn-sm" onclick="this.closest('dialog').close()">Anuluj</button>
+                                            <button type="submit" class="btn btn-primary btn-sm">Zapisz</button>
                                         </div>
                                     </form>
                             </div>
@@ -580,7 +353,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="ds-alert ds-alert-info">
+            <div class="alert alert-info">
                 <i class="bi bi-info-circle"></i>
                 <span>Brak zdefiniowanych kosztow stalych. Dodaj pierwsze koszty (np. Ksiegowosc, ZUS, hosting).</span>
             </div>
