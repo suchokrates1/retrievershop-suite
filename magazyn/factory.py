@@ -25,6 +25,7 @@ from .price_reports import bp as price_reports_bp
 from .socketio_extension import socketio
 from .csrf_extension import csrf
 from .db import configure_engine, create_default_user_if_needed, Base, engine
+from .settings_store import settings_store
 from . import order_sync_scheduler
 from . import promo_scheduler
 
@@ -69,6 +70,10 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
         app.config.update(config)
 
     configure_engine(settings.DB_PATH)
+    # Po skonfigurowaniu engine (PostgreSQL) przeladuj settings_store
+    # zeby odczytac aktualne wartosci z wlasciwej bazy danych
+    # (poczatkowy load mogl uzyc SQLite fallback gdy engine=None)
+    settings_store.reload()
 
     csrf.init_app(app)
     app.jinja_env.globals["ALL_SIZES"] = ALL_SIZES
