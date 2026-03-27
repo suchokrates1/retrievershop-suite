@@ -45,6 +45,11 @@ def post_worker_init(worker):
                 auto_resume_incomplete_reports()
                 worker.log.info(f"Auto-resume incomplete reports done in worker {worker.pid}")
         
+        # Start Allegro token refresher (tylko w jednym workerze)
+        from magazyn.allegro_token_refresher import token_refresher
+        token_refresher.start()
+        worker.log.info(f"Allegro token refresher started in worker {worker.pid}")
+        
     except (OSError, IOError):
         # Lock already held by another worker - skip scheduler initialization
         worker.log.info(f"Worker {worker.pid} skipped scheduler (already running in another worker)")

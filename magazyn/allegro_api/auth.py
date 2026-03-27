@@ -78,12 +78,12 @@ def refresh_token(refresh_token: str) -> dict:
         auth=(store_client_id, store_client_secret),
         timeout=DEFAULT_TIMEOUT,
     )
-    if not response.ok:
+    if getattr(response, 'status_code', 200) >= 400:
         import logging
         logging.getLogger(__name__).warning(
             "Allegro token refresh failed: HTTP %s, body: %s",
             response.status_code,
-            response.text[:500],
+            getattr(response, 'text', '')[:500],
         )
     response.raise_for_status()
     return response.json()
