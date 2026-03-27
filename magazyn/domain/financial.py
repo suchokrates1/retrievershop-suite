@@ -308,9 +308,9 @@ class FinancialCalculator:
         from ..models import Order, OrderProduct, Return, FixedCost
         from sqlalchemy import func, select
 
-        # Wyklucz zamowienia z faktycznym zwrotem pieniedzy (refund_processed=True)
+        # Wyklucz zamowienia ze zwrotem zakonczonym (status=completed)
         return_order_ids = select(Return.order_id).where(
-            Return.refund_processed == True
+            Return.status == 'completed'
         ).distinct()
 
         orders = self.db.query(Order).filter(
@@ -333,7 +333,7 @@ class FinancialCalculator:
         start_dt_str = datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d %H:%M:%S')
         end_dt_str = datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d %H:%M:%S')
         returns_in_period = self.db.query(Return).filter(
-            Return.refund_processed == True,
+            Return.status == 'completed',
             Return.updated_at >= start_dt_str,
             Return.updated_at < end_dt_str,
         ).all()
