@@ -239,18 +239,26 @@ def create_default_user_if_needed(app):
     with app.app_context():
         with get_session() as session:
             try:
-                user = session.query(User).filter_by(username="admin").first()
+                user = session.query(User).filter_by(username="kontakt@retrievershop.pl").first()
             except Exception:
                 # If schema is missing (e.g., test DB reconfigured), rebuild and retry
                 session.rollback()
                 init_db()
-                user = session.query(User).filter_by(username="admin").first()
+                user = session.query(User).filter_by(username="kontakt@retrievershop.pl").first()
 
             if not user:
-                hashed_password = generate_password_hash(
-                    "admin123", method="pbkdf2:sha256", salt_length=16
-                )
-                session.add(User(username="admin", password=hashed_password))
+                # Migracja ze starego loginu "admin" jesli istnieje
+                old_user = session.query(User).filter_by(username="admin").first()
+                if old_user:
+                    old_user.username = "kontakt@retrievershop.pl"
+                    old_user.password = generate_password_hash(
+                        "Lucynka66@", method="pbkdf2:sha256", salt_length=16
+                    )
+                else:
+                    hashed_password = generate_password_hash(
+                        "Lucynka66@", method="pbkdf2:sha256", salt_length=16
+                    )
+                    session.add(User(username="kontakt@retrievershop.pl", password=hashed_password))
 
 
 def record_purchase(
