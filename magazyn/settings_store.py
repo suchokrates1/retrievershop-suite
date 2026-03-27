@@ -120,8 +120,10 @@ class SettingsStore:
                     data[row[0]] = row[1] if row[1] is not None else ""
                     if has_updated_at:
                         val = row[2]
-                        if isinstance(val, str) and (latest is None or val > latest):
-                            latest = val
+                        if val is not None:
+                            val_str = val if isinstance(val, str) else str(val)
+                            if latest is None or val_str > latest:
+                                latest = val_str
                 return data, latest
         except Exception as exc:
             LOGGER.warning("Failed to read settings from engine: %s", exc)
@@ -194,7 +196,9 @@ class SettingsStore:
                 if not row:
                     return None
                 value = row[0]
-                return value if isinstance(value, str) else None
+                if value is None:
+                    return None
+                return value if isinstance(value, str) else str(value)
         except Exception as exc:
             err = str(exc).lower()
             if "no such column" in err or "does not exist" in err or "no such table" in err:
