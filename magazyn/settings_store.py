@@ -61,12 +61,6 @@ class SettingsStore:
             if self._loaded:
                 return
 
-            from .db import engine as _dbg_engine
-            LOGGER.info(
-                "settings_store._ensure_loaded: engine=%s",
-                type(_dbg_engine).__name__ if _dbg_engine else "None",
-            )
-
             env_values = settings_io.load_settings(
                 include_hidden=True,
                 example_path=settings_io.EXAMPLE_PATH,
@@ -79,14 +73,6 @@ class SettingsStore:
                 db_updated_at = None
             else:
                 db_values, db_updated_at = db_result
-
-            LOGGER.info(
-                "settings_store._ensure_loaded: db_path=%s, db_rows=%s, db_updated=%s, has_token=%s",
-                db_path,
-                len(db_values) if db_values else 0,
-                db_updated_at,
-                bool(db_values.get("ALLEGRO_ACCESS_TOKEN")) if db_values else False,
-            )
 
             values = OrderedDict(env_values)
             if db_values:
