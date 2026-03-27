@@ -14,6 +14,9 @@
 html, body {
     height: 100%;
 }
+html {
+    font-size: 17px;
+}
 body {
     margin: 0;
     padding-top: 210px;
