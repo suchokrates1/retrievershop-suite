@@ -19,7 +19,7 @@ def _sync_from_allegro_events(app):
     Mechanizm event-driven polling:
     1. Wczytaj ALLEGRO_LAST_EVENT_ID z settings_store
     2. Pobierz zdarzenia od tego ID (GET /order/events?from=...)
-    3. Dla READY_FOR_PROCESSING: pobierz szczegoly -> sync_order_from_data()
+    3. Dla BOUGHT/FILLED_IN/READY_FOR_PROCESSING: pobierz szczegoly -> sync_order_from_data()
     4. Dla BUYER_CANCELLED / AUTO_CANCELLED: aktualizuj status
     5. Zapisz nowy last_event_id
     """
@@ -29,6 +29,7 @@ def _sync_from_allegro_events(app):
     from .allegro_api.orders import (
         fetch_allegro_order_detail,
         parse_allegro_order_to_data,
+        get_allegro_internal_status,
     )
     from .settings_store import settings_store
 
@@ -113,11 +114,18 @@ def _sync_from_allegro_events(app):
                         continue
                     seen_checkout_forms.add(event_key)
 
-                    if event_type == "READY_FOR_PROCESSING":
+                    if event_type in ("BOUGHT", "FILLED_IN", "READY_FOR_PROCESSING"):
                         try:
                             detail = fetch_allegro_order_detail(checkout_form_id)
                             order_data = parse_allegro_order_to_data(detail)
                             sync_order_from_data(db, order_data)
+                            internal_status = get_allegro_internal_status(order_data)
+                            add_order_status(
+                                db,
+                                order_data["order_id"],
+                                internal_status,
+                                notes=f"Allegro event: {event_type}",
+                            )
                             stats["orders_synced"] += 1
                             logger.info(
                                 f"Allegro Events: zsynchronizowano zamowienie "

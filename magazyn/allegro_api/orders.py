@@ -477,6 +477,30 @@ def get_allegro_internal_status(order_data: dict) -> str:
     fulfillment = order_data.get("_allegro_fulfillment_status", "")
     allegro_status = order_data.get("_allegro_status", "")
 
+    if fulfillment == "CANCELLED" or allegro_status == "CANCELLED":
+        return "anulowano"
+
+    is_cod = bool(order_data.get("payment_method_cod"))
+    payment_done = order_data.get("payment_done")
+    payment_confirmed = False
+
+    try:
+        payment_confirmed = float(payment_done or 0) > 0
+    except (TypeError, ValueError):
+        payment_confirmed = False
+
+    if order_data.get("date_confirmed"):
+        payment_confirmed = True
+
+    if allegro_status == "READY_FOR_PROCESSING":
+        payment_confirmed = True
+
+    if fulfillment in {"PROCESSING", "READY_FOR_SHIPMENT", "SENT", "PICKED_UP"}:
+        payment_confirmed = True
+
+    if not is_cod and not payment_confirmed:
+        return "nieoplacone"
+
     # Fulfillment status ma priorytet
     if fulfillment:
         internal = ALLEGRO_FULFILLMENT_MAP.get(fulfillment)

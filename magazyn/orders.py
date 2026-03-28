@@ -974,9 +974,19 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         )
         db.add(order_product)
     
+    initial_status = "pobrano"
+    if (
+        order_data.get("platform") == "allegro"
+        or "_allegro_status" in order_data
+        or "_allegro_fulfillment_status" in order_data
+    ):
+        from .allegro_api.orders import get_allegro_internal_status
+
+        initial_status = get_allegro_internal_status(order_data)
+
     # Dodaj domyslny status dla nowego zamowienia
     if is_new_order:
-        add_order_status(db, order_id, "pobrano", notes="Nowe zamowienie")
+        add_order_status(db, order_id, initial_status, notes="Nowe zamowienie")
     
     return order
 

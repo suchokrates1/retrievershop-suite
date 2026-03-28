@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 # Typy zdarzen, ktore nas interesuja
 ACTIONABLE_EVENT_TYPES = frozenset({
+    "BOUGHT",
+    "FILLED_IN",
     "READY_FOR_PROCESSING",
     "BUYER_CANCELLED",
     "AUTO_CANCELLED",

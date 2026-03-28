@@ -7,7 +7,7 @@ Nie definiuj mapowania statusow nigdzie indziej.
 
 # ── Nowy flow statusow ─────────────────────────────────────────────
 #
-# pobrano(0) → wydrukowano(2) → spakowano(3) → wyslano(4)
+# pobrano(0) → nieoplacone(0) → wydrukowano(2) → spakowano(3) → wyslano(4)
 #   → w_transporcie(5) → w_punkcie(6) → dostarczono(7)
 #
 # Problemy (999): blad_druku, problem_z_dostawa, zwrot, anulowano
@@ -16,6 +16,7 @@ Nie definiuj mapowania statusow nigdzie indziej.
 VALID_STATUSES = [
     # Etap wewnetrzny (magazyn)
     "pobrano",           # Pobrano zamowienie z Allegro
+    "nieoplacone",       # Zamowienie pobrane, ale bez potwierdzonej platnosci
     "wydrukowano",       # Etykieta wydrukowana
     "spakowano",         # Zeskanowano etykiete + EAN produktow
 
@@ -36,6 +37,7 @@ VALID_STATUSES = [
 
 STATUS_HIERARCHY = {
     "pobrano": 0,
+    "nieoplacone": 0,
     "wydrukowano": 2,
     "spakowano": 3,
     "wyslano": 4,
@@ -132,6 +134,7 @@ SHIPMENT_TRACKING_MAP = {
 
 STATUS_DISPLAY = {
     "pobrano": ("Pobrano", "bg-light text-dark"),
+    "nieoplacone": ("Nieopłacone", "bg-warning text-dark"),
     "wydrukowano": ("Wydrukowano", "bg-info"),
     "blad_druku": ("Błąd druku", "bg-danger"),
     "spakowano": ("Spakowano", "bg-info"),
@@ -180,6 +183,7 @@ STATUS_EMAIL_MAP = {
 
 CUSTOMER_STATUS_DISPLAY = {
     "pobrano": ("Przyjęte do realizacji", "info", "bi-check-circle"),
+    "nieoplacone": ("Oczekuje na płatność", "warning", "bi-credit-card"),
     "wydrukowano": ("Przygotowane do wysyłki", "primary", "bi-printer"),
     "blad_druku": ("Przygotowywane", "info", "bi-hourglass-split"),
     "spakowano": ("Spakowane", "primary", "bi-box-seam"),
@@ -202,6 +206,7 @@ CUSTOMER_STAGES = [
 
 CUSTOMER_STAGE_MAP = {
     "pobrano": 0,
+    "nieoplacone": 0,
     "wydrukowano": 1,
     "blad_druku": 1,
     "spakowano": 1,
@@ -215,7 +220,7 @@ CUSTOMER_STAGE_MAP = {
 # ── Filtry listy zamowien ───────────────────────────────────────────
 
 STATUS_FILTER_GROUPS = {
-    "w_realizacji": ["pobrano", "wydrukowano", "blad_druku", "spakowano"],
+    "w_realizacji": ["pobrano", "nieoplacone", "wydrukowano", "blad_druku", "spakowano"],
     "w_transporcie": ["wyslano", "w_transporcie", "w_punkcie"],
     "zakonczone": ["dostarczono"],
     "problem": ["problem_z_dostawa", "zwrot", "anulowano"],

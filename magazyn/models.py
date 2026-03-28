@@ -495,7 +495,7 @@ class OrderStatusLog(Base):
     id = Column(Integer, primary_key=True)
     order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
     
-    # Status: pobrano, wydrukowano, blad_druku, spakowano, wyslano, w_transporcie, w_punkcie, dostarczono, problem_z_dostawa, zwrot, anulowano
+    # Status: pobrano, nieoplacone, wydrukowano, blad_druku, spakowano, wyslano, w_transporcie, w_punkcie, dostarczono, problem_z_dostawa, zwrot, anulowano
     status = Column(String, nullable=False)
     
     # Optional tracking info
