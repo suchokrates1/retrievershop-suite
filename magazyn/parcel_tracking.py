@@ -52,6 +52,20 @@ def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[Optional[str], 
     """
     candidates: List[Tuple[bool, str, str, str]] = []
 
+    def _collect_statuses(statuses: Optional[List[Dict]]) -> None:
+        for status in statuses or []:
+            status_code = status.get("status") or status.get("type") or status.get("code")
+            if not status_code:
+                continue
+            occurred_at = (
+                status.get("occurredAt")
+                or status.get("dateTime")
+                or status.get("timestamp")
+                or ""
+            )
+            description = status.get("description") or status.get("name") or ""
+            candidates.append((bool(occurred_at), occurred_at, status_code, description))
+
     for event in waybill_data.get("events") or []:
         status_code = event.get("type")
         if not status_code:
@@ -60,18 +74,10 @@ def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[Optional[str], 
         description = event.get("description") or ""
         candidates.append((bool(occurred_at), occurred_at, status_code, description))
 
-    for status in waybill_data.get("statuses") or []:
-        status_code = status.get("status") or status.get("type")
-        if not status_code:
-            continue
-        occurred_at = (
-            status.get("occurredAt")
-            or status.get("dateTime")
-            or status.get("timestamp")
-            or ""
-        )
-        description = status.get("description") or status.get("name") or ""
-        candidates.append((bool(occurred_at), occurred_at, status_code, description))
+    _collect_statuses(waybill_data.get("statuses"))
+
+    tracking_details = waybill_data.get("trackingDetails") or {}
+    _collect_statuses(tracking_details.get("statuses"))
 
     if not candidates:
         return None, ""
