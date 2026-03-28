@@ -68,7 +68,7 @@ def _parse_last_order_data(raw):
 
 
 def _check_and_auto_pack():
-    """Check if we can auto-pack: label + matching product scanned within 60 seconds."""
+    """Check if we can auto-pack: label + matching product scanned within 120 seconds."""
     last_product = session.get('last_product_scan')
     last_label = session.get('last_label_scan')
     
@@ -76,7 +76,7 @@ def _check_and_auto_pack():
         current_app.logger.info(f"Auto-pack check: product={bool(last_product)}, label={bool(last_label)}")
         return
     
-    # Check if scans are within 60 seconds of each other
+    # Check if scans are within 120 seconds of each other
     current_time = time.time()
     product_age = current_time - last_product['timestamp']
     label_age = current_time - last_label['timestamp']
