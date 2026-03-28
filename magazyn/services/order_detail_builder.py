@@ -35,6 +35,7 @@ from ..status_config import STATUS_DISPLAY, get_status_display
 # Statusy wysylki z ikonami i opisami
 SHIPPING_STAGES = [
     ("pobrano", "Pobrano", "download", "Zamowienie pobrane z Allegro"),
+    ("nieoplacone", "Nieopłacone", "credit-card", "Oczekiwanie na potwierdzenie płatności"),
     ("wydrukowano", "Wydrukowano", "printer", "Etykieta wydrukowana"),
     ("spakowano", "Spakowano", "box", "Zeskanowano etykiete + EAN"),
     ("wyslano", "Wysłano", "truck", "Kurier potwierdzil odbior"),

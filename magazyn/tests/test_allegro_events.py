@@ -155,10 +155,9 @@ def test_fetch_event_stats(mock_request, mock_token):
 
 def test_actionable_event_types():
     """Sprawdz ze kluczowe typy zdarzen sa w zbiorze."""
+    assert "BOUGHT" in ACTIONABLE_EVENT_TYPES
+    assert "FILLED_IN" in ACTIONABLE_EVENT_TYPES
     assert "READY_FOR_PROCESSING" in ACTIONABLE_EVENT_TYPES
     assert "BUYER_CANCELLED" in ACTIONABLE_EVENT_TYPES
     assert "AUTO_CANCELLED" in ACTIONABLE_EVENT_TYPES
     assert "FULFILLMENT_STATUS_CHANGED" in ACTIONABLE_EVENT_TYPES
-    # Nie powinny byc:
-    assert "BOUGHT" not in ACTIONABLE_EVENT_TYPES
-    assert "FILLED_IN" not in ACTIONABLE_EVENT_TYPES
