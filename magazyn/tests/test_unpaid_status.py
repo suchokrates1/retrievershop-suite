@@ -1,5 +1,5 @@
 from magazyn.db import get_session
-from magazyn.models import OrderStatusLog
+from magazyn.models import OrderProduct, OrderStatusLog
 
 
 def test_get_allegro_internal_status_returns_unpaid_for_unconfirmed_online_order():
@@ -80,3 +80,54 @@ def test_sync_order_from_data_sets_pobrano_for_cod_order(app):
 
     assert status_log is not None
     assert status_log.status == "pobrano"
+
+
+def test_sync_order_from_data_merges_duplicate_products(app):
+    from magazyn.orders import sync_order_from_data
+
+    order_id = "allegro_cf-dup-products-1"
+    order_data = {
+        "order_id": order_id,
+        "external_order_id": "cf-dup-products-1",
+        "platform": "allegro",
+        "email": "test@example.com",
+        "delivery_fullname": "Test User",
+        "date_add": 1700000000,
+        "payment_method_cod": False,
+        "payment_done": 10,
+        "_allegro_status": "READY_FOR_PROCESSING",
+        "_allegro_fulfillment_status": "NEW",
+        "products": [
+            {
+                "name": "Szelki L czarne",
+                "quantity": 1,
+                "price_brutto": "207.00",
+                "auction_id": "18167082745",
+                "sku": "SKU-1",
+                "ean": "",
+            },
+            {
+                "name": "Szelki L czarne",
+                "quantity": 1,
+                "price_brutto": "207.00",
+                "auction_id": "18167082745",
+                "sku": "SKU-1",
+                "ean": "",
+            },
+        ],
+    }
+
+    with app.app_context():
+        with get_session() as db:
+            sync_order_from_data(db, order_data)
+            db.commit()
+
+        with get_session() as db:
+            products = (
+                db.query(OrderProduct)
+                .filter(OrderProduct.order_id == order_id)
+                .all()
+            )
+
+    assert len(products) == 1
+    assert products[0].quantity == 2
