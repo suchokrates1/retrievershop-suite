@@ -24,6 +24,7 @@ from ..db import get_session, db_connect
 from ..auth import login_required
 from ..models import PrintedOrder, OrderProduct, OrderStatusLog, ScanLog
 from ..domain.products import find_by_barcode
+from ..orders import add_order_status
 from ..parsing import parse_product_info
 
 
@@ -82,7 +83,7 @@ def _check_and_auto_pack():
     
     current_app.logger.info(f"Auto-pack check: product_age={product_age:.1f}s, label_age={label_age:.1f}s")
     
-    if product_age > 60 or label_age > 60:
+    if product_age > 120 or label_age > 120:
         current_app.logger.info("Auto-pack: Timeout - scans too old")
         session.pop('last_product_scan', None)
         session.pop('last_label_scan', None)
@@ -160,13 +161,7 @@ def _check_and_auto_pack():
         current_app.logger.info(f"Auto-pack: Wszystkie produkty zeskanowane ({len(required_product_ids)} szt.)")
         
         # All conditions met - change status to "spakowano"
-        new_status = OrderStatusLog(
-            order_id=order_id,
-            status="spakowano",
-            notes="Automatycznie spakowano po zeskanowaniu etykiety i produktu"
-        )
-        db.add(new_status)
-        db.commit()
+        add_order_status(db, order_id, "spakowano", notes="Automatycznie spakowano po zeskanowaniu etykiety i produktu")
         
         current_app.logger.info(f"AUTO-PACK SUCCESS: Zamówienie {order_id} -> spakowano")
         

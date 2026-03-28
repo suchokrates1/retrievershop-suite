@@ -5,7 +5,7 @@ Ten moduł odpowiada za:
 - Pobieranie statusów przesyłek bezpośrednio z Allegro API
 - Mapowanie statusów Allegro na wewnętrzne statusy zamówień
 - Aktualizację statusów w bazie danych
-- Automatyczne przejścia statusów (wydrukowano → w_drodze → dostarczono)
+- Automatyczne przejścia statusów (wydrukowano → wyslano → w_transporcie → dostarczono)
 """
 
 import logging
@@ -23,34 +23,7 @@ from .orders import add_order_status
 
 logger = logging.getLogger(__name__)
 
-# Mapowanie statusów Allegro na wewnętrzne statusy
-# https://developer.allegro.pl/documentation/#operation/getParcelTrackingUsingGET
-# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → w_punkcie → gotowe_do_odbioru → dostarczono → zakończono
-ALLEGRO_STATUS_MAP = {
-    # Przesyłka utworzona/nadana
-    "CREATED": "przekazano_kurierowi",  # Etykieta utworzona, paczka nadana
-    
-    # Przesyłka w drodze
-    "COLLECTED": "w_drodze",  # Odebrana przez kuriera
-    "IN_TRANSIT": "w_drodze",  # W tranzycie
-    "OUT_FOR_DELIVERY": "w_drodze",  # W doręczeniu
-    
-    # W punkcie odbioru (paczkomat/punkt)
-    "AT_PICKUP_POINT": "w_punkcie",  # Dostarczona do punktu odbioru
-    
-    # Gotowe do odbioru (paczkomat/punkt)
-    "READY_TO_PICKUP": "gotowe_do_odbioru",  # Gotowa do odbioru w punkcie
-    "PICKUP_REMINDER": "gotowe_do_odbioru",  # Przypomnienie o odbiorze
-    "AVIZO": "gotowe_do_odbioru",  # Awizo pozostawione
-    
-    # Dostarczono
-    "DELIVERED": "dostarczono",  # Doręczona do odbiorcy
-    
-    # Problemy
-    "NOT_DELIVERED": "niedostarczono",  # Nieudane doręczenie
-    "RETURNED_TO_SENDER": "zwrot",  # Zwrócona do nadawcy
-    "OTHER": None,  # Inny status - nie zmieniamy
-}
+from .status_config import ALLEGRO_TRACKING_MAP
 
 # Przewoźnicy - mapowanie nazw na ID API Allegro
 CARRIER_ID_MAP = {
@@ -149,7 +122,7 @@ def sync_parcel_statuses() -> Dict[str, int]:
                     ),
                 )
                 .filter(
-                    OrderStatusLog.status.in_(["wydrukowano", "spakowano", "przekazano_kurierowi", "w_drodze", "w_punkcie"]),
+                    OrderStatusLog.status.in_(["wydrukowano", "spakowano", "wyslano", "w_transporcie", "w_punkcie"]),
                     Order.delivery_package_nr.isnot(None),
                     Order.delivery_package_nr != "",
                 )
@@ -209,7 +182,7 @@ def sync_parcel_statuses() -> Dict[str, int]:
                                 description = latest_event.get("description", "")
                                 
                                 # Mapuj na wewnętrzny status
-                                new_status = ALLEGRO_STATUS_MAP.get(allegro_status)
+                                new_status = ALLEGRO_TRACKING_MAP.get(allegro_status)
                                 
                                 if new_status:
                                     # Pobierz obecny status zamówienia

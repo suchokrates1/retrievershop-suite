@@ -456,13 +456,13 @@ class TestStatusEmailDispatch:
                     mock_send.return_value = True
                     from magazyn.orders import add_order_status
                     log = add_order_status(
-                        db, order.order_id, "przekazano_kurierowi"
+                        db, order.order_id, "wyslano"
                     )
                     db.commit()
 
                     assert log is not None
                     # shipment email powinien byc wyslany
-                    # (przekazano_kurierowi -> shipment)
+                    # (wyslano -> shipment)
                     # ale tylko jesli jest tracking_number
                     # email_service.send_shipment_notification wymaga go
 
