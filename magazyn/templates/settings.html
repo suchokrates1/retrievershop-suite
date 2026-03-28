@@ -278,20 +278,20 @@
                             <td>
                                 <strong>{{ cost.name }}</strong>
                             </td>
-                            <td class="w-1 whitespace-nowrap">
+                            <td class="whitespace-nowrap">
                                 <span class="cost-amount {{ 'text-error' if cost.amount > 0 else 'text-success' }}">
                                     {{ '%.2f'|format(cost.amount) }} PLN
                                 </span>
                             </td>
                             <td class="small text-base-content/60">{{ cost.description or '-' }}</td>
-                            <td class="w-1 whitespace-nowrap">
+                            <td class="whitespace-nowrap">
                                 {% if cost.is_active %}
                                 <span class="badge badge-success">Aktywny</span>
                                 {% else %}
                                 <span class="badge badge-ghost">Nieaktywny</span>
                                 {% endif %}
                             </td>
-                            <td class="text-right w-1 whitespace-nowrap">
+                            <td class="text-right whitespace-nowrap">
                                 <button type="button" class="btn btn-sm btn-outline border-0"
                                         onclick="document.getElementById('editModal{{ cost.id }}').showModal()"
                                         title="Edytuj" style="cursor: pointer;">
