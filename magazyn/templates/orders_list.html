@@ -137,7 +137,7 @@
         <td><small>{{ (order.delivery_method or '-') | replace('Allegro ', '') }}</small></td>
         <td class="text-right"><small>{% if order.payment_done %}{{ '%.2f'|format(order.payment_done) }}{% else %}-{% endif %}</small></td>
         <td>
-            <div class="flex flex-wrap items-center gap-1">
+            <div class="flex items-center gap-1 whitespace-nowrap">
             {% if order.return_info %}
             {% set rs = order.return_info.status %}
             {% if order.return_info.refund_processed or rs == 'completed' %}
