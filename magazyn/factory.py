@@ -20,6 +20,7 @@ from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .discussions import bp as discussions_bp
 from .diagnostics import bp as diagnostics_bp
+from .integration_proxy import bp as integration_proxy_bp
 from .blueprints import scanning_bp, stocktake_bp, customer_order_bp
 from .price_reports import bp as price_reports_bp
 from .socketio_extension import socketio
@@ -107,6 +108,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(sales_bp)
     app.register_blueprint(allegro_bp)
     app.register_blueprint(diagnostics_bp)
+    app.register_blueprint(integration_proxy_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(discussions_bp)
     app.register_blueprint(scanning_bp)

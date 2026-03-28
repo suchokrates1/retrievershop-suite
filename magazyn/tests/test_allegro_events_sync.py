@@ -91,15 +91,53 @@ def test_sync_events_ready_for_processing(app):
             return_value={"order_id": "allegro_cf-uuid-1", "external_order_id": "cf-uuid-1"},
         ) as mock_parse, patch(
             "magazyn.orders.sync_order_from_data",
-        ) as mock_sync:
+        ) as mock_sync, patch(
+            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            return_value="pobrano",
+        ) as mock_status, patch(
+            "magazyn.orders.add_order_status",
+        ) as mock_add_status:
             stats = _sync_from_allegro_events(app)
 
         assert stats["events_fetched"] == 1
         assert stats["orders_synced"] == 1
         mock_detail.assert_called_once_with("cf-uuid-1")
         mock_parse.assert_called_once()
+        mock_status.assert_called_once()
         mock_sync.assert_called_once()
+        mock_add_status.assert_called_once()
         assert settings_store.get("ALLEGRO_LAST_EVENT_ID") == "evt-101"
+
+
+def test_sync_events_bought_imports_unpaid_order(app):
+    """Zdarzenie BOUGHT importuje nieoplacone zamowienie."""
+    with app.app_context():
+        settings_store.update({"ALLEGRO_LAST_EVENT_ID": "evt-150"})
+
+        events = [_make_event("evt-151", "BOUGHT", "cf-uuid-unpaid")]
+
+        with patch(
+            "magazyn.allegro_api.events.fetch_order_events",
+            return_value={"events": events},
+        ), patch(
+            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            return_value={"id": "cf-uuid-unpaid", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
+        ), patch(
+            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            return_value={"order_id": "allegro_cf-uuid-unpaid", "external_order_id": "cf-uuid-unpaid"},
+        ), patch(
+            "magazyn.orders.sync_order_from_data",
+        ) as mock_sync, patch(
+            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            return_value="nieoplacone",
+        ), patch(
+            "magazyn.orders.add_order_status",
+        ) as mock_add_status:
+            stats = _sync_from_allegro_events(app)
+
+        assert stats["orders_synced"] == 1
+        mock_sync.assert_called_once()
+        assert mock_add_status.call_args.args[2] == "nieoplacone"
 
 
 def test_sync_events_cancelled(app):
@@ -146,7 +184,12 @@ def test_sync_events_dedup_same_checkout_form(app):
             return_value={"order_id": "allegro_cf-uuid-3", "external_order_id": "cf-uuid-3"},
         ), patch(
             "magazyn.orders.sync_order_from_data",
-        ) as mock_sync:
+        ) as mock_sync, patch(
+            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            return_value="pobrano",
+        ), patch(
+            "magazyn.orders.add_order_status",
+        ):
             stats = _sync_from_allegro_events(app)
 
         assert stats["orders_synced"] == 1
@@ -155,7 +198,7 @@ def test_sync_events_dedup_same_checkout_form(app):
 
 
 def test_sync_events_mixed_types(app):
-    """Mieszane typy zdarzen - READY + CANCELLED + nieistotne."""
+    """Mieszane typy zdarzen - importy i anulowanie."""
     with app.app_context():
         settings_store.update({"ALLEGRO_LAST_EVENT_ID": "evt-400"})
 
@@ -178,12 +221,15 @@ def test_sync_events_mixed_types(app):
         ), patch(
             "magazyn.orders.sync_order_from_data",
         ), patch(
+            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            return_value="pobrano",
+        ), patch(
             "magazyn.orders.add_order_status",
         ):
             stats = _sync_from_allegro_events(app)
 
         assert stats["events_fetched"] == 4
-        assert stats["orders_synced"] == 1
+        assert stats["orders_synced"] == 3
         assert stats["orders_cancelled"] == 1
-        assert stats["orders_skipped"] == 2
+        assert stats["orders_skipped"] == 0
         assert settings_store.get("ALLEGRO_LAST_EVENT_ID") == "evt-404"
