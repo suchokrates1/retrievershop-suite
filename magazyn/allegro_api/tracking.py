@@ -18,7 +18,9 @@ def fetch_parcel_tracking(access_token: str, carrier_id: str, waybills: list[str
         waybills: Lista numerów listów przewozowych (max 20)
     
     Returns:
-        dict: Historia statusów przesyłek, format:
+        dict: Historia statusów przesyłek.
+        API Allegro może zwrócić format historyczny (`events`) albo nowszy (`statuses`).
+        Przykładowe payloady:
         {
             "carrierId": "ALLEGRO",
             "waybills": [
@@ -31,6 +33,14 @@ def fetch_parcel_tracking(access_token: str, carrier_id: str, waybills: list[str
                             "description": "Przesyłka dostarczona"
                         }
                     ]
+                    # lub:
+                    # "statuses": [
+                    #   {
+                    #       "occurredAt": "2024-01-15T10:30:00Z",
+                    #       "status": "IN_TRANSIT",
+                    #       "description": "Picked up from sender"
+                    #   }
+                    # ]
                 }
             ]
         }
@@ -43,8 +53,10 @@ def fetch_parcel_tracking(access_token: str, carrier_id: str, waybills: list[str
         >>> tracking = fetch_parcel_tracking(token, "INPOST", ["123456789012"])
         >>> for waybill_data in tracking["waybills"]:
         ...     print(f"Waybill: {waybill_data['waybill']}")
-        ...     for event in waybill_data["events"]:
+        ...     for event in waybill_data.get("events", []):
         ...         print(f"  {event['occurredAt']}: {event['type']}")
+        ...     for status in waybill_data.get("statuses", []):
+        ...         print(f"  {status['occurredAt']}: {status['status']}")
     """
     if len(waybills) > 20:
         raise ValueError("Maksymalnie 20 numerów przesyłek na jedno żądanie")
