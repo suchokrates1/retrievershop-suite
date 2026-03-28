@@ -498,6 +498,33 @@ class TestStatusEmailDispatch:
                 )
                 assert log is None  # duplikat
 
+    def test_add_order_status_persists_tracking_on_order(self, app, order_with_token):
+        """add_order_status zapisuje tracking i courier na rekordzie zamowienia."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_token
+                ).first()
+
+                from magazyn.orders import add_order_status
+                log = add_order_status(
+                    db,
+                    order.order_id,
+                    "wyslano",
+                    tracking_number="INP123456789",
+                    courier_code="INPOST",
+                    send_email=False,
+                )
+                db.commit()
+
+                db.refresh(order)
+
+                assert log is not None
+                assert order.delivery_package_nr == "INP123456789"
+                assert order.courier_code == "INPOST"
+                assert log.tracking_number == "INP123456789"
+                assert log.courier_code == "INPOST"
+
     def test_dispatch_skips_already_sent(self, app, order_with_token):
         """_dispatch_status_email nie wysyla emaila jesli juz wyslany."""
         with app.app_context():
