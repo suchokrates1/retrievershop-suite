@@ -79,7 +79,7 @@
                 <span class="{% if qty == 0 %}text-base-content/60{% elif qty <= 2 %}text-warning{% endif %}">{{ qty }}</span>
             </td>
             {% endfor %}
-            <td class="text-center whitespace-nowrap">
+            <td class="text-center w-1 whitespace-nowrap">
                 <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
                 <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" class="inline" onsubmit="return confirm('Czy na pewno chcesz usunac ten przedmiot?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
