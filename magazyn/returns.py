@@ -628,7 +628,7 @@ def expire_stale_returns() -> Dict[str, int]:
                     "Zwrot wygasl - brak nadania przesylki w ciagu 16 dni od zgloszenia",
                 )
                 add_order_status(
-                    db, ret.order_id, "zakończono",
+                    db, ret.order_id, "dostarczono",
                     allow_backwards=True,
                     notes="Zwrot wygasl (brak nadania w terminie) - przywrocono status zakonczonego zamowienia",
                 )

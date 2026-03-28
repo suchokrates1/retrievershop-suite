@@ -20,6 +20,7 @@ from collections import OrderedDict
 
 try:
     from playwright.sync_api import Page, expect
+    import pytest_playwright  # noqa: F401 - need pytest-playwright for 'page' fixture
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     Page = None
@@ -112,6 +113,13 @@ def live_server(tmp_path_factory):
     settings_store._values = OrderedDict()
     settings_store._namespace = None
 
+    # Patch out background services that interfere with test db reset
+    import magazyn.factory as _factory
+    _orig_start_print = _factory.start_print_agent
+    _orig_create_user = _factory.create_default_user_if_needed
+    _factory.start_print_agent = lambda *a, **kw: None
+    _factory.create_default_user_if_needed = lambda *a, **kw: None
+
     flask_app = create_app({
         "TESTING": False,
         "WTF_CSRF_ENABLED": False,
@@ -166,6 +174,8 @@ def live_server(tmp_path_factory):
     yield {"app": flask_app, "port": port, "stocktake_id": stocktake_id}
 
     settings_io.load_settings = original_load
+    _factory.start_print_agent = _orig_start_print
+    _factory.create_default_user_if_needed = _orig_create_user
 
 
 # ---------------------------------------------------------------------------

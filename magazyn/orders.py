@@ -167,52 +167,10 @@ def _match_product_to_warehouse(db, name: str, color: str, size: str):
 bp = Blueprint("orders", __name__)
 
 
-# All valid statuses for the system
-# Flow: pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → w_punkcie → gotowe_do_odbioru → dostarczono → zakończono
-VALID_STATUSES = [
-    # Etap wewnętrzny (magazyn)
-    "pobrano",              # Pobrano zamowienie
-    "niewydrukowano",       # Niewydrukowano (legacy)
-    "wydrukowano",          # Wydrukowano etykietę
-    "spakowano",            # Spakowano
-    
-    # Etap przekazania
-    "przekazano_kurierowi", # Przekazano kurierowi/paczkomatowi
-    
-    # Etap transportu (z Allegro API)
-    "w_drodze",             # W tranzycie
-    "w_punkcie",            # W punkcie odbioru (paczkomat)
-    "gotowe_do_odbioru",    # Gotowe do odbioru (paczkomat/punkt)
-    
-    # Finał
-    "dostarczono",          # Doręczono klientowi
-    "zakończono",           # Zakończono (archiwum)
-    
-    # Problemy
-    "niedostarczono",       # Nieudane doręczenie
-    "zwrot",                # Zwrot
-    "anulowano",            # Anulowano
-]
-
-# Hierarchia statusów - statusy mogą się tylko przesuwać "do przodu"
-# Im wyższy indeks, tym bardziej zaawansowany status
-# Statusy problemowe (niedostarczono, zwrot, anulowano) można ustawić zawsze
-STATUS_HIERARCHY = {
-    "pobrano": 0,
-    "niewydrukowano": 1,
-    "wydrukowano": 2,
-    "spakowano": 3,
-    "przekazano_kurierowi": 4,
-    "w_drodze": 5,
-    "w_punkcie": 6,
-    "gotowe_do_odbioru": 7,
-    "dostarczono": 8,
-    "zakończono": 9,
-    # Statusy problemowe - mogą być ustawione w każdym momencie
-    "niedostarczono": 999,
-    "zwrot": 999,
-    "anulowano": 999,
-}
+from .status_config import (
+    VALID_STATUSES, STATUS_HIERARCHY, STATUS_EMAIL_MAP,
+    STATUS_FILTER_GROUPS, get_status_display,
+)
 
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
 
@@ -228,37 +186,8 @@ def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
 
 
 def _get_status_display(status: str) -> tuple[str, str]:
-    """Return (display text, badge class) for status.
-    
-    Flow statusów wysyłki:
-    pobrano → wydrukowano → spakowano → przekazano_kurierowi → w_drodze → gotowe_do_odbioru → dostarczono → zakończono
-    """
-    STATUS_MAP = {
-        # Etap wewnętrzny (magazyn)
-        "pobrano": ("Pobrano", "bg-light text-dark"),
-        "niewydrukowano": ("Niewydrukowano", "bg-secondary"),
-        "wydrukowano": ("Wydrukowano", "bg-info"),
-        "spakowano": ("Spakowano", "bg-info"),
-        
-        # Etap przekazania
-        "przekazano_kurierowi": ("Przekazano kurierowi", "bg-primary"),
-        
-        # Etap transportu (z Allegro API)
-        "w_drodze": ("W drodze", "bg-warning text-dark"),
-        "gotowe_do_odbioru": ("Do odbioru", "bg-info"),
-        "awizo": ("Awizo", "bg-warning text-dark"),
-        
-        # Finał
-        "dostarczono": ("Dostarczono", "bg-success"),
-        "zakończono": ("Zakończono", "bg-success"),
-        
-        # Problemy
-        "niedostarczono": ("Niedostarczono", "bg-danger"),
-        "zwrot": ("Zwrot", "bg-danger"),
-        "zagubiono": ("Zagubiono", "bg-danger"),
-        "anulowano": ("Anulowano", "bg-dark"),
-    }
-    return STATUS_MAP.get(status, (status, "bg-secondary"))
+    """Return (display text, badge class) for status."""
+    return get_status_display(status)
 
 
 def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Optional[str], tracking_number: Optional[str], delivery_method: Optional[str] = None) -> Optional[str]:
@@ -402,22 +331,10 @@ def orders_list():
                 (OrderStatusLog.order_id == latest_status_subq.c.order_id) &
                 (OrderStatusLog.timestamp == latest_status_subq.c.max_ts),
             )
-            if status_filter == "w_realizacji":
-                query = query.filter(OrderStatusLog.status.in_([
-                    "pobrano", "wydrukowano", "spakowano",
-                ]))
-            elif status_filter == "w_transporcie":
-                query = query.filter(OrderStatusLog.status.in_([
-                    "przekazano_kurierowi", "w_drodze", "gotowe_do_odbioru", "awizo",
-                ]))
-            elif status_filter == "zakonczone":
-                query = query.filter(OrderStatusLog.status.in_([
-                    "dostarczono", "zakończono",
-                ]))
-            elif status_filter == "problem":
-                query = query.filter(OrderStatusLog.status.in_([
-                    "niedostarczono", "zwrot", "zagubiono", "anulowano",
-                ]))
+            if status_filter in STATUS_FILTER_GROUPS:
+                query = query.filter(OrderStatusLog.status.in_(
+                    STATUS_FILTER_GROUPS[status_filter]
+                ))
             else:
                 # Bezposredni status
                 query = query.filter(OrderStatusLog.status == status_filter)
@@ -476,7 +393,7 @@ def orders_list():
             )
             
             status_text, status_class = _get_status_display(
-                latest_status.status if latest_status else "niewydrukowano"
+                    latest_status.status if latest_status else "pobrano"
             )
             
             # Get product summary - kazdy produkt w osobnej linii
@@ -1064,23 +981,9 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     return order
 
 
-# Mapowanie statusow na typy emaili
-_STATUS_EMAIL_MAP = {
-    "pobrano": "confirmation",
-    "przekazano_kurierowi": "shipment",
-    "w_drodze": "shipment",
-    "dostarczono": "delivery",
-    "zwrot": "correction",
-}
-
-
 def _dispatch_status_email(db, order_id: str, status: str):
-    """Wyslij email do klienta odpowiedni dla danego statusu.
-
-    Sprawdza czy email danego typu nie zostal juz wyslany (deduplikacja).
-    Bledy wysylki sa logowane ale nie przerywaja flow.
-    """
-    email_type = _STATUS_EMAIL_MAP.get(status)
+    """Wyslij email do klienta przy zmianie statusu zamowienia."""
+    email_type = STATUS_EMAIL_MAP.get(status)
     if not email_type:
         logger.debug("Email dispatch: brak mapowania dla statusu '%s'", status)
         return

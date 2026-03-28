@@ -29,22 +29,7 @@ from ..settings_store import SettingsPersistenceError, settings_store
 
 logger = logging.getLogger(__name__)
 
-# Mapowanie statusow Allegro na wewnetrzne statusy
-ALLEGRO_STATUS_MAP = {
-    "BOUGHT": "pobrano",
-    "FILLED_IN": "pobrano",
-    "READY_FOR_PROCESSING": "wydrukowano",
-    "CANCELLED": "anulowano",
-}
-
-ALLEGRO_FULFILLMENT_MAP = {
-    "NEW": "pobrano",
-    "PROCESSING": "wydrukowano",
-    "READY_FOR_SHIPMENT": "spakowano",
-    "SENT": "w_drodze",
-    "PICKED_UP": "dostarczono",
-    "CANCELLED": "anulowano",
-}
+from ..status_config import ALLEGRO_ORDER_STATUS_MAP, ALLEGRO_FULFILLMENT_MAP
 
 
 def _get_allegro_token() -> tuple[str, str]:
@@ -499,4 +484,4 @@ def get_allegro_internal_status(order_data: dict) -> str:
             return internal
 
     # Fallback na status zamowienia
-    return ALLEGRO_STATUS_MAP.get(allegro_status, "pobrano")
+    return ALLEGRO_ORDER_STATUS_MAP.get(allegro_status, "pobrano")

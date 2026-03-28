@@ -43,17 +43,7 @@ DELIVERY_METHOD_TO_CARRIER = {
     "allegro kurier fedex": "FEDEX",
 }
 
-# Mapowanie statusow przesylki na statusy wewnetrzne
-TRACKING_TO_INTERNAL = {
-    "PENDING": "przekazano_kurierowi",
-    "IN_TRANSIT": "w_drodze",
-    "RELEASED_FOR_DELIVERY": "w_drodze",
-    "AVAILABLE_FOR_PICKUP": "gotowe_do_odbioru",
-    "NOTICE_LEFT": "gotowe_do_odbioru",
-    "DELIVERED": "dostarczono",
-    "RETURNED": "zwrot",
-    "ISSUE": "niedostarczono",
-}
+from ..status_config import SHIPMENT_TRACKING_MAP as TRACKING_TO_INTERNAL
 
 
 def _call_with_refresh(method, url, endpoint, **kwargs):

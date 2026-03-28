@@ -29,13 +29,16 @@ from ..settings_store import settings_store
 logger = logging.getLogger(__name__)
 
 
+from ..status_config import STATUS_DISPLAY, get_status_display
+
+
 # Statusy wysylki z ikonami i opisami
 SHIPPING_STAGES = [
-    ("pobrano", "Pobrano do magazynu", "download", "Zamowienie pobrane z Allegro"),
-    ("niewydrukowano", "Niewydrukowano", "file-text", "Etykieta do wydruku"),
+    ("pobrano", "Pobrano", "download", "Zamowienie pobrane z Allegro"),
     ("wydrukowano", "Wydrukowano", "printer", "Etykieta wydrukowana"),
-    ("wwyslane", "W transporcie", "truck", "Paczka nadana"),
-    ("dostarczone", "Dostarczone", "package", "Paczka dostarczona"),
+    ("spakowano", "Spakowano", "box", "Zeskanowano etykiete + EAN"),
+    ("wyslano", "Wysłano", "truck", "Kurier potwierdzil odbior"),
+    ("dostarczono", "Dostarczone", "package", "Paczka dostarczona"),
 ]
 
 # Statusy zwrotu z ikonami
@@ -45,16 +48,6 @@ RETURN_STAGES = [
     ("delivered", "Odebrano", "package", "Paczka zwrotna odebrana"),
     ("completed", "Zakonczono", "check-circle", "Zwrot rozliczony"),
 ]
-
-# Mapowanie statusow na wyswietlanie
-STATUS_DISPLAY_MAP = {
-    "pobrano": ("Pobrano do magazynu", "bg-info"),
-    "niewydrukowano": ("Niewydrukowano", "bg-secondary"),
-    "wydrukowano": ("Wydrukowano", "bg-primary"),
-    "wwyslane": ("W transporcie", "bg-warning text-dark"),
-    "dostarczone": ("Dostarczone", "bg-success"),
-    "zwrot": ("Zwrot", "bg-danger"),
-}
 
 RETURN_STATUS_MAP = {
     "pending": ("Zgloszono zwrot", "bg-warning text-dark"),
@@ -231,9 +224,7 @@ class OrderDetailBuilder:
                 continue
             seen_statuses.add(log.status)
             
-            status_text, status_class = STATUS_DISPLAY_MAP.get(
-                log.status, (log.status, "bg-secondary")
-            )
+            status_text, status_class = get_status_display(log.status)
             status_history.append({
                 "status": log.status,
                 "status_text": status_text,
@@ -245,9 +236,9 @@ class OrderDetailBuilder:
             })
         
         current_status = status_history[0] if status_history else {
-            "status": "niewydrukowano",
-            "status_text": "Niewydrukowano",
-            "status_class": "bg-secondary",
+                "status": "pobrano",
+                "status_text": "Pobrano",
+                "status_class": "bg-light text-dark",
         }
         
         return status_history, current_status
