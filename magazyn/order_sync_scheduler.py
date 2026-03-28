@@ -255,8 +255,9 @@ def _sync_allegro_fulfillment(app):
                     
                     new_status = ALLEGRO_FULFILLMENT_MAP.get(f_status)
                     if not new_status:
-                        new_status = derived_status
-                        if not new_status:
+                        if derived_status == "anulowano":
+                            new_status = "anulowano"
+                        else:
                             stats["skipped"] += 1
                             continue
 
