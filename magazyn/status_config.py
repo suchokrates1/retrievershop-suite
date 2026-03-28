@@ -110,7 +110,7 @@ ALLEGRO_FULFILLMENT_MAP = {
     "NEW": "pobrano",
     "PROCESSING": None,          # drukowanie zarzadzamy wewnetrznie
     "READY_FOR_SHIPMENT": None,  # pakowanie zarzadzamy wewnetrznie
-    "SENT": None,                # ignorowane — nie jest potwierdzeniem kuriera
+    "SENT": "wyslano",
     "PICKED_UP": "dostarczono",
     "CANCELLED": "anulowano",
 }
@@ -147,26 +147,9 @@ STATUS_DISPLAY = {
     "anulowano": ("Anulowano", "bg-dark"),
 }
 
-# Fallback dla starych statusow jeszcze w bazie (przed migracja)
-_LEGACY_STATUS_DISPLAY = {
-    "niewydrukowano": STATUS_DISPLAY["pobrano"],
-    "przekazano_kurierowi": STATUS_DISPLAY["wyslano"],
-    "w_drodze": STATUS_DISPLAY["w_transporcie"],
-    "gotowe_do_odbioru": STATUS_DISPLAY["w_punkcie"],
-    "niedostarczono": STATUS_DISPLAY["problem_z_dostawa"],
-    "zagubiono": STATUS_DISPLAY["problem_z_dostawa"],
-    "awizo": STATUS_DISPLAY["w_punkcie"],
-    "zakończono": STATUS_DISPLAY["dostarczono"],
-}
-
-
 def get_status_display(status: str) -> tuple:
-    """Zwraca (text, css_class) dla statusu. Obsluguje legacy statusy."""
-    return (
-        STATUS_DISPLAY.get(status)
-        or _LEGACY_STATUS_DISPLAY.get(status)
-        or (status, "bg-secondary")
-    )
+    """Zwraca (text, css_class) dla statusu."""
+    return STATUS_DISPLAY.get(status) or (status, "bg-secondary")
 
 
 # ── Status → typ emaila ────────────────────────────────────────────

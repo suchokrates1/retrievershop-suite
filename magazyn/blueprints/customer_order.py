@@ -27,29 +27,15 @@ from ..status_config import (
 
 
 # Mapowanie statusow na czytelne opisy dla klienta
-# Uzywamy danych z status_config, ale dodajemy legacy statusy
 CUSTOMER_STATUS_MAP = {
     status: info for status, info in CUSTOMER_STATUS_MAP_CONFIG.items()
 }
-# Legacy statusy nadal w bazie
-CUSTOMER_STATUS_MAP.update({
-    "niewydrukowano": ("Przygotowywane", "info", "bi-hourglass-split"),
-    "przekazano_kurierowi": ("Nadane", "warning", "bi-truck"),
-    "w_drodze": ("W drodze", "warning", "bi-truck"),
-    "gotowe_do_odbioru": ("Gotowe do odbioru", "success", "bi-geo-alt"),
-})
 
 # Etapy realizacji widoczne dla klienta (z status_config)
 # CUSTOMER_STAGES imported from status_config
 
-# Mapowanie statusow wewnetrznych na etap klienta (z status_config + legacy)
+# Mapowanie statusow wewnetrznych na etap klienta
 STATUS_TO_STAGE = dict(CUSTOMER_STAGE_MAP)
-STATUS_TO_STAGE.update({
-    "niewydrukowano": 1,
-    "przekazano_kurierowi": 2,
-    "w_drodze": 2,
-    "gotowe_do_odbioru": 3,
-})
 
 
 def _unix_to_datetime(ts):
