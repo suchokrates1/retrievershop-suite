@@ -124,10 +124,10 @@
         <td>
             <a href="{{ url_for('orders.order_detail', order_id=order.order_id) }}" class="font-bold no-underline">#{{ order.lp }}</a>
         </td>
-        <td class="w-1 whitespace-nowrap"><small>{{ order.date_add | format_dt_short if order.date_add else '-' }}</small></td>
+        <td class="whitespace-nowrap"><small>{{ order.date_add | format_dt_short if order.date_add else '-' }}</small></td>
         <td><small>{% for line in order.product_summary %}{{ line }}{% if not loop.last %}<br>{% endif %}{% else %}-{% endfor %}</small></td>
         <td><small>{{ (order.delivery_method or '-') | replace('Allegro ', '') }}</small></td>
-        <td class="text-right w-1 whitespace-nowrap"><small>{% if order.payment_done %}{{ '%.2f'|format(order.payment_done) }}{% else %}-{% endif %}</small></td>
+        <td class="text-right whitespace-nowrap"><small>{% if order.payment_done %}{{ '%.2f'|format(order.payment_done) }}{% else %}-{% endif %}</small></td>
         <td>
             <div class="flex items-center gap-1">
             {% if order.return_info %}
@@ -146,7 +146,7 @@
             {% endif %}
             </div>
         </td>
-        <td class="text-center w-1 whitespace-nowrap" onclick="event.stopPropagation();">
+        <td class="text-center whitespace-nowrap" onclick="event.stopPropagation();">
             <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-outline btn-primary p-1" title="Drukuj etykietę" onclick="return confirm('Wydrukować etykietę?');">

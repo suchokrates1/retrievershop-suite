@@ -113,14 +113,14 @@
                                     <span class="badge badge-error">{{ size.quantity }}</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-right w-1 whitespace-nowrap">
+                                <td class="text-right whitespace-nowrap">
                                     {% if size.purchase_price %}
                                     {{ '%.2f'|format(size.purchase_price) }} z\u0142
                                     {% else %}
                                     <span class="text-base-content/60">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-right w-1 whitespace-nowrap">
+                                <td class="text-right whitespace-nowrap">
                                     {% if size.avg_purchase_price %}
                                     {{ '%.2f'|format(size.avg_purchase_price) }} zł
                                     {% else %}
@@ -170,7 +170,7 @@
                                     <span class="badge badge-neutral">0</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-right w-1 whitespace-nowrap">
+                                <td class="text-right whitespace-nowrap">
                                     {% if delivery.price %}
                                     {{ '%.2f'|format(delivery.price) }} zł
                                     {% else %}
@@ -261,7 +261,7 @@
                                     <span class="badge badge-neutral">Produkt</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-right font-bold w-1 whitespace-nowrap">{{ '%.2f'|format(offer.price) }} z\u0142</td>
+                                <td class="text-right font-bold whitespace-nowrap">{{ '%.2f'|format(offer.price) }} z\u0142</td>
                                 <td>
                                     {% if offer.publication_status == 'ACTIVE' %}
                                     <span class="badge badge-success">Aktywna</span>

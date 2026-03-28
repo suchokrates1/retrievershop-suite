@@ -22,15 +22,6 @@
 {# .table-responsive ensures horizontal scrolling when needed #}
 <div class="overflow-x-auto">
 <table class="table table-zebra table-sm w-full history-table">
-    <colgroup>
-        <col style="width:8.33%">
-        <col style="width:33.33%">
-        <col style="width:8.33%">
-        <col style="width:8.33%">
-        <col style="width:16.67%">
-        <col style="width:16.67%">
-        <col style="width:8.33%">
-    </colgroup>
     <thead><tr><th>ID zamówienia</th><th>Nazwa</th><th>Kolor</th><th>Rozmiar</th><th>Kurier</th><th>Czas</th><th>Akcje</th></tr></thead>
     <tbody id="historyBody">
     {% for item in printed %}
