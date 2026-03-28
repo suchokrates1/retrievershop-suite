@@ -10,7 +10,7 @@ Ten moduł odpowiada za:
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from collections import defaultdict
 
 from sqlalchemy import and_, desc, func
@@ -38,6 +38,46 @@ CARRIER_ID_MAP = {
     "paczkomaty": "INPOST",
     "orlen paczka": "ORLEN_PACZKA",
 }
+
+
+def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[Optional[str], str]:
+    """
+    Wyznacz najnowszy status trackingu z payloadu Allegro.
+
+    API historycznie zwracalo liste "events", a obecnie dla czesci
+    przewoznikow zwraca liste "statuses". Obslugujemy oba formaty.
+
+    Returns:
+        (status_code, description)
+    """
+    candidates: List[Tuple[bool, str, str, str]] = []
+
+    for event in waybill_data.get("events") or []:
+        status_code = event.get("type")
+        if not status_code:
+            continue
+        occurred_at = event.get("occurredAt") or ""
+        description = event.get("description") or ""
+        candidates.append((bool(occurred_at), occurred_at, status_code, description))
+
+    for status in waybill_data.get("statuses") or []:
+        status_code = status.get("status") or status.get("type")
+        if not status_code:
+            continue
+        occurred_at = (
+            status.get("occurredAt")
+            or status.get("dateTime")
+            or status.get("timestamp")
+            or ""
+        )
+        description = status.get("description") or status.get("name") or ""
+        candidates.append((bool(occurred_at), occurred_at, status_code, description))
+
+    if not candidates:
+        return None, ""
+
+    _, _, latest_status, latest_description = max(candidates)
+    return latest_status, latest_description
 
 
 def get_carrier_id(delivery_method: Optional[str]) -> Optional[str]:
@@ -168,50 +208,47 @@ def sync_parcel_statuses() -> Dict[str, int]:
                         
                         for waybill_data in tracking_data.get("waybills", []):
                             waybill = waybill_data.get("waybill")
-                            events = waybill_data.get("events", [])
                             
                             if not waybill or waybill not in waybill_map:
                                 continue
                             
                             order = waybill_map[waybill]
-                            
-                            # Znajdź najnowszy event
-                            if events:
-                                latest_event = max(events, key=lambda e: e.get("occurredAt", ""))
-                                allegro_status = latest_event.get("type")
-                                description = latest_event.get("description", "")
-                                
-                                # Mapuj na wewnętrzny status
-                                new_status = ALLEGRO_TRACKING_MAP.get(allegro_status)
-                                
-                                if new_status:
-                                    # Pobierz obecny status zamówienia
-                                    current_log = db.query(OrderStatusLog).filter(
-                                        OrderStatusLog.order_id == order.order_id
-                                    ).order_by(OrderStatusLog.timestamp.desc()).first()
-                                    
-                                    current_status = current_log.status if current_log else None
-                                    
-                                    # Aktualizuj tylko jeśli status się zmienił
-                                    if current_status != new_status:
-                                        logger.info(
-                                            f"Aktualizacja statusu zamówienia {order.order_id}: "
-                                            f"{current_status} → {new_status} (Allegro: {allegro_status})"
-                                        )
-                                        
-                                        # Dodaj nowy status
-                                        note_text = f"Allegro tracking: {description}" if description else f"Status z API: {allegro_status}"
-                                        add_order_status(
-                                            db, 
-                                            order.order_id, 
-                                            new_status, 
-                                            notes=note_text
-                                        )
-                                        stats["updated"] += 1
-                                    else:
-                                        logger.debug(
-                                            f"Status zamówienia {order.order_id} bez zmian: {current_status}"
-                                        )
+
+                            allegro_status, description = _extract_latest_tracking_status(waybill_data)
+                            if not allegro_status:
+                                continue
+
+                            # Mapuj na wewnętrzny status
+                            new_status = ALLEGRO_TRACKING_MAP.get(allegro_status)
+
+                            if new_status:
+                                # Pobierz obecny status zamówienia
+                                current_log = db.query(OrderStatusLog).filter(
+                                    OrderStatusLog.order_id == order.order_id
+                                ).order_by(OrderStatusLog.timestamp.desc()).first()
+
+                                current_status = current_log.status if current_log else None
+
+                                # Aktualizuj tylko jeśli status się zmienił
+                                if current_status != new_status:
+                                    logger.info(
+                                        f"Aktualizacja statusu zamówienia {order.order_id}: "
+                                        f"{current_status} → {new_status} (Allegro: {allegro_status})"
+                                    )
+
+                                    # Dodaj nowy status
+                                    note_text = f"Allegro tracking: {description}" if description else f"Status z API: {allegro_status}"
+                                    add_order_status(
+                                        db,
+                                        order.order_id,
+                                        new_status,
+                                        notes=note_text
+                                    )
+                                    stats["updated"] += 1
+                                else:
+                                    logger.debug(
+                                        f"Status zamówienia {order.order_id} bez zmian: {current_status}"
+                                    )
                     
                     except Exception as e:
                         logger.error(f"Błąd podczas sprawdzania przesyłek {carrier_id}: {e}", exc_info=True)
