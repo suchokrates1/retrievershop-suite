@@ -204,7 +204,7 @@ def _sync_allegro_fulfillment(app):
             )
             
             # Zamowienia w statusach posrednich z external_order_id
-            active_statuses = ["wydrukowano", "spakowano", "przekazano_kurierowi", "w_drodze", "w_punkcie", "gotowe_do_odbioru"]
+            active_statuses = ["wydrukowano", "spakowano", "wyslano", "w_transporcie", "w_punkcie"]
             orders = (
                 db.query(Order)
                 .join(OrderStatusLog, OrderStatusLog.order_id == Order.order_id)

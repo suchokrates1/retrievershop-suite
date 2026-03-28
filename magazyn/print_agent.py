@@ -1392,22 +1392,8 @@ class LabelAgent:
     # ------------------------------------------------------------------
     # Tracking status updates (Allegro API)
     # ------------------------------------------------------------------
-    # Allegro tracking event type -> our internal status
-    ALLEGRO_TRACKING_STATUS_MAP = {
-        "DELIVERED": "dostarczono",
-        "READY_FOR_PICKUP": "gotowe_do_odbioru",
-        "PICKED_UP": "dostarczono",
-        "SENT": "przekazano_kurierowi",
-        "PICKED_UP_BY_CARRIER": "przekazano_kurierowi",
-        "IN_TRANSIT": "w_drodze",
-        "OUT_FOR_DELIVERY": "w_drodze",
-        "RETURNED": "zwrot",
-        "RETURNED_TO_SENDER": "zwrot",
-        "CANCELLED": "anulowano",
-        "LOST": "zagubiono",
-        "FAILED_DELIVERY": "niedostarczono",
-        "LABEL_CREATED": "wydrukowano",
-    }
+    # Allegro tracking event type -> our internal status (imported from status_config)
+    from .status_config import ALLEGRO_TRACKING_MAP as ALLEGRO_TRACKING_STATUS_MAP
 
     def _check_tracking_statuses(self) -> None:
         """Sprawdz i zaktualizuj statusy przesylek przez Allegro Tracking API."""
@@ -1446,9 +1432,9 @@ class LabelAgent:
                         .order_by(desc(OrderStatusLog.timestamp))
                         .first()
                     )
-                    current_status = latest_status.status if latest_status else "niewydrukowano"
+                    current_status = latest_status.status if latest_status else "pobrano"
 
-                    if current_status in ("dostarczono", "zwrot", "zagubiono", "anulowano", "zakończono"):
+                    if current_status in ("dostarczono", "zwrot", "anulowano", "problem_z_dostawa"):
                         continue
 
                     waybill = order.delivery_package_nr
@@ -1983,6 +1969,13 @@ class LabelAgent:
                                     "Błąd drukowania zamówienia %s: %s", order_id, exc
                                 )
                                 print_success = False
+                                try:
+                                    from .orders import add_order_status
+                                    from .db import get_session
+                                    with get_session() as db:
+                                        add_order_status(db, order_id, "blad_druku", notes=f"Błąd drukowania: {exc}")
+                                except Exception:
+                                    self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
                                 for entry in entries:
                                     entry["status"] = "queued"
                                 self.save_queue(queue)
@@ -1995,6 +1988,13 @@ class LabelAgent:
                             order_id,
                         )
                         PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
+                        try:
+                            from .orders import add_order_status
+                            from .db import get_session
+                            with get_session() as db:
+                                add_order_status(db, order_id, "blad_druku", notes="Brak etykiety - Allegro nie zwróciło danych")
+                        except Exception:
+                            self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
                         # Wyślij powiadomienie tylko przy 1 i 10 próbie
                         if self._should_send_error_notification(order_id):
                             self._send_label_error_notification(order_id)
