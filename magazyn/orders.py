@@ -907,6 +907,35 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     products_list = order_data.get("products", [])
     order.products_json = json.dumps(products_list) if products_list else None
 
+    # Ujednolicenie pozycji: zdarza sie, ze to samo SKU/oferta wpada wielokrotnie
+    # w jednym payloadzie. Scal je do jednej pozycji z laczna iloscia.
+    merged_products = {}
+    for prod in products_list:
+        key = (
+            str(prod.get("auction_id") or "").strip(),
+            str(prod.get("ean") or "").strip(),
+            str(prod.get("sku") or "").strip(),
+            str(prod.get("name") or "").strip(),
+            str(prod.get("price_brutto") or "").strip(),
+        )
+
+        qty = prod.get("quantity", 1)
+        try:
+            qty_int = int(qty)
+        except (TypeError, ValueError):
+            qty_int = 1
+
+        if key not in merged_products:
+            merged = dict(prod)
+            merged["quantity"] = max(1, qty_int)
+            merged_products[key] = merged
+        else:
+            merged_products[key]["quantity"] = (
+                int(merged_products[key].get("quantity", 1)) + max(1, qty_int)
+            )
+
+    products_list = list(merged_products.values())
+
     # Korekcja payment_done dla zamowien za pobraniem (COD)
     # Allegro raportuje payment_done=0 dla COD, bo gotowka nie przechodzi
     # przez system platnosci online.
@@ -925,8 +954,17 @@ def sync_order_from_data(db, order_data: dict) -> Order:
             )
     
     # Sync order products
+    # Dla PostgreSQL blokujemy rekord zamowienia, aby zserializowac
+    # jednoczesne synchronizacje i uniknac duplikatow order_products.
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        db.flush()
+        db.query(Order).filter(Order.order_id == order_id).with_for_update().first()
+
     # First, remove existing products for this order
-    db.query(OrderProduct).filter(OrderProduct.order_id == order_id).delete()
+    db.query(OrderProduct).filter(OrderProduct.order_id == order_id).delete(
+        synchronize_session=False
+    )
     
     for prod in products_list:
         ean = prod.get("ean", "").strip() or None
