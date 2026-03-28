@@ -268,8 +268,8 @@
     <!-- Main Content Row -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <!-- Left Column: Activity Feed -->
-        <div class="lg:col-span-4">
-            <div class="card bg-base-200 shadow-sm h-full">
+        <div class="lg:col-span-4 flex">
+            <div class="card bg-base-200 shadow-sm h-full flex-1">
                 <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl flex justify-between items-center">
                     <span><i class="bi bi-activity mr-2"></i>Ostatnia aktywność</span>
                 </div>
@@ -304,8 +304,8 @@
         </div>
 
         <!-- Middle Column: Latest Orders -->
-        <div class="lg:col-span-5">
-            <div class="card bg-base-200 shadow-sm h-full">
+        <div class="lg:col-span-5 flex">
+            <div class="card bg-base-200 shadow-sm h-full flex-1">
                 <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl flex justify-between items-center">
                     <span><i class="bi bi-receipt mr-2"></i>Ostatnie zamówienia</span>
                     <a href="{{ url_for('orders.orders_list') }}" class="btn btn-sm btn-outline">
@@ -360,9 +360,9 @@
         </div>
 
         <!-- Right Column: Low Stock Alert -->
-        <div class="lg:col-span-3">
+        <div class="lg:col-span-3 flex">
             <!-- Low Stock Alert -->
-            <div class="card bg-base-200 shadow-sm h-full flex flex-col">
+            <div class="card bg-base-200 shadow-sm h-full flex flex-col flex-1">
                 <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-error">
                     <i class="bi bi-exclamation-triangle mr-2 text-error"></i>Niski stan magazynu
                 </div>
