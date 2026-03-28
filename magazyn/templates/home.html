@@ -422,13 +422,13 @@
                                         <span class="font-semibold">{{ delivery.supplier or 'Import z Excela' }}</span>
                                     </td>
                                     <td class="text-sm text-base-content/60">{{ delivery.invoice_number or '-' }}</td>
-                                    <td class="text-center">
+                                    <td class="text-center whitespace-nowrap">
                                         <span class="badge badge-neutral">{{ delivery.products|length }} poz.</span>
                                     </td>
-                                    <td class="text-center">
+                                    <td class="text-center whitespace-nowrap">
                                         <span class="badge badge-info">{{ delivery.total_quantity }} szt.</span>
                                     </td>
-                                    <td class="text-right text-success font-semibold">{{ "%.2f"|format(delivery.total_value) }} zł</td>
+                                    <td class="text-right text-success font-semibold whitespace-nowrap">{{ "%.2f"|format(delivery.total_value) }} zł</td>
                                 </tr>
                                 <tr x-show="expanded" x-transition.duration.200ms x-cloak>
                                     <td colspan="7" class="p-0 bg-base-200">
@@ -454,9 +454,9 @@
                                                         </td>
                                                         <td class="text-sm text-base-content/60">{{ product.color or '-' }}</td>
                                                         <td class="text-sm">{{ product.size }}</td>
-                                                        <td class="text-center"><span class="badge badge-info">{{ product.quantity }}</span></td>
-                                                        <td class="text-right text-sm">{{ "%.2f"|format(product.price) }} zł</td>
-                                                        <td class="text-right text-sm text-success">{{ "%.2f"|format(product.value) }} zł</td>
+                                                        <td class="text-center whitespace-nowrap"><span class="badge badge-info">{{ product.quantity }}</span></td>
+                                                        <td class="text-right text-sm whitespace-nowrap">{{ "%.2f"|format(product.price) }} zł</td>
+                                                        <td class="text-right text-sm text-success whitespace-nowrap">{{ "%.2f"|format(product.value) }} zł</td>
                                                     </tr>
                                                     {% endfor %}
                                                 </tbody>
@@ -561,7 +561,7 @@
                                                     <span :title="item.name" x-text="item.short_name"></span>
                                                 </template>
                                             </td>
-                                            <td class="text-center"><span class="badge badge-error" x-text="item.quantity"></span></td>
+                                            <td class="text-center whitespace-nowrap"><span class="badge badge-error" x-text="item.quantity"></span></td>
                                         </tr>
                                     </template>
                                     <template x-if="!bestsellers.week || bestsellers.week.length === 0">
@@ -601,8 +601,8 @@
                                                     <span :title="item.name" x-text="item.short_name"></span>
                                                 </template>
                                             </td>
-                                            <td class="text-center"><span class="badge badge-success" x-text="item.quantity"></span></td>
-                                            <td class="text-right text-sm text-success font-semibold" x-text="item.revenue !== undefined ? Math.round(item.revenue) + ' zł' : ''"></td>
+                                            <td class="text-center whitespace-nowrap"><span class="badge badge-success" x-text="item.quantity"></span></td>
+                                            <td class="text-right text-sm text-success font-semibold whitespace-nowrap" x-text="item.revenue !== undefined ? Math.round(item.revenue) + ' zł' : ''"></td>
                                         </tr>
                                     </template>
                                     <template x-if="!bestsellers.month || bestsellers.month.length === 0">
@@ -642,8 +642,8 @@
                                                     <span :title="item.name" x-text="item.short_name"></span>
                                                 </template>
                                             </td>
-                                            <td class="text-center"><span class="badge badge-primary" x-text="item.quantity"></span></td>
-                                            <td class="text-right text-sm text-success font-semibold" x-text="item.revenue !== undefined ? Math.round(item.revenue) + ' zł' : ''"></td>
+                                            <td class="text-center whitespace-nowrap"><span class="badge badge-primary" x-text="item.quantity"></span></td>
+                                            <td class="text-right text-sm text-success font-semibold whitespace-nowrap" x-text="item.revenue !== undefined ? Math.round(item.revenue) + ' zł' : ''"></td>
                                         </tr>
                                     </template>
                                     <template x-if="!bestsellers.all_time || bestsellers.all_time.length === 0">
@@ -679,9 +679,9 @@
                                             <td x-text="(item.name || '').substring(0, 40)"></td>
                                             <td class="text-sm text-base-content/60" x-text="item.color || '-'"></td>
                                             <td x-text="item.size"></td>
-                                            <td class="text-center"><span class="badge badge-info" x-text="item.stock"></span></td>
-                                            <td class="text-center"><span class="badge badge-error" x-text="item.sold_30d"></span></td>
-                                            <td class="text-center" x-html="rotationBadge(item)"></td>
+                                            <td class="text-center whitespace-nowrap"><span class="badge badge-info" x-text="item.stock"></span></td>
+                                            <td class="text-center whitespace-nowrap"><span class="badge badge-error" x-text="item.sold_30d"></span></td>
+                                            <td class="text-center whitespace-nowrap" x-html="rotationBadge(item)"></td>
                                         </tr>
                                     </template>
                                 </tbody>
