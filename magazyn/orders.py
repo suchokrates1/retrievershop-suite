@@ -1073,6 +1073,17 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
     Returns:
         OrderStatusLog lub None jeśli pominięto (duplikat lub cofnięcie)
     """
+    order = db.query(Order).filter(Order.order_id == order_id).first()
+
+    tracking_number = kwargs.get("tracking_number")
+    courier_code = kwargs.get("courier_code")
+
+    if order is not None:
+        if tracking_number:
+            order.delivery_package_nr = tracking_number
+        if courier_code:
+            order.courier_code = courier_code
+
     # Sprawdź ostatni status
     last_status = db.query(OrderStatusLog).filter(
         OrderStatusLog.order_id == order_id
@@ -1101,8 +1112,8 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
     log = OrderStatusLog(
         order_id=order_id,
         status=status,
-        tracking_number=kwargs.get("tracking_number"),
-        courier_code=kwargs.get("courier_code"),
+        tracking_number=tracking_number,
+        courier_code=courier_code,
         notes=kwargs.get("notes"),
     )
     db.add(log)
