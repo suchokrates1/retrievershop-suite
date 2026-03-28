@@ -138,20 +138,19 @@
         <td class="text-right"><small>{% if order.payment_done %}{{ '%.2f'|format(order.payment_done) }}{% else %}-{% endif %}</small></td>
         <td>
             <div class="flex flex-wrap items-center gap-1">
-            <span class="badge {{ order.status_class }}">{{ order.status_text }}</span>
             {% if order.return_info %}
             {% set rs = order.return_info.status %}
-            {% if order.return_info.refund_processed %}
-            <span class="badge text-white ml-1" style="background-color: oklch(0.55 0.15 25);" title="Zwrot zakonczony">zakonczony</span>
-            {% elif rs == 'completed' %}
-            <span class="badge text-white ml-1" style="background-color: oklch(0.55 0.15 25);" title="Zwrot zakonczony">zakonczony</span>
+            {% if order.return_info.refund_processed or rs == 'completed' %}
+            <span class="badge text-white" style="background-color: oklch(0.55 0.15 25);" title="Zwrot zakonczony"><i class="bi bi-arrow-return-left"></i> zakonczony</span>
             {% elif rs == 'delivered' %}
-            <span class="badge text-white ml-1" style="background-color: oklch(0.65 0.18 50);" title="Paczka zwrotna odebrana">odebrano</span>
+            <span class="badge text-white" style="background-color: oklch(0.65 0.18 50);" title="Paczka zwrotna odebrana"><i class="bi bi-arrow-return-left"></i> odebrano</span>
             {% elif rs == 'in_transit' %}
-            <span class="badge text-white ml-1" style="background-color: oklch(0.7 0.15 65);" title="Paczka zwrotna w drodze">w drodze</span>
+            <span class="badge text-white" style="background-color: oklch(0.7 0.15 65);" title="Paczka zwrotna w drodze"><i class="bi bi-arrow-return-left"></i> w drodze</span>
             {% else %}
-            <span class="badge text-white ml-1" style="background-color: oklch(0.6 0.2 30);" title="Zwrot zgloszony">zgloszony</span>
+            <span class="badge text-white" style="background-color: oklch(0.6 0.2 30);" title="Zwrot zgloszony"><i class="bi bi-arrow-return-left"></i> zgloszony</span>
             {% endif %}
+            {% else %}
+            <span class="badge {{ order.status_class }}">{{ order.status_text }}</span>
             {% endif %}
             </div>
         </td>
