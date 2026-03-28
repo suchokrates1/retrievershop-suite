@@ -362,12 +362,12 @@
         <!-- Right Column: Low Stock Alert -->
         <div class="lg:col-span-3">
             <!-- Low Stock Alert -->
-            <div class="card bg-base-200 shadow-sm h-full">
+            <div class="card bg-base-200 shadow-sm h-full flex flex-col">
                 <div class="bg-base-300 px-4 py-3 font-semibold rounded-t-2xl border-l-4 border-error">
                     <i class="bi bi-exclamation-triangle mr-2 text-error"></i>Niski stan magazynu
                 </div>
-                <div class="card-body p-0">
-                    <div class="divide-y divide-base-300" style="max-height: 200px; overflow-y: auto;">
+                <div class="card-body p-0 flex-1 min-h-0">
+                    <div class="divide-y divide-base-300 h-full overflow-y-auto">
                         {% for item in dashboard.inventory.low_stock_items %}
                         <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" 
                            class="flex justify-between items-center py-2 px-3 hover:bg-base-300 no-underline">
