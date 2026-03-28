@@ -1503,6 +1503,18 @@ class LabelAgent:
                                     courier_code=carrier_id,
                                     notes=f"Auto-update z Allegro Tracking ({event_type})",
                                 )
+
+                                # Gdy tracking potwierdzi nadanie, zsynchronizuj fulfillment Allegro.
+                                if new_status == "wyslano" and order_obj.external_order_id:
+                                    try:
+                                        update_fulfillment_status(order_obj.external_order_id, "SENT")
+                                    except Exception as ful_exc:
+                                        self.logger.warning(
+                                            "Nie mozna ustawic fulfillment SENT dla %s: %s",
+                                            order_obj.order_id,
+                                            ful_exc,
+                                        )
+
                                 db.commit()
                             except Exception as status_exc:
                                 self.logger.warning(

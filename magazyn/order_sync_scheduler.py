@@ -186,13 +186,15 @@ def _sync_allegro_fulfillment(app):
     
     Sprawdzamy tylko zamowienia ktore:
     - maja external_order_id (UUID Allegro)
-    - sa w statusie posrednim (wydrukowano, spakowano, przekazano_kurierowi, w_drodze, w_punkcie)
+    - sa w statusie posrednim (wydrukowano, spakowano, wyslano, w_transporcie, w_punkcie)
     """
     from .db import get_session
     from .models import Order, OrderStatusLog
     from .orders import add_order_status
     from .allegro_api.orders import (
         fetch_allegro_order_detail,
+        parse_allegro_order_to_data,
+        get_allegro_internal_status,
         ALLEGRO_FULFILLMENT_MAP,
     )
     from sqlalchemy import and_, desc, func
@@ -238,6 +240,11 @@ def _sync_allegro_fulfillment(app):
                 try:
                     detail = fetch_allegro_order_detail(order.external_order_id)
                     stats["checked"] += 1
+
+                    # Priorytet: status checkout-form (np. CANCELLED) nad samym fulfillment.
+                    # To domyka przypadki, gdzie fulfillment jeszcze nie odzwierciedla anulowania.
+                    parsed = parse_allegro_order_to_data(detail)
+                    derived_status = get_allegro_internal_status(parsed)
                     
                     fulfillment = detail.get("fulfillment", {}) or {}
                     f_status = fulfillment.get("status", "")
@@ -248,8 +255,13 @@ def _sync_allegro_fulfillment(app):
                     
                     new_status = ALLEGRO_FULFILLMENT_MAP.get(f_status)
                     if not new_status:
-                        stats["skipped"] += 1
-                        continue
+                        new_status = derived_status
+                        if not new_status:
+                            stats["skipped"] += 1
+                            continue
+
+                    if derived_status == "anulowano":
+                        new_status = "anulowano"
                     
                     # Pobierz obecny status
                     current_log = (
