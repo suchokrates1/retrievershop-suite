@@ -97,6 +97,17 @@ def parse_time_str(value: str) -> dt_time:
         raise ValueError(f"Invalid time value: {value}") from exc
 
 
+def is_cod_order(payment_method_cod: Any, payment_method: Any) -> bool:
+    """Return True when order should be treated as COD (pobranie)."""
+    cod_value = str(payment_method_cod or "").strip().lower()
+    if cod_value in {"1", "true", "t", "yes", "y"}:
+        return True
+
+    method = str(payment_method or "").strip().lower()
+    method_ascii = unicodedata.normalize("NFKD", method).encode("ascii", "ignore").decode("ascii")
+    return any(token in method_ascii for token in ("pobran", "cod", "cash on delivery"))
+
+
 # Uzywamy short_preview z modulu utils
 
 
@@ -1846,7 +1857,10 @@ class LabelAgent:
 
                     # Blokada druku dla nieopłaconych zamówień (nie dotyczy COD)
                     payment_done = float(order.get("payment_done") or 0)
-                    is_cod = str(order.get("payment_method_cod", "0")) == "1"
+                    is_cod = is_cod_order(
+                        order.get("payment_method_cod", "0"),
+                        order.get("payment_method", ""),
+                    )
                     if not is_cod and payment_done <= 0:
                         self.logger.info(
                             "Pomijam %s - nieoplacone (payment_done=%.2f, cod=%s)",
