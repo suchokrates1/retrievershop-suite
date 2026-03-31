@@ -187,13 +187,10 @@
                             <tr class="border-t-2 border-base-300">
                                 <td>
                                     <i class="bi bi-truck mr-1"></i>
-                                    <strong>Wysylka</strong>
-                                    {% if order.delivery_method %}
-                                    <br><span class="text-sm text-base-content/60">{{ order.delivery_method }}</span>
-                                    {% endif %}
+                                    {{ order.delivery_method or '-' }}
                                 </td>
-                                <td><span class="text-base-content/60">-</span></td>
-                                <td class="text-center">1</td>
+                                <td></td>
+                                <td></td>
                                 <td class="text-right">{{ '%.2f'|format(order.delivery_price) }}</td>
                             </tr>
                         {% endif %}
