@@ -341,6 +341,17 @@ def _process_pending_invoices():
         for order in orders:
             if not order.products:
                 continue
+
+            # Nie wystawiaj faktury jesli etykieta jeszcze nie zostala wygenerowana.
+            # Brak etykiety moze oznaczac blad w adresie dostawy - co bedzie bledem
+            # rowniez na fakturze. Poczekaj az print_agent potwierdzi wysylke.
+            if not order.delivery_package_nr:
+                logger.debug(
+                    "Pomijam fakture dla %s - brak etykiety (delivery_package_nr)",
+                    order.order_id,
+                )
+                continue
+
             stats["processed"] += 1
             try:
                 result = generate_and_send_invoice(order.order_id)
