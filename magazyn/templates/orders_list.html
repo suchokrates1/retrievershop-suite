@@ -127,7 +127,7 @@
         <td class="whitespace-nowrap"><small>{{ order.date_add | format_dt_short if order.date_add else '-' }}</small></td>
         <td><small>{% for line in order.product_summary %}{{ line }}{% if not loop.last %}<br>{% endif %}{% else %}-{% endfor %}</small></td>
         <td><small>{{ (order.delivery_method or '-') | replace('Allegro ', '') }}</small></td>
-        <td class="text-right whitespace-nowrap"><small>{% if order.payment_done %}{{ '%.2f'|format(order.payment_done) }}{% else %}-{% endif %}</small></td>
+        <td class="text-right whitespace-nowrap"><small>{% if order.sale_price %}{{ '%.2f'|format(order.sale_price) }} zł{% else %}-{% endif %}</small></td>
         <td>
             <div class="flex items-center gap-1">
             {% if order.return_info %}
