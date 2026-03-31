@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from sqlalchemy import desc
+from sqlalchemy import or_ as db_or
 from sqlalchemy.orm import Session
 
 
@@ -254,8 +255,22 @@ class FinancialCalculator:
         Returns:
             ProfitBreakdown ze szczegolami kalkulacji
         """
-        # Cena sprzedazy
-        sale_price = Decimal(str(order.payment_done or 0))
+        # Cena sprzedazy - dla pobrania (COD) uzywamy kwoty zamowienia
+        payment_method_cod = getattr(order, 'payment_method_cod', False)
+        payment_method_str = str(getattr(order, 'payment_method', '') or '')
+        is_cod = bool(payment_method_cod) or 'pobranie' in payment_method_str.lower()
+        if is_cod and hasattr(order, 'products'):
+            try:
+                products_total = sum(
+                    Decimal(str(p.price_brutto or 0)) * p.quantity
+                    for p in order.products
+                )
+                delivery = Decimal(str(getattr(order, 'delivery_price', None) or 0))
+                sale_price = products_total + delivery
+            except Exception:
+                sale_price = Decimal(str(order.payment_done or 0))
+        else:
+            sale_price = Decimal(str(order.payment_done or 0))
         
         # Oplaty Allegro - uzyj external_order_id dla billing API
         delivery_method = getattr(order, 'delivery_method', None)
@@ -316,17 +331,26 @@ class FinancialCalculator:
         orders = self.db.query(Order).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
-            Order.payment_done > 0,  # wyklucz zamowienia bez platnosci (0 lub None)
             ~Order.order_id.in_(return_order_ids)
+        ).filter(
+            # Zamowienia z platnoscia LUB za pobraniem (payment_done=0 ale COD)
+            db_or(
+                Order.payment_done > 0,
+                Order.payment_method_cod == True,
+            )
         ).all()
 
-        # Zlicz produkty - BEZ filtra zwrotow (jak Allegro: sprzedane = sprzedane)
+        # Zlicz produkty
         products_sold = self.db.query(func.sum(OrderProduct.quantity)).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
-            Order.payment_done > 0,
+        ).filter(
+            db_or(
+                Order.payment_done > 0,
+                Order.payment_method_cod == True,
+            )
         ).scalar() or 0
 
         # Zwroty zakonczone w tym okresie (wg updated_at - kiedy status zmieniono na completed)
