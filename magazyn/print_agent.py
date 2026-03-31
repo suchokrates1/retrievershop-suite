@@ -775,8 +775,21 @@ class LabelAgent:
                     )
                     current_status = latest.status if latest else "pobrano"
 
-                    # Interesuja nas tylko zamowienia w statusie 'pobrano'
-                    if current_status != "pobrano":
+                    # Interesuja nas tylko zamowienia w statusie 'pobrano' lub 'blad_druku' (retry)
+                    if current_status == "blad_druku":
+                        # Policz ile razy bylo blad_druku - max 3 retry
+                        from sqlalchemy import func as sa_func
+                        error_count = (
+                            db.query(sa_func.count(OrderStatusLog.id))
+                            .filter(
+                                OrderStatusLog.order_id == order.order_id,
+                                OrderStatusLog.status == "blad_druku",
+                            )
+                            .scalar()
+                        ) or 0
+                        if error_count >= 3:
+                            continue
+                    elif current_status != "pobrano":
                         continue
 
                     # Pobierz produkty
@@ -2046,6 +2059,8 @@ class LabelAgent:
                                 for entry in entries:
                                     entry["status"] = "queued"
                                 self.save_queue(queue)
+                                self.logger.info("Retry za 60s dla %s", order_id)
+                                self._stop_event.wait(60)
                             # Zawsze wysyłaj wiadomość - z info o statusie drukowania
                             self._notify_messenger(self.last_order_data, print_success=print_success)
                     else:
@@ -2068,6 +2083,8 @@ class LabelAgent:
                         else:
                             # Inkrementuj licznik bez wysyłania
                             self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
+                        self.logger.info("Retry za 60s dla %s", order_id)
+                        self._stop_event.wait(60)
             except Exception as exc:
                 self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
                 PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()

@@ -101,3 +101,42 @@ def test_agent_loop_treats_pobranie_as_cod_with_zero_payment(monkeypatch):
     assert agent.last_order_data.get("payment_method") == "Pobranie przy odbiorze"
     assert captured["mess"].get("courier_code") == "DHL"
     assert captured["marked"].get("courier_code") == "DHL"
+
+
+def test_get_orders_includes_blad_druku_under_3_retries(app):
+    """get_orders zwraca zamowienia z blad_druku gdy error_count < 3."""
+    from magazyn.db import get_session
+    from magazyn.models import Order, OrderStatusLog
+    import time
+
+    oid = "allegro_test-retry-blad"
+    now_ts = int(time.time())
+
+    with app.app_context():
+        with get_session() as db:
+            order = Order(
+                order_id=oid,
+                platform="allegro",
+                date_add=now_ts,
+                delivery_fullname="Test Retry",
+            )
+            db.add(order)
+            # 1x blad_druku - powinno byc jeszcze retry
+            db.add(OrderStatusLog(order_id=oid, status="blad_druku", notes="test"))
+            db.commit()
+
+        mod = importlib.reload(pa)
+        agent = mod.agent
+        orders = agent.get_orders()
+        order_ids = [o["order_id"] for o in orders]
+        assert oid in order_ids
+
+        # Dodaj jeszcze 2x blad_druku (lacznie 3) - powinno byc pominiete
+        with get_session() as db:
+            db.add(OrderStatusLog(order_id=oid, status="blad_druku", notes="test2"))
+            db.add(OrderStatusLog(order_id=oid, status="blad_druku", notes="test3"))
+            db.commit()
+
+        orders = agent.get_orders()
+        order_ids = [o["order_id"] for o in orders]
+        assert oid not in order_ids
