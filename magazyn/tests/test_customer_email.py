@@ -80,6 +80,7 @@ def order_with_invoice(app):
             order.payment_done = 100.00
             order.date_add = int(time.time())
             order.want_invoice = True
+            order.delivery_package_nr = "TEST123456789"
             order.invoice_company = "Firma Testowa Sp. z o.o."
             order.invoice_nip = "1234567890"
             order.invoice_fullname = "Jan Kowalski"
