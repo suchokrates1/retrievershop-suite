@@ -120,6 +120,7 @@ def create_shipment(
     sender: dict,
     receiver: dict,
     packages: list[dict],
+    cash_on_delivery: Optional[dict] = None,
     reference_number: Optional[str] = None,
     label_format: str = "PDF",
     additional_services: Optional[list[str]] = None,
@@ -145,6 +146,9 @@ def create_shipment(
         Opcjonalnie point (jesli adres odbiorczy to punkt odbioru/paczkomat).
     packages : list[dict]
         Lista paczek. Kazda: type, length, width, height, weight, textOnLabel.
+    cash_on_delivery : dict, optional
+        Dane pobrania (COD), np. {"amount": "216.99", "currency": "PLN"}
+        lub dodatkowo z "iban" i "ownerName" gdy wymagane przez usluge.
     reference_number : str, optional
         Zewnetrzny ID / sygnatura przesylki.
     label_format : str
@@ -175,6 +179,8 @@ def create_shipment(
 
     if credentials_id:
         input_data["credentialsId"] = credentials_id
+    if cash_on_delivery:
+        input_data["cashOnDelivery"] = cash_on_delivery
     if reference_number:
         input_data["referenceNumber"] = reference_number
     if additional_services:
