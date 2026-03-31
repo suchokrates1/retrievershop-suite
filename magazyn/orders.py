@@ -417,6 +417,20 @@ def orders_list():
                     "refund_processed": active_return.refund_processed,
                 }
             
+            # Kwota sprzedazy: dla COD liczymy z pozycji + dostawa
+            is_cod = bool(order.payment_method_cod) or (
+                'pobranie' in (order.payment_method or '').lower()
+            )
+            if is_cod:
+                products_total = sum(
+                    Decimal(str(p.price_brutto or 0)) * p.quantity
+                    for p in products
+                )
+                delivery = Decimal(str(order.delivery_price or 0))
+                sale_price = float(products_total + delivery)
+            else:
+                sale_price = float(order.payment_done) if order.payment_done else None
+
             orders_data.append({
                 "order_id": order.order_id,
                 "lp": lp_map.get(order.order_id, 0),
@@ -426,7 +440,7 @@ def orders_list():
                 "platform": order.platform,
                 "date_add": _unix_to_datetime(order.date_add),
                 "delivery_method": order.delivery_method,
-                "payment_done": order.payment_done,
+                "sale_price": sale_price,
                 "currency": order.currency,
                 "status_text": status_text,
                 "status_class": status_class,
