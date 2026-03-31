@@ -335,8 +335,19 @@ class OrderDetailBuilder:
         # Produkty
         products = self.build_products_list(order)
         
-        # Cena sprzedazy
-        sale_price = Decimal(str(order.payment_done)) if order.payment_done else Decimal("0")
+        # Cena sprzedazy - dla pobrania (COD) uzywamy kwoty zamowienia zamiast payment_done
+        is_cod = bool(order.payment_method_cod) or (
+            order.payment_method and 'pobranie' in (order.payment_method or '').lower()
+        )
+        if is_cod:
+            products_total = sum(
+                Decimal(str(op.price_brutto or 0)) * op.quantity
+                for op in order.products
+            )
+            delivery = Decimal(str(order.delivery_price or 0))
+            sale_price = products_total + delivery
+        else:
+            sale_price = Decimal(str(order.payment_done)) if order.payment_done else Decimal("0")
         
         # Koszt pakowania
         try:

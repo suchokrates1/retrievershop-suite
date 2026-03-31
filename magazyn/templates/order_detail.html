@@ -183,6 +183,20 @@
                                 <td colspan="4" class="text-center text-base-content/60">Brak produktow</td>
                             </tr>
                         {% endfor %}
+                        {% if order.delivery_price and order.delivery_price > 0 %}
+                            <tr class="border-t-2 border-base-300">
+                                <td>
+                                    <i class="bi bi-truck mr-1"></i>
+                                    <strong>Wysylka</strong>
+                                    {% if order.delivery_method %}
+                                    <br><span class="text-sm text-base-content/60">{{ order.delivery_method }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="text-base-content/60">-</span></td>
+                                <td class="text-center">1</td>
+                                <td class="text-right">{{ '%.2f'|format(order.delivery_price) }}</td>
+                            </tr>
+                        {% endif %}
                         </tbody>
                     </table>
                     </div>
