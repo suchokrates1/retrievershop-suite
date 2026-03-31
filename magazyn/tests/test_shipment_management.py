@@ -15,6 +15,7 @@ from magazyn.allegro_api.shipment_management import (
     invalidate_delivery_services_cache,
     _CACHE_TTL,
 )
+from magazyn.print_agent import calculate_cod_amount
 
 
 # --------------- helpers ---------------
@@ -164,6 +165,36 @@ def test_create_shipment_with_inpost_props(mock_call):
 
     body = mock_call.call_args.kwargs["json"]
     assert body["input"]["additionalProperties"] == {"inpost#sendingMethod": "parcel_locker"}
+
+
+@patch("magazyn.allegro_api.shipment_management._call_with_refresh")
+def test_create_shipment_with_cash_on_delivery(mock_call):
+    mock_call.return_value = _mock_response({"commandId": "cmd-cod"})
+
+    create_shipment(
+        delivery_method_id="svc-1",
+        sender=SAMPLE_SENDER,
+        receiver=SAMPLE_RECEIVER,
+        packages=SAMPLE_PACKAGES,
+        cash_on_delivery={"amount": "216.99", "currency": "PLN"},
+    )
+
+    body = mock_call.call_args.kwargs["json"]
+    assert body["input"]["cashOnDelivery"] == {"amount": "216.99", "currency": "PLN"}
+
+
+def test_calculate_cod_amount_includes_delivery_price():
+    order_data = {
+        "products": [
+            {"price_brutto": "207.00", "quantity": 1},
+            {"price_brutto": "10.00", "quantity": 2},
+        ],
+        "delivery_price": "12.99",
+    }
+
+    result = calculate_cod_amount(order_data)
+
+    assert str(result) == "239.99"
 
 
 # --------------- get_create_command_status ---------------
