@@ -9,6 +9,7 @@ import subprocess
 import threading
 import time
 import unicodedata
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 # fcntl is Unix-only, provide fallback for Windows
 try:
@@ -106,6 +107,29 @@ def is_cod_order(payment_method_cod: Any, payment_method: Any) -> bool:
     method = str(payment_method or "").strip().lower()
     method_ascii = unicodedata.normalize("NFKD", method).encode("ascii", "ignore").decode("ascii")
     return any(token in method_ascii for token in ("pobran", "cod", "cash on delivery"))
+
+
+def calculate_cod_amount(order_data: dict) -> Decimal:
+    """Return COD amount as sum(products) + delivery rounded to 2 decimals."""
+    total = Decimal("0")
+    for product in order_data.get("products", []):
+        try:
+            price = Decimal(str(product.get("price_brutto") or "0"))
+        except (InvalidOperation, TypeError):
+            price = Decimal("0")
+        try:
+            qty = int(product.get("quantity") or 1)
+        except (ValueError, TypeError):
+            qty = 1
+        total += price * Decimal(qty)
+
+    try:
+        delivery_price = Decimal(str(order_data.get("delivery_price") or "0"))
+    except (InvalidOperation, TypeError):
+        delivery_price = Decimal("0")
+
+    total += delivery_price
+    return total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 # Uzywamy short_preview z modulu utils
@@ -991,12 +1015,25 @@ class LabelAgent:
             additional_properties = {"inpost#sendingMethod": "any_point"}
 
         try:
+            cod_payload = None
+            if is_cod_order(
+                order_data.get("payment_method_cod", "0"),
+                order_data.get("payment_method", ""),
+            ):
+                cod_amount = calculate_cod_amount(order_data)
+                if cod_amount > 0:
+                    cod_payload = {
+                        "amount": str(cod_amount),
+                        "currency": "PLN",
+                    }
+
             # 1. Wyslij komende tworzenia (async)
             cmd_result = create_shipment(
                 delivery_method_id=delivery_method_id,
                 sender=sender,
                 receiver=receiver,
                 packages=packages,
+                cash_on_delivery=cod_payload,
                 reference_number=reference_number,
                 additional_properties=additional_properties,
             )
