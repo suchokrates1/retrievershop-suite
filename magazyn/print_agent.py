@@ -1866,6 +1866,10 @@ class LabelAgent:
                             "Błąd pobierania paczek dla %s: %s", order_id, exc
                         )
                         PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                        if self._should_send_error_notification(order_id):
+                            self._send_label_error_notification(order_id)
+                        else:
+                            self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
                         continue
                     labels: List[Tuple[str, str]] = []
                     courier_code = ""
