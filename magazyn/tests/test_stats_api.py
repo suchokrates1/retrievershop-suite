@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
+import json
 from types import SimpleNamespace
 
 from magazyn.db import get_session
-from magazyn.models import AllegroBillingType, AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, OrderEvent, ShipmentError, PriceReport, PriceReportItem, Return
+from magazyn.models import AllegroBillingType, AllegroPriceHistory, Message, Order, OrderProduct, OrderStatusLog, OrderEvent, ShipmentError, PriceReport, PriceReportItem, Return, Thread
 
 
 def _seed_order(app, order_id: str, *, payment_done=100.0, cod=False, platform="allegro"):
@@ -793,3 +794,121 @@ def test_stats_shipment_errors_filters_by_date(client, app, login):
     assert data["unresolved_total"] == 1
     assert data["by_error_type"]["LABEL_GENERATION"] == 1
     assert data["by_error_type"]["ADDRESS_VALIDATION"] == 1
+
+
+def test_stats_customer_support_returns_kpi(client, app, login):
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    now = datetime.now(timezone.utc)
+
+    with app.app_context():
+        with get_session() as db:
+            db.add_all(
+                [
+                    Thread(
+                        id="th_kpi_1",
+                        title="Pytanie o zamowienie",
+                        author="buyer1",
+                        type="wiadomosc",
+                        read=False,
+                        last_message_at=now,
+                    ),
+                    Thread(
+                        id="th_kpi_2",
+                        title="Dyskusja Allegro",
+                        author="buyer2",
+                        type="dyskusja",
+                        read=True,
+                        last_message_at=now,
+                    ),
+                ]
+            )
+            db.add_all(
+                [
+                    Message(id="msg_kpi_1", thread_id="th_kpi_1", author="buyer1", content="Pomoc", created_at=now - timedelta(hours=3)),
+                    Message(id="msg_kpi_2", thread_id="th_kpi_1", author="seller", content="Juz pomagam", created_at=now - timedelta(hours=1)),
+                    Message(id="msg_kpi_3", thread_id="th_kpi_2", author="buyer2", content="Status?", created_at=now - timedelta(hours=4)),
+                    Message(id="msg_kpi_4", thread_id="th_kpi_2", author="seller", content="Wyslane", created_at=now - timedelta(hours=2)),
+                ]
+            )
+            db.commit()
+
+    response = client.get("/api/stats/customer-support")
+    assert response.status_code == 200
+
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["data"]["summary"]["threads_total"] == 2
+    assert payload["data"]["summary"]["unread_threads"] == 1
+    assert payload["data"]["summary"]["first_response_samples"] == 2
+    assert payload["data"]["summary"]["avg_first_response_hours"] == 2.0
+    assert payload["data"]["by_type"]["wiadomosc"]["unread"] == 1
+    assert payload["data"]["by_type"]["dyskusja"]["threads"] == 1
+
+
+def test_stats_invoice_coverage_returns_kpi(client, app, login):
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    now_ts = int(datetime.now().timestamp())
+
+    with app.app_context():
+        with get_session() as db:
+            db.add_all(
+                [
+                    Order(
+                        order_id="inv_cov_1",
+                        platform="allegro",
+                        date_add=now_ts,
+                        payment_done=100.0,
+                        want_invoice=True,
+                        wfirma_invoice_id=101,
+                        wfirma_invoice_number="FV/101",
+                        emails_sent=json.dumps({"invoice": True}),
+                    ),
+                    Order(
+                        order_id="inv_cov_2",
+                        platform="allegro",
+                        date_add=now_ts,
+                        payment_done=90.0,
+                        want_invoice=True,
+                        wfirma_invoice_id=102,
+                        wfirma_invoice_number="FV/102",
+                        emails_sent="{}",
+                    ),
+                    Order(
+                        order_id="inv_cov_3",
+                        platform="shop",
+                        date_add=now_ts,
+                        payment_done=70.0,
+                        want_invoice=True,
+                        wfirma_invoice_id=None,
+                    ),
+                    Order(
+                        order_id="inv_cov_4",
+                        platform="shop",
+                        date_add=now_ts,
+                        payment_done=50.0,
+                        want_invoice=False,
+                        wfirma_invoice_id=None,
+                    ),
+                ]
+            )
+            db.commit()
+
+    response = client.get("/api/stats/invoice-coverage")
+    assert response.status_code == 200
+
+    payload = response.get_json()
+    assert payload["ok"] is True
+    summary = payload["data"]["summary"]
+
+    assert summary["orders_total"] == 4
+    assert summary["requested_total"] == 3
+    assert summary["invoiced_total"] == 2
+    assert summary["missing_total"] == 1
+    assert summary["emailed_total"] == 1
+    assert round(float(summary["coverage_pct"]), 2) == 66.67
+    assert round(float(summary["email_coverage_pct"]), 2) == 33.33
+    assert payload["data"]["missing_orders"][0]["order_id"] == "inv_cov_3"

@@ -744,12 +744,12 @@ Status aktualizacji: 2026-04-01
 ## 19. Priorytet nowych danych Allegro do wdrozenia
 
 1. Priorytet A (wdrozyc w MVP+):
-    1. slownik billing_types,
-    2. surowe order/events do funnelu,
-    3. bledy shipment create/cancel do KPI etykiet.
+   1. [x] slownik billing_types,
+   2. [x] surowe order/events do funnelu,
+   3. [x] bledy shipment create/cancel do KPI etykiet.
 2. Priorytet B:
-    1. KPI obslugi klienta z messaging/issues,
-    2. KPI pokrycia faktur.
+   1. [x] KPI obslugi klienta z messaging/issues,
+   2. [x] KPI pokrycia faktur.
 3. Priorytet C:
     1. rozszerzone dane reklam i offer analytics po potwierdzeniu dostepnosci.
 
