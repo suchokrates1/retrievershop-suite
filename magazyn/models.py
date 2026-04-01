@@ -313,6 +313,21 @@ class FixedCost(Base):
         return f"<FixedCost {self.name}: {self.amount} PLN>"
 
 
+class AllegroBillingType(Base):
+    """Slownik typow billingowych Allegro z wersjonowaniem mapowania."""
+
+    __tablename__ = "allegro_billing_types"
+
+    type_id = Column(String(32), primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    mapping_category = Column(String(64), nullable=True)
+    mapping_version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    last_seen_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
 class AllegroRepliedThread(Base):
     __tablename__ = "allegro_replied_threads"
     thread_id = Column(String, primary_key=True)

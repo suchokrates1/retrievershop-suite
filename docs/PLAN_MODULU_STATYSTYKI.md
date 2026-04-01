@@ -696,7 +696,7 @@ Status aktualizacji: 2026-04-01
 2. [x] Dodac `funnel` i `error_counts` do `GET /api/stats/logistics` (ustrukturyzowane etapy i bledy etykiet z OrderStatusLog).
 3. [x] Dodac wykres waterfall (Przychod -> koszty -> zysk netto) do dashboardu na podstawie danych z `GET /api/stats/profit`.
 4. [x] Testy jednostkowe: MoM w overview nie zwraca None przy danych historycznych, funnel w logistics, waterfall w dashboardzie renderuje sie bez bledow.
-5. [ ] Zaktualizowac dokumentacje i zbudowac kontenery po wdrozeniu.
+5. [x] Zaktualizowac dokumentacje i zbudowac kontenery po wdrozeniu.
 
 ## 18. Allegro: co mamy vs co jeszcze mozemy wziac do statystyk
 
@@ -752,6 +752,14 @@ Status aktualizacji: 2026-04-01
     2. KPI pokrycia faktur.
 3. Priorytet C:
     1. rozszerzone dane reklam i offer analytics po potwierdzeniu dostepnosci.
+
+## 21. Sprint 7: Priorytet A - billing types (start)
+
+1. [x] Dodac trwala tabele `allegro_billing_types` z wersjonowaniem mapowania (`mapping_version`).
+2. [x] Dodac synchronizacje slownika billing types podczas `GET /api/stats/allegro-costs`.
+3. [x] Dodac test API potwierdzajacy zapis slownika do DB.
+4. [x] Dodac UI/raport mapowania kategorii billingowych (mapping_category) i panel recznej korekty.
+5. [x] Dodac job okresowej synchronizacji billing types niezalezny od wejscia na dashboard.
 
 ## 20. Definicja sukcesu modulu Statystyki
 

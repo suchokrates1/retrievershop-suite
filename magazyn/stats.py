@@ -17,6 +17,7 @@ from sqlalchemy import case, func, or_
 from .auth import login_required
 from .db import get_session
 from .models import (
+    AllegroBillingType,
     AllegroPriceHistory,
     Order,
     OrderProduct,
@@ -40,6 +41,48 @@ _TELEMETRY: dict[str, dict[str, float]] = defaultdict(
         "total_response_ms": 0.0,
     }
 )
+
+BILLING_CATEGORY_CHOICES = {
+    "commission_organic",
+    "commission_promoted",
+    "shipping",
+    "promo",
+    "ads",
+    "listing",
+    "refund",
+    "bonus",
+    "other",
+}
+
+
+def _default_billing_mapping_category(type_id: str) -> str:
+    from .allegro_api.billing import (
+        ORGANIC_COMMISSION_TYPES,
+        PROMOTED_COMMISSION_TYPES,
+        SHIPPING_TYPES,
+        PROMO_TYPES,
+        LISTING_TYPES,
+        REFUND_TYPES,
+        CAMPAIGN_BONUS_TYPES,
+    )
+
+    if type_id in ORGANIC_COMMISSION_TYPES:
+        return "commission_organic"
+    if type_id in PROMOTED_COMMISSION_TYPES:
+        return "commission_promoted"
+    if type_id in SHIPPING_TYPES:
+        return "shipping"
+    if type_id in PROMO_TYPES:
+        if type_id in {"NSP", "ADS"}:
+            return "ads"
+        return "promo"
+    if type_id in LISTING_TYPES:
+        return "listing"
+    if type_id in REFUND_TYPES:
+        return "refund"
+    if type_id in CAMPAIGN_BONUS_TYPES:
+        return "bonus"
+    return "other"
 
 
 @dataclass
@@ -234,6 +277,43 @@ def _period_offsets(filters: StatsFilters) -> tuple[int, int, int, int]:
     return current_start, current_end, prev_start, prev_end
 
 
+def _upsert_billing_types(db, billing_types: list[dict]) -> dict[str, str]:
+    """Synchronizuje slownik billing types do bazy i zwraca mapowanie id->nazwa."""
+    now = datetime.now(timezone.utc)
+    existing = {row.type_id: row for row in db.query(AllegroBillingType).all()}
+
+    for item in billing_types:
+        type_id = (item.get("id") or "").strip()
+        if not type_id:
+            continue
+
+        name = (item.get("description") or item.get("name") or type_id).strip()
+        description = (item.get("description") or item.get("name") or "").strip() or None
+
+        inferred_category = _default_billing_mapping_category(type_id)
+        row = existing.get(type_id)
+        if row is None:
+            row = AllegroBillingType(
+                type_id=type_id,
+                name=name,
+                description=description,
+                mapping_category=inferred_category,
+                mapping_version=1,
+                last_seen_at=now,
+            )
+            db.add(row)
+            existing[type_id] = row
+        else:
+            row.name = name
+            row.description = description
+            if not row.mapping_category:
+                row.mapping_category = inferred_category
+            row.last_seen_at = now
+
+    db.flush()
+    return {row.type_id: (row.name or row.type_id) for row in existing.values()}
+
+
 def _build_alerts(*, returns_rate: float | None = None, refund_rate: float | None = None, lead_time_hours: float | None = None) -> list[dict]:
     alerts: list[dict] = []
     if returns_rate is not None and returns_rate > 8.0:
@@ -276,6 +356,28 @@ def _format_filters(filters: StatsFilters) -> dict[str, str]:
         "granularity": filters.granularity,
         "platform": filters.platform,
         "payment_type": filters.payment_type,
+    }
+
+
+def sync_billing_types_dictionary(access_token: str) -> dict[str, int]:
+    """Synchronizuje slownik billing types z Allegro do bazy danych."""
+    from .allegro_api import fetch_billing_types
+
+    types_data = fetch_billing_types(access_token)
+    if isinstance(types_data, dict):
+        types_list = types_data.get("billingTypes", [])
+    else:
+        types_list = types_data or []
+
+    with get_session() as db:
+        before = db.query(AllegroBillingType).count()
+        _upsert_billing_types(db, types_list)
+        after = db.query(AllegroBillingType).count()
+
+    return {
+        "fetched": len(types_list),
+        "known": after,
+        "created": max(after - before, 0),
     }
 
 
@@ -706,7 +808,11 @@ def stats_allegro_costs():
         types_list = types_data.get("billingTypes", [])
     else:
         types_list = types_data or []
-    type_name_map = {t.get("id"): t.get("description") or t.get("name") or t.get("id") for t in types_list if t.get("id")}
+    api_type_name_map = {
+        t.get("id"): t.get("description") or t.get("name") or t.get("id")
+        for t in types_list
+        if t.get("id")
+    }
 
     agg: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     for e in entries:
@@ -719,6 +825,8 @@ def stats_allegro_costs():
     ads_total = Decimal(str(ads_result.get("total_cost") or 0))
 
     with get_session() as db:
+        db_type_name_map = _upsert_billing_types(db, types_list)
+        type_name_map = {**db_type_name_map, **api_type_name_map}
         orders = _fetch_orders(db, filters, _to_ts(filters.date_from), _to_ts(filters.date_to))
         order_ids = [o.order_id for o in orders]
         products_map = _order_products_map(db, order_ids)
@@ -875,6 +983,96 @@ def stats_returns():
     payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
     _cache_set(cache_key, payload)
     return jsonify(payload)
+
+
+@bp.route("/billing-types", methods=["GET"])
+@login_required
+def stats_billing_types_list():
+    with get_session() as db:
+        rows = (
+            db.query(AllegroBillingType)
+            .order_by(AllegroBillingType.type_id.asc())
+            .all()
+        )
+
+    data = [
+        {
+            "type_id": row.type_id,
+            "name": row.name,
+            "description": row.description,
+            "mapping_category": row.mapping_category,
+            "mapping_version": int(row.mapping_version or 1),
+            "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+        }
+        for row in rows
+    ]
+    return jsonify(
+        {
+            "ok": True,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": {
+                "rows": data,
+                "categories": sorted(BILLING_CATEGORY_CHOICES),
+            },
+            "errors": [],
+        }
+    )
+
+
+@bp.route("/billing-types/<string:type_id>", methods=["PUT"])
+@login_required
+def stats_billing_type_update(type_id: str):
+    payload = request.get_json(silent=True) or {}
+    new_category = (payload.get("mapping_category") or "").strip()
+    if new_category not in BILLING_CATEGORY_CHOICES:
+        return _json_error(
+            "INVALID_MAPPING_CATEGORY",
+            "Niepoprawna kategoria mapowania billing type",
+            400,
+        )
+
+    with get_session() as db:
+        row = db.query(AllegroBillingType).filter(AllegroBillingType.type_id == type_id).first()
+        if row is None:
+            return _json_error("BILLING_TYPE_NOT_FOUND", "Nie znaleziono billing type", 404)
+
+        if row.mapping_category != new_category:
+            row.mapping_category = new_category
+            row.mapping_version = int(row.mapping_version or 1) + 1
+            db.flush()
+
+        result = {
+            "type_id": row.type_id,
+            "mapping_category": row.mapping_category,
+            "mapping_version": int(row.mapping_version or 1),
+        }
+
+    return jsonify(
+        {
+            "ok": True,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": result,
+            "errors": [],
+        }
+    )
+
+
+@bp.route("/billing-types/sync", methods=["POST"])
+@login_required
+def stats_billing_types_sync():
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not access_token:
+        return _json_error("ALLEGRO_TOKEN_MISSING", "Brak tokenu Allegro", 400)
+
+    result = sync_billing_types_dictionary(access_token)
+    return jsonify(
+        {
+            "ok": True,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": result,
+            "errors": [],
+        }
+    )
 
 
 @bp.route("/logistics")
