@@ -13,7 +13,7 @@
         white-space: nowrap;
     }
     .product-selector .dropdown-content {
-        min-width: 450px;
+        min-width: min(450px, 90vw);
         max-height: 350px;
         overflow-y: auto;
         padding: 0;
@@ -78,18 +78,7 @@
 <form action="{{ url_for('products.confirm_invoice') }}" method="post" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="overflow-x-auto">
-    <table class="table table-sm align-middle" style="table-layout: fixed; width: 100%;">
-        <colgroup>
-            <col style="width: 3%;">  <!-- Lp. -->
-            <col style="width: 4%;">  <!-- Akceptuj -->
-            <col style="width: 33%;"> <!-- Nazwa -->
-            <col style="width: 10%;"> <!-- Kolor -->
-            <col style="width: 5%;">  <!-- Rozmiar -->
-            <col style="width: 5%;">  <!-- Ilość -->
-            <col style="width: 6%;">  <!-- Cena -->
-            <col style="width: 12%;"> <!-- EAN -->
-            <col style="width: 22%;"> <!-- Produkt z bazy -->
-        </colgroup>
+    <table class="table table-sm align-middle min-w-[800px]">
         <thead>
             <tr>
                 <th>Lp.</th>

@@ -139,12 +139,12 @@
                     <i class="{{ group_data.icon }} mr-2"></i>{{ group_name }}
                     <span class="badge ml-2">{{ group_data.entries|length }}</span>
                 </div>
-                <div class="collapse-content p-0">
+                <div class="collapse-content p-0 overflow-x-auto">
                         <table class="table settings-table table-sm mb-0">
                             <tbody>
                             {% for item in group_data.entries %}
                             <tr>
-                                <th scope="row" style="width: 40%;">
+                                <th scope="row" class="w-[40%] min-w-[150px]">
                                     {{ item.label }}
                                     {% if item.desc %}<br><small class="text-base-content/60">{{ item.desc }}</small>{% endif %}
                                 </th>
