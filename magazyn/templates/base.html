@@ -72,6 +72,7 @@
                 {% if show_menu %}
                 <ul class="menu menu-horizontal flex-nowrap gap-1 hidden md:flex items-center mt-2 p-0">
                     <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('home') }}">Strona główna</a></li>
+                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
                     <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('products.items') }}">Przedmioty</a></li>
                     <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
                     <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
@@ -114,6 +115,7 @@
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-10 mx-auto mb-3">
         <ul class="menu flex flex-col h-full p-0">
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('products.items') }}">Przedmioty</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>

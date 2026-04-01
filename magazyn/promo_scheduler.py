@@ -110,7 +110,6 @@ def stop_promo_scheduler():
     global _promo_thread
     
     if _promo_thread is None or not _promo_thread.is_alive():
-        logger.info("Promo scheduler not running")
         return
     
     logger.info("Stopping promo scheduler...")

@@ -339,6 +339,14 @@ def dashboard_heavy():
     return jsonify(heavy_data)
 
 
+@bp.route("/stats")
+@login_required
+def stats_dashboard():
+    """Widok dashboardu statystyk (Sprint 5)."""
+    username = session["username"]
+    return render_template("stats_dashboard.html", username=username)
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
