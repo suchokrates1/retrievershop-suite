@@ -354,6 +354,75 @@ def _build_alerts(*, returns_rate: float | None = None, refund_rate: float | Non
     return alerts
 
 
+def _carrier_label(order: Order) -> str:
+    raw_values = [
+        (order.courier_code or "").strip(),
+        (order.delivery_package_module or "").strip(),
+        (order.delivery_method or "").strip(),
+    ]
+    combined = " ".join(value.lower() for value in raw_values if value)
+    if "inpost" in combined or "paczkomat" in combined:
+        return "InPost"
+    if "dpd" in combined:
+        return "DPD"
+    if "dhl" in combined:
+        return "DHL"
+    if "poczta" in combined or "pocztex" in combined:
+        return "Poczta Polska"
+    if "gls" in combined:
+        return "GLS"
+    if "ups" in combined:
+        return "UPS"
+    if "fedex" in combined:
+        return "FedEx"
+    if "orlen" in combined:
+        return "Orlen"
+    if "allegro" in combined and "one" in combined:
+        return "Allegro One"
+
+    for value in raw_values:
+        if value:
+            return value
+    return "Nieznany"
+
+
+def _delivery_method_label(order: Order) -> str:
+    return (
+        (order.delivery_method or "").strip()
+        or (order.delivery_package_module or "").strip()
+        or _carrier_label(order)
+    )
+
+
+def _group_logistics_rows(rows: dict[str, dict[str, object]]) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+    for row in rows.values():
+        lead_times = [float(value) for value in row.pop("lead_times", [])]
+        delivered_total = int(row.get("delivered_total", 0) or 0)
+        on_time_rate = (
+            sum(1 for value in lead_times if value <= 48.0) / delivered_total * 100
+            if delivered_total
+            else 0.0
+        )
+        avg_lead = sum(lead_times) / len(lead_times) if lead_times else 0.0
+        result.append(
+            {
+                **row,
+                "avg_lead_time_hours": round(avg_lead, 2),
+                "on_time_rate_48h": round(on_time_rate, 2),
+            }
+        )
+
+    result.sort(
+        key=lambda item: (
+            -int(item.get("shipped_total", 0) or 0),
+            float(item.get("avg_lead_time_hours", 0.0) or 0.0),
+            str(item.get("carrier", item.get("delivery_method", ""))),
+        )
+    )
+    return result
+
+
 def _format_filters(filters: StatsFilters) -> dict[str, str]:
     return {
         "date_from": filters.date_from.strftime("%Y-%m-%d"),
@@ -1486,15 +1555,57 @@ def stats_logistics():
                 ship_end[log.order_id] = log.timestamp
 
         lead_times_hours: list[float] = []
+        lead_time_by_order: dict[str, float] = {}
         for order_id, ship_started_at in ship_start.items():
             delivered_at = ship_end.get(order_id)
             if not delivered_at or delivered_at < ship_started_at:
                 continue
-            lead_times_hours.append((delivered_at - ship_started_at).total_seconds() / 3600)
+            lead_hours = (delivered_at - ship_started_at).total_seconds() / 3600
+            lead_times_hours.append(lead_hours)
+            lead_time_by_order[order_id] = lead_hours
 
         shipped_total = sum(1 for o in orders if o.delivery_package_nr)
         delivered_total = sum(1 for oid in ship_end.keys() if oid in orders_map)
         in_transit = max(shipped_total - delivered_total, 0)
+
+        by_carrier_raw: dict[str, dict[str, object]] = defaultdict(
+            lambda: {"carrier": "", "shipped_total": 0, "delivered_total": 0, "lead_times": []}
+        )
+        by_delivery_method_raw: dict[str, dict[str, object]] = defaultdict(
+            lambda: {
+                "carrier": "",
+                "delivery_method": "",
+                "shipped_total": 0,
+                "delivered_total": 0,
+                "lead_times": [],
+            }
+        )
+
+        for order in orders:
+            shipped = bool(order.delivery_package_nr or order.order_id in ship_start)
+            delivered = order.order_id in ship_end
+            carrier = _carrier_label(order)
+            delivery_method = _delivery_method_label(order)
+
+            carrier_row = by_carrier_raw[carrier]
+            carrier_row["carrier"] = carrier
+            if shipped:
+                carrier_row["shipped_total"] = int(carrier_row["shipped_total"]) + 1
+            if delivered:
+                carrier_row["delivered_total"] = int(carrier_row["delivered_total"]) + 1
+            if order.order_id in lead_time_by_order:
+                carrier_row["lead_times"].append(lead_time_by_order[order.order_id])
+
+            method_key = f"{carrier}|{delivery_method}"
+            method_row = by_delivery_method_raw[method_key]
+            method_row["carrier"] = carrier
+            method_row["delivery_method"] = delivery_method
+            if shipped:
+                method_row["shipped_total"] = int(method_row["shipped_total"]) + 1
+            if delivered:
+                method_row["delivered_total"] = int(method_row["delivered_total"]) + 1
+            if order.order_id in lead_time_by_order:
+                method_row["lead_times"].append(lead_time_by_order[order.order_id])
 
         avg_lead = sum(lead_times_hours) / len(lead_times_hours) if lead_times_hours else 0.0
         p95_lead = sorted(lead_times_hours)[int(0.95 * (len(lead_times_hours) - 1))] if lead_times_hours else 0.0
@@ -1529,6 +1640,8 @@ def stats_logistics():
                 "problem_z_dostawa": status_counts.get("problem_z_dostawa", 0),
                 "zwrot": status_counts.get("zwrot", 0),
             },
+            "by_carrier": _group_logistics_rows(by_carrier_raw),
+            "by_delivery_method": _group_logistics_rows(by_delivery_method_raw),
             "alerts": alerts,
         },
         "meta": {

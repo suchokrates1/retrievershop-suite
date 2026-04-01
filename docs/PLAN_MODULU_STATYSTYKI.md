@@ -732,7 +732,7 @@ Status aktualizacji: 2026-04-01
 3. Dane refundowe per etap i czas zwrotu pieniedzy.
    1. [x] Cel: KPI czasu rozliczenia zwrotu.
 4. Rozszerzony tracking delivery (gdy API zwraca wiecej statusow i timestampow).
-    1. Cel: SLA per przewoznik i metoda.
+   1. [x] Cel: SLA per przewoznik i metoda.
 
 ### 18.4 Dane, ktore warto potwierdzic na etapie implementacji z dokumentacja Allegro
 

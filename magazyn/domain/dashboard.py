@@ -130,22 +130,27 @@ class DashboardService:
     def get_order_stats(self) -> OrderStats:
         """Pobiera statystyki zamowien."""
         tr = self.time_ranges
+        now_ts = int(tr.now.timestamp())
         
         orders_today = self.db.query(Order).filter(
-            Order.date_add >= tr.today_start
+            Order.date_add >= tr.today_start,
+            Order.date_add <= now_ts,
         ).count()
         
         orders_week = self.db.query(Order).filter(
-            Order.date_add >= tr.week_start_ts
+            Order.date_add >= tr.week_start_ts,
+            Order.date_add <= now_ts,
         ).count()
         
         orders_month = self.db.query(Order).filter(
-            Order.date_add >= tr.month_start_ts
+            Order.date_add >= tr.month_start_ts,
+            Order.date_add <= now_ts,
         ).count()
         
         pending_orders = self.db.query(Order).filter(
             Order.delivery_package_nr.is_(None),
-            Order.date_add >= tr.month_start_ts
+            Order.date_add >= tr.month_start_ts,
+            Order.date_add <= now_ts,
         ).count()
         
         return OrderStats(
@@ -174,6 +179,7 @@ class DashboardService:
                 func.sum(Order.payment_done)
             ).filter(
                 Order.date_add >= from_timestamp,
+                Order.date_add <= int(tr.now.timestamp()),
                 Order.payment_done > 0,
                 ~Order.order_id.in_(return_order_ids)
             ).scalar()
@@ -233,6 +239,7 @@ class DashboardService:
         )
         total_returned_orders = self.db.query(Order).filter(
             Order.date_add >= tr.month_start_ts,
+            Order.date_add <= now_ts,
             Order.order_id.in_(returned_order_ids)
         ).count() if returned_order_ids else 0
         
