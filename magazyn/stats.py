@@ -1633,14 +1633,63 @@ def stats_logistics():
         ship_start: dict[str, datetime] = {}
         ship_end: dict[str, datetime] = {}
         status_counts: dict[str, int] = defaultdict(int)
+        first_status_by_order: dict[str, dict[str, datetime]] = defaultdict(dict)
 
         for log in logs:
             status = (log.status or "").strip().lower()
             status_counts[status] += 1
+            if status not in first_status_by_order[log.order_id]:
+                first_status_by_order[log.order_id][status] = log.timestamp
             if status in start_statuses and log.order_id not in ship_start:
                 ship_start[log.order_id] = log.timestamp
             if status in end_statuses:
                 ship_end[log.order_id] = log.timestamp
+
+        transition_definitions = [
+            ("wydrukowano", "spakowano"),
+            ("spakowano", "wyslano"),
+            ("wyslano", "w_transporcie"),
+            ("wyslano", "dostarczono"),
+        ]
+        transition_samples: dict[str, list[float]] = defaultdict(list)
+        for status_map in first_status_by_order.values():
+            for source_status, target_status in transition_definitions:
+                source_ts = status_map.get(source_status)
+                target_ts = status_map.get(target_status)
+                if not source_ts or not target_ts or target_ts < source_ts:
+                    continue
+                transition_key = f"{source_status}_to_{target_status}"
+                delta_hours = (target_ts - source_ts).total_seconds() / 3600
+                transition_samples[transition_key].append(delta_hours)
+
+        status_transitions: list[dict[str, float | int | str]] = []
+        for source_status, target_status in transition_definitions:
+            transition_key = f"{source_status}_to_{target_status}"
+            samples = sorted(transition_samples.get(transition_key, []))
+            count = len(samples)
+            if count == 0:
+                status_transitions.append(
+                    {
+                        "transition": transition_key,
+                        "count": 0,
+                        "avg_hours": 0.0,
+                        "median_hours": 0.0,
+                        "p95_hours": 0.0,
+                    }
+                )
+                continue
+            avg_hours = sum(samples) / count
+            median_hours = samples[count // 2]
+            p95_hours = samples[int(0.95 * (count - 1))]
+            status_transitions.append(
+                {
+                    "transition": transition_key,
+                    "count": count,
+                    "avg_hours": round(avg_hours, 2),
+                    "median_hours": round(median_hours, 2),
+                    "p95_hours": round(p95_hours, 2),
+                }
+            )
 
         lead_times_hours: list[float] = []
         lead_time_by_order: dict[str, float] = {}
@@ -1730,6 +1779,7 @@ def stats_logistics():
             },
             "by_carrier": _group_logistics_rows(by_carrier_raw),
             "by_delivery_method": _group_logistics_rows(by_delivery_method_raw),
+            "status_transitions": status_transitions,
             "alerts": alerts,
         },
         "meta": {

@@ -211,6 +211,31 @@
                         Błędy druku: <b x-text="(logisticsData.error_counts || {}).blad_druku || 0"></b>
                         &nbsp;|&nbsp; Problem z dostawą: <b x-text="(logisticsData.error_counts || {}).problem_z_dostawa || 0"></b>
                     </div>
+                    <div class="overflow-x-auto mb-3" x-show="(logisticsData.status_transitions || []).length">
+                        <div class="text-xs uppercase opacity-70 mb-1">Czasy przejść statusów (SLA etapowe)</div>
+                        <table class="table table-xs">
+                            <thead>
+                                <tr>
+                                    <th>Przejście</th>
+                                    <th>Liczba</th>
+                                    <th>Średnio</th>
+                                    <th>Mediana</th>
+                                    <th>P95</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="row in (logisticsData.status_transitions || [])" :key="row.transition">
+                                    <tr>
+                                        <td x-text="row.transition.replace('_to_', ' → ').replace(/_/g, ' ')"></td>
+                                        <td x-text="row.count"></td>
+                                        <td x-text="row.avg_hours + ' h'"></td>
+                                        <td x-text="row.median_hours + ' h'"></td>
+                                        <td x-text="row.p95_hours + ' h'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-3">
                         <div x-show="(logisticsData.by_carrier || []).length">
                             <div class="text-xs uppercase opacity-70 mb-1">SLA per przewoźnik</div>

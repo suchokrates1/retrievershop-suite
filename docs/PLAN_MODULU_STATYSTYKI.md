@@ -733,6 +733,7 @@ Status aktualizacji: 2026-04-01
    1. [x] Cel: KPI czasu rozliczenia zwrotu.
 4. Rozszerzony tracking delivery (gdy API zwraca wiecej statusow i timestampow).
    1. [x] Cel: SLA per przewoznik i metoda.
+   2. [x] Rozszerzenie: SLA etapowe na przejsciach statusow (`wydrukowano->spakowano->wyslano->w_transporcie->dostarczono`).
 
 ### 18.4 Dane, ktore warto potwierdzic na etapie implementacji z dokumentacja Allegro
 
