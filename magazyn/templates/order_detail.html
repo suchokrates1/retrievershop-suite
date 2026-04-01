@@ -442,6 +442,12 @@
                         <i class="bi bi-box-arrow-up-right"></i> Otworz w Allegro
                     </a>
                     {% endif %}
+                    {% if order.external_order_id and order.platform == 'allegro' and (not order.delivery_package_nr or current_status.status == 'blad_druku') %}
+                    <a href="https://allegro.pl/moje-allegro/sprzedaz/zamowienia/{{ order.external_order_id }}"
+                       target="_blank" class="btn btn-warning w-full mb-2">
+                        <i class="bi bi-truck"></i> Utworz etykiete na Allegro
+                    </a>
+                    {% endif %}
                     {% if customer_page_url %}
                     <a href="{{ customer_page_url }}" target="_blank" class="btn btn-outline btn-info w-full mb-2">
                         <i class="bi bi-person-lines-fill"></i> Strona klienta

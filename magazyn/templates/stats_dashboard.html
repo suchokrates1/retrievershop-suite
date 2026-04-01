@@ -1171,11 +1171,14 @@ function statsDashboard() {
         },
 
         updateCards(overview, sales, profit) {
+            const revenue = sales.data.summary.revenue || 0;
+            const netProfit = profit.data.summary.net_profit || 0;
+            const marginPct = revenue > 0 ? (netProfit / revenue * 100) : 0;
             this.cards = [
                 {
                     key: 'revenue',
                     label: 'Przychód',
-                    value: (sales.data.summary.revenue || 0).toFixed(2) + ' zł',
+                    value: revenue.toFixed(2) + ' zł',
                     sub: this.abbr('MoM') + ': ' + (sales.data.summary.mom === null ? '-' : sales.data.summary.mom.toFixed(2) + '%')
                 },
                 {
@@ -1187,8 +1190,14 @@ function statsDashboard() {
                 {
                     key: 'margin',
                     label: 'Marża',
-                    value: (profit.data.summary.margin_pct || 0).toFixed(2) + '%',
+                    value: marginPct.toFixed(2) + '%',
                     sub: 'Zwroty: ' + (overview.data.kpi.returns_rate.value || 0).toFixed(2) + '%'
+                },
+                {
+                    key: 'net_profit',
+                    label: 'Zysk netto',
+                    value: netProfit.toFixed(2) + ' zł',
+                    sub: this.abbr('WoW') + ': ' + (profit.data.summary.wow === null ? '-' : profit.data.summary.wow.toFixed(2) + '%')
                 }
             ];
             const t = sales.meta && sales.meta.telemetry ? sales.meta.telemetry : null;
