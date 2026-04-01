@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 
 from magazyn.db import get_session
-from magazyn.models import AllegroBillingType, AllegroPriceHistory, Message, Order, OrderProduct, OrderStatusLog, OrderEvent, ShipmentError, PriceReport, PriceReportItem, Return, Thread
+from magazyn.models import AllegroBillingType, AllegroPriceHistory, Message, Order, OrderProduct, OrderStatusLog, OrderEvent, ReturnStatusLog, ShipmentError, PriceReport, PriceReportItem, Return, Thread
 
 
 def _seed_order(app, order_id: str, *, payment_done=100.0, cod=False, platform="allegro"):
@@ -51,6 +51,18 @@ def _seed_status_log(app, order_id: str, status: str, dt: datetime):
             db.add(
                 OrderStatusLog(
                     order_id=order_id,
+                    status=status,
+                    timestamp=dt,
+                )
+            )
+
+
+def _seed_return_status_log(app, return_id: int, status: str, dt: datetime):
+    with app.app_context():
+        with get_session() as db:
+            db.add(
+                ReturnStatusLog(
+                    return_id=return_id,
                     status=status,
                     timestamp=dt,
                 )
@@ -970,3 +982,64 @@ def test_stats_ads_offer_analytics_returns_kpi(client, app, login, monkeypatch):
     assert payload["data"]["top_offers"][0]["offer_id"] == "111"
     assert payload["data"]["availability"]["offer_level_ads_cost"] is True
     assert payload["data"]["availability"]["offer_level_views_ctr"] is False
+
+
+def test_stats_ads_offer_analytics_export_csv(client, app, login, monkeypatch):
+    from magazyn import allegro_api as allegro_api_module
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    monkeypatch.setattr(stats_module.settings_store, "get", lambda key, default=None: "token" if key == "ALLEGRO_ACCESS_TOKEN" else default)
+    monkeypatch.setattr(
+        allegro_api_module,
+        "fetch_billing_entries",
+        lambda token, occurred_at_gte=None, occurred_at_lte=None, limit=100: {
+            "billingEntries": [
+                {"type": {"id": "ADS"}, "value": {"amount": "-5.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
+            ]
+        },
+    )
+
+    response = client.get("/api/stats/ads-offer-analytics?format=csv")
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    body = response.data.decode("utf-8")
+    assert "offer_id" in body
+    assert "111" in body
+
+
+def test_stats_refund_timeline_returns_metrics(client, app, login):
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    now = datetime.now().replace(microsecond=0)
+    _seed_order(app, "ord_ref_1", payment_done=100.0)
+    _seed_order(app, "ord_ref_2", payment_done=120.0)
+
+    with app.app_context():
+        with get_session() as db:
+            ret1 = Return(order_id="ord_ref_1", status="completed", refund_processed=True, created_at=now - timedelta(hours=30))
+            ret2 = Return(order_id="ord_ref_2", status="delivered", refund_processed=False, created_at=now - timedelta(hours=20))
+            db.add_all([ret1, ret2])
+            db.flush()
+            ret1_id = ret1.id
+            ret2_id = ret2.id
+            db.commit()
+
+    _seed_return_status_log(app, ret1_id, "delivered", now - timedelta(hours=24))
+    _seed_return_status_log(app, ret1_id, "completed", now - timedelta(hours=12))
+    _seed_return_status_log(app, ret2_id, "delivered", now - timedelta(hours=10))
+
+    date_from = (now - timedelta(days=2)).strftime("%Y-%m-%d")
+    date_to = now.strftime("%Y-%m-%d")
+    response = client.get(f"/api/stats/refund-timeline?date_from={date_from}&date_to={date_to}")
+    assert response.status_code == 200
+    payload = response.get_json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["summary"]["returns_total"] == 2
+    assert payload["data"]["summary"]["delivered_count"] == 2
+    assert payload["data"]["summary"]["refunded_count"] == 1
+    assert payload["data"]["transitions"]["request_to_delivered"]["count"] == 2
+    assert payload["data"]["transitions"]["delivered_to_refund"]["count"] == 1
+    assert payload["data"]["transitions"]["request_to_refund"]["avg_hours"] == 18.0

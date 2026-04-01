@@ -730,7 +730,7 @@ Status aktualizacji: 2026-04-01
 2. Dzienna historia publikacji/zmian ofert (status, cena, zmiany parametrow).
     1. Cel: korelacja zmian oferty z wynikiem sprzedazy.
 3. Dane refundowe per etap i czas zwrotu pieniedzy.
-    1. Cel: KPI czasu rozliczenia zwrotu.
+   1. [x] Cel: KPI czasu rozliczenia zwrotu.
 4. Rozszerzony tracking delivery (gdy API zwraca wiecej statusow i timestampow).
     1. Cel: SLA per przewoznik i metoda.
 

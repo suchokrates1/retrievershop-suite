@@ -474,7 +474,11 @@
     <section class="chart-wrap lazy-section reveal mb-6" x-ref="adsOfferAnalyticsSection">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold">Ads i Offer Analytics - Priorytet C</h3>
-            <button class="btn btn-xs btn-primary" @click="loadAdsOfferAnalytics()">Odśwież</button>
+            <div class="flex gap-2">
+                <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/ads-offer-analytics?format=csv')">CSV</button>
+                <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/ads-offer-analytics?format=xlsx')">XLSX</button>
+                <button class="btn btn-xs btn-primary" @click="loadAdsOfferAnalytics()">Odśwież</button>
+            </div>
         </div>
 
         <template x-if="adsOfferAnalyticsLoading">
@@ -539,6 +543,62 @@
                             </template>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </template>
+    </section>
+
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="refundTimelineSection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Refund Timeline - KPI</h3>
+            <button class="btn btn-xs btn-primary" @click="loadRefundTimeline()">Odśwież</button>
+        </div>
+
+        <template x-if="refundTimelineLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+            </div>
+        </template>
+
+        <template x-if="!refundTimelineLoading && refundTimelineError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + refundTimelineError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadRefundTimeline()">Ponów</button>
+            </div>
+        </template>
+
+        <template x-if="!refundTimelineLoading && !refundTimelineError && refundTimelineLoaded">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="refundTimelineData.summary.returns_total || 0"></div>
+                        <div class="text-xs opacity-70">Zwroty razem</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="refundTimelineData.summary.refunded_count || 0"></div>
+                        <div class="text-xs opacity-70">Zwroty rozliczone</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="((refundTimelineData.transitions || {}).request_to_refund || {}).avg_hours?.toFixed ? refundTimelineData.transitions.request_to_refund.avg_hours.toFixed(2) + ' h' : '0.00 h'"></div>
+                        <div class="text-xs opacity-70">Śr. zgłoszenie → refund</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="((refundTimelineData.transitions || {}).delivered_to_refund || {}).p95_hours?.toFixed ? refundTimelineData.transitions.delivered_to_refund.p95_hours.toFixed(2) + ' h' : '0.00 h'"></div>
+                        <div class="text-xs opacity-70">P95 dostarczono → refund</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <template x-for="(transition, key) in (refundTimelineData.transitions || {})" :key="key">
+                        <div class="stats-kpi p-2">
+                            <div class="text-xs opacity-70 mb-1" x-text="key.replace(/_/g, ' → ')"></div>
+                            <div>avg: <b x-text="transition.avg_hours + ' h'"></b></div>
+                            <div>med: <b x-text="transition.median_hours + ' h'"></b></div>
+                            <div>p95: <b x-text="transition.p95_hours + ' h'"></b></div>
+                            <div>n: <b x-text="transition.count"></b></div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </template>
@@ -770,6 +830,10 @@ function statsDashboard() {
         adsOfferAnalyticsLoading: false,
         adsOfferAnalyticsError: null,
         adsOfferAnalyticsData: { summary: {}, top_offers: [], availability: {} },
+        refundTimelineLoaded: false,
+        refundTimelineLoading: false,
+        refundTimelineError: null,
+        refundTimelineData: { summary: {}, transitions: {} },
         telemetryRows: [],
         salesChart: null,
         splitChart: null,
@@ -802,6 +866,7 @@ function statsDashboard() {
                 customerSupport: this.customerSupportLoaded || !!this.customerSupportError,
                 invoiceCoverage: this.invoiceCoverageLoaded || !!this.invoiceCoverageError,
                 adsOfferAnalytics: this.adsOfferAnalyticsLoaded || !!this.adsOfferAnalyticsError,
+                refundTimeline: this.refundTimelineLoaded || !!this.refundTimelineError,
             };
             this.returnsLoaded = false; this.returnsError = null;
             this.logisticsLoaded = false; this.logisticsError = null;
@@ -810,6 +875,7 @@ function statsDashboard() {
             this.customerSupportLoaded = false; this.customerSupportError = null;
             this.invoiceCoverageLoaded = false; this.invoiceCoverageError = null;
             this.adsOfferAnalyticsLoaded = false; this.adsOfferAnalyticsError = null;
+            this.refundTimelineLoaded = false; this.refundTimelineError = null;
             try {
                 const q = this.buildQuery();
                 const [overview, sales, profit] = await Promise.all([
@@ -830,6 +896,7 @@ function statsDashboard() {
                     reload.customerSupport ? this.loadCustomerSupport() : Promise.resolve(),
                     reload.invoiceCoverage ? this.loadInvoiceCoverage() : Promise.resolve(),
                     reload.adsOfferAnalytics ? this.loadAdsOfferAnalytics() : Promise.resolve(),
+                    reload.refundTimeline ? this.loadRefundTimeline() : Promise.resolve(),
                 ]);
             } catch(e) {
                 this.salesMeta = 'Błąd API: ' + (e.message || 'nieznany');
@@ -984,6 +1051,7 @@ function statsDashboard() {
                     if (entry.target === this.$refs.customerSupportSection && !this.customerSupportLoaded && !this.customerSupportLoading) this.loadCustomerSupport();
                     if (entry.target === this.$refs.invoiceCoverageSection && !this.invoiceCoverageLoaded && !this.invoiceCoverageLoading) this.loadInvoiceCoverage();
                     if (entry.target === this.$refs.adsOfferAnalyticsSection && !this.adsOfferAnalyticsLoaded && !this.adsOfferAnalyticsLoading) this.loadAdsOfferAnalytics();
+                    if (entry.target === this.$refs.refundTimelineSection && !this.refundTimelineLoaded && !this.refundTimelineLoading) this.loadRefundTimeline();
                     if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
                     if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
                 });
@@ -996,6 +1064,7 @@ function statsDashboard() {
             observer.observe(this.$refs.customerSupportSection);
             observer.observe(this.$refs.invoiceCoverageSection);
             observer.observe(this.$refs.adsOfferAnalyticsSection);
+            observer.observe(this.$refs.refundTimelineSection);
             observer.observe(this.$refs.productsSection);
             observer.observe(this.$refs.competitionSection);
         },
@@ -1228,6 +1297,24 @@ function statsDashboard() {
                 this.adsOfferAnalyticsError = 'Nie udalo sie zaladowac analityki Ads/Offer: ' + (e.message || 'blad');
             } finally {
                 this.adsOfferAnalyticsLoading = false;
+            }
+        },
+
+        async loadRefundTimeline() {
+            try {
+                this.refundTimelineLoading = true;
+                this.refundTimelineError = null;
+                const r = await fetch('/api/stats/refund-timeline?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.refundTimelineData = payload.data || { summary: {}, transitions: {} };
+                this.refundTimelineLoaded = true;
+            } catch (e) {
+                this.refundTimelineError = 'Nie udalo sie zaladowac KPI refund timeline: ' + (e.message || 'blad');
+            } finally {
+                this.refundTimelineLoading = false;
             }
         },
 
