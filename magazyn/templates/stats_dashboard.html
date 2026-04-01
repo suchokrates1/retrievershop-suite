@@ -754,6 +754,113 @@
         </div>
     </section>
 
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="offerPublicationHistorySection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Historia zmian ofert Allegro</h3>
+            <button class="btn btn-xs btn-primary" @click="loadOfferPublicationHistory()">Odśwież</button>
+        </div>
+
+        <template x-if="offerPublicationHistoryLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+                <div class="skeleton skeleton-row w-full"></div>
+            </div>
+        </template>
+
+        <template x-if="!offerPublicationHistoryLoading && offerPublicationHistoryError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + offerPublicationHistoryError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadOfferPublicationHistory()">Ponów</button>
+            </div>
+        </template>
+
+        <template x-if="!offerPublicationHistoryLoading && !offerPublicationHistoryError && offerPublicationHistoryLoaded">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="offerPublicationHistoryData.summary.offers_total || 0"></div>
+                        <div class="text-xs opacity-70">Oferty ogółem</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="offerPublicationHistoryData.summary.offers_with_history || 0"></div>
+                        <div class="text-xs opacity-70">Oferty z historią cen</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="offerPublicationHistoryData.summary.offers_with_price_change || 0"></div>
+                        <div class="text-xs opacity-70">Oferty ze zmianą ceny</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="offerPublicationHistoryData.summary.price_change_events_total || 0"></div>
+                        <div class="text-xs opacity-70">Zdarzenia zmiany ceny</div>
+                    </div>
+                </div>
+
+                <div x-show="Object.keys(offerPublicationHistoryData.publication_status || {}).length > 0">
+                    <div class="text-xs uppercase opacity-70 mb-2">Status publikacji (snapshot)</div>
+                    <div class="flex gap-2 flex-wrap text-sm">
+                        <template x-for="(count, status) in (offerPublicationHistoryData.publication_status || {})" :key="status">
+                            <span class="badge badge-outline" x-text="status + ': ' + count"></span>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    <div class="overflow-x-auto" x-show="(offerPublicationHistoryData.daily_series || []).length">
+                        <div class="text-xs uppercase opacity-70 mb-1">Dzienna historia zmian</div>
+                        <table class="table table-xs">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Oferty</th>
+                                    <th>Śr. cena</th>
+                                    <th>Zmiany cen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="row in (offerPublicationHistoryData.daily_series || []).slice(-10)" :key="row.date">
+                                    <tr>
+                                        <td x-text="row.date"></td>
+                                        <td x-text="row.offers_observed"></td>
+                                        <td x-text="row.avg_price + ' zł'"></td>
+                                        <td x-text="row.price_change_events"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="overflow-x-auto" x-show="(offerPublicationHistoryData.top_changed_offers || []).length">
+                        <div class="text-xs uppercase opacity-70 mb-1">Największe zmiany ofert</div>
+                        <table class="table table-xs">
+                            <thead>
+                                <tr>
+                                    <th>Oferta</th>
+                                    <th>Status</th>
+                                    <th>Δ cena</th>
+                                    <th>Zdarzenia</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="row in (offerPublicationHistoryData.top_changed_offers || []).slice(0, 10)" :key="row.offer_id">
+                                    <tr>
+                                        <td>
+                                            <div class="font-semibold" x-text="row.title || row.offer_id"></div>
+                                            <div class="text-xs opacity-60" x-text="row.offer_id"></div>
+                                        </td>
+                                        <td x-text="row.publication_status"></td>
+                                        <td :class="row.delta > 0 ? 'text-warning' : (row.delta < 0 ? 'text-success' : '')" x-text="(row.delta > 0 ? '+' : '') + row.delta + ' zł'"></td>
+                                        <td x-text="row.change_events"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </section>
+
     <section class="chart-wrap mb-6 reveal">
         <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div>
@@ -895,6 +1002,10 @@ function statsDashboard() {
         refundTimelineLoading: false,
         refundTimelineError: null,
         refundTimelineData: { summary: {}, transitions: {} },
+        offerPublicationHistoryLoaded: false,
+        offerPublicationHistoryLoading: false,
+        offerPublicationHistoryError: null,
+        offerPublicationHistoryData: { summary: {}, publication_status: {}, daily_series: [], top_changed_offers: [] },
         telemetryRows: [],
         salesChart: null,
         splitChart: null,
@@ -928,6 +1039,7 @@ function statsDashboard() {
                 invoiceCoverage: this.invoiceCoverageLoaded || !!this.invoiceCoverageError,
                 adsOfferAnalytics: this.adsOfferAnalyticsLoaded || !!this.adsOfferAnalyticsError,
                 refundTimeline: this.refundTimelineLoaded || !!this.refundTimelineError,
+                offerPublicationHistory: this.offerPublicationHistoryLoaded || !!this.offerPublicationHistoryError,
             };
             this.returnsLoaded = false; this.returnsError = null;
             this.logisticsLoaded = false; this.logisticsError = null;
@@ -937,6 +1049,7 @@ function statsDashboard() {
             this.invoiceCoverageLoaded = false; this.invoiceCoverageError = null;
             this.adsOfferAnalyticsLoaded = false; this.adsOfferAnalyticsError = null;
             this.refundTimelineLoaded = false; this.refundTimelineError = null;
+            this.offerPublicationHistoryLoaded = false; this.offerPublicationHistoryError = null;
             try {
                 const q = this.buildQuery();
                 const [overview, sales, profit] = await Promise.all([
@@ -958,6 +1071,7 @@ function statsDashboard() {
                     reload.invoiceCoverage ? this.loadInvoiceCoverage() : Promise.resolve(),
                     reload.adsOfferAnalytics ? this.loadAdsOfferAnalytics() : Promise.resolve(),
                     reload.refundTimeline ? this.loadRefundTimeline() : Promise.resolve(),
+                    reload.offerPublicationHistory ? this.loadOfferPublicationHistory() : Promise.resolve(),
                 ]);
             } catch(e) {
                 this.salesMeta = 'Błąd API: ' + (e.message || 'nieznany');
@@ -1149,6 +1263,7 @@ function statsDashboard() {
                     if (entry.target === this.$refs.refundTimelineSection && !this.refundTimelineLoaded && !this.refundTimelineLoading) this.loadRefundTimeline();
                     if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
                     if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
+                    if (entry.target === this.$refs.offerPublicationHistorySection && !this.offerPublicationHistoryLoaded && !this.offerPublicationHistoryLoading) this.loadOfferPublicationHistory();
                 });
             }, { threshold: 0.2 });
 
@@ -1162,6 +1277,7 @@ function statsDashboard() {
             observer.observe(this.$refs.refundTimelineSection);
             observer.observe(this.$refs.productsSection);
             observer.observe(this.$refs.competitionSection);
+            observer.observe(this.$refs.offerPublicationHistorySection);
         },
 
         async loadReturns() {
@@ -1410,6 +1526,24 @@ function statsDashboard() {
                 this.refundTimelineError = 'Nie udalo sie zaladowac KPI refund timeline: ' + (e.message || 'blad');
             } finally {
                 this.refundTimelineLoading = false;
+            }
+        },
+
+        async loadOfferPublicationHistory() {
+            try {
+                this.offerPublicationHistoryLoading = true;
+                this.offerPublicationHistoryError = null;
+                const r = await fetch('/api/stats/offer-publication-history?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.offerPublicationHistoryData = payload.data || { summary: {}, publication_status: {}, daily_series: [], top_changed_offers: [] };
+                this.offerPublicationHistoryLoaded = true;
+            } catch (e) {
+                this.offerPublicationHistoryError = 'Nie udalo sie zaladowac historii zmian ofert: ' + (e.message || 'blad');
+            } finally {
+                this.offerPublicationHistoryLoading = false;
             }
         },
 
