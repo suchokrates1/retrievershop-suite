@@ -826,11 +826,18 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 function statsDashboard() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const toLocalDateInput = (dt) => {
+        const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 10);
+    };
+
     return {
         loading: false,
         filters: {
-            date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10),
-            date_to: new Date().toISOString().slice(0,10),
+            date_from: toLocalDateInput(monthStart),
+            date_to: toLocalDateInput(now),
             granularity: 'day',
             platform: 'all',
             payment_type: 'all'
