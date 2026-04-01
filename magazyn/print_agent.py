@@ -989,17 +989,8 @@ class LabelAgent:
         else:
             pkg_dims = {"length": 64, "width": 38, "height": 8}   # Gabaryt A
 
-        packages = [
-            {
-                "type": "PACKAGE",
-                "weight": {"value": 1.0, "unit": "KILOGRAMS"},
-                "length": {"value": pkg_dims["length"], "unit": "CENTIMETER"},
-                "width": {"value": pkg_dims["width"], "unit": "CENTIMETER"},
-                "height": {"value": pkg_dims["height"], "unit": "CENTIMETER"},
-            }
-        ]
-
-        # Nazwy produktow jako referenceNumber na etykiecie
+        # Nazwy produktow na etykiecie
+        text_on_label = None
         reference_number = None
         if products:
             product_names = []
@@ -1019,7 +1010,22 @@ class LabelAgent:
                 # API dopuszcza tylko litery bez diakrytykow, cyfry, spacje i _/-
                 nfkd = unicodedata.normalize('NFKD', raw_ref)
                 ascii_ref = ''.join(c for c in nfkd if not unicodedata.combining(c))
-                reference_number = re.sub(r'[^a-zA-Z0-9 _/\-]', '', ascii_ref)[:100]
+                sanitized = re.sub(r'[^a-zA-Z0-9 _/\-]', '', ascii_ref)
+                # textOnLabel - pelniejszy opis na etykiecie paczki
+                text_on_label = sanitized[:100]
+                # referenceNumber - sygnatura wewnetrzna (limit 30 znakow wg API)
+                reference_number = sanitized[:30]
+
+        packages = [
+            {
+                "type": "PACKAGE",
+                "weight": {"value": 1.0, "unit": "KILOGRAMS"},
+                "length": {"value": pkg_dims["length"], "unit": "CENTIMETER"},
+                "width": {"value": pkg_dims["width"], "unit": "CENTIMETER"},
+                "height": {"value": pkg_dims["height"], "unit": "CENTIMETER"},
+                **({"textOnLabel": text_on_label} if text_on_label else {}),
+            }
+        ]
 
         # Dodatkowe wlasciwosci InPost (metoda nadania)
         additional_properties = None
