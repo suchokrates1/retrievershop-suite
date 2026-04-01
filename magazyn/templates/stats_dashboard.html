@@ -28,7 +28,7 @@
 .stats-grid {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
 }
 .chart-wrap {
     background: rgba(12, 30, 34, 0.85);
@@ -190,7 +190,7 @@
             </template>
             <template x-if="!logisticsLoading && !logisticsError && logisticsLoaded">
                 <div>
-                    <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3 text-sm">
                         <div>Wysłane: <b x-text="logisticsData.summary.shipped_total"></b></div>
                         <div>Dostarczone: <b x-text="logisticsData.summary.delivered_total"></b></div>
                         <div>Średni lead: <b x-text="logisticsData.summary.avg_lead_time_hours + ' h'"></b></div>
@@ -345,7 +345,7 @@
                 <!-- Transition times -->
                 <div x-show="(orderFunnelData.transitions || {}).BOUGHT_to_READY_FOR_PROCESSING">
                     <div class="text-xs uppercase opacity-70 mb-2 mt-3">Czasy przejść (godziny)</div>
-                    <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         <template x-for="(transition, key) in (orderFunnelData.transitions || {})" :key="key">
                             <template x-if="transition.count > 0">
                                 <div class="stats-kpi p-2">
@@ -393,7 +393,7 @@
         <template x-if="!shipmentErrorsLoading && !shipmentErrorsError && shipmentErrorsLoaded">
             <div class="space-y-4">
                 <!-- Summary cards -->
-                <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-2xl font-bold text-error" x-text="shipmentErrorsData.total_errors || 0"></div>
                         <div class="text-xs opacity-70">Błędy razem</div>
@@ -464,7 +464,7 @@
 
         <template x-if="!customerSupportLoading && !customerSupportError && customerSupportLoaded">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-2xl font-bold" x-text="customerSupportData.summary.threads_total || 0"></div>
                         <div class="text-xs opacity-70">Wątki razem</div>
@@ -522,7 +522,7 @@
 
         <template x-if="!invoiceCoverageLoading && !invoiceCoverageError && invoiceCoverageLoaded">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-2xl font-bold" x-text="invoiceCoverageData.summary.requested_total || 0"></div>
                         <div class="text-xs opacity-70">Zamówienia z fakturą</div>
@@ -577,7 +577,7 @@
 
         <template x-if="!adsOfferAnalyticsLoading && !adsOfferAnalyticsError && adsOfferAnalyticsLoaded">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-xl font-bold" x-text="(adsOfferAnalyticsData.summary.net_ads_spend_total || 0).toFixed(2) + ' zł'"></div>
                         <div class="text-xs opacity-70">Łączny koszt reklam netto</div>
@@ -680,7 +680,7 @@
 
         <template x-if="!refundTimelineLoading && !refundTimelineError && refundTimelineLoaded">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-xl font-bold" x-text="refundTimelineData.summary.returns_total || 0"></div>
                         <div class="text-xs opacity-70">Zwroty razem</div>
@@ -833,7 +833,7 @@
 
         <template x-if="!offerPublicationHistoryLoading && !offerPublicationHistoryError && offerPublicationHistoryLoaded">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-xl font-bold" x-text="offerPublicationHistoryData.summary.offers_total || 0"></div>
                         <div class="text-xs opacity-70">Oferty ogółem</div>
