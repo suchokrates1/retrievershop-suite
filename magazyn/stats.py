@@ -27,6 +27,7 @@ from .models import (
     OrderStatusLog,
     PriceReportItem,
     Return,
+    ReturnStatusLog,
     Thread,
 )
 from .domain.financial import FinancialCalculator
@@ -891,17 +892,22 @@ def stats_ads_offer_analytics():
     if err:
         return err
 
+    export_format = (request.args.get("format") or "").strip().lower()
+    if export_format and export_format not in {"csv", "xlsx"}:
+        return _json_error("INVALID_EXPORT_FORMAT", "Dozwolone formaty eksportu: csv, xlsx")
+
     cache_key = "ads-offer-analytics|" + _build_cache_key(filters)
-    cached_payload = _cache_get(cache_key)
-    if cached_payload is not None:
-        endpoint = _endpoint_name(cache_key)
-        response_ms = _record_telemetry(endpoint, "hit", started_at)
-        cached = dict(cached_payload)
-        cached["generated_at"] = datetime.now(timezone.utc).isoformat()
-        cached["meta"] = dict(cached.get("meta") or {})
-        cached["meta"]["cache"] = "hit"
-        cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
-        return jsonify(cached)
+    if not export_format:
+        cached_payload = _cache_get(cache_key)
+        if cached_payload is not None:
+            endpoint = _endpoint_name(cache_key)
+            response_ms = _record_telemetry(endpoint, "hit", started_at)
+            cached = dict(cached_payload)
+            cached["generated_at"] = datetime.now(timezone.utc).isoformat()
+            cached["meta"] = dict(cached.get("meta") or {})
+            cached["meta"]["cache"] = "hit"
+            cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+            return jsonify(cached)
 
     access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not access_token:
@@ -1039,6 +1045,25 @@ def stats_ads_offer_analytics():
 
     top_rows.sort(key=lambda r: (r["net_ads_spend"], r["ads_fee"]), reverse=True)
 
+    if export_format:
+        export_rows = [
+            {
+                "offer_id": row["offer_id"],
+                "offer_name": row["offer_name"],
+                "publication_status": row["publication_status"],
+                "current_price": row["current_price"],
+                "ads_fee": row["ads_fee"],
+                "promoted_commission": row["promoted_commission"],
+                "campaign_bonus": row["campaign_bonus"],
+                "net_ads_spend": row["net_ads_spend"],
+                "orders_count": row["orders_count"],
+                "items_sold": row["items_sold"],
+                "revenue": row["revenue"],
+            }
+            for row in top_rows
+        ]
+        return _export_table(export_rows, "ads_offer_analytics", export_format)
+
     payload = {
         "ok": True,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1071,6 +1096,133 @@ def stats_ads_offer_analytics():
         "errors": [],
     }
 
+    endpoint = _endpoint_name(cache_key)
+    response_ms = _record_telemetry(endpoint, "miss", started_at)
+    payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+    _cache_set(cache_key, payload)
+    return jsonify(payload)
+
+
+@bp.route("/refund-timeline")
+@login_required
+def stats_refund_timeline():
+    """KPI czasu przejsc zwrotu od zgloszenia do refundu."""
+    started_at = time.perf_counter()
+    filters, err = _parse_filters()
+    if err:
+        return err
+
+    cache_key = "refund-timeline|" + _build_cache_key(filters)
+    cached_payload = _cache_get(cache_key)
+    if cached_payload is not None:
+        endpoint = _endpoint_name(cache_key)
+        response_ms = _record_telemetry(endpoint, "hit", started_at)
+        cached = dict(cached_payload)
+        cached["generated_at"] = datetime.now(timezone.utc).isoformat()
+        cached["meta"] = dict(cached.get("meta") or {})
+        cached["meta"]["cache"] = "hit"
+        cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+        return jsonify(cached)
+
+    start_dt = filters.date_from
+    end_dt = filters.date_to
+
+    with get_session() as db:
+        returns_query = db.query(Return).filter(Return.created_at >= start_dt, Return.created_at < end_dt)
+        if filters.platform != "all":
+            returns_query = returns_query.join(Order, Return.order_id == Order.order_id).filter(Order.platform == filters.platform)
+        returns_data = returns_query.all()
+
+        if filters.payment_type != "all":
+            order_ids = [ret.order_id for ret in returns_data if ret.order_id]
+            orders_map = {}
+            if order_ids:
+                orders_map = {o.order_id: o for o in db.query(Order).filter(Order.order_id.in_(order_ids)).all()}
+            filtered_returns = []
+            for ret in returns_data:
+                order = orders_map.get(ret.order_id)
+                if not order:
+                    continue
+                if filters.payment_type == "cod" and _is_cod(order):
+                    filtered_returns.append(ret)
+                if filters.payment_type == "online" and not _is_cod(order):
+                    filtered_returns.append(ret)
+            returns_data = filtered_returns
+
+        return_ids = [ret.id for ret in returns_data]
+        logs_by_return: dict[int, list[ReturnStatusLog]] = defaultdict(list)
+        if return_ids:
+            logs = (
+                db.query(ReturnStatusLog)
+                .filter(ReturnStatusLog.return_id.in_(return_ids))
+                .order_by(ReturnStatusLog.return_id.asc(), ReturnStatusLog.timestamp.asc())
+                .all()
+            )
+            for log in logs:
+                logs_by_return[log.return_id].append(log)
+
+    request_to_delivered: list[float] = []
+    delivered_to_refund: list[float] = []
+    request_to_refund: list[float] = []
+    delivered_count = 0
+    refunded_count = 0
+
+    for ret in returns_data:
+        delivered_at = None
+        refunded_at = None
+        for log in logs_by_return.get(ret.id, []):
+            status = (log.status or "").strip().lower()
+            if status == "delivered" and delivered_at is None:
+                delivered_at = log.timestamp
+            if status == "completed" and refunded_at is None:
+                refunded_at = log.timestamp
+
+        if delivered_at and ret.created_at and delivered_at >= ret.created_at:
+            delivered_count += 1
+            request_to_delivered.append((delivered_at - ret.created_at).total_seconds() / 3600)
+
+        if refunded_at and ret.created_at and refunded_at >= ret.created_at:
+            refunded_count += 1
+            request_to_refund.append((refunded_at - ret.created_at).total_seconds() / 3600)
+
+        if delivered_at and refunded_at and refunded_at >= delivered_at:
+            delivered_to_refund.append((refunded_at - delivered_at).total_seconds() / 3600)
+
+    def _metric(values: list[float]) -> dict[str, float | int]:
+        if not values:
+            return {"count": 0, "avg_hours": 0.0, "median_hours": 0.0, "p95_hours": 0.0}
+        sorted_values = sorted(values)
+        return {
+            "count": len(sorted_values),
+            "avg_hours": round(sum(sorted_values) / len(sorted_values), 2),
+            "median_hours": round(sorted_values[len(sorted_values) // 2], 2),
+            "p95_hours": round(sorted_values[int(0.95 * (len(sorted_values) - 1))], 2),
+        }
+
+    payload = {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "filters": _format_filters(filters),
+        "data": {
+            "summary": {
+                "returns_total": len(returns_data),
+                "delivered_count": delivered_count,
+                "refunded_count": refunded_count,
+            },
+            "transitions": {
+                "request_to_delivered": _metric(request_to_delivered),
+                "delivered_to_refund": _metric(delivered_to_refund),
+                "request_to_refund": _metric(request_to_refund),
+            },
+        },
+        "meta": {
+            "confidence": "medium",
+            "sources": ["db.returns", "db.return_status_logs", "db.orders"],
+            "cache": "miss",
+            "telemetry": {},
+        },
+        "errors": [],
+    }
     endpoint = _endpoint_name(cache_key)
     response_ms = _record_telemetry(endpoint, "miss", started_at)
     payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
