@@ -22,7 +22,7 @@ def post_worker_init(worker):
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         
         # If we got here, we acquired the lock - this worker starts the scheduler
-        from magazyn.factory import _start_order_sync_scheduler, _start_promo_scheduler
+        from magazyn.factory import _start_order_sync_scheduler, _start_promo_scheduler, _start_billing_types_scheduler
         from magazyn.price_report_scheduler import start_price_report_scheduler
         from magazyn.factory import _app_instance
         
@@ -37,6 +37,10 @@ def post_worker_init(worker):
         # Start promo scheduler (codzienne sprawdzanie wyrozien)
         _start_promo_scheduler()
         worker.log.info(f"Promo scheduler started in worker {worker.pid}")
+
+        # Start billing types scheduler (okresowa synchronizacja slownika billing)
+        _start_billing_types_scheduler()
+        worker.log.info(f"Billing types scheduler started in worker {worker.pid}")
         
         # Auto-resume incomplete price reports (tylko w jednym workerze)
         if _app_instance:

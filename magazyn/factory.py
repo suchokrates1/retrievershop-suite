@@ -20,6 +20,7 @@ from . import print_agent
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .discussions import bp as discussions_bp
 from .diagnostics import bp as diagnostics_bp
+from .stats import bp as stats_bp
 from .integration_proxy import bp as integration_proxy_bp
 from .blueprints import scanning_bp, stocktake_bp, customer_order_bp
 from .price_reports import bp as price_reports_bp
@@ -29,6 +30,7 @@ from .db import configure_engine, create_default_user_if_needed, Base, engine
 from .settings_store import settings_store
 from . import order_sync_scheduler
 from . import promo_scheduler
+from . import billing_types_scheduler
 
 _shutdown_registered = False
 _app_instance: Optional[Flask] = None
@@ -41,6 +43,7 @@ def _register_shutdown_hook() -> None:
     atexit.register(print_agent.stop_agent_thread)
     atexit.register(order_sync_scheduler.stop_sync_scheduler)
     atexit.register(promo_scheduler.stop_promo_scheduler)
+    atexit.register(billing_types_scheduler.stop_billing_types_scheduler)
     _shutdown_registered = True
 
 
@@ -56,6 +59,13 @@ def _start_promo_scheduler() -> None:
     global _app_instance
     if _app_instance is not None:
         promo_scheduler.start_promo_scheduler(_app_instance)
+
+
+def _start_billing_types_scheduler() -> None:
+    """Start billing types scheduler - called from gunicorn post_worker_init hook."""
+    global _app_instance
+    if _app_instance is not None:
+        billing_types_scheduler.start_billing_types_scheduler(_app_instance)
 
 
 def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
@@ -108,6 +118,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(sales_bp)
     app.register_blueprint(allegro_bp)
     app.register_blueprint(diagnostics_bp)
+    app.register_blueprint(stats_bp)
     app.register_blueprint(integration_proxy_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(discussions_bp)

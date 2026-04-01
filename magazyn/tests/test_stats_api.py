@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from magazyn.db import get_session
-from magazyn.models import AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, PriceReport, PriceReportItem, Return
+from magazyn.models import AllegroBillingType, AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, PriceReport, PriceReportItem, Return
 
 
 def _seed_order(app, order_id: str, *, payment_done=100.0, cod=False, platform="allegro"):
@@ -182,6 +182,8 @@ def test_stats_profit_returns_summary(client, app, login, monkeypatch):
 def test_stats_allegro_costs_returns_totals(client, app, login, monkeypatch):
     from magazyn import allegro_api as allegro_api_module
     from magazyn import stats as stats_module
+    from magazyn.db import get_session
+    from magazyn.models import AllegroBillingType
 
     _seed_order(app, "ord_cost_1", payment_done=100.0, cod=False)
 
@@ -221,6 +223,13 @@ def test_stats_allegro_costs_returns_totals(client, app, login, monkeypatch):
     assert payload["data"]["totals"]["allegro_total"] == 16.0
     assert payload["data"]["totals"]["ads_total"] == 7.0
 
+    with app.app_context():
+        with get_session() as db:
+            saved = {row.type_id: row.name for row in db.query(AllegroBillingType).all()}
+
+    assert saved["FEE1"] == "Prowizja"
+    assert saved["FEE2"] == "Wyroznienie"
+
 
 def test_stats_allegro_costs_requires_token(client, login, monkeypatch):
     from magazyn import stats as stats_module
@@ -233,6 +242,58 @@ def test_stats_allegro_costs_requires_token(client, login, monkeypatch):
     payload = response.get_json()
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "ALLEGRO_TOKEN_MISSING"
+
+
+def test_stats_billing_types_list_and_update(client, app, login):
+    with app.app_context():
+        with get_session() as db:
+            db.add(
+                AllegroBillingType(
+                    type_id="SUC",
+                    name="Prowizja",
+                    description="Prowizja od sprzedazy",
+                    mapping_category="commission_organic",
+                    mapping_version=1,
+                )
+            )
+
+    resp = client.get("/api/stats/billing-types")
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["rows"][0]["type_id"] == "SUC"
+
+    upd = client.put("/api/stats/billing-types/SUC", json={"mapping_category": "promo"})
+    assert upd.status_code == 200
+    upd_data = upd.get_json()["data"]
+    assert upd_data["mapping_category"] == "promo"
+    assert upd_data["mapping_version"] == 2
+
+
+def test_stats_billing_types_sync_endpoint(client, app, login, monkeypatch):
+    from magazyn import allegro_api as allegro_api_module
+    from magazyn import stats as stats_module
+
+    monkeypatch.setattr(stats_module.settings_store, "get", lambda key, default=None: "token" if key == "ALLEGRO_ACCESS_TOKEN" else default)
+    monkeypatch.setattr(
+        allegro_api_module,
+        "fetch_billing_types",
+        lambda token: [
+            {"id": "SUC", "name": "Prowizja"},
+            {"id": "NSP", "name": "Ads"},
+        ],
+    )
+
+    resp = client.post("/api/stats/billing-types/sync")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["data"]["fetched"] == 2
+
+    with app.app_context():
+        with get_session() as db:
+            ids = {row.type_id for row in db.query(AllegroBillingType).all()}
+    assert "SUC" in ids
+    assert "NSP" in ids
 
 
 def test_stats_returns_summary_and_refund_metrics(client, app, login):
