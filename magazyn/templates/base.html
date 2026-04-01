@@ -42,15 +42,15 @@
     {% endif %}
     {% block page_vars %}{% endblock %}
     <div class="page-wrapper flex flex-col min-h-screen">
-    <div x-data="{ menuOpen: false }">
+    <div x-data="{ menuOpen: false }" x-effect="document.body.classList.toggle('menu-open', menuOpen)">
     <nav class="navbar bg-base-300 fixed top-0 left-0 right-0 z-50">
         <div class="container mx-auto">
             <div class="flex flex-col w-full">
                 <div class="flex items-center w-full">
                     <a class="text-xl" href="{{ url_for('home') }}">
-                        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-[140px]">
+                        <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-[48px] md:h-[140px]">
                     </a>
-                    <span class="grow text-center text-2xl">Witaj w aplikacji magazynowej</span>
+                    <span class="grow text-center text-base md:text-2xl hidden sm:block">Witaj w aplikacji magazynowej</span>
                     {% if show_menu %}
                     <div class="flex items-center ml-auto">
                         <div x-data="wakeLock({{ wake_lock_default|default(false)|tojson }})" x-cloak class="inline-block">
@@ -110,6 +110,7 @@
 
 
     {% if show_menu %}
+    <div class="mobile-menu-backdrop md:hidden" :class="{ open: menuOpen }" @click="menuOpen = false"></div>
     <div class="mobile-menu md:hidden" :class="{ open: menuOpen }" @click.outside="menuOpen = false">
         <button @click="menuOpen = false" class="btn btn-ghost btn-sm absolute top-2 right-2 text-white" type="button" aria-label="Zamknij">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-10 mx-auto mb-3">
@@ -139,7 +140,7 @@
     {% endif %}
     </div>{# /x-data menuOpen #}
 
-    <main x-data class="w-full mt-4 pt-4 px-4 flex-1{% if full_width %} max-w-none{% endif %}">
+    <main x-data class="w-full mt-2 md:mt-4 pt-2 md:pt-4 px-2 md:px-4 flex-1{% if full_width %} max-w-none{% endif %}">
         {% if not full_width %}
         <div class="container mx-auto">
         {% endif %}

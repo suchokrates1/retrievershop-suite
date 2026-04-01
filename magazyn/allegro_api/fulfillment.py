@@ -122,6 +122,9 @@ def update_fulfillment_status(
         "Fulfillment %s -> %s dla zamowienia %s",
         "zmieniony", status, checkout_form_id,
     )
+    # Allegro PUT fulfillment moze zwrocic 204 No Content (puste body)
+    if response.status_code == 204 or not response.content:
+        return {"status": status}
     return response.json()
 
 
