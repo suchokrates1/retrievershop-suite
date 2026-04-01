@@ -104,7 +104,7 @@
             <div class="stats-kpi p-4 reveal">
                 <div class="text-xs uppercase opacity-70" x-text="card.label"></div>
                 <div class="text-3xl font-semibold mt-1" x-text="card.value"></div>
-                <div class="text-xs opacity-70 mt-2" x-text="card.sub"></div>
+                <div class="text-xs opacity-70 mt-2" x-html="card.sub"></div>
             </div>
         </template>
     </section>
@@ -211,6 +211,60 @@
                         Błędy druku: <b x-text="(logisticsData.error_counts || {}).blad_druku || 0"></b>
                         &nbsp;|&nbsp; Problem z dostawą: <b x-text="(logisticsData.error_counts || {}).problem_z_dostawa || 0"></b>
                     </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-3">
+                        <div x-show="(logisticsData.by_carrier || []).length">
+                            <div class="text-xs uppercase opacity-70 mb-1">SLA per przewoźnik</div>
+                            <div class="overflow-x-auto">
+                                <table class="table table-xs">
+                                    <thead>
+                                        <tr>
+                                            <th>Przewoźnik</th>
+                                            <th>Wysłane</th>
+                                            <th>Dostarczone</th>
+                                            <th>Śr. lead</th>
+                                            <th>On-time 48h</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="row in (logisticsData.by_carrier || []).slice(0, 6)" :key="row.carrier">
+                                            <tr>
+                                                <td x-text="row.carrier"></td>
+                                                <td x-text="row.shipped_total"></td>
+                                                <td x-text="row.delivered_total"></td>
+                                                <td x-text="row.avg_lead_time_hours + ' h'"></td>
+                                                <td x-text="row.on_time_rate_48h + '%'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div x-show="(logisticsData.by_delivery_method || []).length">
+                            <div class="text-xs uppercase opacity-70 mb-1">SLA per metoda dostawy</div>
+                            <div class="overflow-x-auto">
+                                <table class="table table-xs">
+                                    <thead>
+                                        <tr>
+                                            <th>Metoda</th>
+                                            <th>Przewoźnik</th>
+                                            <th>Wysłane</th>
+                                            <th>Śr. lead</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="row in (logisticsData.by_delivery_method || []).slice(0, 6)" :key="row.carrier + row.delivery_method">
+                                            <tr>
+                                                <td x-text="row.delivery_method"></td>
+                                                <td x-text="row.carrier"></td>
+                                                <td x-text="row.shipped_total"></td>
+                                                <td x-text="row.avg_lead_time_hours + ' h'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                     <ul class="text-sm opacity-80">
                         <template x-for="alert in logisticsData.alerts" :key="alert.code">
                             <li x-text="alert.message"></li>
@@ -223,7 +277,7 @@
 
     <section class="chart-wrap lazy-section reveal mb-6" x-ref="orderFunnelSection">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold">Order Funnel - Czasy przejść statusów</h3>
+            <h3 class="text-lg font-semibold">Lejek zamówień i czasy przejść statusów</h3>
             <button class="btn btn-xs btn-primary" @click="loadOrderFunnel()">Odśwież</button>
         </div>
         
@@ -273,8 +327,8 @@
                                     <div class="text-xs opacity-70 mb-1" x-text="key.replace(/_/g, ' → ')"></div>
                                     <div class="text-sm font-semibold" x-text="transition.avg_hours + ' h'"></div>
                                     <div class="text-xs opacity-50">
-                                        med: <span x-text="transition.median_hours + 'h'"></span>
-                                        | n=<span x-text="transition.count"></span>
+                                        Mediana: <span x-text="transition.median_hours + ' h'"></span>
+                                        | liczba: <span x-text="transition.count"></span>
                                     </div>
                                 </div>
                             </template>
@@ -293,7 +347,7 @@
 
     <section class="chart-wrap lazy-section reveal mb-6" x-ref="shipmentErrorsSection">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold">Błędy Shipmentów - KPI</h3>
+            <h3 class="text-lg font-semibold">Błędy przesyłek</h3>
         </div>
         
         <template x-if="shipmentErrorsLoading">
@@ -329,7 +383,7 @@
                     </div>
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-xl opacity-80" x-text="shipmentErrorsData.summary.most_problematic_courier || '-'"></div>
-                        <div class="text-xs opacity-70">Najgorsza kurier</div>
+                        <div class="text-xs opacity-70">Najbardziej problematyczny przewoźnik</div>
                     </div>
                 </div>
                 
@@ -400,7 +454,7 @@
                     </div>
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-2xl font-bold" x-text="(customerSupportData.summary.p95_first_response_hours || 0).toFixed(2) + ' h'"></div>
-                        <div class="text-xs opacity-70">P95 1. odpowiedź</div>
+                        <div class="text-xs opacity-70"><span :title="tooltipText('P95')">P95</span> 1. odpowiedź</div>
                     </div>
                 </div>
 
@@ -423,7 +477,7 @@
 
     <section class="chart-wrap lazy-section reveal mb-6" x-ref="invoiceCoverageSection">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold">Pokrycie Faktur - KPI</h3>
+            <h3 class="text-lg font-semibold">Pokrycie faktur</h3>
             <button class="btn btn-xs btn-primary" @click="loadInvoiceCoverage()">Odśwież</button>
         </div>
 
@@ -473,7 +527,7 @@
 
     <section class="chart-wrap lazy-section reveal mb-6" x-ref="adsOfferAnalyticsSection">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold">Ads i Offer Analytics - Priorytet C</h3>
+            <h3 class="text-lg font-semibold">Reklamy i analityka ofert</h3>
             <div class="flex gap-2">
                 <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/ads-offer-analytics?format=csv')">CSV</button>
                 <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/ads-offer-analytics?format=xlsx')">XLSX</button>
@@ -501,7 +555,7 @@
                 <div class="grid grid-cols-2 gap-2 text-sm">
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-xl font-bold" x-text="(adsOfferAnalyticsData.summary.net_ads_spend_total || 0).toFixed(2) + ' zł'"></div>
-                        <div class="text-xs opacity-70">Net Ads Spend</div>
+                        <div class="text-xs opacity-70">Łączny koszt reklam netto</div>
                     </div>
                     <div class="stats-kpi p-2 text-center">
                         <div class="text-xl font-bold" x-text="adsOfferAnalyticsData.summary.offers_with_ads_cost || 0"></div>
@@ -524,7 +578,7 @@
                         <thead>
                             <tr>
                                 <th>Oferta</th>
-                                <th>Net Ads</th>
+                                <th>Koszt reklam netto</th>
                                 <th>Zamówienia</th>
                                 <th>Przychód</th>
                             </tr>
@@ -550,7 +604,7 @@
 
     <section class="chart-wrap lazy-section reveal mb-6" x-ref="refundTimelineSection">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold">Refund Timeline - KPI</h3>
+            <h3 class="text-lg font-semibold">Czas rozliczenia zwrotów</h3>
             <button class="btn btn-xs btn-primary" @click="loadRefundTimeline()">Odśwież</button>
         </div>
 
@@ -593,10 +647,10 @@
                     <template x-for="(transition, key) in (refundTimelineData.transitions || {})" :key="key">
                         <div class="stats-kpi p-2">
                             <div class="text-xs opacity-70 mb-1" x-text="key.replace(/_/g, ' → ')"></div>
-                            <div>avg: <b x-text="transition.avg_hours + ' h'"></b></div>
-                            <div>med: <b x-text="transition.median_hours + ' h'"></b></div>
-                            <div>p95: <b x-text="transition.p95_hours + ' h'"></b></div>
-                            <div>n: <b x-text="transition.count"></b></div>
+                            <div>Średnio: <b x-text="transition.avg_hours + ' h'"></b></div>
+                            <div>Mediana: <b x-text="transition.median_hours + ' h'"></b></div>
+                            <div><span :title="tooltipText('P95')">P95</span>: <b x-text="transition.p95_hours + ' h'"></b></div>
+                            <div>Liczba spraw: <b x-text="transition.count"></b></div>
                         </div>
                     </template>
                 </div>
@@ -703,12 +757,12 @@
     <section class="chart-wrap mb-6 reveal">
         <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div>
-                <h3 class="text-lg font-semibold">Mapowanie Billing Types</h3>
-                <p class="text-xs opacity-70">Reczna korekta mapping_category dla typow kosztow Allegro.</p>
+                <h3 class="text-lg font-semibold">Mapowanie typów rozliczeń</h3>
+                <p class="text-xs opacity-70">Ręczna korekta kategorii mapowania dla typów kosztów Allegro.</p>
             </div>
             <div class="flex gap-2">
                 <button class="btn btn-xs btn-outline" @click="syncBillingTypes()" :disabled="billingTypesLoading">Sync z Allegro</button>
-                <button class="btn btn-xs btn-outline" @click="loadBillingTypes()" :disabled="billingTypesLoading">Odswiez liste</button>
+                <button class="btn btn-xs btn-outline" @click="loadBillingTypes()" :disabled="billingTypesLoading">Odśwież listę</button>
             </div>
         </div>
 
@@ -723,7 +777,7 @@
             <table class="table table-sm">
                 <thead>
                     <tr>
-                        <th>Type ID</th>
+                        <th>ID typu</th>
                         <th>Nazwa</th>
                         <th>Kategoria</th>
                         <th>Wersja</th>
@@ -759,8 +813,8 @@
             <template x-for="item in telemetryRows" :key="item.name">
                 <div class="stats-kpi p-3">
                     <div class="font-semibold" x-text="item.name"></div>
-                    <div>Śr. odpowiedź: <b x-text="item.avg_response_ms + ' ms'"></b></div>
-                    <div>Cache hit: <b x-text="item.cache_hit_ratio + '%'"></b></div>
+                    <div>Śr. czas odpowiedzi: <b x-text="item.avg_response_ms + ' ms'"></b></div>
+                    <div>Skuteczność cache: <b x-text="item.cache_hit_ratio + '%'"></b></div>
                 </div>
             </template>
         </div>
@@ -905,19 +959,32 @@ function statsDashboard() {
             }
         },
 
+        tooltipText(shortcut) {
+            const labels = {
+                MoM: 'Month over Month - zmiana miesiąc do miesiąca',
+                AOV: 'Average Order Value - średnia wartość zamówienia',
+                P95: '95. percentyl - wartość, poniżej której mieści się 95% wyników'
+            };
+            return labels[shortcut] || shortcut;
+        },
+
+        abbr(shortcut) {
+            return `<span title="${this.tooltipText(shortcut)}">${shortcut}</span>`;
+        },
+
         updateCards(overview, sales, profit) {
             this.cards = [
                 {
                     key: 'revenue',
                     label: 'Przychód',
                     value: (sales.data.summary.revenue || 0).toFixed(2) + ' zł',
-                    sub: 'MoM: ' + (sales.data.summary.mom === null ? '-' : sales.data.summary.mom.toFixed(2) + '%')
+                    sub: this.abbr('MoM') + ': ' + (sales.data.summary.mom === null ? '-' : sales.data.summary.mom.toFixed(2) + '%')
                 },
                 {
                     key: 'orders',
                     label: 'Zamówienia',
                     value: String(overview.data.kpi.orders_count.value || 0),
-                    sub: 'MoM: ' + (overview.data.kpi.orders_count.mom === null ? '-' : overview.data.kpi.orders_count.mom.toFixed(2) + '%') + ' | AOV: ' + (overview.data.kpi.aov.value || 0).toFixed(2) + ' zł'
+                    sub: this.abbr('MoM') + ': ' + (overview.data.kpi.orders_count.mom === null ? '-' : overview.data.kpi.orders_count.mom.toFixed(2) + '%') + ' | ' + this.abbr('AOV') + ': ' + (overview.data.kpi.aov.value || 0).toFixed(2) + ' zł'
                 },
                 {
                     key: 'margin',
@@ -927,7 +994,7 @@ function statsDashboard() {
                 }
             ];
             const t = sales.meta && sales.meta.telemetry ? sales.meta.telemetry : null;
-            this.salesMeta = t ? ('API: ' + t.response_ms + ' ms | cache ' + t.cache_hit_ratio + '%') : 'API: -';
+            this.salesMeta = t ? ('API: ' + t.response_ms + ' ms | cache: ' + t.cache_hit_ratio + '%') : 'API: -';
         },
 
         renderSalesChart(sales) {
