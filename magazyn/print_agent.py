@@ -960,7 +960,7 @@ class LabelAgent:
         }
         sender_company = settings_store.get("SENDER_COMPANY")
         if sender_company:
-            sender["company"] = sender_company
+            sender["company"] = sender_company[:30]
 
         # Dane odbiorcy z zamowienia (nazwy pol wg dokumentacji API)
         receiver = {
