@@ -627,6 +627,49 @@ class ReturnStatusLog(Base):
 
 
 # =============================================================================
+# Shipment System - Bledy przesylek i generowania etykiet
+# =============================================================================
+
+class ShipmentError(Base):
+    """Tracking błędów związanych z generowaniem etykiet i tworzeniem przesyłek."""
+    __tablename__ = "shipment_errors"
+    __table_args__ = (
+        Index("idx_shipment_errors_order_id", "order_id"),
+        Index("idx_shipment_errors_error_type", "error_type"),
+        Index("idx_shipment_errors_delivery_method", "delivery_method"),
+        Index("idx_shipment_errors_created_at", "created_at"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
+    
+    # Typ błędu (label_generation_failed, invalid_address, shipment_creation_failed, etc.)
+    error_type = Column(String(64), nullable=False)
+    
+    # Kod błędu z API (jeśli dostępny)
+    error_code = Column(String(32), nullable=True)
+    
+    # Wiadomość błędu z API
+    error_message = Column(Text, nullable=True)
+    
+    # Metoda dostawy (courier name)
+    delivery_method = Column(String(255), nullable=True)
+    
+    # Raw payload from Allegro API (for debugging)
+    raw_response = Column(Text, nullable=True)
+    
+    # Czy błąd został rozwiązany/ponownie przetworzony
+    resolved = Column(Boolean, default=False, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    
+    # Relationship
+    order = relationship("Order")
+
+
+# =============================================================================
 # Price Reports System - Raporty cenowe konkurencji
 # =============================================================================
 
