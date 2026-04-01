@@ -1026,11 +1026,11 @@ def test_stats_ads_offer_analytics_returns_kpi(client, app, login, monkeypatch):
         "fetch_billing_entries",
         lambda token, occurred_at_gte=None, occurred_at_lte=None, limit=100: {
             "billingEntries": [
-                {"type": {"id": "ADS"}, "value": {"amount": "-5.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
-                {"type": {"id": "BRG"}, "value": {"amount": "-3.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
+                {"type": {"id": "ADS"}, "value": {"amount": "-5.00"}, "offer": {"id": "111", "name": "Oferta 111"}, "campaign": {"id": "C1", "name": "Kampania A"}},
+                {"type": {"id": "BRG"}, "value": {"amount": "-3.00"}, "offer": {"id": "111", "name": "Oferta 111"}, "campaign": {"id": "C1", "name": "Kampania A"}},
                 {"type": {"id": "CB2"}, "value": {"amount": "1.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
-                {"type": {"id": "ADS"}, "value": {"amount": "-2.00"}, "offer": {"id": "222", "name": "Oferta 222"}},
-                {"type": {"id": "NSP"}, "value": {"amount": "-4.00"}},
+                {"type": {"id": "ADS"}, "value": {"amount": "-2.00"}, "offer": {"id": "222", "name": "Oferta 222"}, "campaign": {"id": "C2", "name": "Kampania B"}},
+                {"type": {"id": "NSP"}, "value": {"amount": "-4.00"}, "campaign": {"id": "C3", "name": "Konto NSP"}},
             ]
         },
     )
@@ -1066,7 +1066,13 @@ def test_stats_ads_offer_analytics_returns_kpi(client, app, login, monkeypatch):
     assert summary["promoted_commission_total"] == 3.0
     assert summary["campaign_bonus_total"] == 1.0
     assert summary["offers_with_ads_cost"] == 2
+    assert summary["campaigns_detected"] == 3
+    assert summary["offer_attributed_revenue"] == 200.0
+    assert summary["roas_offer_level"] == 22.22
     assert payload["data"]["top_offers"][0]["offer_id"] == "111"
+    assert payload["data"]["top_offers"][0]["roas"] == 14.29
+    assert payload["data"]["top_campaigns"][0]["campaign_id"] == "C1"
+    assert payload["data"]["availability"]["campaign_level_ads_cost"] is True
     assert payload["data"]["availability"]["offer_level_ads_cost"] is True
     assert payload["data"]["availability"]["offer_level_views_ctr"] is False
 
@@ -1093,6 +1099,7 @@ def test_stats_ads_offer_analytics_export_csv(client, app, login, monkeypatch):
     body = response.data.decode("utf-8")
     assert "offer_id" in body
     assert "111" in body
+    assert "roas" in body
 
 
 def test_stats_refund_timeline_returns_metrics(client, app, login):
