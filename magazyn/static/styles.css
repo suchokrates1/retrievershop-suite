@@ -23,11 +23,20 @@ body {
     background-color: oklch(var(--b1));
     color: oklch(var(--bc));
 }
+@media (max-width: 767px) {
+    body {
+        padding-top: 80px;
+    }
+}
 .page-wrapper {
-    /* Subtract navbar height so short pages avoid unnecessary scrolling */
     min-height: calc(100vh - 210px);
     display: flex;
     flex-direction: column;
+}
+@media (max-width: 767px) {
+    .page-wrapper {
+        min-height: calc(100vh - 80px);
+    }
 }
 main {
     flex: 1;
@@ -95,10 +104,20 @@ header .logo img {
     height: 200px;
     vertical-align: middle;
 }
+@media (max-width: 767px) {
+    header .logo img {
+        height: 80px;
+    }
+}
 
 /* Logo in the navigation bar */
 .navbar-brand img {
     height: 140px;
+}
+@media (max-width: 767px) {
+    .navbar-brand img {
+        height: 48px;
+    }
 }
 
 
@@ -118,7 +137,7 @@ footer a:hover {
 
 .barcode-feedback {
     position: fixed;
-    top: 220px;
+    top: 90px;
     right: 1rem;
     max-width: 360px;
     width: min(90vw, 360px);
@@ -139,9 +158,10 @@ table {
     margin-top: 5px;
 }
 
-/* Kolumny dopasowane do zawartosci, brak przewijania */
-.overflow-x-auto:has(> table) {
-    overflow-x: visible;
+/* Tabele: przewijanie poziome na mobile */
+.overflow-x-auto {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Ensure long tables remain usable on small screens */
@@ -218,79 +238,54 @@ th {
 
 /* Adjust layout for fixed navbar */
 
-/* Mobile slide-in menu */
-@media (max-width: 768px) {
-    #mobileMenuBtn {
-        margin-right: 1rem;
-    }
-    .mobile-menu {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 250px;
-        height: 100%;
-        background-color: #17383E;
-        padding: 1rem;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        z-index: 1050;
-        display: flex;
-        flex-direction: column;
-    }
-    .mobile-menu ul {
-        flex-grow: 1;
-    }
-    .mobile-menu.open {
-        transform: translateX(0);
-    }
-    .mobile-menu a {
-        color: #fff;
-        text-decoration: none;
-        display: block;
-        padding: 8px 0;
-        transition: background-color 0.2s ease, color 0.2s ease;
-    }
-
-    .mobile-menu a:hover {
-        background-color: rgba(255, 255, 255, 0.25);
-        color: #fff;
-    }
+/* Mobile slide-in menu + backdrop */
+.mobile-menu-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+}
+.mobile-menu-backdrop.open {
+    display: block;
+}
+.mobile-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100%;
+    background-color: #17383E;
+    padding: 1rem;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.mobile-menu ul {
+    flex-grow: 1;
+}
+.mobile-menu.open {
+    transform: translateX(0);
+}
+.mobile-menu a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+    padding: 10px 8px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 6px;
+}
+.mobile-menu a:hover,
+.mobile-menu a:active {
+    background-color: rgba(255, 255, 255, 0.25);
+    color: #fff;
 }
 
-@media (min-width: 768px) {
-    .navbar-nav .nav-link {
-        color: #fff;
-        padding-left: 1rem;
-        padding-right: 1rem;
-        transition: background-color 0.2s ease, color 0.2s ease;
-    }
-    .navbar-nav .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.25);
-        color: #fff;
-        text-decoration: none;
-    }
-
-
-    .navbar-nav .dropdown-menu {
-        position: absolute;
-        left: 0;
-        top: 100%;
-        width: auto;
-        min-width: 0;
-        transform-origin: top left;
-        transform: scaleX(0);
-        transition: transform 0.2s ease;
-        display: block;
-        visibility: hidden;
-        opacity: 0;
-    }
-
-    .navbar-nav .dropdown-menu.show {
-        transform: scaleX(1);
-        visibility: visible;
-        opacity: 1;
-    }
-}
+/* Selektory .navbar-nav usuniete - nawigacja uzywa DaisyUI menu */
 
 .dropdown-menu .dropdown-item {
     transition: background-color 0.2s ease, color 0.2s ease;
@@ -334,17 +329,9 @@ th {
     max-width: 350px;
 }
 
-@media (max-width: 768px) {
-    #mobileMenu .custom-btn {
-        margin-left: auto;
-        margin-right: auto;
-        display: block;
-    }
-    .mobile-close {
-        position: absolute;
-        top: 0;
-        right: 0;
-    }
+/* Blokada scrolla body przy otwartym mobile menu */
+body.menu-open {
+    overflow: hidden;
 }
 
 /* Globalny overlay ladowania */
