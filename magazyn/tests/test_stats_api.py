@@ -387,6 +387,45 @@ def test_stats_competition_merges_report_and_history(client, app, login):
     assert row["repricing_recommendation"] == "decrease_3pct"
 
 
+def test_stats_offer_publication_history_returns_daily_changes(client, app, login):
+    from magazyn import stats as stats_module
+    from magazyn.models import AllegroOffer
+
+    stats_module._FAST_CACHE.clear()
+    now = datetime.now()
+    day_1 = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    day_2 = now.strftime("%Y-%m-%d")
+
+    with app.app_context():
+        with get_session() as db:
+            db.add_all(
+                [
+                    AllegroOffer(offer_id="offer_hist_1", title="Oferta Hist 1", price=109.0, publication_status="ACTIVE"),
+                    AllegroOffer(offer_id="offer_hist_2", title="Oferta Hist 2", price=95.0, publication_status="ENDED"),
+                ]
+            )
+            db.add_all(
+                [
+                    AllegroPriceHistory(offer_id="offer_hist_1", price=100.0, recorded_at=day_1),
+                    AllegroPriceHistory(offer_id="offer_hist_1", price=110.0, recorded_at=day_2),
+                    AllegroPriceHistory(offer_id="offer_hist_2", price=95.0, recorded_at=day_2),
+                ]
+            )
+            db.commit()
+
+    response = client.get(f"/api/stats/offer-publication-history?date_from={day_1}&date_to={day_2}")
+    assert response.status_code == 200
+
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["data"]["summary"]["offers_total"] == 2
+    assert payload["data"]["summary"]["offers_with_history"] == 2
+    assert payload["data"]["summary"]["offers_with_price_change"] == 1
+    assert payload["data"]["publication_status"]["ACTIVE"] == 1
+    assert len(payload["data"]["daily_series"]) >= 2
+    assert payload["data"]["top_changed_offers"][0]["offer_id"] == "offer_hist_1"
+
+
 def test_stats_products_export_csv(client, app, login):
     _seed_order(app, "ord_prod_csv", payment_done=100.0, cod=False)
 
