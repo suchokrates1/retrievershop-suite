@@ -1004,6 +1004,7 @@ def stats_ads_offer_analytics():
     bonus_types = {"CB2"}
 
     offer_costs: dict[str, dict[str, Decimal | str]] = {}
+    campaign_costs: dict[str, dict[str, Decimal | str]] = {}
     account_level_ads_total = Decimal("0")
 
     for entry in entries:
@@ -1013,12 +1014,45 @@ def stats_ads_offer_analytics():
         offer_id = str(offer_info.get("id") or "").strip()
         offer_name = offer_info.get("name") or "-"
 
+        campaign_info = entry.get("campaign") or {}
+        campaign_id = str(
+            campaign_info.get("id")
+            or entry.get("campaignId")
+            or entry.get("campaign_id")
+            or ""
+        ).strip()
+        campaign_name = (
+            campaign_info.get("name")
+            or entry.get("campaignName")
+            or entry.get("campaign_name")
+            or campaign_id
+            or "-"
+        )
+
         if type_id not in (ads_types | promoted_commission_types | bonus_types):
             continue
 
         if not offer_id:
             if type_id in ads_types and amount < 0:
                 account_level_ads_total += abs(amount)
+            # Wpisy kampanii bez offer_id nadal moga byc przydatne do agregacji kampanijnej.
+            if campaign_id:
+                campaign_row = campaign_costs.setdefault(
+                    campaign_id,
+                    {
+                        "campaign_id": campaign_id,
+                        "campaign_name": str(campaign_name),
+                        "ads_fee": Decimal("0"),
+                        "promoted_commission": Decimal("0"),
+                        "campaign_bonus": Decimal("0"),
+                    },
+                )
+                if type_id in ads_types and amount < 0:
+                    campaign_row["ads_fee"] = Decimal(str(campaign_row["ads_fee"])) + abs(amount)
+                elif type_id in promoted_commission_types and amount < 0:
+                    campaign_row["promoted_commission"] = Decimal(str(campaign_row["promoted_commission"])) + abs(amount)
+                elif type_id in bonus_types and amount > 0:
+                    campaign_row["campaign_bonus"] = Decimal(str(campaign_row["campaign_bonus"])) + amount
             continue
 
         row = offer_costs.setdefault(
@@ -1038,6 +1072,24 @@ def stats_ads_offer_analytics():
             row["promoted_commission"] = Decimal(str(row["promoted_commission"])) + abs(amount)
         elif type_id in bonus_types and amount > 0:
             row["campaign_bonus"] = Decimal(str(row["campaign_bonus"])) + amount
+
+        if campaign_id:
+            campaign_row = campaign_costs.setdefault(
+                campaign_id,
+                {
+                    "campaign_id": campaign_id,
+                    "campaign_name": str(campaign_name),
+                    "ads_fee": Decimal("0"),
+                    "promoted_commission": Decimal("0"),
+                    "campaign_bonus": Decimal("0"),
+                },
+            )
+            if type_id in ads_types and amount < 0:
+                campaign_row["ads_fee"] = Decimal(str(campaign_row["ads_fee"])) + abs(amount)
+            elif type_id in promoted_commission_types and amount < 0:
+                campaign_row["promoted_commission"] = Decimal(str(campaign_row["promoted_commission"])) + abs(amount)
+            elif type_id in bonus_types and amount > 0:
+                campaign_row["campaign_bonus"] = Decimal(str(campaign_row["campaign_bonus"])) + amount
 
     start_ts = _to_ts(filters.date_from)
     end_ts = _to_ts(filters.date_to)
@@ -1080,6 +1132,7 @@ def stats_ads_offer_analytics():
     total_promoted_commission = Decimal("0")
     total_campaign_bonus = Decimal("0")
     offers_with_sales = 0
+    total_offer_revenue = Decimal("0")
 
     for offer_id, row in offer_costs.items():
         ads_fee = Decimal(str(row["ads_fee"]))
@@ -1095,6 +1148,11 @@ def stats_ads_offer_analytics():
         sales = sales_by_offer.get(offer_id, {"orders": 0, "items": 0, "revenue": Decimal("0")})
         if int(sales["orders"]) > 0:
             offers_with_sales += 1
+        total_offer_revenue += Decimal(str(sales["revenue"]))
+
+        roas = None
+        if net_ads_spend > 0:
+            roas = round(float(Decimal(str(sales["revenue"])) / net_ads_spend), 2)
 
         top_rows.append(
             {
@@ -1109,10 +1167,34 @@ def stats_ads_offer_analytics():
                 "orders_count": int(sales["orders"]),
                 "items_sold": int(sales["items"]),
                 "revenue": float(Decimal(str(sales["revenue"]))),
+                "roas": roas,
             }
         )
 
     top_rows.sort(key=lambda r: (r["net_ads_spend"], r["ads_fee"]), reverse=True)
+
+    top_campaigns: list[dict] = []
+    for row in campaign_costs.values():
+        ads_fee = Decimal(str(row["ads_fee"]))
+        promoted_commission = Decimal(str(row["promoted_commission"]))
+        campaign_bonus = Decimal(str(row["campaign_bonus"]))
+        net_ads_spend = ads_fee + promoted_commission - campaign_bonus
+        top_campaigns.append(
+            {
+                "campaign_id": str(row["campaign_id"]),
+                "campaign_name": str(row["campaign_name"]),
+                "ads_fee": float(ads_fee),
+                "promoted_commission": float(promoted_commission),
+                "campaign_bonus": float(campaign_bonus),
+                "net_ads_spend": float(net_ads_spend),
+            }
+        )
+    top_campaigns.sort(key=lambda item: item["net_ads_spend"], reverse=True)
+
+    net_offer_ads_spend = total_offer_ads_fee + total_promoted_commission - total_campaign_bonus
+    roas_offer_level = None
+    if net_offer_ads_spend > 0:
+        roas_offer_level = round(float(total_offer_revenue / net_offer_ads_spend), 2)
 
     if export_format:
         export_rows = [
@@ -1128,6 +1210,7 @@ def stats_ads_offer_analytics():
                 "orders_count": row["orders_count"],
                 "items_sold": row["items_sold"],
                 "revenue": row["revenue"],
+                "roas": row["roas"],
             }
             for row in top_rows
         ]
@@ -1147,10 +1230,15 @@ def stats_ads_offer_analytics():
                 "offers_with_ads_cost": len(offer_costs),
                 "active_offers_total": active_offers_total,
                 "offers_with_sales": offers_with_sales,
+                "offer_attributed_revenue": float(total_offer_revenue),
+                "roas_offer_level": roas_offer_level,
+                "campaigns_detected": len(campaign_costs),
             },
             "top_offers": top_rows[:12],
+            "top_campaigns": top_campaigns[:12],
             "availability": {
                 "offer_level_ads_cost": True,
+                "campaign_level_ads_cost": len(campaign_costs) > 0,
                 "offer_level_views_ctr": False,
                 "offer_level_conversion": False,
                 "note": "Dostepne: koszty reklam i prowizje promowane z billing entries + dane ofert/sprzedazy z DB. Brak natywnego feedu views/CTR/conversion w obecnej integracji.",

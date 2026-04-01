@@ -569,6 +569,14 @@
                         <div class="text-xl font-bold" x-text="adsOfferAnalyticsData.summary.offers_with_sales || 0"></div>
                         <div class="text-xs opacity-70">Oferty z Ads i sprzedażą</div>
                     </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="adsOfferAnalyticsData.summary.roas_offer_level === null ? '-' : adsOfferAnalyticsData.summary.roas_offer_level"></div>
+                        <div class="text-xs opacity-70">ROAS (poziom ofert)</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="adsOfferAnalyticsData.summary.campaigns_detected || 0"></div>
+                        <div class="text-xs opacity-70">Wykryte kampanie</div>
+                    </div>
                 </div>
 
                 <div class="text-xs opacity-70" x-text="(adsOfferAnalyticsData.availability || {}).note || ''"></div>
@@ -581,6 +589,7 @@
                                 <th>Koszt reklam netto</th>
                                 <th>Zamówienia</th>
                                 <th>Przychód</th>
+                                <th>ROAS</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -593,6 +602,28 @@
                                     <td x-text="(row.net_ads_spend || 0).toFixed(2) + ' zł'"></td>
                                     <td x-text="row.orders_count || 0"></td>
                                     <td x-text="(row.revenue || 0).toFixed(2) + ' zł'"></td>
+                                    <td x-text="row.roas === null ? '-' : row.roas"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="overflow-x-auto" x-show="(adsOfferAnalyticsData.top_campaigns || []).length">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Kampania</th>
+                                <th>ID</th>
+                                <th>Koszt reklam netto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="row in (adsOfferAnalyticsData.top_campaigns || []).slice(0, 8)" :key="row.campaign_id">
+                                <tr>
+                                    <td x-text="row.campaign_name || '-'"></td>
+                                    <td x-text="row.campaign_id"></td>
+                                    <td x-text="(row.net_ads_spend || 0).toFixed(2) + ' zł'"></td>
                                 </tr>
                             </template>
                         </tbody>
@@ -997,7 +1028,7 @@ function statsDashboard() {
         adsOfferAnalyticsLoaded: false,
         adsOfferAnalyticsLoading: false,
         adsOfferAnalyticsError: null,
-        adsOfferAnalyticsData: { summary: {}, top_offers: [], availability: {} },
+        adsOfferAnalyticsData: { summary: {}, top_offers: [], top_campaigns: [], availability: {} },
         refundTimelineLoaded: false,
         refundTimelineLoading: false,
         refundTimelineError: null,
@@ -1502,7 +1533,7 @@ function statsDashboard() {
                 if (!payload.ok) {
                     throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
                 }
-                this.adsOfferAnalyticsData = payload.data || { summary: {}, top_offers: [], availability: {} };
+                this.adsOfferAnalyticsData = payload.data || { summary: {}, top_offers: [], top_campaigns: [], availability: {} };
                 this.adsOfferAnalyticsLoaded = true;
             } catch (e) {
                 this.adsOfferAnalyticsError = 'Nie udalo sie zaladowac analityki Ads/Offer: ' + (e.message || 'blad');
