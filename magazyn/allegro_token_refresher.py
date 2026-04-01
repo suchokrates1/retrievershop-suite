@@ -95,7 +95,6 @@ class AllegroTokenRefresher:
         with self._lock:
             self._thread = None
             self._stop_event.clear()
-            LOGGER.info("Stopped Allegro token refresher")
 
     # ------------------------------------------------------------------
     # Internal helpers

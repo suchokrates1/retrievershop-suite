@@ -1,8 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from magazyn.db import get_session
-from magazyn.models import AllegroBillingType, AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, PriceReport, PriceReportItem, Return
+from magazyn.models import AllegroBillingType, AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, OrderEvent, PriceReport, PriceReportItem, Return
 
 
 def _seed_order(app, order_id: str, *, payment_done=100.0, cod=False, platform="allegro"):
@@ -534,3 +534,137 @@ def test_stats_profit_waterfall_structure(client, app, login, monkeypatch):
     names = [w["name"] for w in payload["data"]["waterfall"]]
     assert "Przychod" in names
     assert "Zysk netto" in names
+
+
+def test_stats_order_funnel_creates_and_tracks_events(client, app, login, monkeypatch):
+    """Order funnel zwraca funnel z transitions times na podstawie OrderEvent."""
+    from magazyn import stats as stats_module
+    from magazyn.models import OrderEvent
+
+    stats_module._FAST_CACHE.clear()
+    
+    # Create test order
+    now = datetime.now(timezone.utc)
+    order_id = "ord_funnel_1"
+    _seed_order(app, order_id, payment_done=100.0)
+    
+    # Create raw events w realnym czasie
+    with app.app_context():
+        with get_session() as db:
+            # Event 1: BOUGHT (t=0h)
+            evt1 = OrderEvent(
+                order_id=order_id,
+                allegro_event_id="evt_001",
+                event_type="BOUGHT",
+                occurred_at=now,
+                payload_json="{}"
+            )
+            # Event 2: FILLED_IN (t=2h)
+            evt2 = OrderEvent(
+                order_id=order_id,
+                allegro_event_id="evt_002",
+                event_type="FILLED_IN",
+                occurred_at=now + timedelta(hours=2),
+                payload_json="{}"
+            )
+            # Event 3: READY_FOR_PROCESSING (t=5h)
+            evt3 = OrderEvent(
+                order_id=order_id,
+                allegro_event_id="evt_003",
+                event_type="READY_FOR_PROCESSING",
+                occurred_at=now + timedelta(hours=5),
+                payload_json="{}"
+            )
+            db.add_all([evt1, evt2, evt3])
+            db.commit()
+    
+    # Test endpoint
+    response = client.get("/api/stats/order-funnel")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    
+    # Verify funnel stages
+    assert "funnel" in data
+    funnel_stages = [s["stage"] for s in data["funnel"]]
+    assert "BOUGHT" in funnel_stages
+    assert "FILLED_IN" in funnel_stages
+    assert "READY_FOR_PROCESSING" in funnel_stages
+    
+    # Verify transition times
+    assert "transitions" in data
+    transitions = data["transitions"]
+    
+    # BOUGHT -> FILLED_IN should be ~2 hours
+    assert "BOUGHT_to_FILLED_IN" in transitions
+    assert transitions["BOUGHT_to_FILLED_IN"]["avg_hours"] == 2.0
+    assert transitions["BOUGHT_to_FILLED_IN"]["count"] == 1
+    
+    # FILLED_IN -> READY_FOR_PROCESSING should be ~3 hours
+    assert "FILLED_IN_to_READY_FOR_PROCESSING" in transitions
+    assert transitions["FILLED_IN_to_READY_FOR_PROCESSING"]["avg_hours"] == 3.0
+    
+    # BOUGHT -> READY_FOR_PROCESSING should be ~5 hours
+    assert "BOUGHT_to_READY_FOR_PROCESSING" in transitions
+    assert transitions["BOUGHT_to_READY_FOR_PROCESSING"]["avg_hours"] == 5.0
+    
+    # Verify summary
+    assert "summary" in data
+    assert data["summary"]["avg_time_bought_to_ready_hours"] == 5.0
+
+
+def test_stats_order_funnel_multiple_orders(client, app, login):
+    """Order funnel aggregates metrics across multiple orders."""
+    from magazyn import stats as stats_module
+    from magazyn.models import OrderEvent
+
+    stats_module._FAST_CACHE.clear()
+    
+    now = datetime.now(timezone.utc)
+    
+    # Create two test orders
+    order_id_1 = "ord_funnel_2a"
+    order_id_2 = "ord_funnel_2b"
+    _seed_order(app, order_id_1, payment_done=50.0)
+    _seed_order(app, order_id_2, payment_done=75.0)
+    
+    with app.app_context():
+        with get_session() as db:
+            # Order 1: BOUGHT -> (2h) -> FILLED_IN -> (3h) -> READY (total 5h)
+            db.add_all([
+                OrderEvent(order_id=order_id_1, allegro_event_id="evt_101",
+                          event_type="BOUGHT", occurred_at=now, payload_json="{}"),
+                OrderEvent(order_id=order_id_1, allegro_event_id="evt_102",
+                          event_type="FILLED_IN", occurred_at=now + timedelta(hours=2), payload_json="{}"),
+                OrderEvent(order_id=order_id_1, allegro_event_id="evt_103",
+                          event_type="READY_FOR_PROCESSING", occurred_at=now + timedelta(hours=5), payload_json="{}"),
+            ])
+            
+            # Order 2: BOUGHT -> (4h) -> FILLED_IN -> (6h) -> READY (total 10h)
+            db.add_all([
+                OrderEvent(order_id=order_id_2, allegro_event_id="evt_201",
+                          event_type="BOUGHT", occurred_at=now, payload_json="{}"),
+                OrderEvent(order_id=order_id_2, allegro_event_id="evt_202",
+                          event_type="FILLED_IN", occurred_at=now + timedelta(hours=4), payload_json="{}"),
+                OrderEvent(order_id=order_id_2, allegro_event_id="evt_203",
+                          event_type="READY_FOR_PROCESSING", occurred_at=now + timedelta(hours=10), payload_json="{}"),
+            ])
+            db.commit()
+    
+    response = client.get("/api/stats/order-funnel")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    
+    # Both orders should be in funnel (count=2)
+    assert data["total_orders"] == 2
+    assert data["orders_with_events"] == 2
+    
+    # Verify averages across orders
+    transitions = data["transitions"]
+    
+    # BOUGHT_to_FILLED_IN: (2 + 4) / 2 = 3 hours avg
+    assert transitions["BOUGHT_to_FILLED_IN"]["count"] == 2
+    assert transitions["BOUGHT_to_FILLED_IN"]["avg_hours"] == 3.0  # (2+4)/2
+    
+    # BOUGHT_to_READY: (5 + 10) / 2 = 7.5 hours avg
+    assert transitions["BOUGHT_to_READY_FOR_PROCESSING"]["count"] == 2
+    assert abs(transitions["BOUGHT_to_READY_FOR_PROCESSING"]["avg_hours"] - 7.5) < 0.01
