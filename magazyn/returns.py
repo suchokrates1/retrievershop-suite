@@ -203,7 +203,12 @@ def check_allegro_customer_returns() -> Dict[str, int]:
 
                         # Aktualizuj status jesli sie zmienil
                         new_status = _map_allegro_return_status(allegro_status)
-                        if existing.status != new_status and new_status in [RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]:
+                        if existing.status != new_status and new_status in [
+                            RETURN_STATUS_IN_TRANSIT,
+                            RETURN_STATUS_DELIVERED,
+                            RETURN_STATUS_COMPLETED,
+                            RETURN_STATUS_CANCELLED,
+                        ]:
                             old_status = existing.status
                             existing.status = new_status
                             _add_return_status_log(
@@ -469,7 +474,7 @@ def check_and_update_return_statuses() -> Dict[str, int]:
                             stats["updated"] += 1
                             logger.info(f"Zwrot #{return_record.id} - paczka dostarczona")
                     
-                    elif parcel_status in ["IN_TRANSIT", "OUT_FOR_DELIVERY", "COLLECTED"]:
+                    elif parcel_status in ["IN_TRANSIT", "OUT_FOR_DELIVERY", "COLLECTED", "RELEASED_FOR_DELIVERY"]:
                         if return_record.status == RETURN_STATUS_PENDING:
                             return_record.status = RETURN_STATUS_IN_TRANSIT
                             _add_return_status_log(
