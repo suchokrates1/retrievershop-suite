@@ -23,14 +23,14 @@
                 {% endif %}
             </form>
         </div>
-        <div class="flex gap-2 items-center">
-            <a href="{{ url_for('products.add_item') }}" class="btn btn-success" title="Dodaj przedmiot">
+        <div class="flex flex-wrap gap-1 items-center">
+            <a href="{{ url_for('products.add_item') }}" class="btn btn-success btn-sm sm:btn-md" title="Dodaj przedmiot">
                 <i class="bi bi-plus-circle"></i>
             </a>
-            <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info">Dostawa z faktury</a>
-            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline"><i class="bi bi-clipboard-check mr-1"></i>Remanent</a>
-            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary">Skanuj EAN</a>
-            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline btn-primary">Skanuj paczke</a>
+            <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info btn-sm sm:btn-md">Dostawa z faktury</a>
+            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline btn-sm sm:btn-md"><i class="bi bi-clipboard-check mr-1"></i>Remanent</a>
+            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary btn-sm sm:btn-md">Skanuj EAN</a>
+            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline btn-primary btn-sm sm:btn-md">Skanuj paczke</a>
         </div>
     </div>
 
