@@ -362,6 +362,115 @@
         </template>
     </section>
 
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="customerSupportSection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Obsługa Klienta - KPI</h3>
+            <button class="btn btn-xs btn-primary" @click="loadCustomerSupport()">Odśwież</button>
+        </div>
+
+        <template x-if="customerSupportLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+                <div class="skeleton skeleton-row w-2/3"></div>
+            </div>
+        </template>
+
+        <template x-if="!customerSupportLoading && customerSupportError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + customerSupportError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadCustomerSupport()">Ponów</button>
+            </div>
+        </template>
+
+        <template x-if="!customerSupportLoading && !customerSupportError && customerSupportLoaded">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="customerSupportData.summary.threads_total || 0"></div>
+                        <div class="text-xs opacity-70">Wątki razem</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold text-warning" x-text="customerSupportData.summary.unread_threads || 0"></div>
+                        <div class="text-xs opacity-70">Backlog (nieprzeczytane)</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="(customerSupportData.summary.avg_first_response_hours || 0).toFixed(2) + ' h'"></div>
+                        <div class="text-xs opacity-70">Śr. 1. odpowiedź</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="(customerSupportData.summary.p95_first_response_hours || 0).toFixed(2) + ' h'"></div>
+                        <div class="text-xs opacity-70">P95 1. odpowiedź</div>
+                    </div>
+                </div>
+
+                <div x-show="Object.keys(customerSupportData.by_type || {}).length > 0">
+                    <div class="text-xs uppercase opacity-70 mb-2">Backlog wg typu</div>
+                    <div class="space-y-1 text-sm">
+                        <template x-for="(row, supportType) in (customerSupportData.by_type || {})" :key="supportType">
+                            <div class="flex justify-between opacity-80">
+                                <span x-text="supportType"></span>
+                                <span>
+                                    <b x-text="row.unread"></b> / <span x-text="row.threads"></span>
+                                </span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </section>
+
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="invoiceCoverageSection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Pokrycie Faktur - KPI</h3>
+            <button class="btn btn-xs btn-primary" @click="loadInvoiceCoverage()">Odśwież</button>
+        </div>
+
+        <template x-if="invoiceCoverageLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+            </div>
+        </template>
+
+        <template x-if="!invoiceCoverageLoading && invoiceCoverageError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + invoiceCoverageError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadInvoiceCoverage()">Ponów</button>
+            </div>
+        </template>
+
+        <template x-if="!invoiceCoverageLoading && !invoiceCoverageError && invoiceCoverageLoaded">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="invoiceCoverageData.summary.requested_total || 0"></div>
+                        <div class="text-xs opacity-70">Zamówienia z fakturą</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="invoiceCoverageData.summary.invoiced_total || 0"></div>
+                        <div class="text-xs opacity-70">Wystawione</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold text-warning" x-text="invoiceCoverageData.summary.missing_total || 0"></div>
+                        <div class="text-xs opacity-70">Brakujące</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="(invoiceCoverageData.summary.coverage_pct || 0).toFixed(1) + '%' "></div>
+                        <div class="text-xs opacity-70">Pokrycie faktur</div>
+                    </div>
+                </div>
+
+                <div class="text-sm opacity-80">
+                    Pokrycie email: <b x-text="(invoiceCoverageData.summary.email_coverage_pct || 0).toFixed(1) + '%' "></b>
+                    (<span x-text="invoiceCoverageData.summary.emailed_total || 0"></span>
+                    / <span x-text="invoiceCoverageData.summary.requested_total || 0"></span>)
+                </div>
+            </div>
+        </template>
+    </section>
+
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div class="chart-wrap lazy-section reveal" x-ref="productsSection">
             <div class="flex items-center justify-between mb-3">
@@ -576,6 +685,14 @@ function statsDashboard() {
         shipmentErrorsLoading: false,
         shipmentErrorsError: null,
         shipmentErrorsData: { total_errors: 0, unresolved_total: 0, by_error_type: {}, by_delivery_method: {}, summary: {} },
+        customerSupportLoaded: false,
+        customerSupportLoading: false,
+        customerSupportError: null,
+        customerSupportData: { summary: {}, by_type: {} },
+        invoiceCoverageLoaded: false,
+        invoiceCoverageLoading: false,
+        invoiceCoverageError: null,
+        invoiceCoverageData: { summary: {}, missing_orders: [] },
         telemetryRows: [],
         salesChart: null,
         splitChart: null,
@@ -605,11 +722,15 @@ function statsDashboard() {
                 logistics: this.logisticsLoaded || !!this.logisticsError,
                 products: this.productsLoaded || !!this.productsError,
                 competition: this.competitionLoaded || !!this.competitionError,
+                customerSupport: this.customerSupportLoaded || !!this.customerSupportError,
+                invoiceCoverage: this.invoiceCoverageLoaded || !!this.invoiceCoverageError,
             };
             this.returnsLoaded = false; this.returnsError = null;
             this.logisticsLoaded = false; this.logisticsError = null;
             this.productsLoaded = false; this.productsError = null;
             this.competitionLoaded = false; this.competitionError = null;
+            this.customerSupportLoaded = false; this.customerSupportError = null;
+            this.invoiceCoverageLoaded = false; this.invoiceCoverageError = null;
             try {
                 const q = this.buildQuery();
                 const [overview, sales, profit] = await Promise.all([
@@ -627,6 +748,8 @@ function statsDashboard() {
                     reload.logistics ? this.loadLogistics() : Promise.resolve(),
                     reload.products ? this.loadProducts() : Promise.resolve(),
                     reload.competition ? this.loadCompetition() : Promise.resolve(),
+                    reload.customerSupport ? this.loadCustomerSupport() : Promise.resolve(),
+                    reload.invoiceCoverage ? this.loadInvoiceCoverage() : Promise.resolve(),
                 ]);
             } catch(e) {
                 this.salesMeta = 'Błąd API: ' + (e.message || 'nieznany');
@@ -778,6 +901,8 @@ function statsDashboard() {
                     if (entry.target === this.$refs.logisticsSection && !this.logisticsLoaded && !this.logisticsLoading) this.loadLogistics();
                     if (entry.target === this.$refs.orderFunnelSection && !this.orderFunnelLoaded && !this.orderFunnelLoading) this.loadOrderFunnel();
                     if (entry.target === this.$refs.shipmentErrorsSection && !this.shipmentErrorsLoaded && !this.shipmentErrorsLoading) this.loadShipmentErrors();
+                    if (entry.target === this.$refs.customerSupportSection && !this.customerSupportLoaded && !this.customerSupportLoading) this.loadCustomerSupport();
+                    if (entry.target === this.$refs.invoiceCoverageSection && !this.invoiceCoverageLoaded && !this.invoiceCoverageLoading) this.loadInvoiceCoverage();
                     if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
                     if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
                 });
@@ -787,6 +912,8 @@ function statsDashboard() {
             observer.observe(this.$refs.logisticsSection);
             observer.observe(this.$refs.orderFunnelSection);
             observer.observe(this.$refs.shipmentErrorsSection);
+            observer.observe(this.$refs.customerSupportSection);
+            observer.observe(this.$refs.invoiceCoverageSection);
             observer.observe(this.$refs.productsSection);
             observer.observe(this.$refs.competitionSection);
         },
@@ -965,6 +1092,42 @@ function statsDashboard() {
                 this.shipmentErrorsError = 'Nie udalo sie zaladowac błędów shipmentów: ' + (e.message || 'blad');
             } finally {
                 this.shipmentErrorsLoading = false;
+            }
+        },
+
+        async loadCustomerSupport() {
+            try {
+                this.customerSupportLoading = true;
+                this.customerSupportError = null;
+                const r = await fetch('/api/stats/customer-support?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.customerSupportData = payload.data || { summary: {}, by_type: {} };
+                this.customerSupportLoaded = true;
+            } catch (e) {
+                this.customerSupportError = 'Nie udalo sie zaladowac KPI obslugi klienta: ' + (e.message || 'blad');
+            } finally {
+                this.customerSupportLoading = false;
+            }
+        },
+
+        async loadInvoiceCoverage() {
+            try {
+                this.invoiceCoverageLoading = true;
+                this.invoiceCoverageError = null;
+                const r = await fetch('/api/stats/invoice-coverage?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.invoiceCoverageData = payload.data || { summary: {}, missing_orders: [] };
+                this.invoiceCoverageLoaded = true;
+            } catch (e) {
+                this.invoiceCoverageError = 'Nie udalo sie zaladowac KPI pokrycia faktur: ' + (e.message || 'blad');
+            } finally {
+                this.invoiceCoverageLoading = false;
             }
         },
 
