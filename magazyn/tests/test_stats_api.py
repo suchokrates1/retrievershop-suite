@@ -912,3 +912,61 @@ def test_stats_invoice_coverage_returns_kpi(client, app, login):
     assert round(float(summary["coverage_pct"]), 2) == 66.67
     assert round(float(summary["email_coverage_pct"]), 2) == 33.33
     assert payload["data"]["missing_orders"][0]["order_id"] == "inv_cov_3"
+
+
+def test_stats_ads_offer_analytics_returns_kpi(client, app, login, monkeypatch):
+    from magazyn import allegro_api as allegro_api_module
+    from magazyn import stats as stats_module
+    from magazyn.models import AllegroOffer
+
+    stats_module._FAST_CACHE.clear()
+    monkeypatch.setattr(stats_module.settings_store, "get", lambda key, default=None: "token" if key == "ALLEGRO_ACCESS_TOKEN" else default)
+
+    monkeypatch.setattr(
+        allegro_api_module,
+        "fetch_billing_entries",
+        lambda token, occurred_at_gte=None, occurred_at_lte=None, limit=100: {
+            "billingEntries": [
+                {"type": {"id": "ADS"}, "value": {"amount": "-5.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
+                {"type": {"id": "BRG"}, "value": {"amount": "-3.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
+                {"type": {"id": "CB2"}, "value": {"amount": "1.00"}, "offer": {"id": "111", "name": "Oferta 111"}},
+                {"type": {"id": "ADS"}, "value": {"amount": "-2.00"}, "offer": {"id": "222", "name": "Oferta 222"}},
+                {"type": {"id": "NSP"}, "value": {"amount": "-4.00"}},
+            ]
+        },
+    )
+
+    _seed_order(app, "ord_ads_1", payment_done=100.0)
+    _seed_order(app, "ord_ads_2", payment_done=120.0)
+
+    with app.app_context():
+        with get_session() as db:
+            db.add_all(
+                [
+                    AllegroOffer(offer_id="111", title="Oferta 111", price=99.99, publication_status="ACTIVE"),
+                    AllegroOffer(offer_id="222", title="Oferta 222", price=89.99, publication_status="ACTIVE"),
+                ]
+            )
+            db.flush()
+
+            op1 = db.query(OrderProduct).filter(OrderProduct.order_id == "ord_ads_1").first()
+            op2 = db.query(OrderProduct).filter(OrderProduct.order_id == "ord_ads_2").first()
+            op1.auction_id = "111"
+            op2.auction_id = "222"
+            db.commit()
+
+    response = client.get("/api/stats/ads-offer-analytics")
+    assert response.status_code == 200
+
+    payload = response.get_json()
+    assert payload["ok"] is True
+    summary = payload["data"]["summary"]
+
+    assert summary["account_level_ads_total"] == 4.0
+    assert summary["offer_ads_total"] == 7.0
+    assert summary["promoted_commission_total"] == 3.0
+    assert summary["campaign_bonus_total"] == 1.0
+    assert summary["offers_with_ads_cost"] == 2
+    assert payload["data"]["top_offers"][0]["offer_id"] == "111"
+    assert payload["data"]["availability"]["offer_level_ads_cost"] is True
+    assert payload["data"]["availability"]["offer_level_views_ctr"] is False

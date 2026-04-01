@@ -471,6 +471,79 @@
         </template>
     </section>
 
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="adsOfferAnalyticsSection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Ads i Offer Analytics - Priorytet C</h3>
+            <button class="btn btn-xs btn-primary" @click="loadAdsOfferAnalytics()">Odśwież</button>
+        </div>
+
+        <template x-if="adsOfferAnalyticsLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+                <div class="skeleton skeleton-row w-2/3"></div>
+            </div>
+        </template>
+
+        <template x-if="!adsOfferAnalyticsLoading && adsOfferAnalyticsError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + adsOfferAnalyticsError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadAdsOfferAnalytics()">Ponów</button>
+            </div>
+        </template>
+
+        <template x-if="!adsOfferAnalyticsLoading && !adsOfferAnalyticsError && adsOfferAnalyticsLoaded">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="(adsOfferAnalyticsData.summary.net_ads_spend_total || 0).toFixed(2) + ' zł'"></div>
+                        <div class="text-xs opacity-70">Net Ads Spend</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="adsOfferAnalyticsData.summary.offers_with_ads_cost || 0"></div>
+                        <div class="text-xs opacity-70">Oferty z kosztem Ads</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="(adsOfferAnalyticsData.summary.account_level_ads_total || 0).toFixed(2) + ' zł'"></div>
+                        <div class="text-xs opacity-70">Koszt konto-level (NSP)</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl font-bold" x-text="adsOfferAnalyticsData.summary.offers_with_sales || 0"></div>
+                        <div class="text-xs opacity-70">Oferty z Ads i sprzedażą</div>
+                    </div>
+                </div>
+
+                <div class="text-xs opacity-70" x-text="(adsOfferAnalyticsData.availability || {}).note || ''"></div>
+
+                <div class="overflow-x-auto" x-show="(adsOfferAnalyticsData.top_offers || []).length">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Oferta</th>
+                                <th>Net Ads</th>
+                                <th>Zamówienia</th>
+                                <th>Przychód</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="row in (adsOfferAnalyticsData.top_offers || []).slice(0, 8)" :key="row.offer_id">
+                                <tr>
+                                    <td>
+                                        <div class="font-semibold" x-text="row.offer_name || row.offer_id"></div>
+                                        <div class="text-xs opacity-60" x-text="row.offer_id"></div>
+                                    </td>
+                                    <td x-text="(row.net_ads_spend || 0).toFixed(2) + ' zł'"></td>
+                                    <td x-text="row.orders_count || 0"></td>
+                                    <td x-text="(row.revenue || 0).toFixed(2) + ' zł'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </template>
+    </section>
+
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div class="chart-wrap lazy-section reveal" x-ref="productsSection">
             <div class="flex items-center justify-between mb-3">
@@ -693,6 +766,10 @@ function statsDashboard() {
         invoiceCoverageLoading: false,
         invoiceCoverageError: null,
         invoiceCoverageData: { summary: {}, missing_orders: [] },
+        adsOfferAnalyticsLoaded: false,
+        adsOfferAnalyticsLoading: false,
+        adsOfferAnalyticsError: null,
+        adsOfferAnalyticsData: { summary: {}, top_offers: [], availability: {} },
         telemetryRows: [],
         salesChart: null,
         splitChart: null,
@@ -724,6 +801,7 @@ function statsDashboard() {
                 competition: this.competitionLoaded || !!this.competitionError,
                 customerSupport: this.customerSupportLoaded || !!this.customerSupportError,
                 invoiceCoverage: this.invoiceCoverageLoaded || !!this.invoiceCoverageError,
+                adsOfferAnalytics: this.adsOfferAnalyticsLoaded || !!this.adsOfferAnalyticsError,
             };
             this.returnsLoaded = false; this.returnsError = null;
             this.logisticsLoaded = false; this.logisticsError = null;
@@ -731,6 +809,7 @@ function statsDashboard() {
             this.competitionLoaded = false; this.competitionError = null;
             this.customerSupportLoaded = false; this.customerSupportError = null;
             this.invoiceCoverageLoaded = false; this.invoiceCoverageError = null;
+            this.adsOfferAnalyticsLoaded = false; this.adsOfferAnalyticsError = null;
             try {
                 const q = this.buildQuery();
                 const [overview, sales, profit] = await Promise.all([
@@ -750,6 +829,7 @@ function statsDashboard() {
                     reload.competition ? this.loadCompetition() : Promise.resolve(),
                     reload.customerSupport ? this.loadCustomerSupport() : Promise.resolve(),
                     reload.invoiceCoverage ? this.loadInvoiceCoverage() : Promise.resolve(),
+                    reload.adsOfferAnalytics ? this.loadAdsOfferAnalytics() : Promise.resolve(),
                 ]);
             } catch(e) {
                 this.salesMeta = 'Błąd API: ' + (e.message || 'nieznany');
@@ -903,6 +983,7 @@ function statsDashboard() {
                     if (entry.target === this.$refs.shipmentErrorsSection && !this.shipmentErrorsLoaded && !this.shipmentErrorsLoading) this.loadShipmentErrors();
                     if (entry.target === this.$refs.customerSupportSection && !this.customerSupportLoaded && !this.customerSupportLoading) this.loadCustomerSupport();
                     if (entry.target === this.$refs.invoiceCoverageSection && !this.invoiceCoverageLoaded && !this.invoiceCoverageLoading) this.loadInvoiceCoverage();
+                    if (entry.target === this.$refs.adsOfferAnalyticsSection && !this.adsOfferAnalyticsLoaded && !this.adsOfferAnalyticsLoading) this.loadAdsOfferAnalytics();
                     if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
                     if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
                 });
@@ -914,6 +995,7 @@ function statsDashboard() {
             observer.observe(this.$refs.shipmentErrorsSection);
             observer.observe(this.$refs.customerSupportSection);
             observer.observe(this.$refs.invoiceCoverageSection);
+            observer.observe(this.$refs.adsOfferAnalyticsSection);
             observer.observe(this.$refs.productsSection);
             observer.observe(this.$refs.competitionSection);
         },
@@ -1128,6 +1210,24 @@ function statsDashboard() {
                 this.invoiceCoverageError = 'Nie udalo sie zaladowac KPI pokrycia faktur: ' + (e.message || 'blad');
             } finally {
                 this.invoiceCoverageLoading = false;
+            }
+        },
+
+        async loadAdsOfferAnalytics() {
+            try {
+                this.adsOfferAnalyticsLoading = true;
+                this.adsOfferAnalyticsError = null;
+                const r = await fetch('/api/stats/ads-offer-analytics?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.adsOfferAnalyticsData = payload.data || { summary: {}, top_offers: [], availability: {} };
+                this.adsOfferAnalyticsLoaded = true;
+            } catch (e) {
+                this.adsOfferAnalyticsError = 'Nie udalo sie zaladowac analityki Ads/Offer: ' + (e.message || 'blad');
+            } finally {
+                this.adsOfferAnalyticsLoading = false;
             }
         },
 
