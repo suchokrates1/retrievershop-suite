@@ -221,6 +221,76 @@
         </div>
     </section>
 
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="orderFunnelSection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Order Funnel - Czasy przejść statusów</h3>
+            <button class="btn btn-xs btn-primary" @click="loadOrderFunnel()">Odśwież</button>
+        </div>
+        
+        <template x-if="orderFunnelLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+                <div class="skeleton skeleton-row w-2/3"></div>
+            </div>
+        </template>
+        
+        <template x-if="!orderFunnelLoading && orderFunnelError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + orderFunnelError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadOrderFunnel()">Ponów</button>
+            </div>
+        </template>
+        
+        <template x-if="!orderFunnelLoading && !orderFunnelError && orderFunnelLoaded">
+            <div class="space-y-4">
+                <!-- Funnel progression -->
+                <div>
+                    <div class="text-xs uppercase opacity-70 mb-2">Funnel zamówień</div>
+                    <div class="space-y-2">
+                        <template x-for="stage in (orderFunnelData.funnel || [])" :key="stage.stage">
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span x-text="stage.stage"></span>
+                                    <span class="opacity-70">
+                                        <b x-text="stage.count"></b>
+                                        (<span x-text="stage.conversion_rate.toFixed(1) + '%'"></span>)
+                                    </span>
+                                </div>
+                                <div class="h-2 bg-opacity-20 rounded" :style="`width: ${stage.conversion_rate}%; background-color: var(--stats-accent)`"></div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Transition times -->
+                <div x-show="(orderFunnelData.transitions || {}).BOUGHT_to_READY_FOR_PROCESSING">
+                    <div class="text-xs uppercase opacity-70 mb-2 mt-3">Czasy przejść (godziny)</div>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <template x-for="(transition, key) in (orderFunnelData.transitions || {})" :key="key">
+                            <template x-if="transition.count > 0">
+                                <div class="stats-kpi p-2">
+                                    <div class="text-xs opacity-70 mb-1" x-text="key.replace(/_/g, ' → ')"></div>
+                                    <div class="text-sm font-semibold" x-text="transition.avg_hours + ' h'"></div>
+                                    <div class="text-xs opacity-50">
+                                        med: <span x-text="transition.median_hours + 'h'"></span>
+                                        | n=<span x-text="transition.count"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Summary -->
+                <div class="bg-opacity-20 p-2 rounded text-sm" :style="`background-color: var(--stats-accent)`">
+                    Średni czas BOUGHT→READY: 
+                    <b x-text="(orderFunnelData.summary.avg_time_bought_to_ready_hours || 0).toFixed(2) + ' h'"></b>
+                </div>
+            </div>
+        </template>
+    </section>
+
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div class="chart-wrap lazy-section reveal" x-ref="productsSection">
             <div class="flex items-center justify-between mb-3">
@@ -427,6 +497,10 @@ function statsDashboard() {
         billingTypesLoading: false,
         billingTypesError: null,
         billingTypesMessage: null,
+        orderFunnelLoaded: false,
+        orderFunnelLoading: false,
+        orderFunnelError: null,
+        orderFunnelData: { funnel: [], transitions: {}, summary: {} },
         telemetryRows: [],
         salesChart: null,
         splitChart: null,
@@ -627,6 +701,7 @@ function statsDashboard() {
                     if (!entry.isIntersecting) return;
                     if (entry.target === this.$refs.returnsSection && !this.returnsLoaded && !this.returnsLoading) this.loadReturns();
                     if (entry.target === this.$refs.logisticsSection && !this.logisticsLoaded && !this.logisticsLoading) this.loadLogistics();
+                    if (entry.target === this.$refs.orderFunnelSection && !this.orderFunnelLoaded && !this.orderFunnelLoading) this.loadOrderFunnel();
                     if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
                     if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
                 });
@@ -634,6 +709,7 @@ function statsDashboard() {
 
             observer.observe(this.$refs.returnsSection);
             observer.observe(this.$refs.logisticsSection);
+            observer.observe(this.$refs.orderFunnelSection);
             observer.observe(this.$refs.productsSection);
             observer.observe(this.$refs.competitionSection);
         },
@@ -776,6 +852,24 @@ function statsDashboard() {
                 this.billingTypesError = 'Nie udalo sie zsynchronizowac billing types: ' + (e.message || 'blad');
             } finally {
                 this.billingTypesLoading = false;
+            }
+        },
+
+        async loadOrderFunnel() {
+            try {
+                this.orderFunnelLoading = true;
+                this.orderFunnelError = null;
+                const r = await fetch('/api/stats/order-funnel?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.orderFunnelData = payload.data || { funnel: [], transitions: {}, summary: {} };
+                this.orderFunnelLoaded = true;
+            } catch (e) {
+                this.orderFunnelError = 'Nie udalo sie zaladowac funnelu zamowien: ' + (e.message || 'blad');
+            } finally {
+                this.orderFunnelLoading = false;
             }
         },
 

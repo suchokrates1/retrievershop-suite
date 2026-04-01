@@ -58,3 +58,13 @@ def test_nav_contains_allegro_offers_and_prices_link(app_mod, client, login):
     resp = client.get("/")
     html = resp.get_data(as_text=True)
     assert f'href="{offers_url}"' in html
+
+
+def test_nav_contains_stats_dashboard_link(app_mod, client, login):
+    from flask import url_for
+
+    with app_mod.app.test_request_context():
+        stats_url = url_for("stats_dashboard")
+    resp = client.get("/")
+    html = resp.get_data(as_text=True)
+    assert f'href="{stats_url}"' in html

@@ -459,6 +459,7 @@ class Order(Base):
     # Relationships
     products = relationship("OrderProduct", back_populates="order", cascade="all, delete-orphan")
     status_logs = relationship("OrderStatusLog", back_populates="order", cascade="all, delete-orphan")
+    events = relationship("OrderEvent", back_populates="order", cascade="all, delete-orphan")
 
 
 class OrderProduct(Base):
@@ -525,6 +526,38 @@ class OrderStatusLog(Base):
     
     # Relationship
     order = relationship("Order", back_populates="status_logs")
+
+
+class OrderEvent(Base):
+    """Raw events from Allegro Order Events API for detailed funnel analysis."""
+    __tablename__ = "order_events"
+    __table_args__ = (
+        Index("idx_order_events_order_id", "order_id"),
+        Index("idx_order_events_allegro_event_id", "allegro_event_id"),
+        Index("idx_order_events_occurred_at", "occurred_at"),
+        Index("idx_order_events_event_type", "event_type"),
+    )
+    
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
+    
+    # Unique Allegro event ID (ensures idempotency)
+    allegro_event_id = Column(String(64), nullable=False, unique=True)
+    
+    # Event type from Allegro (BOUGHT, FILLED_IN, READY_FOR_PROCESSING, FULFILLMENT_STATUS_CHANGED, etc.)
+    event_type = Column(String(64), nullable=False)
+    
+    # Timestamp when event occurred in Allegro
+    occurred_at = Column(DateTime, nullable=False)
+    
+    # Raw event payload (JSON) for detailed analysis
+    payload_json = Column(Text, nullable=True)
+    
+    # When we ingested this event
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    
+    # Relationship
+    order = relationship("Order", back_populates="events")
 
 
 # =============================================================================

@@ -1459,3 +1459,178 @@ def stats_telemetry():
             "errors": [],
         }
     )
+
+
+@bp.route("/order-funnel")
+@login_required
+def stats_order_funnel():
+    """Funnel analizy dla zamowien - czasy przejscia miedzy statusami na podstawie raw events.
+    
+    Zwraca:
+    - funnel: lista etapow z kontami i czasami srednich przejsc
+    - transitions: szczegoly czasow przejsc BOUGHT -> FILLED_IN -> READY_FOR_PROCESSING
+    - summary: statystyki ogolne (total_orders, avg_time_to_ready, etc.)
+    """
+    from .models import OrderEvent, Order
+    
+    started_at = time.perf_counter()
+    filters, err = _parse_filters()
+    if err:
+        return err
+
+    cache_key = "order-funnel|" + _build_cache_key(filters)
+    cached_payload = _cache_get(cache_key)
+    if cached_payload is not None:
+        endpoint = _endpoint_name(cache_key)
+        response_ms = _record_telemetry(endpoint, "hit", started_at)
+        cached = dict(cached_payload)
+        cached["generated_at"] = datetime.now(timezone.utc).isoformat()
+        cached["meta"] = dict(cached.get("meta") or {})
+        cached["meta"]["cache"] = "hit"
+        cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+        return jsonify(cached)
+
+    start_dt = filters.date_from
+    end_dt = filters.date_to + timedelta(days=1)
+
+    with get_session() as db:
+        # Pobierz wszystkie orders w zakresie czasowym
+        orders = _fetch_orders(db, filters, _to_ts(start_dt), _to_ts(end_dt))
+        order_ids = {o.order_id for o in orders}
+
+        # Pobierz events dla tych orders
+        events = (
+            db.query(OrderEvent)
+            .filter(
+                OrderEvent.order_id.in_(order_ids),
+                OrderEvent.occurred_at >= start_dt,
+                OrderEvent.occurred_at < end_dt,
+            )
+            .order_by(OrderEvent.order_id.asc(), OrderEvent.occurred_at.asc())
+            .all()
+        )
+
+        # Pogrupuj events po order_id
+        events_by_order: dict[str, list[OrderEvent]] = defaultdict(list)
+        for event in events:
+            events_by_order[event.order_id].append(event)
+
+        # Zdefiniuj etapy funnelu i ich order
+        funnel_stages = ["BOUGHT", "FILLED_IN", "READY_FOR_PROCESSING"]
+        
+        # Zlicz ile zamowien bylo w kazdym etapie
+        stage_counts: dict[str, int] = defaultdict(int)
+        
+        # Zbierz czasy przejsc miedzy etapami
+        transitions: dict[str, list[float]] = {
+            "BOUGHT_to_FILLED_IN": [],
+            "FILLED_IN_to_READY_FOR_PROCESSING": [],
+            "BOUGHT_to_READY_FOR_PROCESSING": [],
+        }
+
+        for order_id, order_events in events_by_order.items():
+            # Stwórz mapę event_type -> pierwszy occurrence (czasem)
+            event_map: dict[str, datetime] = {}
+            for event in order_events:
+                if event.event_type not in event_map:
+                    event_map[event.event_type] = event.occurred_at
+
+            # Zlicz etapy
+            for stage in funnel_stages:
+                if stage in event_map:
+                    stage_counts[stage] += 1
+
+            # Oblicz czasy przejsc w godzinach
+            if "BOUGHT" in event_map and "FILLED_IN" in event_map:
+                delta = (event_map["FILLED_IN"] - event_map["BOUGHT"]).total_seconds() / 3600
+                transitions["BOUGHT_to_FILLED_IN"].append(delta)
+
+            if "FILLED_IN" in event_map and "READY_FOR_PROCESSING" in event_map:
+                delta = (event_map["READY_FOR_PROCESSING"] - event_map["FILLED_IN"]).total_seconds() / 3600
+                transitions["FILLED_IN_to_READY_FOR_PROCESSING"].append(delta)
+
+            if "BOUGHT" in event_map and "READY_FOR_PROCESSING" in event_map:
+                delta = (event_map["READY_FOR_PROCESSING"] - event_map["BOUGHT"]).total_seconds() / 3600
+                transitions["BOUGHT_to_READY_FOR_PROCESSING"].append(delta)
+
+        # Oblicz statystyki przejsc
+        transition_stats = {}
+        for transition_name, times in transitions.items():
+            if times:
+                avg_time = sum(times) / len(times)
+                median_time = sorted(times)[len(times) // 2] if times else 0
+                min_time = min(times)
+                max_time = max(times)
+                p95_time = sorted(times)[int(0.95 * (len(times) - 1))] if times else 0
+                transition_stats[transition_name] = {
+                    "count": len(times),
+                    "avg_hours": round(avg_time, 2),
+                    "median_hours": round(median_time, 2),
+                    "min_hours": round(min_time, 2),
+                    "max_hours": round(max_time, 2),
+                    "p95_hours": round(p95_time, 2),
+                }
+            else:
+                transition_stats[transition_name] = {
+                    "count": 0,
+                    "avg_hours": 0,
+                    "median_hours": 0,
+                    "min_hours": 0,
+                    "max_hours": 0,
+                    "p95_hours": 0,
+                }
+
+        # Zbuduj funnel
+        funnel = []
+        for i, stage in enumerate(funnel_stages):
+            count = stage_counts.get(stage, 0)
+            if i == 0:
+                funnel.append({
+                    "stage": stage,
+                    "count": count,
+                    "conversion_rate": 100.0 if len(orders) == 0 else (count / len(orders)) * 100,
+                })
+            else:
+                prev_stage = funnel_stages[i - 1]
+                prev_count = stage_counts.get(prev_stage, 1)
+                conversion = (count / prev_count * 100) if prev_count > 0 else 0
+                funnel.append({
+                    "stage": stage,
+                    "count": count,
+                    "conversion_rate": conversion,
+                })
+
+        result = {
+            "total_orders": len(orders),
+            "orders_with_events": len(events_by_order),
+            "funnel": funnel,
+            "transitions": transition_stats,
+            "summary": {
+                "avg_time_bought_to_ready_hours": round(
+                    sum(transitions["BOUGHT_to_READY_FOR_PROCESSING"]) / len(transitions["BOUGHT_to_READY_FOR_PROCESSING"]), 2
+                ) if transitions["BOUGHT_to_READY_FOR_PROCESSING"] else 0,
+                "median_time_bought_to_ready_hours": round(
+                    sorted(transitions["BOUGHT_to_READY_FOR_PROCESSING"])[
+                        len(transitions["BOUGHT_to_READY_FOR_PROCESSING"]) // 2
+                    ], 2
+                ) if transitions["BOUGHT_to_READY_FOR_PROCESSING"] else 0,
+            }
+        }
+
+        _cache_set(cache_key, result)
+
+    endpoint = _endpoint_name(cache_key)
+    response_ms = _record_telemetry(endpoint, "miss", started_at)
+
+    return jsonify(
+        {
+            "ok": True,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": result,
+            "errors": [],
+            "meta": {
+                "cache": "miss",
+                "telemetry": _telemetry_stats(endpoint, response_ms),
+            },
+        }
+    )

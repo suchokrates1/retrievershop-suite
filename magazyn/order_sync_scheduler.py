@@ -3,7 +3,7 @@
 import threading
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -21,9 +21,11 @@ def _sync_from_allegro_events(app):
     2. Pobierz zdarzenia od tego ID (GET /order/events?from=...)
     3. Dla BOUGHT/FILLED_IN/READY_FOR_PROCESSING: pobierz szczegoly -> sync_order_from_data()
     4. Dla BUYER_CANCELLED / AUTO_CANCELLED: aktualizuj status
-    5. Zapisz nowy last_event_id
+    5. Zapisz raw events do OrderEvent tabeli dla analizy funnelu
+    6. Zapisz nowy last_event_id
     """
     from .db import get_session
+    from .models import OrderEvent
     from .orders import sync_order_from_data, add_order_status
     from .allegro_api.events import fetch_order_events, fetch_event_stats
     from .allegro_api.orders import (
@@ -32,9 +34,12 @@ def _sync_from_allegro_events(app):
         get_allegro_internal_status,
     )
     from .settings_store import settings_store
+    from sqlalchemy.exc import IntegrityError
+    from dateutil import parser as dateparser
 
     stats = {
         "events_fetched": 0,
+        "events_stored": 0,
         "orders_synced": 0,
         "orders_cancelled": 0,
         "orders_skipped": 0,
@@ -100,12 +105,43 @@ def _sync_from_allegro_events(app):
                 seen_checkout_forms = set()
 
                 for event in all_events:
+                    event_id = event.get("id", "")
                     event_type = event.get("type", "")
                     order_info = event.get("order", {})
                     checkout_form_id = order_info.get("checkoutForm", {}).get("id")
+                    occurred_at_str = event.get("occurredAt", "")
 
                     if not checkout_form_id:
                         continue
+
+                    # Parsuj timestamp zdarzenia
+                    try:
+                        occurred_at = dateparser.isoparse(occurred_at_str) if occurred_at_str else datetime.now(timezone.utc)
+                    except Exception:
+                        occurred_at = datetime.now(timezone.utc)
+
+                    order_id = f"allegro_{checkout_form_id}"
+
+                    # Przechowaj raw event w bazie dla analizy funnelu (idempotentne, unika duplikatow)
+                    try:
+                        event_record = OrderEvent(
+                            order_id=order_id,
+                            allegro_event_id=event_id,
+                            event_type=event_type,
+                            occurred_at=occurred_at,
+                            payload_json=str(event)  # Store raw event as string for later analysis
+                        )
+                        db.add(event_record)
+                        db.flush()  # Ensure unique constraint check happens
+                        stats["events_stored"] += 1
+                        logger.debug(f"Allegro Events: zapisano raw event {event_id}")
+                    except IntegrityError:
+                        # Zdarzenie juz istnieje - pomiń (idempotency)
+                        db.rollback()
+                        logger.debug(f"Allegro Events: event {event_id} juz istnieje, pominięto")
+                    except Exception as exc:
+                        logger.warning(f"Allegro Events: blad zapisu raw event {event_id}: {exc}")
+                        db.rollback()
 
                     # Deduplikacja - jedno zamowienie moze miec wiele zdarzen
                     event_key = (checkout_form_id, event_type)
@@ -140,7 +176,6 @@ def _sync_from_allegro_events(app):
 
                     elif event_type in ("BUYER_CANCELLED", "AUTO_CANCELLED"):
                         try:
-                            order_id = f"allegro_{checkout_form_id}"
                             add_order_status(
                                 db,
                                 order_id,
@@ -493,7 +528,6 @@ def stop_sync_scheduler():
     global _sync_thread
     
     if _sync_thread is None or not _sync_thread.is_alive():
-        logger.info("Order sync scheduler not running")
         return
     
     logger.info("Stopping order sync scheduler...")
