@@ -519,6 +519,54 @@ def test_stats_logistics_funnel_and_error_counts(client, app, login):
     assert "zwrot" in data["error_counts"]
 
 
+def test_stats_logistics_breakdown_by_carrier_and_method(client, app, login):
+    """Logistics zwraca SLA per przewoznik i metode dostawy."""
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    _seed_order(app, "ord_s7_track_1", payment_done=120.0)
+    _seed_order(app, "ord_s7_track_2", payment_done=130.0)
+
+    now = datetime.now()
+    with app.app_context():
+        with get_session() as db:
+            order_1 = db.query(Order).filter(Order.order_id == "ord_s7_track_1").first()
+            order_1.delivery_package_nr = "INP123"
+            order_1.delivery_method = "Allegro Paczkomaty InPost"
+            order_1.courier_code = "INPOST"
+            order_1.delivery_package_module = "InPost"
+
+            order_2 = db.query(Order).filter(Order.order_id == "ord_s7_track_2").first()
+            order_2.delivery_package_nr = "DPD123"
+            order_2.delivery_method = "Kurier DPD"
+            order_2.courier_code = "DPD"
+            order_2.delivery_package_module = "DPD"
+
+    _seed_status_log(app, "ord_s7_track_1", "spakowano", now)
+    _seed_status_log(app, "ord_s7_track_1", "dostarczono", now + timedelta(hours=24))
+    _seed_status_log(app, "ord_s7_track_2", "spakowano", now)
+    _seed_status_log(app, "ord_s7_track_2", "dostarczono", now + timedelta(hours=72))
+
+    date_from = now.strftime("%Y-%m-%d")
+    date_to = (now + timedelta(days=5)).strftime("%Y-%m-%d")
+    response = client.get(f"/api/stats/logistics?date_from={date_from}&date_to={date_to}")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+
+    assert "by_carrier" in data
+    assert "by_delivery_method" in data
+
+    carriers = {row["carrier"]: row for row in data["by_carrier"]}
+    assert carriers["InPost"]["shipped_total"] == 1
+    assert carriers["InPost"]["delivered_total"] == 1
+    assert carriers["InPost"]["on_time_rate_48h"] == 100.0
+    assert carriers["DPD"]["on_time_rate_48h"] == 0.0
+
+    methods = {row["delivery_method"]: row for row in data["by_delivery_method"]}
+    assert methods["Allegro Paczkomaty InPost"]["carrier"] == "InPost"
+    assert methods["Kurier DPD"]["carrier"] == "DPD"
+
+
 def test_stats_profit_waterfall_structure(client, app, login, monkeypatch):
     """Profit zwraca waterfall z Przychodem i Zyskiem netto."""
     from magazyn import stats as stats_module
