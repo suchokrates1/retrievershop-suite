@@ -751,7 +751,10 @@ Status aktualizacji: 2026-04-01
    1. [x] KPI obslugi klienta z messaging/issues,
    2. [x] KPI pokrycia faktur.
 3. Priorytet C:
-    1. rozszerzone dane reklam i offer analytics po potwierdzeniu dostepnosci.
+   1. [x] rozszerzone dane reklam i offer analytics po potwierdzeniu dostepnosci.
+      Zakres wykonany: koszt reklamy per oferta (billing entries), prowizja promowana, bonus kampanii,
+      korelacja ze sprzedaza oferty i sygnalizacja niedostepnosci metryk views/CTR/conversion
+      w obecnej integracji API.
 
 ## 21. Sprint 7: Priorytet A - billing types (start)
 

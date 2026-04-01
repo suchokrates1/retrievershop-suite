@@ -19,6 +19,7 @@ from .auth import login_required
 from .db import get_session
 from .models import (
     AllegroBillingType,
+    AllegroOffer,
     AllegroPriceHistory,
     Message,
     Order,
@@ -874,6 +875,202 @@ def stats_allegro_costs():
         },
         "errors": [],
     }
+    endpoint = _endpoint_name(cache_key)
+    response_ms = _record_telemetry(endpoint, "miss", started_at)
+    payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+    _cache_set(cache_key, payload)
+    return jsonify(payload)
+
+
+@bp.route("/ads-offer-analytics")
+@login_required
+def stats_ads_offer_analytics():
+    """Priorytet C: rozszerzone dane reklam i offer analytics na bazie dostepnych danych."""
+    started_at = time.perf_counter()
+    filters, err = _parse_filters()
+    if err:
+        return err
+
+    cache_key = "ads-offer-analytics|" + _build_cache_key(filters)
+    cached_payload = _cache_get(cache_key)
+    if cached_payload is not None:
+        endpoint = _endpoint_name(cache_key)
+        response_ms = _record_telemetry(endpoint, "hit", started_at)
+        cached = dict(cached_payload)
+        cached["generated_at"] = datetime.now(timezone.utc).isoformat()
+        cached["meta"] = dict(cached.get("meta") or {})
+        cached["meta"]["cache"] = "hit"
+        cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+        return jsonify(cached)
+
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not access_token:
+        return _json_error(
+            "ALLEGRO_TOKEN_MISSING",
+            "Brak tokenu Allegro - nie mozna pobrac analityki reklam i ofert",
+            400,
+        )
+
+    from .allegro_api import fetch_billing_entries
+
+    date_from_iso = filters.date_from.strftime("%Y-%m-%dT00:00:00Z")
+    date_to_iso = (filters.date_to - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    entries_data = fetch_billing_entries(
+        access_token,
+        occurred_at_gte=date_from_iso,
+        occurred_at_lte=date_to_iso,
+        limit=100,
+    )
+    entries = entries_data.get("billingEntries", [])
+
+    ads_types = {"NSP", "ADS", "FEA", "DPG", "PRO"}
+    promoted_commission_types = {"BRG", "FSF"}
+    bonus_types = {"CB2"}
+
+    offer_costs: dict[str, dict[str, Decimal | str]] = {}
+    account_level_ads_total = Decimal("0")
+
+    for entry in entries:
+        type_id = (entry.get("type") or {}).get("id") or "UNKNOWN"
+        amount = Decimal(str((entry.get("value") or {}).get("amount") or 0))
+        offer_info = entry.get("offer") or {}
+        offer_id = str(offer_info.get("id") or "").strip()
+        offer_name = offer_info.get("name") or "-"
+
+        if type_id not in (ads_types | promoted_commission_types | bonus_types):
+            continue
+
+        if not offer_id:
+            if type_id in ads_types and amount < 0:
+                account_level_ads_total += abs(amount)
+            continue
+
+        row = offer_costs.setdefault(
+            offer_id,
+            {
+                "offer_id": offer_id,
+                "offer_name": str(offer_name),
+                "ads_fee": Decimal("0"),
+                "promoted_commission": Decimal("0"),
+                "campaign_bonus": Decimal("0"),
+            },
+        )
+
+        if type_id in ads_types and amount < 0:
+            row["ads_fee"] = Decimal(str(row["ads_fee"])) + abs(amount)
+        elif type_id in promoted_commission_types and amount < 0:
+            row["promoted_commission"] = Decimal(str(row["promoted_commission"])) + abs(amount)
+        elif type_id in bonus_types and amount > 0:
+            row["campaign_bonus"] = Decimal(str(row["campaign_bonus"])) + amount
+
+    start_ts = _to_ts(filters.date_from)
+    end_ts = _to_ts(filters.date_to)
+    with get_session() as db:
+        offers_map = {
+            o.offer_id: o
+            for o in db.query(AllegroOffer).filter(AllegroOffer.offer_id.in_(list(offer_costs.keys()))).all()
+        }
+        active_offers_total = db.query(AllegroOffer).filter(AllegroOffer.publication_status == "ACTIVE").count()
+
+        orders = _fetch_orders(db, filters, start_ts, end_ts)
+        order_ids = [o.order_id for o in orders]
+
+        sales_by_offer: dict[str, dict[str, Decimal | int]] = defaultdict(lambda: {"orders": 0, "items": 0, "revenue": Decimal("0")})
+        if order_ids:
+            sales_rows = (
+                db.query(
+                    OrderProduct.auction_id,
+                    func.count(func.distinct(OrderProduct.order_id)).label("orders"),
+                    func.sum(OrderProduct.quantity).label("items"),
+                    func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label("revenue"),
+                )
+                .filter(
+                    OrderProduct.order_id.in_(order_ids),
+                    OrderProduct.auction_id.isnot(None),
+                )
+                .group_by(OrderProduct.auction_id)
+                .all()
+            )
+            for row in sales_rows:
+                oid = str(row.auction_id)
+                sales_by_offer[oid] = {
+                    "orders": int(row.orders or 0),
+                    "items": int(row.items or 0),
+                    "revenue": Decimal(str(row.revenue or 0)),
+                }
+
+    top_rows: list[dict] = []
+    total_offer_ads_fee = Decimal("0")
+    total_promoted_commission = Decimal("0")
+    total_campaign_bonus = Decimal("0")
+    offers_with_sales = 0
+
+    for offer_id, row in offer_costs.items():
+        ads_fee = Decimal(str(row["ads_fee"]))
+        promoted_commission = Decimal(str(row["promoted_commission"]))
+        campaign_bonus = Decimal(str(row["campaign_bonus"]))
+        net_ads_spend = ads_fee + promoted_commission - campaign_bonus
+
+        total_offer_ads_fee += ads_fee
+        total_promoted_commission += promoted_commission
+        total_campaign_bonus += campaign_bonus
+
+        offer_db = offers_map.get(offer_id)
+        sales = sales_by_offer.get(offer_id, {"orders": 0, "items": 0, "revenue": Decimal("0")})
+        if int(sales["orders"]) > 0:
+            offers_with_sales += 1
+
+        top_rows.append(
+            {
+                "offer_id": offer_id,
+                "offer_name": row["offer_name"],
+                "publication_status": offer_db.publication_status if offer_db else "UNKNOWN",
+                "current_price": float(Decimal(str(offer_db.price))) if offer_db and offer_db.price is not None else None,
+                "ads_fee": float(ads_fee),
+                "promoted_commission": float(promoted_commission),
+                "campaign_bonus": float(campaign_bonus),
+                "net_ads_spend": float(net_ads_spend),
+                "orders_count": int(sales["orders"]),
+                "items_sold": int(sales["items"]),
+                "revenue": float(Decimal(str(sales["revenue"]))),
+            }
+        )
+
+    top_rows.sort(key=lambda r: (r["net_ads_spend"], r["ads_fee"]), reverse=True)
+
+    payload = {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "filters": _format_filters(filters),
+        "data": {
+            "summary": {
+                "account_level_ads_total": float(account_level_ads_total),
+                "offer_ads_total": float(total_offer_ads_fee),
+                "promoted_commission_total": float(total_promoted_commission),
+                "campaign_bonus_total": float(total_campaign_bonus),
+                "net_ads_spend_total": float(total_offer_ads_fee + total_promoted_commission - total_campaign_bonus + account_level_ads_total),
+                "offers_with_ads_cost": len(offer_costs),
+                "active_offers_total": active_offers_total,
+                "offers_with_sales": offers_with_sales,
+            },
+            "top_offers": top_rows[:12],
+            "availability": {
+                "offer_level_ads_cost": True,
+                "offer_level_views_ctr": False,
+                "offer_level_conversion": False,
+                "note": "Dostepne: koszty reklam i prowizje promowane z billing entries + dane ofert/sprzedazy z DB. Brak natywnego feedu views/CTR/conversion w obecnej integracji.",
+            },
+        },
+        "meta": {
+            "confidence": "medium",
+            "sources": ["allegro.billing", "db.allegro_offers", "db.order_products", "db.orders"],
+            "cache": "miss",
+            "telemetry": {},
+        },
+        "errors": [],
+    }
+
     endpoint = _endpoint_name(cache_key)
     response_ms = _record_telemetry(endpoint, "miss", started_at)
     payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
