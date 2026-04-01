@@ -1011,8 +1011,8 @@ class LabelAgent:
                 nfkd = unicodedata.normalize('NFKD', raw_ref)
                 ascii_ref = ''.join(c for c in nfkd if not unicodedata.combining(c))
                 sanitized = re.sub(r'[^a-zA-Z0-9 _/\-]', '', ascii_ref)
-                # textOnLabel - pelniejszy opis na etykiecie paczki
-                text_on_label = sanitized[:100]
+                # textOnLabel - opis na etykiecie paczki (limit 30 znakow)
+                text_on_label = sanitized[:30]
                 # referenceNumber - sygnatura wewnetrzna (limit 30 znakow wg API)
                 reference_number = sanitized[:30]
 

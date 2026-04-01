@@ -257,8 +257,13 @@ def wait_for_shipment_creation(command_id: str, *, timeout: float = 30.0,
             error_msg = "; ".join(
                 e.get("message", str(e)) for e in errors
             ) if errors else "Nieznany blad"
+            error_details = "; ".join(
+                f"path={e.get('path','?')} code={e.get('code','?')}"
+                for e in errors
+            ) if errors else ""
             logger.error(
-                "Blad tworzenia przesylki (commandId=%s): %s", command_id, error_msg,
+                "Blad tworzenia przesylki (commandId=%s): %s [%s]",
+                command_id, error_msg, error_details,
             )
             raise RuntimeError(f"Blad tworzenia przesylki: {error_msg}")
 
