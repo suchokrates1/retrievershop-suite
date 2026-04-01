@@ -1634,3 +1634,98 @@ def stats_order_funnel():
             },
         }
     )
+
+
+@bp.route("/shipment-errors")
+@login_required
+def stats_shipment_errors():
+    """Shipment errors KPI - błędy przy generowaniu etykiet i tworzeniu przesyłek.
+    
+    Zwraca:
+    - by_error_type: Liczba błędów per typ (label_generation_failed, invalid_address, etc.)
+    - by_delivery_method: Liczba błędów per metoda dostawy (inpost, dhl, orlen, etc.)
+    - unresolved: Liczba nierozwiązanych błędów
+    - unresolved_by_type: Nierozwiązane błędy grouped by type
+    """
+    from .models import ShipmentError
+    
+    started_at = time.perf_counter()
+    filters, err = _parse_filters()
+    if err:
+        return err
+
+    cache_key = "shipment-errors|" + _build_cache_key(filters)
+    cached_payload = _cache_get(cache_key)
+    if cached_payload is not None:
+        endpoint = _endpoint_name(cache_key)
+        response_ms = _record_telemetry(endpoint, "hit", started_at)
+        cached = dict(cached_payload)
+        cached["generated_at"] = datetime.now(timezone.utc).isoformat()
+        cached["meta"] = dict(cached.get("meta") or {})
+        cached["meta"]["cache"] = "hit"
+        cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+        return jsonify(cached)
+
+    start_dt = filters.date_from
+    end_dt = filters.date_to + timedelta(days=1)
+
+    with get_session() as db:
+        # Fetch all shipment errors in period
+        all_errors = (
+            db.query(ShipmentError)
+            .filter(
+                ShipmentError.created_at >= start_dt,
+                ShipmentError.created_at < end_dt,
+            )
+            .all()
+        )
+
+        # Group by error_type
+        by_error_type: dict[str, int] = defaultdict(int)
+        by_delivery_method: dict[str, int] = defaultdict(int)
+        unresolved_by_type: dict[str, int] = defaultdict(int)
+        
+        for error in all_errors:
+            error_type = error.error_type or "unknown"
+            delivery_method = error.delivery_method or "unknown"
+            
+            by_error_type[error_type] += 1
+            by_delivery_method[delivery_method] += 1
+            
+            if not error.resolved:
+                unresolved_by_type[error_type] += 1
+
+        unresolved_count = sum(1 for e in all_errors if not e.resolved)
+
+        result = {
+            "total_errors": len(all_errors),
+            "unresolved_total": unresolved_count,
+            "by_error_type": dict(sorted(by_error_type.items(), key=lambda x: x[1], reverse=True)),
+            "by_delivery_method": dict(sorted(by_delivery_method.items(), key=lambda x: x[1], reverse=True)),
+            "unresolved_by_type": dict(sorted(unresolved_by_type.items(), key=lambda x: x[1], reverse=True)),
+            "summary": {
+                "most_common_error": max(by_error_type.items(), key=lambda x: x[1])[0] if by_error_type else "none",
+                "most_problematic_courier": max(by_delivery_method.items(), key=lambda x: x[1])[0] if by_delivery_method else "none",
+                "resolution_rate": (
+                    ((len(all_errors) - unresolved_count) / len(all_errors)) * 100
+                ) if all_errors else 0,
+            },
+        }
+
+        _cache_set(cache_key, result)
+
+    endpoint = _endpoint_name(cache_key)
+    response_ms = _record_telemetry(endpoint, "miss", started_at)
+
+    return jsonify(
+        {
+            "ok": True,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": result,
+            "errors": [],
+            "meta": {
+                "cache": "miss",
+                "telemetry": _telemetry_stats(endpoint, response_ms),
+            },
+        }
+    )

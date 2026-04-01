@@ -291,6 +291,77 @@
         </template>
     </section>
 
+    <section class="chart-wrap lazy-section reveal mb-6" x-ref="shipmentErrorsSection">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Błędy Shipmentów - KPI</h3>
+        </div>
+        
+        <template x-if="shipmentErrorsLoading">
+            <div class="space-y-2">
+                <div class="skeleton skeleton-row w-3/4"></div>
+                <div class="skeleton skeleton-row w-1/2"></div>
+                <div class="skeleton skeleton-row w-2/3"></div>
+            </div>
+        </template>
+        
+        <template x-if="!shipmentErrorsLoading && shipmentErrorsError">
+            <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                <span x-text="'Błąd: ' + shipmentErrorsError"></span>
+                <button class="btn btn-xs btn-outline ml-auto" @click="loadShipmentErrors()">Ponów</button>
+            </div>
+        </template>
+        
+        <template x-if="!shipmentErrorsLoading && !shipmentErrorsError && shipmentErrorsLoaded">
+            <div class="space-y-4">
+                <!-- Summary cards -->
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold text-error" x-text="shipmentErrorsData.total_errors || 0"></div>
+                        <div class="text-xs opacity-70">Błędy razem</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold text-warning" x-text="shipmentErrorsData.unresolved_total || 0"></div>
+                        <div class="text-xs opacity-70">Nierozwiązane</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-2xl font-bold" x-text="(shipmentErrorsData.summary.resolution_rate || 0).toFixed(1) + '%'"></div>
+                        <div class="text-xs opacity-70">Rozwiązane</div>
+                    </div>
+                    <div class="stats-kpi p-2 text-center">
+                        <div class="text-xl opacity-80" x-text="shipmentErrorsData.summary.most_problematic_courier || '-'"></div>
+                        <div class="text-xs opacity-70">Najgorsza kurier</div>
+                    </div>
+                </div>
+                
+                <!-- Errors by type -->
+                <div x-show="Object.keys(shipmentErrorsData.by_error_type || {}).length > 0">
+                    <div class="text-xs uppercase opacity-70 mb-2">Błędy per typ</div>
+                    <div class="space-y-1 text-sm">
+                        <template x-for="(count, errorType) in (shipmentErrorsData.by_error_type || {})" :key="errorType">
+                            <div class="flex justify-between opacity-80">
+                                <span x-text="errorType.replace(/_/g, ' ')"></span>
+                                <span class="font-semibold text-error" x-text="count"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Errors by delivery method -->
+                <div x-show="Object.keys(shipmentErrorsData.by_delivery_method || {}).length > 0">
+                    <div class="text-xs uppercase opacity-70 mb-2">Błędy per kurier</div>
+                    <div class="space-y-1 text-sm">
+                        <template x-for="(count, method) in (shipmentErrorsData.by_delivery_method || {})" :key="method">
+                            <div class="flex justify-between opacity-80">
+                                <span x-text="method"></span>
+                                <span class="font-semibold text-error" x-text="count"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </section>
+
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div class="chart-wrap lazy-section reveal" x-ref="productsSection">
             <div class="flex items-center justify-between mb-3">
@@ -501,6 +572,10 @@ function statsDashboard() {
         orderFunnelLoading: false,
         orderFunnelError: null,
         orderFunnelData: { funnel: [], transitions: {}, summary: {} },
+        shipmentErrorsLoaded: false,
+        shipmentErrorsLoading: false,
+        shipmentErrorsError: null,
+        shipmentErrorsData: { total_errors: 0, unresolved_total: 0, by_error_type: {}, by_delivery_method: {}, summary: {} },
         telemetryRows: [],
         salesChart: null,
         splitChart: null,
@@ -702,6 +777,7 @@ function statsDashboard() {
                     if (entry.target === this.$refs.returnsSection && !this.returnsLoaded && !this.returnsLoading) this.loadReturns();
                     if (entry.target === this.$refs.logisticsSection && !this.logisticsLoaded && !this.logisticsLoading) this.loadLogistics();
                     if (entry.target === this.$refs.orderFunnelSection && !this.orderFunnelLoaded && !this.orderFunnelLoading) this.loadOrderFunnel();
+                    if (entry.target === this.$refs.shipmentErrorsSection && !this.shipmentErrorsLoaded && !this.shipmentErrorsLoading) this.loadShipmentErrors();
                     if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
                     if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
                 });
@@ -710,6 +786,7 @@ function statsDashboard() {
             observer.observe(this.$refs.returnsSection);
             observer.observe(this.$refs.logisticsSection);
             observer.observe(this.$refs.orderFunnelSection);
+            observer.observe(this.$refs.shipmentErrorsSection);
             observer.observe(this.$refs.productsSection);
             observer.observe(this.$refs.competitionSection);
         },
@@ -870,6 +947,24 @@ function statsDashboard() {
                 this.orderFunnelError = 'Nie udalo sie zaladowac funnelu zamowien: ' + (e.message || 'blad');
             } finally {
                 this.orderFunnelLoading = false;
+            }
+        },
+
+        async loadShipmentErrors() {
+            try {
+                this.shipmentErrorsLoading = true;
+                this.shipmentErrorsError = null;
+                const r = await fetch('/api/stats/shipment-errors?' + this.buildQuery());
+                const payload = await r.json();
+                if (!payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || 'Unknown error');
+                }
+                this.shipmentErrorsData = payload.data || { total_errors: 0, unresolved_total: 0, by_error_type: {}, by_delivery_method: {}, summary: {} };
+                this.shipmentErrorsLoaded = true;
+            } catch (e) {
+                this.shipmentErrorsError = 'Nie udalo sie zaladowac błędów shipmentów: ' + (e.message || 'blad');
+            } finally {
+                this.shipmentErrorsLoading = false;
             }
         },
 

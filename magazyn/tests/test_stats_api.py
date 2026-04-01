@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from magazyn.db import get_session
-from magazyn.models import AllegroBillingType, AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, OrderEvent, PriceReport, PriceReportItem, Return
+from magazyn.models import AllegroBillingType, AllegroPriceHistory, Order, OrderProduct, OrderStatusLog, OrderEvent, ShipmentError, PriceReport, PriceReportItem, Return
 
 
 def _seed_order(app, order_id: str, *, payment_done=100.0, cod=False, platform="allegro"):
@@ -668,3 +668,128 @@ def test_stats_order_funnel_multiple_orders(client, app, login):
     # BOUGHT_to_READY: (5 + 10) / 2 = 7.5 hours avg
     assert transitions["BOUGHT_to_READY_FOR_PROCESSING"]["count"] == 2
     assert abs(transitions["BOUGHT_to_READY_FOR_PROCESSING"]["avg_hours"] - 7.5) < 0.01
+
+
+def test_stats_shipment_errors_list_and_aggregation(client, app, login):
+    """Shipment errors endpoint correctly groups and aggregates errors."""
+    from magazyn.models import ShipmentError
+    from magazyn import stats as stats_module
+    
+    stats_module._FAST_CACHE.clear()
+    
+    now = datetime.now(timezone.utc)
+    
+    # Create test orders
+    _seed_order(app, "ord_ship_1", payment_done=50.0)
+    _seed_order(app, "ord_ship_2", payment_done=75.0)
+    _seed_order(app, "ord_ship_3", payment_done=100.0)
+    
+    with app.app_context():
+        with get_session() as db:
+            # Add shipment errors for testing
+            db.add_all([
+                # Order 1: Label generation error (unresolved)
+                ShipmentError(
+                    order_id="ord_ship_1",
+                    error_type="LABEL_GENERATION",
+                    error_code="LG001",
+                    error_message="Invalid shipment dimensions",
+                    delivery_method="DHL",
+                    raw_response='{"error": "dimensions"}',
+                    resolved=False,
+                ),
+                # Order 2: Address validation error (resolved)
+                ShipmentError(
+                    order_id="ord_ship_2",
+                    error_type="ADDRESS_VALIDATION",
+                    error_code="AV001",
+                    error_message="Invalid postal code",
+                    delivery_method="UPS",
+                    raw_response='{"error": "postal_code"}',
+                    resolved=True,
+                ),
+                # Order 3: Label generation error (unresolved)
+                ShipmentError(
+                    order_id="ord_ship_3",
+                    error_type="LABEL_GENERATION",
+                    error_code="LG002",
+                    error_message="Timeout generating label",
+                    delivery_method="DHL",
+                    raw_response='{"error": "timeout"}',
+                    resolved=False,
+                ),
+            ])
+            db.commit()
+    
+    response = client.get("/api/stats/shipment-errors")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    
+    # Verify totals
+    assert data["total_errors"] == 3
+    assert data["unresolved_total"] == 2
+    
+    # Verify error type grouping (LABEL_GENERATION: 2, ADDRESS_VALIDATION: 1)
+    assert data["by_error_type"]["LABEL_GENERATION"] == 2
+    assert data["by_error_type"]["ADDRESS_VALIDATION"] == 1
+    
+    # Verify delivery method grouping (DHL: 2, UPS: 1)
+    assert data["by_delivery_method"]["DHL"] == 2
+    assert data["by_delivery_method"]["UPS"] == 1
+    
+    # Verify summary
+    assert data["summary"]["most_common_error"] == "LABEL_GENERATION"
+    assert data["summary"]["most_problematic_courier"] == "DHL"
+    assert abs(data["summary"]["resolution_rate"] - 33.33) < 1.0  # 1 resolved out of 3 = 33.33%
+
+
+def test_stats_shipment_errors_filters_by_date(client, app, login):
+    """Shipment errors endpoint respects date_from and date_to filters."""
+    from magazyn.models import ShipmentError
+    from magazyn import stats as stats_module
+    
+    stats_module._FAST_CACHE.clear()
+    
+    now = datetime.now(timezone.utc)
+    
+    # Create test orders
+    _seed_order(app, "ord_date_1", payment_done=50.0)
+    _seed_order(app, "ord_date_2", payment_done=75.0)
+    
+    with app.app_context():
+        with get_session() as db:
+            # Add errors at different times - both within today
+            db.add_all([
+                ShipmentError(
+                    order_id="ord_date_1",
+                    error_type="LABEL_GENERATION",
+                    error_code="LG",
+                    error_message="Error 1",
+                    delivery_method="DHL",
+                    raw_response="{}",
+                    resolved=False,
+                    created_at=now - timedelta(hours=2),
+                ),
+                ShipmentError(
+                    order_id="ord_date_2",
+                    error_type="ADDRESS_VALIDATION",
+                    error_code="AV",
+                    error_message="Error 2",
+                    delivery_method="UPS",
+                    raw_response="{}",
+                    resolved=True,
+                    created_at=now - timedelta(hours=1),
+                ),
+            ])
+            db.commit()
+    
+    # Query without date filter (should get all)
+    response = client.get("/api/stats/shipment-errors")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    
+    # Should include both errors
+    assert data["total_errors"] == 2
+    assert data["unresolved_total"] == 1
+    assert data["by_error_type"]["LABEL_GENERATION"] == 1
+    assert data["by_error_type"]["ADDRESS_VALIDATION"] == 1
