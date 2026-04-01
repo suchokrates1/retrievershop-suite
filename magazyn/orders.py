@@ -1150,8 +1150,9 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
         last_priority = STATUS_HIERARCHY.get(last_status.status, -1)
         new_priority = STATUS_HIERARCHY.get(status, -1)
         
-        # Jeśli nowy status ma niższy priorytet (cofanie) i nie jest statusem problemowym (999)
-        if new_priority != 999 and last_priority != -1 and new_priority < last_priority:
+        # Przejscie ze statusu problemowego (999) do normalnego jest zawsze dozwolone
+        # (np. blad_druku -> wydrukowano po udanym retry)
+        if new_priority != 999 and last_priority != 999 and last_priority != -1 and new_priority < last_priority:
             # Cofnięcie statusu - logujemy i pomijamy
             import logging
             logger = logging.getLogger(__name__)
