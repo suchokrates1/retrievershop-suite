@@ -300,12 +300,12 @@
             <div class="space-y-4">
                 <!-- Funnel progression -->
                 <div>
-                    <div class="text-xs uppercase opacity-70 mb-2">Funnel zamówień</div>
+                    <div class="text-xs uppercase opacity-70 mb-2">Lejek zamówień</div>
                     <div class="space-y-2">
                         <template x-for="stage in (orderFunnelData.funnel || [])" :key="stage.stage">
                             <div>
                                 <div class="flex justify-between text-sm mb-1">
-                                    <span x-text="stage.stage"></span>
+                                    <span x-text="funnelStageLabel(stage.stage)"></span>
                                     <span class="opacity-70">
                                         <b x-text="stage.count"></b>
                                         (<span x-text="stage.conversion_rate.toFixed(1) + '%'"></span>)
@@ -324,7 +324,7 @@
                         <template x-for="(transition, key) in (orderFunnelData.transitions || {})" :key="key">
                             <template x-if="transition.count > 0">
                                 <div class="stats-kpi p-2">
-                                    <div class="text-xs opacity-70 mb-1" x-text="key.replace(/_/g, ' → ')"></div>
+                                    <div class="text-xs opacity-70 mb-1" x-text="funnelTransitionLabel(key)"></div>
                                     <div class="text-sm font-semibold" x-text="transition.avg_hours + ' h'"></div>
                                     <div class="text-xs opacity-50">
                                         Mediana: <span x-text="transition.median_hours + ' h'"></span>
@@ -338,7 +338,7 @@
                 
                 <!-- Summary -->
                 <div class="bg-opacity-20 p-2 rounded text-sm" :style="`background-color: var(--stats-accent)`">
-                    Średni czas BOUGHT→READY: 
+                    Średni czas Zakupione → Gotowe do realizacji: 
                     <b x-text="(orderFunnelData.summary.avg_time_bought_to_ready_hours || 0).toFixed(2) + ' h'"></b>
                 </div>
             </div>
@@ -970,6 +970,27 @@ function statsDashboard() {
 
         abbr(shortcut) {
             return `<span title="${this.tooltipText(shortcut)}">${shortcut}</span>`;
+        },
+
+        funnelStageLabel(stage) {
+            const labels = {
+                BOUGHT: 'Zakupione',
+                FILLED_IN: 'Wypełnione',
+                READY_FOR_PROCESSING: 'Gotowe do realizacji',
+                BUYER_CANCELLED: 'Anulowane przez kupującego',
+                AUTO_CANCELLED: 'Anulowane automatycznie',
+                CANCELLED: 'Anulowane',
+            };
+            return labels[stage] || stage;
+        },
+
+        funnelTransitionLabel(key) {
+            const normalized = String(key || '').replace('_to_', '->');
+            const [fromStage, toStage] = normalized.split('->');
+            if (!fromStage || !toStage) {
+                return String(key || '').replace(/_/g, ' → ');
+            }
+            return `${this.funnelStageLabel(fromStage)} → ${this.funnelStageLabel(toStage)}`;
         },
 
         updateCards(overview, sales, profit) {
