@@ -187,6 +187,20 @@ def check_allegro_customer_returns() -> Dict[str, int]:
                     ).first()
                     
                     if existing:
+                        updated = False
+
+                        # Aktualizuj dane paczki jesli pojawily sie w Allegro
+                        parcels = return_data.get("parcels", [])
+                        if parcels and not existing.return_tracking_number:
+                            parcel = parcels[0]
+                            waybill = parcel.get("waybill")
+                            carrier = parcel.get("carrierId")
+                            if waybill:
+                                existing.return_tracking_number = waybill
+                                existing.return_carrier = carrier
+                                updated = True
+                                logger.info(f"Zaktualizowano dane paczki zwrotu #{existing.id}: {waybill} ({carrier})")
+
                         # Aktualizuj status jesli sie zmienil
                         new_status = _map_allegro_return_status(allegro_status)
                         if existing.status != new_status and new_status in [RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]:
@@ -196,8 +210,11 @@ def check_allegro_customer_returns() -> Dict[str, int]:
                                 db, existing.id, new_status,
                                 f"Aktualizacja z Allegro: {allegro_status}"
                             )
-                            stats["updated"] += 1
+                            updated = True
                             logger.info(f"Zaktualizowano zwrot #{existing.id}: {old_status} -> {new_status}")
+
+                        if updated:
+                            stats["updated"] += 1
                         else:
                             stats["existing"] += 1
                         continue
