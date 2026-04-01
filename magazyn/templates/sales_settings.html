@@ -4,6 +4,7 @@
 <h2 class="mb-3 text-center">Ustawienia sprzedazy</h2>
 <form method="post" id="salesSettingsForm" class="max-w-4xl mx-auto">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="overflow-x-auto">
     <table class="table">
         <tbody>
         {% for item in settings %}
@@ -38,6 +39,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </form>
 <div class="form-actions text-center mt-3">
     <button type="submit" form="salesSettingsForm" class="btn btn-primary">Zapisz</button>

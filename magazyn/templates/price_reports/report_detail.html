@@ -114,22 +114,22 @@
 
 {% if items %}
 <div x-data="reportDetail()" class="overflow-x-auto">
-    <table class="table table-zebra table-sm" style="table-layout: fixed;">
+    <table class="table table-zebra table-sm min-w-[830px]">
         <thead class="bg-base-300 text-base-content">
             <tr>
-                <th style="width: 200px;">Produkt</th>
-                <th style="width: 110px;" class="text-right">Cena konkurenta</th>
-                <th style="width: 120px;">Konkurent</th>
-                <th style="width: 70px;" class="text-center">Pozycja</th>
-                <th style="width: 65px;" class="text-center">Status</th>
-                <th style="width: 85px;">Sugestia</th>
-                <th style="width: 180px;">Akcje</th>
+                <th class="w-[200px]">Produkt</th>
+                <th class="w-[110px] text-right">Cena konkurenta</th>
+                <th class="w-[120px]">Konkurent</th>
+                <th class="w-[70px] text-center">Pozycja</th>
+                <th class="w-[65px] text-center">Status</th>
+                <th class="w-[85px]">Sugestia</th>
+                <th class="w-[180px]">Akcje</th>
             </tr>
         </thead>
         <tbody>
             {% for item in items %}
             <tr class="{% if item.error %}bg-warning/10{% elif not item.is_cheapest %}bg-error/10{% endif %}">
-                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <td class="max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
                     {% if item.product_id %}
                     <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" class="no-underline" title="{{ item.product_name }}">
                         {{ item.product_name }}
