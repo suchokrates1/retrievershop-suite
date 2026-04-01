@@ -1,0 +1,680 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+.stats-shell {
+    --stats-accent: #ff7a18;
+    --stats-accent-2: #f9c74f;
+    --stats-surface: linear-gradient(135deg, rgba(17, 56, 62, 0.95), rgba(33, 89, 95, 0.88));
+    --stats-card: rgba(255, 255, 255, 0.06);
+}
+.stats-hero {
+    background: radial-gradient(1200px 600px at 0% 0%, rgba(249, 199, 79, 0.35), transparent 45%),
+                radial-gradient(900px 500px at 100% 20%, rgba(255, 122, 24, 0.3), transparent 40%),
+                var(--stats-surface);
+    border-radius: 1.25rem;
+    overflow: hidden;
+}
+.stats-title {
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    letter-spacing: 0.03em;
+}
+.stats-kpi {
+    background: var(--stats-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    backdrop-filter: blur(6px);
+}
+.stats-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.chart-wrap {
+    background: rgba(12, 30, 34, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    padding: 1rem;
+}
+.lazy-section {
+    min-height: 220px;
+}
+.reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    animation: statsReveal 450ms ease-out forwards;
+}
+@keyframes statsReveal {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.stats-shell .skeleton {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 0.375rem;
+    display: block;
+}
+.stats-shell .skeleton-row {
+    height: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stats-shell" x-data="statsDashboard()" x-init="init()">
+    <section class="stats-hero p-6 md:p-8 mb-6 reveal">
+        <div class="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
+            <div>
+                <p class="text-sm uppercase tracking-wider opacity-80">Analityka operacyjna</p>
+                <h1 class="stats-title text-3xl md:text-4xl font-bold">Centrum Statystyk</h1>
+                <p class="opacity-80 mt-2">Sprzedaż, marża, zwroty, logistyka i konkurencja w jednym widoku.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <input type="date" class="input input-bordered" x-model="filters.date_from">
+                <input type="date" class="input input-bordered" x-model="filters.date_to">
+                <select class="select select-bordered" x-model="filters.granularity">
+                    <option value="day">Dzień</option>
+                    <option value="week">Tydzień</option>
+                    <option value="month">Miesiąc</option>
+                </select>
+                <select class="select select-bordered" x-model="filters.platform">
+                    <option value="all">Wszystkie platformy</option>
+                    <option value="allegro">Allegro</option>
+                    <option value="shop">Sklep</option>
+                    <option value="ebay">eBay</option>
+                    <option value="manual">Ręczne</option>
+                </select>
+                <select class="select select-bordered" x-model="filters.payment_type">
+                    <option value="all">Wszystkie płatności</option>
+                    <option value="cod">Pobranie</option>
+                    <option value="online">Online</option>
+                </select>
+                <button class="btn btn-warning" @click="refreshAll()">
+                    <span x-show="!loading">Odśwież</span>
+                    <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="stats-grid mb-6">
+        <template x-for="card in cards" :key="card.key">
+            <div class="stats-kpi p-4 reveal">
+                <div class="text-xs uppercase opacity-70" x-text="card.label"></div>
+                <div class="text-3xl font-semibold mt-1" x-text="card.value"></div>
+                <div class="text-xs opacity-70 mt-2" x-text="card.sub"></div>
+            </div>
+        </template>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+        <div class="chart-wrap xl:col-span-2 reveal">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-lg font-semibold">Trend sprzedaży</h3>
+                <span class="badge badge-outline" x-text="salesMeta"></span>
+            </div>
+            <canvas id="salesChart" height="120"></canvas>
+            <div class="mt-3 text-sm opacity-80" x-text="drillDownText"></div>
+        </div>
+        <div class="chart-wrap reveal">
+            <h3 class="text-lg font-semibold mb-3">Struktura płatności</h3>
+            <canvas id="splitChart" height="120"></canvas>
+        </div>
+    </section>
+
+    <section class="chart-wrap mb-6 reveal">
+        <h3 class="text-lg font-semibold mb-3">Waterfall finansowy</h3>
+        <canvas id="waterfallChart" height="100"></canvas>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div class="chart-wrap lazy-section reveal" x-ref="returnsSection">
+            <h3 class="text-lg font-semibold mb-2">Zwroty i refundy</h3>
+            <template x-if="returnsLoading">
+                <div class="space-y-2">
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                    <div class="skeleton skeleton-row w-1/2"></div>
+                    <div class="skeleton skeleton-row w-2/3"></div>
+                    <div class="skeleton skeleton-row w-2/5"></div>
+                </div>
+            </template>
+            <template x-if="!returnsLoading && returnsError">
+                <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                    <span x-text="'Błąd: ' + returnsError"></span>
+                    <button class="btn btn-xs btn-outline ml-auto" @click="loadReturns()">Ponów</button>
+                </div>
+            </template>
+            <template x-if="!returnsLoading && !returnsError && !returnsLoaded">
+                <div class="space-y-2 opacity-40">
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                    <div class="skeleton skeleton-row w-1/2"></div>
+                    <p class="text-xs mt-2">Sekcja załaduje się po przewinięciu.</p>
+                </div>
+            </template>
+            <template x-if="!returnsLoading && !returnsError && returnsLoaded">
+                <div>
+                    <div class="mb-2">Zwroty: <b x-text="returnsData.summary.returns_total"></b></div>
+                    <div class="mb-2">Skuteczność refundów: <b x-text="returnsData.summary.refund_success_rate + '%' "></b></div>
+                    <ul class="text-sm opacity-80">
+                        <template x-for="alert in returnsData.alerts" :key="alert.code">
+                            <li x-text="alert.message"></li>
+                        </template>
+                    </ul>
+                </div>
+            </template>
+        </div>
+        <div class="chart-wrap lazy-section reveal" x-ref="logisticsSection">
+            <h3 class="text-lg font-semibold mb-2">Logistyka i lead time</h3>
+            <template x-if="logisticsLoading">
+                <div class="space-y-2">
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                    <div class="skeleton skeleton-row w-1/2"></div>
+                    <div class="skeleton skeleton-row w-2/3"></div>
+                    <div class="skeleton skeleton-row w-2/5"></div>
+                </div>
+            </template>
+            <template x-if="!logisticsLoading && logisticsError">
+                <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                    <span x-text="'Błąd: ' + logisticsError"></span>
+                    <button class="btn btn-xs btn-outline ml-auto" @click="loadLogistics()">Ponów</button>
+                </div>
+            </template>
+            <template x-if="!logisticsLoading && !logisticsError && !logisticsLoaded">
+                <div class="space-y-2 opacity-40">
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                    <div class="skeleton skeleton-row w-1/2"></div>
+                    <p class="text-xs mt-2">Sekcja załaduje się po przewinięciu.</p>
+                </div>
+            </template>
+            <template x-if="!logisticsLoading && !logisticsError && logisticsLoaded">
+                <div>
+                    <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
+                        <div>Wysłane: <b x-text="logisticsData.summary.shipped_total"></b></div>
+                        <div>Dostarczone: <b x-text="logisticsData.summary.delivered_total"></b></div>
+                        <div>Średni lead: <b x-text="logisticsData.summary.avg_lead_time_hours + ' h'"></b></div>
+                        <div>On-time 48h: <b x-text="logisticsData.summary.on_time_rate_48h + '%'"></b></div>
+                    </div>
+                    <div class="mb-3" x-show="(logisticsData.funnel || []).length">
+                        <div class="text-xs uppercase opacity-70 mb-1">Funnel statusów</div>
+                        <div class="flex gap-2 flex-wrap">
+                            <template x-for="stage in (logisticsData.funnel || [])" :key="stage.status">
+                                <div class="stats-kpi p-2 text-center min-w-20">
+                                    <div class="text-lg font-bold" x-text="stage.count"></div>
+                                    <div class="text-xs opacity-70" x-text="stage.status"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="text-sm opacity-80 mb-2" x-show="logisticsData.error_counts">
+                        Błędy druku: <b x-text="(logisticsData.error_counts || {}).blad_druku || 0"></b>
+                        &nbsp;|&nbsp; Problem z dostawą: <b x-text="(logisticsData.error_counts || {}).problem_z_dostawa || 0"></b>
+                    </div>
+                    <ul class="text-sm opacity-80">
+                        <template x-for="alert in logisticsData.alerts" :key="alert.code">
+                            <li x-text="alert.message"></li>
+                        </template>
+                    </ul>
+                </div>
+            </template>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div class="chart-wrap lazy-section reveal" x-ref="productsSection">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-semibold">Produkty</h3>
+                <div class="flex gap-2">
+                    <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/products?format=csv')">CSV</button>
+                    <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/products?format=xlsx')">XLSX</button>
+                </div>
+            </div>
+            <template x-if="productsLoading">
+                <div class="space-y-2">
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-full"></div>
+                </div>
+            </template>
+            <template x-if="!productsLoading && productsError">
+                <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                    <span x-text="'Błąd: ' + productsError"></span>
+                    <button class="btn btn-xs btn-outline ml-auto" @click="loadProducts()">Ponów</button>
+                </div>
+            </template>
+            <template x-if="!productsLoading && !productsError && !productsLoaded">
+                <div class="space-y-2 opacity-40">
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                    <p class="text-xs mt-2">Sekcja załaduje się po przewinięciu.</p>
+                </div>
+            </template>
+            <template x-if="!productsLoading && !productsError && productsLoaded">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead><tr><th>Nazwa</th><th>Przychód</th><th>Rekomendacja</th></tr></thead>
+                        <tbody>
+                            <template x-for="row in productsData.rows.slice(0,6)" :key="row.ean + row.name">
+                                <tr>
+                                    <td x-text="row.name"></td>
+                                    <td x-text="row.revenue_gross.toFixed(2) + ' zł'"></td>
+                                    <td><span class="badge badge-warning" x-text="row.repricing_recommendation"></span></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+        </div>
+
+        <div class="chart-wrap lazy-section reveal" x-ref="competitionSection">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-semibold">Konkurencja</h3>
+                <div class="flex gap-2">
+                    <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/competition?format=csv')">CSV</button>
+                    <button class="btn btn-xs btn-outline" @click="exportFile('/api/stats/competition?format=xlsx')">XLSX</button>
+                </div>
+            </div>
+            <template x-if="competitionLoading">
+                <div class="space-y-2">
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-full"></div>
+                </div>
+            </template>
+            <template x-if="!competitionLoading && competitionError">
+                <div class="alert alert-error text-sm flex items-center gap-2 py-2">
+                    <span x-text="'Błąd: ' + competitionError"></span>
+                    <button class="btn btn-xs btn-outline ml-auto" @click="loadCompetition()">Ponów</button>
+                </div>
+            </template>
+            <template x-if="!competitionLoading && !competitionError && !competitionLoaded">
+                <div class="space-y-2 opacity-40">
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                    <p class="text-xs mt-2">Sekcja załaduje się po przewinięciu.</p>
+                </div>
+            </template>
+            <template x-if="!competitionLoading && !competitionError && competitionLoaded">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead><tr><th>Oferta</th><th>Gap</th><th>Drill-down</th></tr></thead>
+                        <tbody>
+                            <template x-for="row in competitionData.rows.slice(0,6)" :key="row.offer_id">
+                                <tr>
+                                    <td x-text="row.offer_id"></td>
+                                    <td x-text="row.price_gap.toFixed(2)"></td>
+                                    <td>
+                                        <button class="btn btn-xs" @click="drillCompetition(row)">Szczegóły</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+        </div>
+    </section>
+
+    <section class="chart-wrap reveal">
+        <h3 class="text-lg font-semibold mb-2">Telemetria API</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+            <template x-for="item in telemetryRows" :key="item.name">
+                <div class="stats-kpi p-3">
+                    <div class="font-semibold" x-text="item.name"></div>
+                    <div>Śr. odpowiedź: <b x-text="item.avg_response_ms + ' ms'"></b></div>
+                    <div>Cache hit: <b x-text="item.cache_hit_ratio + '%'"></b></div>
+                </div>
+            </template>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+function statsDashboard() {
+    return {
+        loading: false,
+        filters: {
+            date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10),
+            date_to: new Date().toISOString().slice(0,10),
+            granularity: 'day',
+            platform: 'all',
+            payment_type: 'all'
+        },
+        cards: [
+            { key: 'revenue', label: 'Przychód', value: '-', sub: '' },
+            { key: 'orders', label: 'Zamówienia', value: '-', sub: '' },
+            { key: 'net', label: 'Zysk netto', value: '-', sub: '' },
+            { key: 'margin', label: 'Marża', value: '-', sub: '' }
+        ],
+        salesMeta: '-',
+        drillDownText: 'Kliknij punkt wykresu, aby zobaczyć drill-down.',
+        returnsLoaded: false,
+        returnsLoading: false,
+        returnsError: null,
+        logisticsLoaded: false,
+        logisticsLoading: false,
+        logisticsError: null,
+        productsLoaded: false,
+        productsLoading: false,
+        productsError: null,
+        competitionLoaded: false,
+        competitionLoading: false,
+        competitionError: null,
+        returnsData: { summary: {}, alerts: [] },
+        logisticsData: { summary: {}, alerts: [] },
+        productsData: { rows: [] },
+        competitionData: { rows: [] },
+        telemetryRows: [],
+        salesChart: null,
+        splitChart: null,
+        waterfallChart: null,
+
+        buildQuery() {
+            const p = new URLSearchParams({
+                date_from: this.filters.date_from,
+                date_to: this.filters.date_to,
+                granularity: this.filters.granularity,
+            });
+            if (this.filters.platform !== 'all') p.set('platform', this.filters.platform);
+            if (this.filters.payment_type !== 'all') p.set('payment_type', this.filters.payment_type);
+            return p.toString();
+        },
+
+        async init() {
+            await this.refreshAll();
+            this.setupLazyLoading();
+        },
+
+        async refreshAll() {
+            this.loading = true;
+            const reload = {
+                returns: this.returnsLoaded || !!this.returnsError,
+                logistics: this.logisticsLoaded || !!this.logisticsError,
+                products: this.productsLoaded || !!this.productsError,
+                competition: this.competitionLoaded || !!this.competitionError,
+            };
+            this.returnsLoaded = false; this.returnsError = null;
+            this.logisticsLoaded = false; this.logisticsError = null;
+            this.productsLoaded = false; this.productsError = null;
+            this.competitionLoaded = false; this.competitionError = null;
+            try {
+                const q = this.buildQuery();
+                const [overview, sales, profit] = await Promise.all([
+                    fetch('/api/stats/overview?' + q).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+                    fetch('/api/stats/sales?' + q).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+                    fetch('/api/stats/profit?' + q).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+                ]);
+                this.updateCards(overview, sales, profit);
+                this.renderSalesChart(sales);
+                this.renderSplitChart(sales);
+                this.renderWaterfallChart(profit);
+                await Promise.all([
+                    this.loadTelemetry(),
+                    reload.returns ? this.loadReturns() : Promise.resolve(),
+                    reload.logistics ? this.loadLogistics() : Promise.resolve(),
+                    reload.products ? this.loadProducts() : Promise.resolve(),
+                    reload.competition ? this.loadCompetition() : Promise.resolve(),
+                ]);
+            } catch(e) {
+                this.salesMeta = 'Błąd API: ' + (e.message || 'nieznany');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        updateCards(overview, sales, profit) {
+            this.cards = [
+                {
+                    key: 'revenue',
+                    label: 'Przychód',
+                    value: (sales.data.summary.revenue || 0).toFixed(2) + ' zł',
+                    sub: 'MoM: ' + (sales.data.summary.mom === null ? '-' : sales.data.summary.mom.toFixed(2) + '%')
+                },
+                {
+                    key: 'orders',
+                    label: 'Zamówienia',
+                    value: String(overview.data.kpi.orders_count.value || 0),
+                    sub: 'AOV: ' + (overview.data.kpi.aov.value || 0).toFixed(2) + ' zł'
+                {
+                    key: 'orders',
+                    label: 'Zamówienia',
+                    value: String(overview.data.kpi.orders_count.value || 0),
+                    sub: 'MoM: ' + (overview.data.kpi.orders_count.mom === null ? '-' : overview.data.kpi.orders_count.mom.toFixed(2) + '%') + ' | AOV: ' + (overview.data.kpi.aov.value || 0).toFixed(2) + ' zł'
+                },
+                },
+                {
+                    key: 'margin',
+                    label: 'Marża',
+                    value: (profit.data.summary.margin_pct || 0).toFixed(2) + '%',
+                    sub: 'Zwroty: ' + (overview.data.kpi.returns_rate.value || 0).toFixed(2) + '%'
+                }
+            ];
+            const t = sales.meta && sales.meta.telemetry ? sales.meta.telemetry : null;
+            this.salesMeta = t ? ('API: ' + t.response_ms + ' ms | cache ' + t.cache_hit_ratio + '%') : 'API: -';
+        },
+
+        renderSalesChart(sales) {
+            const labels = sales.data.series.map(x => x.bucket);
+            const revenue = sales.data.series.map(x => x.revenue);
+            const orders = sales.data.series.map(x => x.orders);
+            const ctx = document.getElementById('salesChart');
+            if (this.salesChart) this.salesChart.destroy();
+            this.salesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Przychód',
+                            data: revenue,
+                            backgroundColor: 'rgba(249, 199, 79, 0.75)',
+                            borderColor: 'rgba(249, 199, 79, 1)',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Zamówienia',
+                            data: orders,
+                            type: 'line',
+                            borderColor: 'rgba(255, 122, 24, 1)',
+                            backgroundColor: 'rgba(255, 122, 24, 0.25)',
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (_evt, elements) => {
+                        if (!elements.length) return;
+                        const idx = elements[0].index;
+                        const bucket = sales.data.series[idx];
+                        this.drillDownText = 'Drill-down: ' + bucket.bucket + ' | przychód: ' + bucket.revenue.toFixed(2) + ' zł | zamówienia: ' + bucket.orders + ' | sztuki: ' + bucket.items;
+                    },
+                    scales: {
+                        y: { beginAtZero: true },
+                        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        },
+
+        renderSplitChart(sales) {
+            const ctx = document.getElementById('splitChart');
+            if (this.splitChart) this.splitChart.destroy();
+            this.splitChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['COD', 'Online'],
+                    datasets: [{
+                        data: [sales.data.split.payment.cod, sales.data.split.payment.online],
+                        backgroundColor: ['rgba(255,122,24,0.85)', 'rgba(249,199,79,0.85)']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        },
+
+        renderWaterfallChart(profit) {
+            const ctx = document.getElementById('waterfallChart');
+            if (!ctx) return;
+            if (this.waterfallChart) this.waterfallChart.destroy();
+            const items = (profit.data || {}).waterfall || [];
+            if (!items.length) return;
+            let running = 0;
+            const floatingBars = items.map((item, i) => {
+                if (i === items.length - 1) return [0, item.value];
+                const bottom = running;
+                const top = running + item.value;
+                running += item.value;
+                return item.value >= 0 ? [bottom, top] : [top, bottom];
+            });
+            const colors = items.map((item, i) => {
+                if (i === items.length - 1) return 'rgba(249, 199, 79, 0.9)';
+                return item.value >= 0 ? 'rgba(72, 199, 142, 0.85)' : 'rgba(248, 114, 114, 0.85)';
+            });
+            this.waterfallChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: items.map(x => x.name),
+                    datasets: [{
+                        data: floatingBars,
+                        backgroundColor: colors,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const [lo, hi] = ctx.raw;
+                                    const val = hi - lo;
+                                    return (val >= 0 ? '+' : '') + val.toFixed(2) + ' zł';
+                                }
+                            }
+                        }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        },
+
+        setupLazyLoading() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) return;
+                    if (entry.target === this.$refs.returnsSection && !this.returnsLoaded && !this.returnsLoading) this.loadReturns();
+                    if (entry.target === this.$refs.logisticsSection && !this.logisticsLoaded && !this.logisticsLoading) this.loadLogistics();
+                    if (entry.target === this.$refs.productsSection && !this.productsLoaded && !this.productsLoading) this.loadProducts();
+                    if (entry.target === this.$refs.competitionSection && !this.competitionLoaded && !this.competitionLoading) this.loadCompetition();
+                });
+            }, { threshold: 0.2 });
+
+            observer.observe(this.$refs.returnsSection);
+            observer.observe(this.$refs.logisticsSection);
+            observer.observe(this.$refs.productsSection);
+            observer.observe(this.$refs.competitionSection);
+        },
+
+        async loadReturns() {
+            this.returnsLoading = true;
+            this.returnsError = null;
+            try {
+                const q = this.buildQuery();
+                const r = await fetch('/api/stats/returns?' + q);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const payload = await r.json();
+                this.returnsData = payload.data;
+                this.returnsLoaded = true;
+            } catch(e) {
+                this.returnsError = e.message || 'nieznany błąd';
+            } finally {
+                this.returnsLoading = false;
+            }
+        },
+
+        async loadLogistics() {
+            this.logisticsLoading = true;
+            this.logisticsError = null;
+            try {
+                const q = this.buildQuery();
+                const r = await fetch('/api/stats/logistics?' + q);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const payload = await r.json();
+                this.logisticsData = payload.data;
+                this.logisticsLoaded = true;
+            } catch(e) {
+                this.logisticsError = e.message || 'nieznany błąd';
+            } finally {
+                this.logisticsLoading = false;
+            }
+        },
+
+        async loadProducts() {
+            this.productsLoading = true;
+            this.productsError = null;
+            try {
+                const q = this.buildQuery();
+                const r = await fetch('/api/stats/products?' + q);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const payload = await r.json();
+                this.productsData = payload.data;
+                this.productsLoaded = true;
+            } catch(e) {
+                this.productsError = e.message || 'nieznany błąd';
+            } finally {
+                this.productsLoading = false;
+            }
+        },
+
+        async loadCompetition() {
+            this.competitionLoading = true;
+            this.competitionError = null;
+            try {
+                const q = this.buildQuery();
+                const r = await fetch('/api/stats/competition?' + q);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const payload = await r.json();
+                this.competitionData = payload.data;
+                this.competitionLoaded = true;
+            } catch(e) {
+                this.competitionError = e.message || 'nieznany błąd';
+            } finally {
+                this.competitionLoading = false;
+            }
+        },
+
+        async loadTelemetry() {
+            try {
+                const payload = await fetch('/api/stats/telemetry').then(r => r.json());
+                const rows = [];
+                Object.keys(payload.data || {}).forEach((name) => {
+                    rows.push({ name, ...payload.data[name] });
+                });
+                rows.sort((a, b) => b.requests - a.requests);
+                this.telemetryRows = rows.slice(0, 8);
+            } catch(e) {
+                // telemetria niekrytyczna - ignorujemy blad
+            }
+        },
+
+        drillCompetition(row) {
+            this.drillDownText = 'Drill-down oferty ' + row.offer_id + ': nasza cena ' + row.our_price.toFixed(2) + ' zł, konkurencja ' + row.competitor_price.toFixed(2) + ' zł, rekomendacja ' + row.repricing_recommendation + '.';
+        },
+
+        exportFile(url) {
+            window.open(url + '&' + this.buildQuery(), '_blank');
+        }
+    };
+}
+</script>
+{% endblock %}
