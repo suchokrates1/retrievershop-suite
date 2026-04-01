@@ -606,6 +606,35 @@ def test_stats_logistics_breakdown_by_carrier_and_method(client, app, login):
     assert methods["Kurier DPD"]["carrier"] == "DPD"
 
 
+def test_stats_logistics_status_transitions(client, app, login):
+    """Logistics zwraca czasy przejsc miedzy statusami przesylki."""
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    _seed_order(app, "ord_s8_trans_1", payment_done=100.0)
+
+    now = datetime.now()
+    _seed_status_log(app, "ord_s8_trans_1", "wydrukowano", now)
+    _seed_status_log(app, "ord_s8_trans_1", "spakowano", now + timedelta(minutes=30))
+    _seed_status_log(app, "ord_s8_trans_1", "wyslano", now + timedelta(hours=2))
+    _seed_status_log(app, "ord_s8_trans_1", "w_transporcie", now + timedelta(hours=7))
+    _seed_status_log(app, "ord_s8_trans_1", "dostarczono", now + timedelta(hours=28))
+
+    date_from = now.strftime("%Y-%m-%d")
+    date_to = (now + timedelta(days=2)).strftime("%Y-%m-%d")
+    response = client.get(f"/api/stats/logistics?date_from={date_from}&date_to={date_to}")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+
+    assert "status_transitions" in data
+    transitions = {row["transition"]: row for row in data["status_transitions"]}
+    assert transitions["wydrukowano_to_spakowano"]["count"] == 1
+    assert transitions["wydrukowano_to_spakowano"]["avg_hours"] == 0.5
+    assert transitions["spakowano_to_wyslano"]["avg_hours"] == 1.5
+    assert transitions["wyslano_to_w_transporcie"]["avg_hours"] == 5.0
+    assert transitions["wyslano_to_dostarczono"]["avg_hours"] == 26.0
+
+
 def test_stats_profit_waterfall_structure(client, app, login, monkeypatch):
     """Profit zwraca waterfall z Przychodem i Zyskiem netto."""
     from magazyn import stats as stats_module
