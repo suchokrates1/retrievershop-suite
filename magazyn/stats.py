@@ -1901,6 +1901,183 @@ def stats_competition():
     return jsonify(payload)
 
 
+@bp.route("/offer-publication-history")
+@login_required
+def stats_offer_publication_history():
+    started_at = time.perf_counter()
+    filters, err = _parse_filters()
+    if err:
+        return err
+
+    cache_key = "offer-publication-history|" + _build_cache_key(filters)
+    cached_payload = _cache_get(cache_key)
+    if cached_payload is not None:
+        endpoint = _endpoint_name(cache_key)
+        response_ms = _record_telemetry(endpoint, "hit", started_at)
+        cached = dict(cached_payload)
+        cached["generated_at"] = datetime.now(timezone.utc).isoformat()
+        cached["meta"] = dict(cached.get("meta") or {})
+        cached["meta"]["cache"] = "hit"
+        cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+        return jsonify(cached)
+
+    start_str = filters.date_from.strftime("%Y-%m-%d")
+    end_str = filters.date_to.strftime("%Y-%m-%d")
+
+    with get_session() as db:
+        history_rows = (
+            db.query(
+                AllegroPriceHistory.offer_id,
+                AllegroPriceHistory.price,
+                AllegroPriceHistory.recorded_at,
+            )
+            .filter(
+                AllegroPriceHistory.recorded_at >= start_str,
+                AllegroPriceHistory.recorded_at < end_str,
+            )
+            .order_by(
+                AllegroPriceHistory.offer_id.asc(),
+                AllegroPriceHistory.recorded_at.asc(),
+            )
+            .all()
+        )
+
+        offers = (
+            db.query(
+                AllegroOffer.offer_id,
+                AllegroOffer.title,
+                AllegroOffer.publication_status,
+                AllegroOffer.price,
+            )
+            .all()
+        )
+
+    offers_map = {
+        row.offer_id: {
+            "title": row.title,
+            "publication_status": row.publication_status or "UNKNOWN",
+            "current_price": float(row.price or 0),
+        }
+        for row in offers
+        if row.offer_id
+    }
+
+    per_day: dict[str, dict[str, object]] = defaultdict(
+        lambda: {
+            "offers": set(),
+            "prices_sum": 0.0,
+            "rows": 0,
+            "price_change_events": 0,
+        }
+    )
+    per_offer: dict[str, dict[str, object]] = defaultdict(
+        lambda: {
+            "prices": [],
+            "changes": 0,
+            "last_price": None,
+            "observations": 0,
+        }
+    )
+
+    for row in history_rows:
+        offer_id = (row.offer_id or "").strip()
+        if not offer_id:
+            continue
+        day = str(row.recorded_at or "")[:10]
+        if len(day) != 10:
+            continue
+
+        price = float(row.price or 0)
+        day_row = per_day[day]
+        day_row["offers"].add(offer_id)
+        day_row["prices_sum"] = float(day_row["prices_sum"]) + price
+        day_row["rows"] = int(day_row["rows"]) + 1
+
+        offer_row = per_offer[offer_id]
+        offer_row["prices"].append({"day": day, "price": price})
+        offer_row["observations"] = int(offer_row["observations"]) + 1
+        if offer_row["last_price"] is not None and float(offer_row["last_price"]) != price:
+            offer_row["changes"] = int(offer_row["changes"]) + 1
+            day_row["price_change_events"] = int(day_row["price_change_events"]) + 1
+        offer_row["last_price"] = price
+
+    daily_series = []
+    for day in sorted(per_day.keys()):
+        day_row = per_day[day]
+        rows_total = int(day_row["rows"]) or 1
+        daily_series.append(
+            {
+                "date": day,
+                "offers_observed": len(day_row["offers"]),
+                "avg_price": round(float(day_row["prices_sum"]) / rows_total, 2),
+                "price_change_events": int(day_row["price_change_events"]),
+            }
+        )
+
+    changed_offers = []
+    for offer_id, row in per_offer.items():
+        prices = row["prices"]
+        if not prices:
+            continue
+        first_price = float(prices[0]["price"])
+        last_price = float(prices[-1]["price"])
+        delta = round(last_price - first_price, 2)
+        if delta == 0 and int(row["changes"]) == 0:
+            continue
+
+        info = offers_map.get(offer_id, {})
+        pct_change = round((delta / first_price) * 100, 2) if first_price else 0.0
+        changed_offers.append(
+            {
+                "offer_id": offer_id,
+                "title": info.get("title") or offer_id,
+                "publication_status": info.get("publication_status") or "UNKNOWN",
+                "first_price": round(first_price, 2),
+                "last_price": round(last_price, 2),
+                "delta": delta,
+                "pct_change": pct_change,
+                "change_events": int(row["changes"]),
+                "observations": int(row["observations"]),
+            }
+        )
+
+    changed_offers.sort(key=lambda item: abs(float(item["delta"])), reverse=True)
+
+    status_breakdown: dict[str, int] = defaultdict(int)
+    for info in offers_map.values():
+        status_breakdown[str(info.get("publication_status") or "UNKNOWN")] += 1
+
+    payload = {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "filters": _format_filters(filters),
+        "data": {
+            "summary": {
+                "offers_total": len(offers_map),
+                "offers_with_history": len(per_offer),
+                "offers_with_price_change": len(changed_offers),
+                "price_change_events_total": int(sum(item["change_events"] for item in changed_offers)),
+            },
+            "publication_status": dict(status_breakdown),
+            "daily_series": daily_series,
+            "top_changed_offers": changed_offers[:12],
+        },
+        "meta": {
+            "confidence": "medium",
+            "sources": ["db.allegro_offers", "db.allegro_price_history"],
+            "cache": "miss",
+            "telemetry": {},
+        },
+        "errors": [],
+    }
+
+    endpoint = _endpoint_name(cache_key)
+    response_ms = _record_telemetry(endpoint, "miss", started_at)
+    payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+    _cache_set(cache_key, payload)
+    return jsonify(payload)
+
+
 @bp.route("/telemetry")
 @login_required
 def stats_telemetry():

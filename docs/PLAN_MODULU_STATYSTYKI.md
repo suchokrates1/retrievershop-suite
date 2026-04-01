@@ -728,7 +728,7 @@ Status aktualizacji: 2026-04-01
 1. Granularny koszt reklam po kampanii/ofercie (jesli dostepny w API konta i billing).
     1. Cel: ROAS i koszt reklamy na produkt.
 2. Dzienna historia publikacji/zmian ofert (status, cena, zmiany parametrow).
-    1. Cel: korelacja zmian oferty z wynikiem sprzedazy.
+   1. [x] Cel: korelacja zmian oferty z wynikiem sprzedazy.
 3. Dane refundowe per etap i czas zwrotu pieniedzy.
    1. [x] Cel: KPI czasu rozliczenia zwrotu.
 4. Rozszerzony tracking delivery (gdy API zwraca wiecej statusow i timestampow).
