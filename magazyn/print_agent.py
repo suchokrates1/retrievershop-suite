@@ -1127,6 +1127,22 @@ class LabelAgent:
             self.logger.error(
                 "Blad tworzenia przesylki dla zamowienia %s: %s", order_id, exc,
             )
+            # Loguj body odpowiedzi z API przy HTTPError (zawiera szczegoly walidacji)
+            resp = getattr(exc, "response", None)
+            if resp is not None:
+                try:
+                    error_body = resp.json()
+                    errors = error_body.get("errors", [])
+                    for err in errors:
+                        self.logger.error(
+                            "  SM API error: path=%s code=%s message=%s userMessage=%s",
+                            err.get("path"), err.get("code"),
+                            err.get("message"), err.get("userMessage"),
+                        )
+                    if not errors:
+                        self.logger.error("  SM API response body: %s", resp.text[:500])
+                except Exception:
+                    self.logger.error("  SM API response body: %s", resp.text[:500])
             return []
 
     def _resolve_delivery_service_id(self, delivery_method: str) -> Optional[str]:
