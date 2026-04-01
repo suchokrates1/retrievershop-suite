@@ -69,16 +69,16 @@
         </div>
     </div>
     <div class="col-span-12 md:col-span-5">
-        <form method="get" action="{{ url_for('orders.orders_list') }}" class="flex items-center gap-1 justify-end" hx-boost="true">
+        <form method="get" action="{{ url_for('orders.orders_list') }}" class="flex flex-wrap items-center gap-1 justify-end" hx-boost="true">
             <input type="hidden" name="search" value="{{ search }}">
             <input type="hidden" name="per_page" value="{{ per_page }}">
             <input type="hidden" name="sort" value="{{ sort_by }}">
             <input type="hidden" name="dir" value="{{ sort_dir }}">
             <input type="hidden" name="status" value="{{ status_filter }}">
             <label class="whitespace-nowrap text-sm mb-0">Od:</label>
-            <input type="date" name="date_from" class="input input-bordered input-sm" style="width: 140px;" value="{{ date_from }}">
+            <input type="date" name="date_from" class="input input-bordered input-sm w-[130px]" value="{{ date_from }}">
             <label class="whitespace-nowrap text-sm mb-0">Do:</label>
-            <input type="date" name="date_to" class="input input-bordered input-sm" style="width: 140px;" value="{{ date_to }}">
+            <input type="date" name="date_to" class="input input-bordered input-sm w-[130px]" value="{{ date_to }}">
             <button type="submit" class="btn btn-sm btn-outline btn-primary"><i class="bi bi-funnel"></i></button>
             {% if date_from or date_to %}
             <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort=sort_by, dir=sort_dir, status=status_filter) }}" class="btn btn-sm btn-outline"><i class="bi bi-x-lg"></i></a>
