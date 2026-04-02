@@ -33,7 +33,6 @@
                    hx-trigger="input changed delay:400ms, search"
                    hx-include="closest form"
                    hx-replace-url="true">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
             {% if search %}
             <a href="{{ url_for('allegro.offers_and_prices', status=status_filter, per_page=per_page) }}" class="btn btn-outline"><i class="bi bi-x-lg"></i></a>
             {% endif %}
