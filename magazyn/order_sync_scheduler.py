@@ -122,31 +122,27 @@ def _sync_from_allegro_events(app):
 
                     order_id = f"allegro_{checkout_form_id}"
 
-                    # Przechowaj raw event w bazie dla analizy funnelu (idempotentne, unika duplikatow)
-                    try:
-                        event_record = OrderEvent(
-                            order_id=order_id,
-                            allegro_event_id=event_id,
-                            event_type=event_type,
-                            occurred_at=occurred_at,
-                            payload_json=str(event)  # Store raw event as string for later analysis
-                        )
-                        db.add(event_record)
-                        db.flush()  # Ensure unique constraint check happens
-                        stats["events_stored"] += 1
-                        logger.debug(f"Allegro Events: zapisano raw event {event_id}")
-                    except IntegrityError:
-                        # Zdarzenie juz istnieje - pomiń (idempotency)
-                        db.rollback()
-                        logger.debug(f"Allegro Events: event {event_id} juz istnieje, pominięto")
-                    except Exception as exc:
-                        logger.warning(f"Allegro Events: blad zapisu raw event {event_id}: {exc}")
-                        db.rollback()
-
                     # Deduplikacja - jedno zamowienie moze miec wiele zdarzen
                     event_key = (checkout_form_id, event_type)
                     if event_key in seen_checkout_forms:
                         stats["orders_skipped"] += 1
+                        # Zapisz raw event nawet dla deduplikowanych zdarzen (analiza funnelu)
+                        try:
+                            nested = db.begin_nested()
+                            event_record = OrderEvent(
+                                order_id=order_id,
+                                allegro_event_id=event_id,
+                                event_type=event_type,
+                                occurred_at=occurred_at,
+                                payload_json=str(event),
+                            )
+                            db.add(event_record)
+                            db.flush()
+                            stats["events_stored"] += 1
+                        except IntegrityError:
+                            nested.rollback()
+                        except Exception:
+                            nested.rollback()
                         continue
                     seen_checkout_forms.add(event_key)
 
@@ -173,6 +169,7 @@ def _sync_from_allegro_events(app):
                                 f"{checkout_form_id}: {exc}"
                             )
                             stats["errors"] += 1
+                            continue
 
                     elif event_type in ("BUYER_CANCELLED", "AUTO_CANCELLED"):
                         try:
@@ -193,9 +190,32 @@ def _sync_from_allegro_events(app):
                                 f"{checkout_form_id}: {exc}"
                             )
                             stats["errors"] += 1
+                            continue
 
                     else:
                         stats["orders_skipped"] += 1
+                        continue
+
+                    # Zapisz raw event PO syncu zamowienia (Order musi istniec dla FK)
+                    try:
+                        nested = db.begin_nested()
+                        event_record = OrderEvent(
+                            order_id=order_id,
+                            allegro_event_id=event_id,
+                            event_type=event_type,
+                            occurred_at=occurred_at,
+                            payload_json=str(event),
+                        )
+                        db.add(event_record)
+                        db.flush()
+                        stats["events_stored"] += 1
+                        logger.debug(f"Allegro Events: zapisano raw event {event_id}")
+                    except IntegrityError:
+                        nested.rollback()
+                        logger.debug(f"Allegro Events: event {event_id} juz istnieje, pominieto")
+                    except Exception as exc:
+                        nested.rollback()
+                        logger.warning(f"Allegro Events: blad zapisu raw event {event_id}: {exc}")
 
                 db.commit()
 
