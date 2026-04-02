@@ -13,7 +13,14 @@ ENV_PATH = ROOT_DIR / ".env"
 EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 # Settings that should not be editable from the administration panels.
-HIDDEN_KEYS = {"ENABLE_HTTP_SERVER", "HTTP_PORT", "DB_PATH"}
+HIDDEN_KEYS = {
+    "ENABLE_HTTP_SERVER", "HTTP_PORT", "DB_PATH",
+    # Klucze wewnetrzne zarzadzane automatycznie przez kod
+    "ALLEGRO_LAST_EVENT_ID",
+    "ALLEGRO_TOKEN_EXPIRES_AT",
+    "ALLEGRO_TOKEN_EXPIRES_IN",
+    "ALLEGRO_TOKEN_METADATA",
+}
 
 
 def _handle_error(
