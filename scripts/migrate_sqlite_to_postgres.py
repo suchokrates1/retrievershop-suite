@@ -141,7 +141,7 @@ def migrate(sqlite_path, database_url):
             print(f"  INFO: {table} nie istnieje w SQLite - pomijam")
 
     # Dodaj tabele z SQLite ktore nie sa w TABLE_ORDER
-    extra_tables = sqlite_tables - set(TABLE_ORDER) - {"alembic_version", "scraper_tasks"}
+    extra_tables = sqlite_tables - set(TABLE_ORDER) - {"alembic_version"}
     for table in sorted(extra_tables):
         if table in pg_tables:
             tables_to_migrate.append(table)
