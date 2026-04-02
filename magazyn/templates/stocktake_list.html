@@ -13,6 +13,7 @@
     </div>
 
     {% if stocktakes %}
+    <div class="overflow-x-auto">
     <table class="table table-zebra table-sm">
         <thead>
             <tr>
@@ -60,6 +61,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% else %}
     <div class="alert text-center">
         Brak remanentów. Kliknij "Nowy remanent" aby rozpocząć inwentaryzację.

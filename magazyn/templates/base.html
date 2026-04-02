@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl" data-theme="dark" style="font-size: 120%;">
+<html lang="pl" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,7 +24,7 @@
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
           integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
           crossorigin="anonymous">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260402">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
             integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
@@ -63,7 +63,7 @@
                             </button>
                         </div>
                         <a href="{{ url_for('logout') }}" class="btn btn-error hidden md:inline-flex ml-3">Wyloguj się</a>
-                        <button @click="menuOpen = !menuOpen" class="btn btn-ghost md:hidden ml-2" type="button">
+                        <button @click="menuOpen = !menuOpen" class="btn btn-ghost md:hidden ml-2" type="button" style="touch-action: manipulation; min-width: 44px; min-height: 44px;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                         </button>
                     </div>
@@ -97,6 +97,7 @@
                         <ul x-show="open" x-transition class="menu bg-base-200 rounded-box absolute top-full left-0 z-50 w-52 p-2 shadow-lg">
                             <li><a href="{{ url_for('settings_page') }}">Ustawienia</a></li>
                             <li><a href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
+                            <li><a href="{{ url_for('stats_billing_types') }}">Mapowanie rozliczeń</a></li>
                             <li><a href="{{ url_for('agent_logs') }}">Logi</a></li>
                             <li><a href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
                             <li><a href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
@@ -111,7 +112,7 @@
 
     {% if show_menu %}
     <div class="mobile-menu-backdrop md:hidden" :class="{ open: menuOpen }" @click="menuOpen = false"></div>
-    <div class="mobile-menu md:hidden" :class="{ open: menuOpen }" @click.outside="menuOpen = false">
+    <div class="mobile-menu md:hidden" :class="{ open: menuOpen }">
         <button @click="menuOpen = false" class="btn btn-ghost btn-sm absolute top-2 right-2 text-white" type="button" aria-label="Zamknij">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-10 mx-auto mb-3">
         <ul class="menu flex flex-col h-full p-0">
@@ -130,6 +131,7 @@
                 </a>
             </li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('stats_billing_types') }}">Mapowanie rozliczeń</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('agent_logs') }}">Logi</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
             <li class="mt-auto text-center">

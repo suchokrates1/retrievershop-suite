@@ -19,7 +19,6 @@ def test_create_app_initializes_agent_and_migrations(tmp_path, monkeypatch):
         ("PAGE_ACCESS_TOKEN", "test-token"),
         ("ALLEGRO_ACCESS_TOKEN", ""),
         ("ALLEGRO_REFRESH_TOKEN", ""),
-        ("ALLEGRO_SELLER_NAME", "Retriever Shop"),
         ("RECIPIENT_ID", "test-id"),
         ("PRINTER_NAME", "test-printer"),
         ("CUPS_SERVER", ""),
