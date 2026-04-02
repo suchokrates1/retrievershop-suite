@@ -138,26 +138,26 @@
                 <h3 class="text-lg font-semibold">Trend sprzedaży</h3>
                 <span class="badge badge-outline" x-text="salesMeta"></span>
             </div>
-            <div class="chart-canvas-shell" :class="{'hidden': !salesChartHasData}">
+            <div class="chart-canvas-shell relative">
                 <canvas id="salesChart" height="120"></canvas>
-            </div>
-            <div x-show="!salesChartHasData && !loading" class="flex items-center justify-center h-40 text-base-content/40">
-                <div class="text-center">
-                    <i class="bi bi-graph-up text-4xl block mb-2"></i>
-                    <span>Brak danych do wyświetlenia wykresu</span>
+                <div x-show="!salesChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/40">
+                    <div class="text-center">
+                        <i class="bi bi-graph-up text-4xl block mb-2"></i>
+                        <span>Brak danych do wyswietlenia wykresu</span>
+                    </div>
                 </div>
             </div>
             <div class="mt-3 text-sm opacity-80" x-text="drillDownText"></div>
         </div>
         <div class="chart-wrap reveal">
             <h3 class="text-lg font-semibold mb-3">Struktura płatności</h3>
-            <div class="chart-canvas-shell chart-canvas-shell-sm" :class="{'hidden': !splitChartHasData}">
+            <div class="chart-canvas-shell chart-canvas-shell-sm relative">
                 <canvas id="splitChart" height="120"></canvas>
-            </div>
-            <div x-show="!splitChartHasData && !loading" class="flex items-center justify-center h-40 text-base-content/40">
-                <div class="text-center">
-                    <i class="bi bi-pie-chart text-4xl block mb-2"></i>
-                    <span>Brak danych</span>
+                <div x-show="!splitChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/40">
+                    <div class="text-center">
+                        <i class="bi bi-pie-chart text-4xl block mb-2"></i>
+                        <span>Brak danych</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -165,13 +165,13 @@
 
     <section class="chart-wrap mb-6 reveal">
         <h3 class="text-lg font-semibold mb-3">Waterfall finansowy</h3>
-        <div class="chart-canvas-shell chart-canvas-shell-sm" :class="{'hidden': !waterfallChartHasData}">
+        <div class="chart-canvas-shell chart-canvas-shell-sm relative">
             <canvas id="waterfallChart" height="100"></canvas>
-        </div>
-        <div x-show="!waterfallChartHasData && !loading" class="flex items-center justify-center h-40 text-base-content/40">
-            <div class="text-center">
-                <i class="bi bi-bar-chart text-4xl block mb-2"></i>
-                <span>Brak danych</span>
+            <div x-show="!waterfallChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/40">
+                <div class="text-center">
+                    <i class="bi bi-bar-chart text-4xl block mb-2"></i>
+                    <span>Brak danych</span>
+                </div>
             </div>
         </div>
     </section>
@@ -1227,7 +1227,6 @@ function statsDashboard() {
             const orders = sales.data.series.map(x => x.orders);
             if (!labels.length) { this.salesChartHasData = false; return; }
             this.salesChartHasData = true;
-            this.$nextTick(() => {
             const ctx = document.getElementById('salesChart');
             if (this.salesChart) this.salesChart.destroy();
             this.salesChart = new Chart(ctx, {
@@ -1268,7 +1267,6 @@ function statsDashboard() {
                     }
                 }
             });
-            });
         },
 
         renderSplitChart(sales) {
@@ -1276,7 +1274,6 @@ function statsDashboard() {
             const online = sales.data.split.payment.online || 0;
             if (!cod && !online) { this.splitChartHasData = false; return; }
             this.splitChartHasData = true;
-            this.$nextTick(() => {
             const ctx = document.getElementById('splitChart');
             if (this.splitChart) this.splitChart.destroy();
             this.splitChart = new Chart(ctx, {
@@ -1290,14 +1287,12 @@ function statsDashboard() {
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
-            });
         },
 
         renderWaterfallChart(profit) {
             const items = ((profit.data || {}).waterfall || []);
             if (!items.length) { this.waterfallChartHasData = false; return; }
             this.waterfallChartHasData = true;
-            this.$nextTick(() => {
             const ctx = document.getElementById('waterfallChart');
             if (!ctx) return;
             if (this.waterfallChart) this.waterfallChart.destroy();
@@ -1340,7 +1335,6 @@ function statsDashboard() {
                     },
                     scales: { y: { beginAtZero: true } }
                 }
-            });
             });
         },
 

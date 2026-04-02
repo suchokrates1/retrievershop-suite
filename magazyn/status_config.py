@@ -133,23 +133,23 @@ SHIPMENT_TRACKING_MAP = {
 # ── Admin UI: badge text + CSS class ───────────────────────────────
 
 STATUS_DISPLAY = {
-    "pobrano": ("Pobrano", "bg-light text-dark"),
-    "nieoplacone": ("Nieopłacone", "bg-warning text-dark"),
-    "wydrukowano": ("Wydrukowano", "bg-info"),
-    "blad_druku": ("Błąd druku", "bg-danger"),
-    "spakowano": ("Spakowano", "bg-info"),
-    "wyslano": ("Wysłano", "bg-primary"),
-    "w_transporcie": ("W transporcie", "bg-warning text-dark"),
-    "w_punkcie": ("W punkcie odbioru", "bg-success"),
-    "dostarczono": ("Dostarczono", "bg-success"),
-    "problem_z_dostawa": ("Problem z dostawą", "bg-danger"),
-    "zwrot": ("Zwrot", "bg-danger"),
-    "anulowano": ("Anulowano", "bg-dark"),
+    "pobrano": ("Pobrano", "badge-ghost"),
+    "nieoplacone": ("Nieopłacone", "badge-warning"),
+    "wydrukowano": ("Wydrukowano", "badge-info"),
+    "blad_druku": ("Błąd druku", "badge-error"),
+    "spakowano": ("Spakowano", "badge-info"),
+    "wyslano": ("Wysłano", "badge-primary"),
+    "w_transporcie": ("W transporcie", "badge-warning"),
+    "w_punkcie": ("W punkcie odbioru", "badge-success"),
+    "dostarczono": ("Dostarczono", "badge-success"),
+    "problem_z_dostawa": ("Problem z dostawą", "badge-error"),
+    "zwrot": ("Zwrot", "badge-error"),
+    "anulowano": ("Anulowano", "badge-neutral"),
 }
 
 def get_status_display(status: str) -> tuple:
     """Zwraca (text, css_class) dla statusu."""
-    return STATUS_DISPLAY.get(status) or (status, "bg-secondary")
+    return STATUS_DISPLAY.get(status) or (status, "badge-neutral")
 
 
 # ── Status → typ emaila ────────────────────────────────────────────
