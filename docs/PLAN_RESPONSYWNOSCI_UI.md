@@ -220,7 +220,12 @@ wlasciwosci responsywnosci (`overflow-x-auto`, responsive grid, flex-wrap).
 |---|---|
 | 0fb9204b | FIX-1 do FIX-6: globalna regula CSS, flex-wrap formularze, min-w tabeli, status buttons |
 | 3d6c09e3 | FIX-7: add_order.html flex-wrap, FIX-8: scan_logs.html filtry mobilne |
+| 1fcc9431 | FIX-2/FIX-4: orders_list flex-wrap search + responsywne date inputs |
 
 ### Pozostale do rozpatrzenia (niska priorytetowosc)
 - RC4: Hardcoded padding-top 210px/72px - funkcjonalnie dziala, ale kruche
 - RC5: Brak ujednoliconego wzorca container - kosmetyczne
+
+### Status koncowy (2026-04-02)
+Wszystkie punkty FIX-1 do FIX-8 zrealizowane. Etapy A, B, C zakonczone.
+Pozostaly RC4 i RC5 (niska priorytetowosc, kosmetyczne).
