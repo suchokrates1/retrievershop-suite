@@ -137,10 +137,8 @@ def calculate_cod_amount(order_data: dict) -> Decimal:
 
 @dataclass
 class AgentConfig:
-    api_token: str
     page_access_token: str
     recipient_id: str
-    status_id: str
     printer_name: str
     cups_server: Optional[str]
     cups_port: Optional[int]
@@ -174,10 +172,8 @@ class AgentConfig:
             os.path.join(os.path.dirname(log_file), "agent.lock"),
         )
         return cls(
-            api_token=cfg.API_TOKEN,
             page_access_token=cfg.PAGE_ACCESS_TOKEN,
             recipient_id=cfg.RECIPIENT_ID,
-            status_id=cfg.STATUS_ID,
             printer_name=cfg.PRINTER_NAME,
             cups_server=cfg.CUPS_SERVER,
             cups_port=int(cfg.CUPS_PORT) if cfg.CUPS_PORT else None,
@@ -400,7 +396,6 @@ class LabelAgent:
 
     def validate_env(self) -> None:
         required = {
-            "API_TOKEN": self.config.api_token,
             "PAGE_ACCESS_TOKEN": self.config.page_access_token,
             "RECIPIENT_ID": self.config.recipient_id,
         }

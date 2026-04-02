@@ -20,7 +20,6 @@ from flask import (
 )
 from datetime import datetime
 import os
-import hmac
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 from typing import Optional
@@ -48,7 +47,6 @@ BOOLEAN_KEYS = {
 
 # Grupowanie ustawien w sekcje (klucz -> (nazwa_grupy, ikona))
 SETTINGS_GROUPS = {
-    "API_TOKEN": ("API i Integracje", "bi-plug"),
     "COMMISSION_ALLEGRO": ("Allegro", "bi-shop"),
     "PRICE_MAX_DISCOUNT_PERCENT": ("Allegro", "bi-shop"),
     "PRINTER_NAME": ("Drukarka", "bi-printer"),
@@ -57,7 +55,6 @@ SETTINGS_GROUPS = {
     "POLL_INTERVAL": ("Agent drukujacy", "bi-robot"),
     "QUIET_HOURS_START": ("Agent drukujacy", "bi-robot"),
     "QUIET_HOURS_END": ("Agent drukujacy", "bi-robot"),
-    "STATUS_ID": ("Agent drukujacy", "bi-robot"),
     "PRINTED_EXPIRY_DAYS": ("Agent drukujacy", "bi-robot"),
     "PAGE_ACCESS_TOKEN": ("Powiadomienia", "bi-bell"),
     "RECIPIENT_ID": ("Powiadomienia", "bi-bell"),
@@ -161,13 +158,6 @@ def _make_error_notifier():
     return None
 
 
-def _api_token_ok(value: Optional[str]) -> bool:
-    expected = settings.API_TOKEN
-    if not expected:
-        return False
-    return hmac.compare_digest(str(value or ""), str(expected))
-
-
 # =============================================================================
 # Context Processors
 # =============================================================================
@@ -242,56 +232,6 @@ def ensure_db_initialized(app_obj=None):
         logger.exception("Database initialization failed: %s", e)
         if has_request_context():
             flash(f"Błąd inicjalizacji bazy danych: {e}", "error")
-
-
-# =============================================================================
-# API Routes
-# =============================================================================
-
-@bp.route("/api/eans", methods=["GET"])
-def api_eans():
-    """Public API endpoint for EAN codes."""
-    provided = request.headers.get("X-Auth-Token") or request.args.get("token")
-    if not _api_token_ok(provided):
-        return make_response(jsonify({"error": "unauthorized"}), 401)
-
-    with get_session() as db:
-        rows = (
-            db.query(
-                ProductSize.barcode,
-                Product.name,
-                Product.color,
-                ProductSize.size,
-                ProductSize.quantity,
-            )
-            .join(Product, ProductSize.product_id == Product.id)
-            .filter(ProductSize.barcode.isnot(None))
-            .filter(ProductSize.barcode != "")
-            .all()
-        )
-
-    items = [
-        {
-            "ean": barcode,
-            "barcode": barcode,
-            "name": name,
-            "color": color,
-            "size": size,
-            "quantity": quantity,
-        }
-        for barcode, name, color, size, quantity in rows
-    ]
-
-    payload = {
-        "count": len(items),
-        "eans": [item["ean"] for item in items],
-        "items": items,
-    }
-
-    resp = make_response(jsonify(payload), 200)
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
 
 
 # =============================================================================
