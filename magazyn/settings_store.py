@@ -316,7 +316,7 @@ class SettingsStore:
                     processed_values[key] = value
             elif key.startswith('ENABLE_') or key.endswith('_ENABLED'):
                 processed_values[key] = (value or "0") == "1"
-            elif 'INTERVAL' in key or 'EXPIRY' in key or 'THRESHOLD' in key or 'PORT' in key or ('ID' in key and key not in ['RECIPIENT_ID', 'ALLEGRO_SELLER_ID']):
+            elif 'INTERVAL' in key or 'EXPIRY' in key or 'THRESHOLD' in key or 'PORT' in key or ('ID' in key and key != 'RECIPIENT_ID'):
                 try:
                     processed_values[key] = int(value)
                 except (ValueError, TypeError):

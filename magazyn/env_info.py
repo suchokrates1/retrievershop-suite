@@ -33,10 +33,6 @@ ENV_INFO = {
     "LOG_LEVEL": ("Poziom logów", "Poziom logowania agenta drukującego"),
     "LOG_FILE": ("Plik logu", "Ścieżka do pliku logu agenta"),
     "SECRET_KEY": ("Tajny klucz", "Tajny klucz sesji Flask"),
-    "FLASK_DEBUG": (
-        "Debug Flask",
-        "Ustaw 1 aby włączyć tryb debugowania Flask",
-    ),
     "COMMISSION_ALLEGRO": (
         "Prowizja Allegro (%)",
         "Procent prowizji pobieranej przez Allegro",
@@ -104,5 +100,29 @@ ENV_INFO = {
     "PRICE_MAX_DISCOUNT_PERCENT": (
         "Max znizka dla sugestii cen (%)",
         "Maksymalny procent obnizki przy ktorym pokazywane sa sugestie cen w raportach (domyslnie 5%)",
+    ),
+    "WFIRMA_ACCESS_KEY": (
+        "Klucz dostepu wFirma",
+        "Klucz API do integracji z wFirma (fakturowanie)",
+    ),
+    "WFIRMA_SECRET_KEY": (
+        "Klucz tajny wFirma",
+        "Sekretny klucz API wFirma",
+    ),
+    "WFIRMA_APP_KEY": (
+        "Klucz aplikacji wFirma",
+        "Identyfikator aplikacji w wFirma API",
+    ),
+    "WFIRMA_COMPANY_ID": (
+        "ID firmy wFirma",
+        "Identyfikator firmy w systemie wFirma",
+    ),
+    "ALLEGRO_AUTORESPONDER_ENABLED": (
+        "Autoresponder Allegro",
+        "Wlacz automatyczne odpowiedzi na wiadomosci Allegro (1 = wlaczony)",
+    ),
+    "ALLEGRO_AUTORESPONDER_MESSAGE": (
+        "Tresc autorespondera",
+        "Tresc automatycznej odpowiedzi wysylanej do kupujacych",
     ),
 }

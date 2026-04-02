@@ -81,18 +81,20 @@ This repository contains the code for the RetrieverShop warehouse application wi
 | `API_RETRY_BACKOFF_MAX` | Maximum delay in seconds between API retries |
 | `DB_PATH` | Path to the SQLite database file |
 | `SECRET_KEY` | Secret key for Flask sessions |
-| `FLASK_DEBUG` | Set to `1` to enable Flask debug mode |
-| `FLASK_ENV` | Flask configuration environment |
 | `COMMISSION_ALLEGRO` | Commission percentage charged by Allegro |
 | `ALLEGRO_CLIENT_ID` | Client identifier for Allegro OAuth |
 | `ALLEGRO_CLIENT_SECRET` | Secret key for Allegro OAuth |
 | `ALLEGRO_REDIRECT_URI` | Redirect URI registered for the Allegro application |
 | `ALLEGRO_ACCESS_TOKEN` | OAuth access token used for Allegro API requests |
 | `ALLEGRO_REFRESH_TOKEN` | Token used to refresh the Allegro access token |
-| `ALLEGRO_SELLER_ID` | Your Allegro seller ID to exclude own offers |
-| `ALLEGRO_EXCLUDED_SELLERS` | Comma-separated seller IDs to ignore |
 | `ENABLE_WEEKLY_REPORTS` | Set to `1` to send weekly sales reports |
 | `ENABLE_MONTHLY_REPORTS` | Set to `1` to send monthly sales reports |
+| `WFIRMA_ACCESS_KEY` | Klucz dostepu do API wFirma |
+| `WFIRMA_SECRET_KEY` | Klucz tajny API wFirma |
+| `WFIRMA_APP_KEY` | Klucz aplikacji wFirma |
+| `WFIRMA_COMPANY_ID` | ID firmy w wFirma |
+| `ALLEGRO_AUTORESPONDER_ENABLED` | Wlacz autoresponder Allegro (`1`/`0`) |
+| `ALLEGRO_AUTORESPONDER_MESSAGE` | Tresc wiadomosci autorespondera Allegro |
 
 `DB_PATH` is read only during application startup, so changing it requires
 restarting the server.

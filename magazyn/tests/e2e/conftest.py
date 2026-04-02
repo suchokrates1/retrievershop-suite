@@ -143,7 +143,6 @@ def _e2e_app(tmp_path_factory):
         ("API_RETRY_BACKOFF_MAX", "30.0"),
         ("SECRET_KEY", "e2e-secret-key"),
         ("COMMISSION_ALLEGRO", "10.0"),
-        ("FLASK_DEBUG", "0"),
         ("ALERT_EMAIL", "test@example.com"),
         ("LOW_STOCK_THRESHOLD", "5"),
         ("SMTP_SERVER", ""),
