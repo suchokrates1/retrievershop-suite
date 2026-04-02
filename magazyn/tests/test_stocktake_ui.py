@@ -64,7 +64,6 @@ def live_server(tmp_path_factory):
         ("PAGE_ACCESS_TOKEN", "test"),
         ("ALLEGRO_ACCESS_TOKEN", ""),
         ("ALLEGRO_REFRESH_TOKEN", ""),
-        ("ALLEGRO_SELLER_NAME", "Test"),
         ("RECIPIENT_ID", "test"),
         ("PRINTER_NAME", "test"),
         ("CUPS_SERVER", ""),

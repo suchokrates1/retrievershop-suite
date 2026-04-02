@@ -59,6 +59,29 @@
     height: 0.875rem;
     margin-bottom: 0.5rem;
 }
+.chart-canvas-shell {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    max-height: 320px;
+    overflow: hidden;
+}
+.chart-canvas-shell.chart-canvas-shell-sm {
+    height: 260px;
+    max-height: 260px;
+}
+.funnel-bar-track {
+    height: 0.625rem;
+    border-radius: 0.375rem;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+.funnel-bar-fill {
+    height: 100%;
+    border-radius: 0.375rem;
+    background-color: var(--stats-accent);
+    max-width: 100%;
+}
 </style>
 {% endblock %}
 
@@ -115,18 +138,24 @@
                 <h3 class="text-lg font-semibold">Trend sprzedaży</h3>
                 <span class="badge badge-outline" x-text="salesMeta"></span>
             </div>
-            <canvas id="salesChart" height="120"></canvas>
+            <div class="chart-canvas-shell">
+                <canvas id="salesChart" height="120"></canvas>
+            </div>
             <div class="mt-3 text-sm opacity-80" x-text="drillDownText"></div>
         </div>
         <div class="chart-wrap reveal">
             <h3 class="text-lg font-semibold mb-3">Struktura płatności</h3>
-            <canvas id="splitChart" height="120"></canvas>
+            <div class="chart-canvas-shell chart-canvas-shell-sm">
+                <canvas id="splitChart" height="120"></canvas>
+            </div>
         </div>
     </section>
 
     <section class="chart-wrap mb-6 reveal">
         <h3 class="text-lg font-semibold mb-3">Waterfall finansowy</h3>
-        <canvas id="waterfallChart" height="100"></canvas>
+        <div class="chart-canvas-shell chart-canvas-shell-sm">
+            <canvas id="waterfallChart" height="100"></canvas>
+        </div>
     </section>
 
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
@@ -330,13 +359,15 @@
                         <template x-for="stage in (orderFunnelData.funnel || [])" :key="stage.stage">
                             <div>
                                 <div class="flex justify-between text-sm mb-1">
-                                    <span x-text="funnelStageLabel(stage.stage)"></span>
+                                    <span class="min-w-0 pr-2" x-text="funnelStageLabel(stage.stage)"></span>
                                     <span class="opacity-70">
                                         <b x-text="stage.count"></b>
-                                        (<span x-text="stage.conversion_rate.toFixed(1) + '%'"></span>)
+                                        (<span x-text="funnelPercent(stage.conversion_rate).toFixed(1) + '%' "></span>)
                                     </span>
                                 </div>
-                                <div class="h-2 bg-opacity-20 rounded" :style="`width: ${stage.conversion_rate}%; background-color: var(--stats-accent)`"></div>
+                                <div class="funnel-bar-track">
+                                    <div class="funnel-bar-fill" :style="`width: ${funnelPercent(stage.conversion_rate)}%`"></div>
+                                </div>
                             </div>
                         </template>
                     </div>
@@ -921,52 +952,12 @@
         <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div>
                 <h3 class="text-lg font-semibold">Mapowanie typów rozliczeń</h3>
-                <p class="text-xs opacity-70">Ręczna korekta kategorii mapowania dla typów kosztów Allegro.</p>
+                <p class="text-xs opacity-70">Sekcja została wydzielona na osobną podstronę, aby nie rozciągać dashboardu.</p>
             </div>
-            <div class="flex gap-2">
-                <button class="btn btn-xs btn-outline" @click="syncBillingTypes()" :disabled="billingTypesLoading">Sync z Allegro</button>
-                <button class="btn btn-xs btn-outline" @click="loadBillingTypes()" :disabled="billingTypesLoading">Odśwież listę</button>
-            </div>
+            <a class="btn btn-sm btn-primary" href="{{ url_for('stats_billing_types') }}">Otwórz podstronę</a>
         </div>
-
-        <template x-if="billingTypesError">
-            <div class="alert alert-error text-sm mb-3" x-text="billingTypesError"></div>
-        </template>
-        <template x-if="billingTypesMessage">
-            <div class="alert alert-success text-sm mb-3" x-text="billingTypesMessage"></div>
-        </template>
-
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>ID typu</th>
-                        <th>Nazwa</th>
-                        <th>Kategoria</th>
-                        <th>Wersja</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="row in billingTypesRows" :key="row.type_id">
-                        <tr>
-                            <td x-text="row.type_id"></td>
-                            <td x-text="row.name"></td>
-                            <td>
-                                <select class="select select-bordered select-xs" :value="row.mapping_category || 'other'" @change="row.mapping_category = $event.target.value">
-                                    <template x-for="opt in billingTypeCategories" :key="opt">
-                                        <option :value="opt" x-text="opt"></option>
-                                    </template>
-                                </select>
-                            </td>
-                            <td x-text="row.mapping_version"></td>
-                            <td>
-                                <button class="btn btn-xs btn-warning" @click="saveBillingType(row)" :disabled="billingTypesLoading">Zapisz</button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
+        <div class="text-sm opacity-80">
+            Zarządzanie mapowaniem działa teraz w dedykowanym widoku z pełną tabelą i akcjami Sync/Zapisz.
         </div>
     </section>
 
@@ -1080,7 +1071,6 @@ function statsDashboard() {
 
         async init() {
             await this.refreshAll();
-            await this.loadBillingTypes();
             this.setupLazyLoading();
         },
 
@@ -1168,6 +1158,12 @@ function statsDashboard() {
                 return String(key || '').replace(/_/g, ' → ');
             }
             return `${this.funnelStageLabel(fromStage)} → ${this.funnelStageLabel(toStage)}`;
+        },
+
+        funnelPercent(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return 0;
+            return Math.max(0, Math.min(100, n));
         },
 
         updateCards(overview, sales, profit) {

@@ -69,7 +69,7 @@
         {% for size in ALL_SIZES %}
             <div class="col-span-12">
                 <label class="label-text">Rozmiar: {{ size }}</label>
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                         <input type="number" id="quantity_{{ size }}" name="quantity_{{ size }}" min="0" value="0" class="input input-bordered w-full" placeholder="Ilość">
                     </div>

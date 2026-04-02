@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6" x-data="billingTypesPage()" x-init="init()">
+    <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div>
+            <h1 class="text-2xl font-bold">Mapowanie typów rozliczeń</h1>
+            <p class="text-sm opacity-80">Edycja kategorii kosztów Allegro w osobnym widoku administracyjnym.</p>
+        </div>
+        <div class="flex gap-2">
+            <a class="btn btn-outline" href="{{ url_for('stats_dashboard') }}">Powrót do statystyk</a>
+            <button class="btn btn-outline" @click="syncBillingTypes()" :disabled="billingTypesLoading">Sync z Allegro</button>
+            <button class="btn btn-primary" @click="loadBillingTypes()" :disabled="billingTypesLoading">Odśwież</button>
+        </div>
+    </div>
+
+    <template x-if="billingTypesError">
+        <div class="alert alert-error text-sm mb-3" x-text="billingTypesError"></div>
+    </template>
+    <template x-if="billingTypesMessage">
+        <div class="alert alert-success text-sm mb-3" x-text="billingTypesMessage"></div>
+    </template>
+
+    <div class="card bg-base-200 shadow-lg">
+        <div class="card-body p-0">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>ID typu</th>
+                            <th>Nazwa</th>
+                            <th>Kategoria</th>
+                            <th>Wersja</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="row in billingTypesRows" :key="row.type_id">
+                            <tr>
+                                <td x-text="row.type_id"></td>
+                                <td x-text="row.name"></td>
+                                <td>
+                                    <select class="select select-bordered select-xs" :value="row.mapping_category || 'other'" @change="row.mapping_category = $event.target.value">
+                                        <template x-for="opt in billingTypeCategories" :key="opt">
+                                            <option :value="opt" x-text="opt"></option>
+                                        </template>
+                                    </select>
+                                </td>
+                                <td x-text="row.mapping_version"></td>
+                                <td>
+                                    <button class="btn btn-xs btn-warning" @click="saveBillingType(row)" :disabled="billingTypesLoading">Zapisz</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function billingTypesPage() {
+    return {
+        billingTypesRows: [],
+        billingTypeCategories: [],
+        billingTypesLoading: false,
+        billingTypesError: null,
+        billingTypesMessage: null,
+
+        async init() {
+            await this.loadBillingTypes();
+        },
+
+        async loadBillingTypes() {
+            this.billingTypesLoading = true;
+            this.billingTypesError = null;
+            this.billingTypesMessage = null;
+            try {
+                const r = await fetch('/api/stats/billing-types');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const payload = await r.json();
+                this.billingTypesRows = payload.data.rows || [];
+                this.billingTypeCategories = payload.data.categories || [];
+            } catch (e) {
+                this.billingTypesError = 'Nie udalo sie pobrac billing types: ' + (e.message || 'blad');
+            } finally {
+                this.billingTypesLoading = false;
+            }
+        },
+
+        async saveBillingType(row) {
+            this.billingTypesLoading = true;
+            this.billingTypesError = null;
+            this.billingTypesMessage = null;
+            try {
+                const r = await fetch('/api/stats/billing-types/' + encodeURIComponent(row.type_id), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mapping_category: row.mapping_category || 'other' })
+                });
+                const payload = await r.json();
+                if (!r.ok || !payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || ('HTTP ' + r.status));
+                }
+                row.mapping_version = payload.data.mapping_version;
+                this.billingTypesMessage = 'Zapisano mapowanie dla ' + row.type_id;
+            } catch (e) {
+                this.billingTypesError = 'Nie udalo sie zapisac mapowania: ' + (e.message || 'blad');
+            } finally {
+                this.billingTypesLoading = false;
+            }
+        },
+
+        async syncBillingTypes() {
+            this.billingTypesLoading = true;
+            this.billingTypesError = null;
+            this.billingTypesMessage = null;
+            try {
+                const r = await fetch('/api/stats/billing-types/sync', { method: 'POST' });
+                const payload = await r.json();
+                if (!r.ok || !payload.ok) {
+                    throw new Error((payload.errors && payload.errors[0] && payload.errors[0].message) || ('HTTP ' + r.status));
+                }
+                this.billingTypesMessage = 'Sync zakonczony: pobrano ' + payload.data.fetched + ', znanych ' + payload.data.known;
+                await this.loadBillingTypes();
+            } catch (e) {
+                this.billingTypesError = 'Nie udalo sie zsynchronizowac billing types: ' + (e.message || 'blad');
+            } finally {
+                this.billingTypesLoading = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

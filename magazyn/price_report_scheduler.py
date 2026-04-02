@@ -335,9 +335,8 @@ def send_report_notification(report_id: int):
             
             not_cheapest = total - cheapest
         
-        # Pobierz konfiguracje Messenger
-        ***REMOVED*** = settings_store.get("MESSENGER_ACCESS_TOKEN", "")
-        recipient_id = settings_store.get("MESSENGER_RECIPIENT_ID", "")
+        ***REMOVED*** = settings_store.get("PAGE_ACCESS_TOKEN", "")
+        recipient_id = settings_store.get("RECIPIENT_ID", "")
         
         if not ***REMOVED*** or not recipient_id:
             logger.warning("Brak konfiguracji Messenger - pomijam powiadomienie")

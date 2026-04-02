@@ -229,7 +229,7 @@
                     <span><i class="bi bi-shop"></i> Oferty Allegro</span>
                     <span class="badge badge-primary">{{ allegro_offers|length }}</span>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-0 overflow-x-auto">
                     <table class="table table-zebra table-sm mb-0">
                         <thead>
                             <tr>
@@ -292,7 +292,7 @@
                     <span><i class="bi bi-bag-check"></i> Historia zamówień ({{ total_sold }} szt. sprzedanych)</span>
                     <span class="badge badge-primary">{{ order_history|length }}{% if order_history|length >= 50 %} / {{ total_sold }}{% endif %}</span>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-0 overflow-x-auto">
                     <table class="table table-zebra table-sm mb-0">
                         <thead>
                             <tr>

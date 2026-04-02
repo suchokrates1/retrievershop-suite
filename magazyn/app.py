@@ -72,6 +72,7 @@ SETTINGS_GROUPS = {
     "ENABLE_WEEKLY_REPORTS": ("Raporty", "bi-bar-chart"),
     "ENABLE_MONTHLY_REPORTS": ("Raporty", "bi-bar-chart"),
     "SENDER_NAME": ("Nadawca przesylek", "bi-box-seam"),
+    "SENDER_COMPANY": ("Nadawca przesylek", "bi-box-seam"),
     "SENDER_STREET": ("Nadawca przesylek", "bi-box-seam"),
     "SENDER_CITY": ("Nadawca przesylek", "bi-box-seam"),
     "SENDER_ZIPCODE": ("Nadawca przesylek", "bi-box-seam"),
@@ -82,7 +83,6 @@ SETTINGS_GROUPS = {
     "LOG_FILE": ("System", "bi-gear"),
     "SECRET_KEY": ("System", "bi-gear"),
     "FLASK_DEBUG": ("System", "bi-gear"),
-    "FLASK_ENV": ("System", "bi-gear"),
     "TIMEZONE": ("System", "bi-gear"),
 }
 
@@ -345,6 +345,14 @@ def stats_dashboard():
     """Widok dashboardu statystyk (Sprint 5)."""
     username = session["username"]
     return render_template("stats_dashboard.html", username=username)
+
+
+@bp.route("/stats/billing-types")
+@login_required
+def stats_billing_types():
+    """Dedykowana podstrona mapowania typow rozliczen Allegro."""
+    username = session["username"]
+    return render_template("billing_types_mapping.html", username=username)
 
 
 @bp.route("/login", methods=["GET", "POST"])
