@@ -119,3 +119,72 @@ Kazdy widok uznajemy za gotowy, gdy:
 - Stabilizacja po wdrozeniu: 1 dzien
 
 Lacznie: 6-8 dni roboczych.
+
+---
+
+## 9. Audyt wykonania planu (2026-04-02)
+
+### Co zostalo zrealizowane
+| Punkt planu | Status |
+|---|---|
+| A1. Nawigacja - dopasowanie CSS do HTML | DONE - martwe selektory (.navbar-nav, #mobileMenuBtn) usuniete |
+| A1. Backdrop + zamykanie po tapie | DONE - Alpine.js x-data + .mobile-menu-backdrop |
+| A1. Blokada scrolla body | DONE - x-effect + body.menu-open { overflow: hidden } |
+| A1. Mniejsze logo na mobile | DONE - h-[48px] md:h-[140px] |
+| A2. Usuniecie reguly :has(> table) | DONE - regula nie istnieje |
+| A2. Standard overflow-x-auto | CZESCIOWO - regula w CSS jest ale nie wszystkie tabele ja uzywaja |
+| A3. Spacing mobile | CZESCIOWO - padding-top OK, ale hardcoded |
+| B1-B3. Widoki P0 | 30-50% - karty responsywne, ale formularze i tabele nie |
+| C. Widoki P1/P2 | NIE ROZPOCZETE |
+
+### Wykryte przyczyny braku responsywnosci (ROOT CAUSES)
+
+**RC1 (krytyczny): Globalna regula `label, input, button { margin: 5px 0; padding: 8px }` (styles.css:68)**
+- Nadpisuje padding/margin na KAZDYM przycisku, inpucie i labelu
+- DaisyUI klasy btn-sm, input-bordered, p-2 sa ignorowane bo regula laduje sie po Tailwind CDN
+- Powoduje ze elementy sa wieksze niz powinny i nie mieszcza sie na mobile
+
+**RC2 (wazny): Brak flex-wrap na formularzach filtrow**
+- orders_list.html: formularz wyszukiwania `flex gap-2` bez `flex-wrap`
+- orders_list.html: date inputs `w-[130px]` bez fallbacku mobile
+- stats_dashboard.html: 6 filtrow w flex-wrap ale kazdy bez `w-full md:w-auto`
+- items.html: formularz + przyciski w jednej linii
+
+**RC3 (wazny): Tabele bez overflow-x-auto lub bez min-width**
+- items.html: 15+ kolumn rozmiarow bez min-width - kolumny kolapsuja do 0px
+- home.html: tabela dostaw bez overflow-x-auto na glownym kontenerze
+- stats_dashboard.html: tabele logistyki OK (maja overflow-x-auto)
+
+**RC4 (sredni): Hardcoded padding-top 210px/72px**
+- Kruche rozwiazanie - zmiana navbara wymaga recznej aktualizacji CSS
+- Mozliwe ze padding nie odpowiada faktycznej wysokosci navbara
+
+**RC5 (niski): Brak spolnego wzorca container na stronach full_width**
+- orders_list.html, items.html ustawiaja full_width=True ale dodaja wlasny container
+
+## 10. Plan poprawek (wdrozenie natychmiastowe)
+
+### FIX-1: Usuniecie globalnej reguly label/input/button (RC1)
+- Plik: `magazyn/static/styles.css` linia 68
+- Akcja: usunac `label, input, button { margin: 5px 0; padding: 8px }`
+- Zastapic regula waskoscope `.login-form label, .login-form input, .login-form button` jesli login potrzebuje paddingu
+- Wplyw: natychmiastowa poprawa rozmiarow przyciskow i inputow w calej aplikacji
+
+### FIX-2: flex-wrap na formularzach filtrow (RC2)
+- `orders_list.html:20` - dodac `flex-wrap` do formularza wyszukiwania
+- `orders_list.html:70` - date inputs: `w-full sm:w-[130px]` zamiast `w-[130px]`
+- `orders_list.html:55` - status filter `.join`: dodac wrapper z `overflow-x-auto`
+- `items.html:11` - dodac `flex-wrap` do kontenera formularza + przyciskow
+- `stats_dashboard.html:107` - filtry: `w-full sm:w-auto` na kazdym input/select
+
+### FIX-3: Tabele overflow + min-width (RC3)
+- `items.html:55` - dodac `min-w-[800px]` na tabeli z rozmiarami
+- Weryfikacja ze wszystkie tabele P0 sa w `.overflow-x-auto`
+
+### FIX-4: orders_list date form mobile (RC2)
+- Formularz dat: `flex-col sm:flex-row` zamiast `flex flex-wrap`
+- Labele "Od:"/"Do:" i inputy w jednej linii na desktop, stackowane na mobile
+
+### FIX-5: stats_dashboard filtry mobile (RC2)
+- Filtry: kazdy input/select dostaje `w-full sm:w-auto`
+- Przycisk "Odswierz" na pelna szerokosc na mobile

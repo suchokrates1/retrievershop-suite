@@ -14,14 +14,14 @@
 {# Filters and Controls #}
 <div class="grid grid-cols-12 gap-4 mb-3">
     <div class="col-span-12 md:col-span-8">
-        <form id="searchForm" method="get" action="{{ url_for('orders.orders_list') }}" class="flex gap-2" hx-boost="true">
+        <form id="searchForm" method="get" action="{{ url_for('orders.orders_list') }}" class="flex flex-wrap gap-2" hx-boost="true">
             <input type="hidden" name="per_page" value="{{ per_page }}">
             <input type="hidden" name="sort" value="{{ sort_by }}">
             <input type="hidden" name="dir" value="{{ sort_dir }}">
             <input type="hidden" name="status" value="{{ status_filter }}">
             <input type="hidden" name="date_from" value="{{ date_from }}">
             <input type="hidden" name="date_to" value="{{ date_to }}">
-            <input type="text" id="searchInput" name="search" class="input input-bordered w-full" 
+            <input type="text" id="searchInput" name="search" class="input input-bordered w-full min-w-0" 
                    placeholder="Wyszukaj (klient, email, telefon, produkt, metoda wysyłki)..."
                    value="{{ search }}"
                    hx-get="{{ url_for('orders.orders_list') }}"
@@ -54,18 +54,18 @@
 {# Status filter and date range #}
 <div class="grid grid-cols-12 gap-2 mb-3">
     <div class="col-span-12 md:col-span-7">
-        <div class="join flex-wrap" role="group" hx-boost="true">
+        <div class="flex flex-wrap gap-1" role="group" hx-boost="true">
             {% set base_params = {'search': search, 'per_page': per_page, 'sort': sort_by, 'dir': sort_dir, 'date_from': date_from, 'date_to': date_to} %}
             <a href="{{ url_for('orders.orders_list', **dict(base_params, status='all')) }}"
-               class="btn btn-outline btn-sm join-item {{ 'btn-active' if status_filter == 'all' }}">Wszystkie</a>
+               class="btn btn-outline btn-sm {{ 'btn-active' if status_filter == 'all' }}">Wszystkie</a>
             <a href="{{ url_for('orders.orders_list', **dict(base_params, status='w_realizacji')) }}"
-               class="btn btn-outline btn-info btn-sm join-item {{ 'btn-active' if status_filter == 'w_realizacji' }}">W realizacji</a>
+               class="btn btn-outline btn-info btn-sm {{ 'btn-active' if status_filter == 'w_realizacji' }}">W realizacji</a>
             <a href="{{ url_for('orders.orders_list', **dict(base_params, status='w_transporcie')) }}"
-               class="btn btn-outline btn-warning btn-sm join-item {{ 'btn-active' if status_filter == 'w_transporcie' }}">W transporcie</a>
+               class="btn btn-outline btn-warning btn-sm {{ 'btn-active' if status_filter == 'w_transporcie' }}">W transporcie</a>
             <a href="{{ url_for('orders.orders_list', **dict(base_params, status='zakonczone')) }}"
-               class="btn btn-outline btn-success btn-sm join-item {{ 'btn-active' if status_filter == 'zakonczone' }}">Zakończone</a>
+               class="btn btn-outline btn-success btn-sm {{ 'btn-active' if status_filter == 'zakonczone' }}">Zakonczone</a>
             <a href="{{ url_for('orders.orders_list', **dict(base_params, status='problem')) }}"
-               class="btn btn-outline btn-error btn-sm join-item {{ 'btn-active' if status_filter == 'problem' }}">Problemy</a>
+               class="btn btn-outline btn-error btn-sm {{ 'btn-active' if status_filter == 'problem' }}">Problemy</a>
         </div>
     </div>
     <div class="col-span-12 md:col-span-5">
@@ -76,9 +76,9 @@
             <input type="hidden" name="dir" value="{{ sort_dir }}">
             <input type="hidden" name="status" value="{{ status_filter }}">
             <label class="whitespace-nowrap text-sm mb-0">Od:</label>
-            <input type="date" name="date_from" class="input input-bordered input-sm w-[130px]" value="{{ date_from }}">
+            <input type="date" name="date_from" class="input input-bordered input-sm w-full sm:w-[130px]" value="{{ date_from }}">
             <label class="whitespace-nowrap text-sm mb-0">Do:</label>
-            <input type="date" name="date_to" class="input input-bordered input-sm w-[130px]" value="{{ date_to }}">
+            <input type="date" name="date_to" class="input input-bordered input-sm w-full sm:w-[130px]" value="{{ date_to }}">
             <button type="submit" class="btn btn-sm btn-outline btn-primary"><i class="bi bi-funnel"></i></button>
             {% if date_from or date_to %}
             <a href="{{ url_for('orders.orders_list', search=search, per_page=per_page, sort=sort_by, dir=sort_dir, status=status_filter) }}" class="btn btn-sm btn-outline"><i class="bi bi-x-lg"></i></a>
