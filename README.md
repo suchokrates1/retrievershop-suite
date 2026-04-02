@@ -64,7 +64,6 @@ This repository contains the code for the RetrieverShop warehouse application wi
 | --- | --- |
 | `PAGE_ACCESS_TOKEN` | Messenger page token for sending notifications |
 | `RECIPIENT_ID` | Messenger recipient ID that receives alerts |
-| `STATUS_ID` | Order status ID to filter orders for printing |
 | `PRINTER_NAME` | Name of the CUPS printer to use |
 | `CUPS_SERVER` | Hostname of a remote CUPS server |
 | `CUPS_PORT` | Port of the remote CUPS server |

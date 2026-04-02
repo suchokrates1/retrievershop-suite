@@ -1,5 +1,4 @@
 ENV_INFO = {
-    "API_TOKEN": ("Token API", "Klucz API do uwierzytelniania zewnetrznych zapytan"),
     "PAGE_ACCESS_TOKEN": (
         "Token Dostępu Strony",
         "Token strony w Messengerze do wysyłania powiadomień",
@@ -7,10 +6,6 @@ ENV_INFO = {
     "RECIPIENT_ID": (
         "ID odbiorcy",
         "Identyfikator w Messengerze, który otrzymuje powiadomienia",
-    ),
-    "STATUS_ID": (
-        "ID statusu",
-        "ID statusu zamówienia filtrowanych do wydruku",
     ),
     "PRINTER_NAME": ("Nazwa drukarki", "Nazwa używanej drukarki CUPS"),
     "CUPS_SERVER": ("Serwer CUPS", "Nazwa hosta zdalnego serwera CUPS"),

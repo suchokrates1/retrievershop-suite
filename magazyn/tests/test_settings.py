@@ -53,7 +53,6 @@ def test_sensitive_tokens_render_as_password(app_mod, client, login):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     for key in [
-        "API_TOKEN",
         "PAGE_ACCESS_TOKEN",
         "ALLEGRO_CLIENT_SECRET",
         "ALLEGRO_ACCESS_TOKEN",
@@ -77,11 +76,11 @@ def test_settings_post_updates_store(app_mod, client, login, monkeypatch):
         values.pop(skey, None)
     values["QUIET_HOURS_START"] = "10:00"
     values["QUIET_HOURS_END"] = "22:00"
-    values["API_TOKEN"] = "val0"
+    values["PAGE_ACCESS_TOKEN"] = "val0"
     resp = client.post("/settings", data=values)
     assert resp.status_code == 302
     stored = settings_store.as_ordered_dict(include_hidden=True)
-    assert stored["API_TOKEN"] == "val0"
+    assert stored["PAGE_ACCESS_TOKEN"] == "val0"
     assert reloaded["called"] is True
 
 
@@ -103,7 +102,7 @@ def test_weekly_reports_setting_saved(app_mod, client, login):
 
 def test_settings_reload_updates_print_agent(app_mod, client, login, monkeypatch):
     values = app_mod.load_settings(include_hidden=True)
-    values["API_TOKEN"] = "v0"
+    values["PAGE_ACCESS_TOKEN"] = "v0"
     from magazyn.sales import _sales_keys
 
     for skey in _sales_keys(values):
@@ -111,15 +110,15 @@ def test_settings_reload_updates_print_agent(app_mod, client, login, monkeypatch
     values["QUIET_HOURS_START"] = "10:00"
     values["QUIET_HOURS_END"] = "22:00"
     client.post("/settings", data=values)
-    assert settings_store.settings.API_TOKEN == "v0"
+    assert settings_store.settings.PAGE_ACCESS_TOKEN == "v0"
 
-    settings_store.update({"API_TOKEN": "new0"})
+    settings_store.update({"PAGE_ACCESS_TOKEN": "new0"})
     app_mod.print_agent.reload_config()
-    assert app_mod.print_agent.API_TOKEN == "new0"
+    assert app_mod.print_agent.PAGE_ACCESS_TOKEN == "new0"
     cfg.settings = app_mod.print_agent.settings
 
     pa = importlib.reload(app_mod.print_agent)
-    assert pa.API_TOKEN == "new0"
+    assert pa.PAGE_ACCESS_TOKEN == "new0"
 
 
 def test_extra_keys_display_and_save(app_mod, client, login, monkeypatch):

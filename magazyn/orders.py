@@ -954,18 +954,17 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     # Allegro raportuje payment_done=0 dla COD, bo gotowka nie przechodzi
     # przez system platnosci online.
     if order.payment_method_cod and float(order.payment_done or 0) == 0:
-        if order.order_status_id and int(order.order_status_id) == 91621:
-            total_products = sum(
-                float(p.get("price_brutto", 0)) * int(p.get("quantity", 1))
-                for p in products_list
-            )
-            delivery = float(order.delivery_price or 0)
-            order.payment_done = total_products + delivery
-            logger.info(
-                "Zamowienie COD %s doreczone - ustawiam payment_done=%.2f "
-                "(produkty=%.2f + dostawa=%.2f)",
-                order_id, order.payment_done, total_products, delivery
-            )
+        total_products = sum(
+            float(p.get("price_brutto", 0)) * int(p.get("quantity", 1))
+            for p in products_list
+        )
+        delivery = float(order.delivery_price or 0)
+        order.payment_done = total_products + delivery
+        logger.info(
+            "Zamowienie COD %s - ustawiam payment_done=%.2f "
+            "(produkty=%.2f + dostawa=%.2f)",
+            order_id, order.payment_done, total_products, delivery
+        )
     
     # Sync order products
     # Dla PostgreSQL blokujemy rekord zamowienia, aby zserializowac
