@@ -950,7 +950,7 @@ class LabelAgent:
         # Dane nadawcy z ustawien (nazwy pol wg dokumentacji API)
         from .settings_store import settings_store
         sender = {
-            "name": settings_store.get("SENDER_NAME") or "Retriever Shop",
+            "name": settings_store.get("SENDER_NAME") or "Alexandra Kaługa",
             "street": settings_store.get("SENDER_STREET") or "",
             "postalCode": settings_store.get("SENDER_ZIPCODE") or "",
             "city": settings_store.get("SENDER_CITY") or "",
@@ -958,7 +958,7 @@ class LabelAgent:
             "phone": settings_store.get("SENDER_PHONE") or "",
             "email": settings_store.get("SENDER_EMAIL") or "",
         }
-        sender_company = settings_store.get("SENDER_COMPANY")
+        sender_company = settings_store.get("SENDER_COMPANY") or "Retriever Shop"
         if sender_company:
             sender["company"] = sender_company[:30]
 

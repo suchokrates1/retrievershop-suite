@@ -290,14 +290,21 @@ class SettingsStore:
     def _build_namespace(self, values: Mapping[str, str]) -> SimpleNamespace:
         processed_values = {}
         defaults = settings_io.load_settings(include_hidden=True)
-        # Settings not present in .env.example but still expected across the codebase
-        defaults.setdefault("ALLEGRO_SELLER_NAME", "")
-        defaults.setdefault("SENDER_NAME", "Retriever Shop")
-        defaults.setdefault("SENDER_STREET", "Wroclawska 15/7")
-        defaults.setdefault("SENDER_CITY", "Legnica")
-        defaults.setdefault("SENDER_ZIPCODE", "59-220")
-        defaults.setdefault("SENDER_EMAIL", "kontakt@retrievershop.pl")
-        defaults.setdefault("SENDER_PHONE", "782865895")  # e.g. http://192.168.31.150:5555
+        # Hardcoded fallbacks - overriding empty-string entries from .env.example
+        # setdefault does NOT override existing empty-string values, so we use
+        # explicit override: apply only when defaults[key] is empty or missing.
+        _HARD_DEFAULTS = {
+            "SENDER_NAME": "Alexandra Ka\u0142uga",
+            "SENDER_COMPANY": "Retriever Shop",
+            "SENDER_STREET": "Wroclawska 15/7",
+            "SENDER_CITY": "Legnica",
+            "SENDER_ZIPCODE": "59-220",
+            "SENDER_EMAIL": "kontakt@retrievershop.pl",
+            "SENDER_PHONE": "782865895",
+        }
+        for key, fallback in _HARD_DEFAULTS.items():
+            if not defaults.get(key):  # override if missing OR empty string
+                defaults[key] = fallback
         all_keys = set(values.keys()) | set(defaults.keys())
 
         for key in all_keys:
@@ -417,11 +424,23 @@ class SettingsStore:
 
 
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
-        """Return a configuration value from the persistent store."""
+        """Return a configuration value from the persistent store.
+
+        Lookup order:
+        1. Value explicitly saved to database (_values).
+        2. Namespace default (from .env.example or hardcoded fallback).
+        3. The ``default`` argument passed to this method.
+        """
 
         self._ensure_loaded()
         self._refresh_if_stale()
-        return self._values.get(key, default)
+        if key in self._values:
+            return self._values[key]
+        # Fall back to namespace default when the key was never persisted to DB.
+        ns_val = getattr(self._namespace, key, None)
+        if isinstance(ns_val, str) and ns_val:
+            return ns_val
+        return default
 
     def _refresh_if_stale(self) -> None:
         if not self._loaded or not self._db_path:

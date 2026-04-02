@@ -17,6 +17,11 @@ html, body {
 html {
     font-size: 17px;
 }
+@media (max-width: 767px) {
+    html {
+        font-size: 15px;
+    }
+}
 body {
     margin: 0;
     padding-top: 210px;
@@ -25,7 +30,8 @@ body {
 }
 @media (max-width: 767px) {
     body {
-        padding-top: 80px;
+          padding-top: 72px;
+          overflow-x: hidden;
     }
 }
 .page-wrapper {
@@ -35,7 +41,7 @@ body {
 }
 @media (max-width: 767px) {
     .page-wrapper {
-        min-height: calc(100vh - 80px);
+          min-height: calc(100vh - 72px);
     }
 }
 main {
@@ -75,21 +81,6 @@ label, input, button {
     margin-top: 1rem;
 }
 
-.custom-btn {
-    display: inline-block;
-    margin: 10px;
-    padding: 12px 24px;
-    background-color: #17383E;
-    color: white;
-    text-decoration: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-.custom-btn:hover {
-    background-color: #145360;
-}
-
 /* Stylizacja nagłówka */
 header {
     background-color: #17383E;
@@ -99,27 +90,6 @@ header {
     background-size: cover;
     text-align: center;
 }
-
-header .logo img {
-    height: 200px;
-    vertical-align: middle;
-}
-@media (max-width: 767px) {
-    header .logo img {
-        height: 80px;
-    }
-}
-
-/* Logo in the navigation bar */
-.navbar-brand img {
-    height: 140px;
-}
-@media (max-width: 767px) {
-    .navbar-brand img {
-        height: 48px;
-    }
-}
-
 
 footer {
     margin-top: auto;
@@ -133,6 +103,10 @@ footer a {
 
 footer a:hover {
     text-decoration: underline;
+}
+
+.text-brand {
+    color: #17383E;
 }
 
 .barcode-feedback {
@@ -164,37 +138,9 @@ table {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Ensure long tables remain usable on small screens */
-.table-responsive {
-    width: 100%;
-    overflow-x: auto;
-    display: block;
-}
-
 /* Nagłówki tabeli */
 th {
     padding: 8px 12px;
-}
-
-/* Stylizacja przycisków wewnątrz tabeli */
-.form-inline {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-}
-
-.btn-quantity {
-    width: 30px;
-    height: 30px;
-    font-size: 16px;
-    padding: 0;
-    margin: 0 2px;
-}
-
-.quantity-value {
-    min-width: 20px;
-    text-align: center;
 }
 
 /* Zmniejszenie odstępów w wersji mobilnej */
@@ -223,20 +169,6 @@ th {
     text-align: left;
     white-space: pre-wrap;
 }
-
-#scanner-container {
-    width: 100%;
-    height: 60vh;
-    margin: 0 auto;
-}
-
-@media (max-width: 768px) {
-    #scanner-container {
-        height: 80vh;
-    }
-}
-
-/* Adjust layout for fixed navbar */
 
 /* Mobile slide-in menu + backdrop */
 .mobile-menu-backdrop {
@@ -285,38 +217,7 @@ th {
     color: #fff;
 }
 
-/* Selektory .navbar-nav usuniete - nawigacja uzywa DaisyUI menu */
 
-.dropdown-menu .dropdown-item {
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.dropdown-menu .dropdown-item:hover {
-    background-color: #1e6a82;
-    color: #fff;
-}
-
-@media (min-width: 768px) {
-    main.container-fluid {
-        width: 100%;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    .container-fluid.full-width {
-        max-width: none;
-    }
-}
-
-
-
-
-/* Formularze stylowane przez DaisyUI */
-
-/* Additional mobile menu styling */
-.mobile-logo {
-    height: 40px;
-    display: block;
-}
 
 /* Orders table */
 #orders-table-v2 th,

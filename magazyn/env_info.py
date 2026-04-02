@@ -42,7 +42,6 @@ ENV_INFO = {
         "Debug Flask",
         "Ustaw 1 aby włączyć tryb debugowania Flask",
     ),
-    "FLASK_ENV": ("Środowisko Flask", "Konfiguracja środowiska Flask"),
     "COMMISSION_ALLEGRO": (
         "Prowizja Allegro (%)",
         "Procent prowizji pobieranej przez Allegro",
@@ -81,7 +80,11 @@ ENV_INFO = {
     ),
     "SENDER_NAME": (
         "Nazwa nadawcy przesylki",
-        "Nazwa firmy/osoby na etykiecie nadawczej",
+        "Nazwa osoby na etykiecie nadawczej",
+    ),
+    "SENDER_COMPANY": (
+        "Nazwa firmy nadawcy",
+        "Nazwa firmy na etykiecie nadawczej (pole company)",
     ),
     "SENDER_STREET": (
         "Ulica nadawcy",
