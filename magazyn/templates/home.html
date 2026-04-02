@@ -8,37 +8,37 @@
 {% block content %}
 <div class="w-full px-4 mt-4" x-data="dashboard()" x-init="loadHeavyData()">
     <!-- Header -->
-    <div class="flex justify-between items-center mb-3">
-        <div>
-            <h2 class="mb-1"><i class="bi bi-speedometer2 mr-2"></i>Centrum Dowodzenia</h2>
-            <p class="text-base-content/60 mb-0">Witaj, {{ username }}! Oto przegląd Twojego sklepu.</p>
-        </div>
-        <div class="text-base-content/60">
-            <i class="bi bi-clock mr-1"></i>{{ now().strftime('%d.%m.%Y %H:%M') }}
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 mb-3">
+        <div class="text-center sm:text-left w-full sm:w-auto">
+            <div class="flex items-center justify-center sm:justify-start gap-2 mb-1">
+                <h2 class="mb-0"><i class="bi bi-speedometer2 mr-2"></i>Centrum Dowodzenia</h2>
+                <span class="text-base-content/60 text-sm whitespace-nowrap"><i class="bi bi-clock mr-1"></i>{{ now().strftime('%d.%m.%Y %H:%M') }}</span>
+            </div>
+            <p class="text-base-content/60 mb-0 text-sm">Witaj, {{ username }}! Oto przegląd Twojego sklepu.</p>
         </div>
     </div>
 
     <!-- Quick Actions Bar -->
-    <div class="flex flex-wrap gap-2 mb-4">
-        <a href="{{ url_for('products.items') }}" class="btn btn-primary">
-            <i class="bi bi-box mr-1"></i>Produkty
+    <div class="grid grid-cols-5 gap-1 sm:flex sm:flex-wrap sm:gap-2 mb-4">
+        <a href="{{ url_for('products.items') }}" class="btn btn-primary btn-sm sm:btn-md">
+            <i class="bi bi-box sm:mr-1"></i><span class="hidden sm:inline">Produkty</span>
         </a>
-        <a href="{{ url_for('orders.orders_list') }}" class="btn btn-success">
-            <i class="bi bi-receipt mr-1"></i>Zamówienia
+        <a href="{{ url_for('orders.orders_list') }}" class="btn btn-success btn-sm sm:btn-md">
+            <i class="bi bi-receipt sm:mr-1"></i><span class="hidden sm:inline">Zamówienia</span>
         </a>
-        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info">
-            <i class="bi bi-file-earmark-plus mr-1"></i>Import faktury
+        <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info btn-sm sm:btn-md">
+            <i class="bi bi-file-earmark-plus sm:mr-1"></i><span class="hidden sm:inline">Import faktury</span>
         </a>
-        <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('home')) }}" class="btn btn-neutral">
-            <i class="bi bi-upc-scan mr-1"></i>Skanuj kod
+        <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('home')) }}" class="btn btn-neutral btn-sm sm:btn-md">
+            <i class="bi bi-upc-scan sm:mr-1"></i><span class="hidden sm:inline">Skanuj kod</span>
         </a>
-        <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-warning">
-            <i class="bi bi-shop mr-1"></i>Allegro
+        <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-warning btn-sm sm:btn-md">
+            <i class="bi bi-shop sm:mr-1"></i><span class="hidden sm:inline">Allegro</span>
         </a>
     </div>
 
     <!-- Quick Stats Cards Row -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4">
         <!-- Orders Today -->
         <div>
             <div class="card bg-base-200 border-l-4 border-success h-full">
@@ -504,7 +504,7 @@
                         </div>
                     </template>
                     <template x-if="!loading && trends">
-                        <div class="grid grid-cols-1 md:grid-cols-2 text-center">
+                        <div class="grid grid-cols-2 text-center">
                             <div>
                                 <h5 class="mb-1">Zamówienia</h5>
                                 <h3 class="mb-0">

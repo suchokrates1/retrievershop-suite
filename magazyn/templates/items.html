@@ -5,32 +5,37 @@
 {% block content %}
 
 <div id="page-content" hx-select="#page-content" hx-swap="outerHTML" hx-target="#page-content" hx-push-url="true" hx-indicator="#page-content">
-<div class="container mx-auto text-center mt-6">
-    <div class="mb-3 flex justify-between items-center flex-wrap gap-2">
-        <div class="grow min-w-0">
-            <form id="searchForm" method="get" action="{{ url_for('products.items') }}" class="flex flex-wrap gap-2" hx-boost="true">
-                <input type="hidden" name="per_page" value="{{ per_page }}">
-                <input type="text" id="searchInput" name="search" class="input input-bordered w-full" 
-                       placeholder="Wyszukaj produkt (nazwa, kolor, seria, kategoria)..."
-                       value="{{ search }}"
-                       hx-get="{{ url_for('products.items') }}"
-                       hx-trigger="input changed delay:400ms, search"
-                       hx-include="closest form"
-                       hx-replace-url="true">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
-                {% if search %}
-                <a href="{{ url_for('products.items', per_page=per_page) }}" class="btn btn-outline" title="Wyczysc"><i class="bi bi-x-lg"></i></a>
-                {% endif %}
-            </form>
-        </div>
-        <div class="flex flex-wrap gap-1 items-center">
-            <a href="{{ url_for('products.add_item') }}" class="btn btn-success btn-sm sm:btn-md" title="Dodaj przedmiot">
-                <i class="bi bi-plus-circle"></i>
+<div class="container mx-auto mt-6">
+    <div class="mb-3 space-y-2">
+        <form id="searchForm" method="get" action="{{ url_for('products.items') }}" class="flex gap-2" hx-boost="true">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="text" id="searchInput" name="search" class="input input-bordered w-full" 
+                   placeholder="Wyszukaj produkt (nazwa, kolor, seria, kategoria)..."
+                   value="{{ search }}"
+                   hx-get="{{ url_for('products.items') }}"
+                   hx-trigger="input changed delay:400ms, search"
+                   hx-include="closest form"
+                   hx-replace-url="true">
+            {% if search %}
+            <a href="{{ url_for('products.items', per_page=per_page) }}" class="btn btn-outline btn-sm" title="Wyczyść"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </form>
+        <div class="grid grid-cols-3 sm:flex sm:flex-wrap gap-1">
+            <a href="{{ url_for('products.add_item') }}" class="btn btn-success btn-sm" title="Dodaj przedmiot">
+                <i class="bi bi-plus-circle sm:mr-1"></i><span class="hidden sm:inline">Dodaj</span>
             </a>
-            <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info btn-sm sm:btn-md">Dostawa z faktury</a>
-            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline btn-sm sm:btn-md"><i class="bi bi-clipboard-check mr-1"></i>Remanent</a>
-            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary btn-sm sm:btn-md">Skanuj EAN</a>
-            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline btn-primary btn-sm sm:btn-md">Skanuj paczke</a>
+            <a href="{{ url_for('products.import_invoice') }}" class="btn btn-info btn-sm">
+                <i class="bi bi-file-earmark-plus sm:mr-1"></i><span class="hidden sm:inline">Dostawa z faktury</span><span class="sm:hidden">Faktura</span>
+            </a>
+            <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline btn-sm">
+                <i class="bi bi-clipboard-check sm:mr-1"></i><span class="hidden sm:inline">Remanent</span><span class="sm:hidden">Remanent</span>
+            </a>
+            <a href="{{ url_for('scanning.barcode_scan_page', next=url_for('products.items')) }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-upc-scan sm:mr-1"></i><span class="hidden sm:inline">Skanuj EAN</span><span class="sm:hidden">EAN</span>
+            </a>
+            <a href="{{ url_for('scanning.label_scan_page', next=url_for('products.items')) }}" class="btn btn-outline btn-primary btn-sm">
+                <i class="bi bi-box-seam sm:mr-1"></i><span class="hidden sm:inline">Skanuj paczkę</span><span class="sm:hidden">Paczka</span>
+            </a>
         </div>
     </div>
 
@@ -50,7 +55,45 @@
         <span class="text-base-content/60 text-sm">Razem: {{ total }} produktow</span>
     </div>
 
-<div class="overflow-x-auto">
+<!-- Widok mobilny: karty -->
+<div class="md:hidden space-y-2">
+    {% for product in products %}
+    <div class="card bg-base-200 card-compact">
+        <div class="card-body p-3">
+            <div class="flex justify-between items-center">
+                <div class="min-w-0">
+                    <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="font-semibold no-underline">{{ product['series'] or '-' }}</a>
+                    <span class="text-sm text-base-content/60 ml-1">{{ product['category'] }}</span>
+                    <span class="text-sm text-base-content/60 ml-1">{{ product['color'] }}</span>
+                </div>
+                <div class="flex gap-1 flex-none">
+                    <a href="{{ url_for('products.edit_item', product_id=product['id']) }}" class="btn btn-warning btn-xs"><i class="bi bi-pencil-square"></i></a>
+                    <form action="{{ url_for('products.delete_item', item_id=product['id']) }}" method="POST" class="inline" onsubmit="return confirm('Czy na pewno chcesz usunac ten przedmiot?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-error btn-xs"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-1 mt-1">
+                {% for size in ALL_SIZES %}
+                {% set qty = product['sizes'].get(size, 0) %}
+                {% if qty > 0 %}
+                <span class="badge badge-sm {% if qty <= 2 %}badge-warning{% else %}badge-neutral{% endif %}">{{ size }}:{{ qty }}</span>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center text-base-content/60 py-4">
+        <i class="bi bi-inbox text-4xl"></i>
+        <p class="mt-2 mb-0">Brak produktow do wyswietlenia</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Widok desktop: tabela -->
+<div class="overflow-x-auto hidden md:block">
  <table class="table table-zebra table-sm align-middle min-w-[800px]">
     <thead>
         <tr>
