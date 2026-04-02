@@ -188,3 +188,39 @@ Lacznie: 6-8 dni roboczych.
 ### FIX-5: stats_dashboard filtry mobile (RC2)
 - Filtry: kazdy input/select dostaje `w-full sm:w-auto`
 - Przycisk "Odswierz" na pelna szerokosc na mobile
+
+## 11. Weryfikacja pozostalych widokow (2026-04-02)
+
+### Wynik audytu Etap B/C
+
+Przeglad wszystkich szablonow P0/P1/P2 wykazal, ze wiekszosc JUZ posiada prawidlowe
+wlasciwosci responsywnosci (`overflow-x-auto`, responsive grid, flex-wrap).
+
+| Plik | Status | Uwagi |
+|---|---|---|
+| offers_and_prices.html | OK | overflow-x-auto na tabeli |
+| offers.html | OK | overflow-x-auto |
+| sales_list.html | OK | overflow-x-auto |
+| sales.html | OK | overflow-x-auto |
+| history.html | OK | overflow-x-auto |
+| scan_logs.html | NAPRAWIONY | join->flex-wrap na filtrach (commit 3d6c09e3) |
+| review_invoice.html | OK | overflow-x-auto |
+| order_detail.html | OK | overflow-x-auto |
+| product_detail.html | OK | overflow-x-auto |
+| report_detail.html | OK | overflow-x-auto |
+| reports_list.html | OK | overflow-x-auto |
+| home.html | OK | responsive grid z breakpointami |
+| settings.html | OK | overflow-x-auto na collapse-content |
+| sales_settings.html | OK | overflow-x-auto |
+| add_order.html | NAPRAWIONY | grid->flex-wrap + Tailwind width classes (commit 3d6c09e3) |
+
+### Podsumowanie wdrozonych poprawek
+
+| Commit | Zmiany |
+|---|---|
+| 0fb9204b | FIX-1 do FIX-6: globalna regula CSS, flex-wrap formularze, min-w tabeli, status buttons |
+| 3d6c09e3 | FIX-7: add_order.html flex-wrap, FIX-8: scan_logs.html filtry mobilne |
+
+### Pozostale do rozpatrzenia (niska priorytetowosc)
+- RC4: Hardcoded padding-top 210px/72px - funkcjonalnie dziala, ale kruche
+- RC5: Brak ujednoliconego wzorca container - kosmetyczne
