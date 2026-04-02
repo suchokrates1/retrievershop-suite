@@ -1022,11 +1022,11 @@ class LabelAgent:
             }
         ]
 
-        # Dodatkowe wlasciwosci InPost (metoda nadania)
-        additional_properties = None
+        # Nadanie InPost w punkcie (paczkomat/paczkopunkt)
+        additional_services = None
         carrier_id = self._resolve_carrier_id(delivery_method)
         if carrier_id == "INPOST":
-            additional_properties = {"inpost#sendingMethod": "any_point"}
+            additional_services = ["sendingAtPoint"]
 
         try:
             cod_payload = None
@@ -1049,7 +1049,7 @@ class LabelAgent:
                 packages=packages,
                 cash_on_delivery=cod_payload,
                 reference_number=reference_number,
-                additional_properties=additional_properties,
+                additional_services=additional_services,
             )
 
             command_id = cmd_result.get("commandId")
