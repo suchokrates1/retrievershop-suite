@@ -157,12 +157,11 @@ def test_queue_roundtrip(tmp_path, monkeypatch):
     assert loaded[0]["status"] == "queued"
 
 
-def test_validate_env_missing_api_token(monkeypatch):
+def test_validate_env_missing_page_access_token(monkeypatch):
     bl = get_bl()
     agent = bl.agent
     agent.config = agent.config.with_updates(
-        api_token="",
-        page_access_token="x",
+        page_access_token="",
         recipient_id="x",
     )
     with pytest.raises(bl.ConfigError):
