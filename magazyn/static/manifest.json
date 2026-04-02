@@ -1,0 +1,15 @@
+{
+  "name": "Retriever Shop - Magazyn",
+  "short_name": "RetrieverShop",
+  "icons": [
+    {
+      "src": "https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17383E",
+  "theme_color": "#17383E"
+}
