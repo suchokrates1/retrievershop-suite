@@ -1227,6 +1227,7 @@ function statsDashboard() {
             const orders = sales.data.series.map(x => x.orders);
             if (!labels.length) { this.salesChartHasData = false; return; }
             this.salesChartHasData = true;
+            this.$nextTick(() => {
             const ctx = document.getElementById('salesChart');
             if (this.salesChart) this.salesChart.destroy();
             this.salesChart = new Chart(ctx, {
@@ -1267,15 +1268,17 @@ function statsDashboard() {
                     }
                 }
             });
+            });
         },
 
         renderSplitChart(sales) {
-            const ctx = document.getElementById('splitChart');
-            if (this.splitChart) this.splitChart.destroy();
             const cod = sales.data.split.payment.cod || 0;
             const online = sales.data.split.payment.online || 0;
             if (!cod && !online) { this.splitChartHasData = false; return; }
             this.splitChartHasData = true;
+            this.$nextTick(() => {
+            const ctx = document.getElementById('splitChart');
+            if (this.splitChart) this.splitChart.destroy();
             this.splitChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -1287,15 +1290,17 @@ function statsDashboard() {
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
+            });
         },
 
         renderWaterfallChart(profit) {
+            const items = ((profit.data || {}).waterfall || []);
+            if (!items.length) { this.waterfallChartHasData = false; return; }
+            this.waterfallChartHasData = true;
+            this.$nextTick(() => {
             const ctx = document.getElementById('waterfallChart');
             if (!ctx) return;
             if (this.waterfallChart) this.waterfallChart.destroy();
-            const items = (profit.data || {}).waterfall || [];
-            if (!items.length) { this.waterfallChartHasData = false; return; }
-            this.waterfallChartHasData = true;
             let running = 0;
             const floatingBars = items.map((item, i) => {
                 if (i === items.length - 1) return [0, item.value];
@@ -1335,6 +1340,7 @@ function statsDashboard() {
                     },
                     scales: { y: { beginAtZero: true } }
                 }
+            });
             });
         },
 
