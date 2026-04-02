@@ -364,9 +364,6 @@ def _process_pending_invoices():
     - maja przynajmniej jeden produkt
     - przyszly przez sync Allegro (order_id zaczyna sie od 'allegro_')
 
-    Stare zamowienia z BaseLinker nie sa przetwarzane -
-    mialy faktury wystawiane recznie w wFirma.
-
     Returns
     -------
     dict

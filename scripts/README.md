@@ -55,7 +55,6 @@ Skrypty do analizy i napraw danych:
 **Testy i narzędzia:**
 - `test_scan_all.py` - test skanowania
 - `test_update_return.py` - test aktualizacji zwrotów
-- `create_scraper_table.py` - tworzy tabelę scrapera
 
 ### `archive/`
 Archiwalne skrypty już nieużywane
