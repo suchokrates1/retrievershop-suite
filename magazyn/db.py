@@ -224,12 +224,10 @@ def reset_db():
     if _is_postgres:
         with engine.connect() as conn:
             conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
-            conn.execute(text("DROP TABLE IF EXISTS scraper_tasks"))
             conn.commit()
     else:
         with sqlite_connect() as conn:
             conn.execute("DROP TABLE IF EXISTS alembic_version")
-            conn.execute("DROP TABLE IF EXISTS scraper_tasks")
             conn.commit()
     Base.metadata.create_all(engine)
 
