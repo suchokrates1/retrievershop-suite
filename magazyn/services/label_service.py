@@ -41,7 +41,7 @@ _POLL_INTERVAL = 2
 
 def _load_sender_data() -> dict:
     """Zaladuj dane nadawcy z settings_store."""
-    return {
+    sender = {
         "name": settings_store.get("SENDER_NAME") or "Retriever Shop",
         "street": settings_store.get("SENDER_STREET") or "",
         "city": settings_store.get("SENDER_CITY") or "",
@@ -50,6 +50,10 @@ def _load_sender_data() -> dict:
         "phone": settings_store.get("SENDER_PHONE") or "",
         "email": settings_store.get("SENDER_EMAIL") or "",
     }
+    company = settings_store.get("SENDER_COMPANY")
+    if company:
+        sender["company"] = company
+    return sender
 
 
 def _build_receiver(order_data: dict) -> dict:
