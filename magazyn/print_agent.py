@@ -1022,9 +1022,11 @@ class LabelAgent:
             }
         ]
 
-        # Dodatkowe wlasciwosci (np. InPost)
+        # Dodatkowe wlasciwosci InPost (metoda nadania)
         additional_properties = None
         carrier_id = self._resolve_carrier_id(delivery_method)
+        if carrier_id == "INPOST":
+            additional_properties = {"inpost#sendingMethod": "any_point"}
 
         try:
             cod_payload = None
