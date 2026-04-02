@@ -63,7 +63,8 @@
                             </button>
                         </div>
                         <a href="{{ url_for('logout') }}" class="btn btn-error hidden md:inline-flex ml-3">Wyloguj się</a>
-                        <button @click="menuOpen = !menuOpen" class="btn btn-ghost md:hidden ml-2" type="button" style="touch-action: manipulation; min-width: 44px; min-height: 44px;">
+                        <button @click="menuOpen = !menuOpen" class="btn btn-ghost md:hidden ml-2" type="button" style="touch-action: manipulation; min-width: 44px; min-height: 44px;"
+                                aria-label="Menu" :aria-expanded="menuOpen">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                         </button>
                     </div>
@@ -111,8 +112,11 @@
 
 
     {% if show_menu %}
-    <div class="mobile-menu-backdrop md:hidden" :class="{ open: menuOpen }" @click="menuOpen = false"></div>
-    <div class="mobile-menu md:hidden" :class="{ open: menuOpen }">
+    <div class="mobile-menu-backdrop md:hidden"
+         :class="menuOpen && 'open'"
+         @click="menuOpen = false"></div>
+    <div class="mobile-menu md:hidden"
+         :class="menuOpen && 'open'">
         <button @click="menuOpen = false" class="btn btn-ghost btn-sm absolute top-2 right-2 text-white" type="button" aria-label="Zamknij">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-10 mx-auto mb-3">
         <ul class="menu flex flex-col h-full p-0">
@@ -131,8 +135,10 @@
                 </a>
             </li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('stats_billing_types') }}">Mapowanie rozliczeń</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('agent_logs') }}">Logi</a></li>
+            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
             <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
             <li class="mt-auto text-center">
                 <a class="btn btn-error w-full" @click="menuOpen = false" href="{{ url_for('logout') }}">Wyloguj się</a>
@@ -142,7 +148,7 @@
     {% endif %}
     </div>{# /x-data menuOpen #}
 
-    <main x-data class="w-full mt-2 md:mt-4 pt-2 md:pt-4 px-2 md:px-4 flex-1{% if full_width %} max-w-none{% endif %}">
+    <main x-data class="w-full mt-2 md:mt-4 pt-2 md:pt-4 px-2 md:px-4 flex-1 min-w-0 overflow-x-hidden{% if full_width %} max-w-none{% endif %}">
         {% if not full_width %}
         <div class="container mx-auto">
         {% endif %}

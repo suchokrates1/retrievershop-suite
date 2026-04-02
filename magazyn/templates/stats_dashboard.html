@@ -94,27 +94,27 @@
                 <h1 class="stats-title text-3xl md:text-4xl font-bold">Centrum Statystyk</h1>
                 <p class="opacity-80 mt-2">Sprzedaż, marża, zwroty, logistyka i konkurencja w jednym widoku.</p>
             </div>
-            <div class="flex flex-wrap gap-2">
-                <input type="date" class="input input-bordered" x-model="filters.date_from">
-                <input type="date" class="input input-bordered" x-model="filters.date_to">
-                <select class="select select-bordered" x-model="filters.granularity">
+            <div class="flex flex-wrap gap-2 w-full lg:w-auto">
+                <input type="date" class="input input-bordered w-full sm:w-auto" x-model="filters.date_from">
+                <input type="date" class="input input-bordered w-full sm:w-auto" x-model="filters.date_to">
+                <select class="select select-bordered w-full sm:w-auto" x-model="filters.granularity">
                     <option value="day">Dzień</option>
                     <option value="week">Tydzień</option>
                     <option value="month">Miesiąc</option>
                 </select>
-                <select class="select select-bordered" x-model="filters.platform">
+                <select class="select select-bordered w-full sm:w-auto" x-model="filters.platform">
                     <option value="all">Wszystkie platformy</option>
                     <option value="allegro">Allegro</option>
                     <option value="shop">Sklep</option>
                     <option value="ebay">eBay</option>
                     <option value="manual">Ręczne</option>
                 </select>
-                <select class="select select-bordered" x-model="filters.payment_type">
+                <select class="select select-bordered w-full sm:w-auto" x-model="filters.payment_type">
                     <option value="all">Wszystkie płatności</option>
                     <option value="cod">Pobranie</option>
                     <option value="online">Online</option>
                 </select>
-                <button class="btn btn-warning" @click="refreshAll()">
+                <button class="btn btn-warning w-full sm:w-auto" @click="refreshAll()">
                     <span x-show="!loading">Odśwież</span>
                     <span x-show="loading" class="loading loading-spinner loading-sm"></span>
                 </button>
