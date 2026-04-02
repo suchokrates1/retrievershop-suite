@@ -163,12 +163,6 @@
                                         <option value="{{ lvl }}" {% if item.value == lvl %}selected{% endif %}>{{ lvl }}</option>
                                         {% endfor %}
                                     </select>
-                                    {% elif item.key == 'FLASK_ENV' %}
-                                    <select class="select select-bordered select-sm" id="{{ item.key }}" name="{{ item.key }}">
-                                        {% for env in ['production','development'] %}
-                                        <option value="{{ env }}" {% if item.value == env %}selected{% endif %}>{{ env }}</option>
-                                        {% endfor %}
-                                    </select>
                                     {% else %}
                                     {% set is_sensitive =
                                         'password' in lower

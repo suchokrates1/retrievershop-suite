@@ -42,7 +42,7 @@ from .domain.financial import FinancialCalculator
 BOOLEAN_KEYS = {
     "ENABLE_MONTHLY_REPORTS",
     "ENABLE_WEEKLY_REPORTS",
-    "FLASK_DEBUG",
+    "ALLEGRO_AUTORESPONDER_ENABLED",
 }
 
 # Grupowanie ustawien w sekcje (klucz -> (nazwa_grupy, ikona))
@@ -76,10 +76,15 @@ SETTINGS_GROUPS = {
     "SENDER_EMAIL": ("Nadawca przesylek", "bi-box-seam"),
     "SENDER_PHONE": ("Nadawca przesylek", "bi-box-seam"),
     "PACKAGING_COST": ("Sprzedaz", "bi-cash"),
+    "WFIRMA_ACCESS_KEY": ("wFirma", "bi-receipt"),
+    "WFIRMA_SECRET_KEY": ("wFirma", "bi-receipt"),
+    "WFIRMA_APP_KEY": ("wFirma", "bi-receipt"),
+    "WFIRMA_COMPANY_ID": ("wFirma", "bi-receipt"),
+    "ALLEGRO_AUTORESPONDER_ENABLED": ("Allegro", "bi-shop"),
+    "ALLEGRO_AUTORESPONDER_MESSAGE": ("Allegro", "bi-shop"),
     "LOG_LEVEL": ("System", "bi-gear"),
     "LOG_FILE": ("System", "bi-gear"),
     "SECRET_KEY": ("System", "bi-gear"),
-    "FLASK_DEBUG": ("System", "bi-gear"),
     "TIMEZONE": ("System", "bi-gear"),
 }
 

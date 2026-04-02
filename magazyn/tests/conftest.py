@@ -60,7 +60,6 @@ def app(tmp_path, monkeypatch):
         ("API_RETRY_BACKOFF_MAX", "30.0"),
         ("SECRET_KEY", "test-secret-key"),
         ("COMMISSION_ALLEGRO", "10.0"),
-        ("FLASK_DEBUG", "0"),
         ("ALERT_EMAIL", "test@example.com"),
         ("LOW_STOCK_THRESHOLD", "5"),
         ("SMTP_SERVER", ""),

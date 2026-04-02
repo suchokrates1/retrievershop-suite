@@ -82,7 +82,6 @@ def live_server(tmp_path_factory):
         ("API_RETRY_BACKOFF_MAX", "30.0"),
         ("SECRET_KEY", "ui-test-secret"),
         ("COMMISSION_ALLEGRO", "10.0"),
-        ("FLASK_DEBUG", "0"),
         ("ALERT_EMAIL", "test@test.pl"),
         ("LOW_STOCK_THRESHOLD", "5"),
         ("SMTP_SERVER", ""),
