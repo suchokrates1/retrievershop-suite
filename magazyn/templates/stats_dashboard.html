@@ -1125,9 +1125,11 @@ function statsDashboard() {
                     fetch('/api/stats/profit?' + q).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
                 ]);
                 this.updateCards(overview, sales, profit);
-                this.renderSalesChart(sales);
-                this.renderSplitChart(sales);
-                this.renderWaterfallChart(profit);
+                requestAnimationFrame(() => {
+                    this.renderSalesChart(sales);
+                    this.renderSplitChart(sales);
+                    this.renderWaterfallChart(profit);
+                });
                 await Promise.all([
                     this.loadTelemetry(),
                     reload.returns ? this.loadReturns() : Promise.resolve(),
@@ -1228,6 +1230,7 @@ function statsDashboard() {
             if (!labels.length) { this.salesChartHasData = false; return; }
             this.salesChartHasData = true;
             const ctx = document.getElementById('salesChart');
+            if (!ctx || !ctx.getContext('2d')) return;
             if (this.salesChart) this.salesChart.destroy();
             this.salesChart = new Chart(ctx, {
                 type: 'bar',
@@ -1275,6 +1278,7 @@ function statsDashboard() {
             if (!cod && !online) { this.splitChartHasData = false; return; }
             this.splitChartHasData = true;
             const ctx = document.getElementById('splitChart');
+            if (!ctx || !ctx.getContext('2d')) return;
             if (this.splitChart) this.splitChart.destroy();
             this.splitChart = new Chart(ctx, {
                 type: 'doughnut',
@@ -1294,7 +1298,7 @@ function statsDashboard() {
             if (!items.length) { this.waterfallChartHasData = false; return; }
             this.waterfallChartHasData = true;
             const ctx = document.getElementById('waterfallChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext('2d')) return;
             if (this.waterfallChart) this.waterfallChart.destroy();
             let running = 0;
             const floatingBars = items.map((item, i) => {
