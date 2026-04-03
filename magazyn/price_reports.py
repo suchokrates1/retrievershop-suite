@@ -219,27 +219,32 @@ def report_detail(report_id: int):
                 "error": item.error,
             })
         
-        # Sortowanie wg roznicy cen:
-        # 1. Drozsi o niewiele (male dodatnie price_difference)
-        # 2. Drozsi o coraz wiecej (duze dodatnie)
-        # 3. Tansi o duzo (duze ujemne, np. -50)
-        # 4. Tansi o najmniej (male ujemne, np. -1)
-        # Pozycje bez price_difference (bledy) na koncu
+        # Sortowanie grupami:
+        # 1. Drozsi (nie najtansi, z konkurencja) - wg price_difference rosnaco
+        # 2. Inna aukcja OK (siostry)
+        # 3. Tansi (najtansi) - wg price_difference malejaco (duzo tansi -> malo tansi)
+        # 4. Bledy / brak danych - na koncu
         def sort_key(item):
             diff = item.get("price_difference")
+            note = item.get("suggestion_note")
             name = item["product_name"].lower() if item["product_name"] else ""
             
-            if diff is None:
-                # Bledy / brak danych - na koncu
+            if item.get("error"):
+                return (4, 0, name)
+            
+            if note == "inna_aukcja_ok":
                 return (2, 0, name)
+            
+            if diff is None:
+                return (4, 0, name)
             
             diff = float(diff)
             if diff > 0:
-                # Drozsi - grupa 0, sortuj rosnaco (niewiele -> duzo)
-                return (0, diff, name)
-            else:
-                # Tansi (lub rowni) - grupa 1, sortuj malejaco (duzo tansi -> malo tansi)
+                # Drozsi - grupa 1, sortuj rosnaco (niewiele -> duzo)
                 return (1, diff, name)
+            else:
+                # Tansi (lub rowni) - grupa 3, sortuj malejaco (duzo tansi -> malo tansi)
+                return (3, diff, name)
         
         items_data.sort(key=sort_key)
         
