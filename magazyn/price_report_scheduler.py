@@ -162,7 +162,7 @@ def get_unchecked_offers(report_id: int, limit: int = BATCH_SIZE) -> List[dict]:
         # Znajdz oferty ktore nie maja jeszcze wpisu w tym raporcie
         checked_offer_ids = session.query(PriceReportItem.offer_id).filter(
             PriceReportItem.report_id == report_id
-        ).subquery()
+        ).scalar_subquery()
         
         offers = session.query(AllegroOffer).filter(
             AllegroOffer.publication_status == "ACTIVE",
