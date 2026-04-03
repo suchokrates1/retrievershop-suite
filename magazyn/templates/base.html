@@ -75,15 +75,18 @@
                     {% endif %}
                 </div>
                 {% if show_menu %}
+                {% set _ep = request.endpoint or '' %}
+                {% set _bp = request.blueprints[0] if request.blueprints else '' %}
+                {% macro nav_cls(active) %}text-base-content hover:bg-base-content/20 rounded-lg{% if active %} bg-base-content/15 font-semibold{% endif %}{% endmacro %}
                 <ul class="menu menu-horizontal flex-nowrap gap-1 hidden md:flex items-center mt-2 p-0">
-                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('home') }}">Strona główna</a></li>
-                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
-                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
-                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
-                    <li><a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
+                    <li><a class="{{ nav_cls(_ep == 'home') }}" href="{{ url_for('home') }}">Strona główna</a></li>
+                    <li><a class="{{ nav_cls(_ep == 'stats_dashboard') }}" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
+                    <li><a class="{{ nav_cls(_bp == 'products') }}" href="{{ url_for('products.items') }}">Produkty</a></li>
+                    <li><a class="{{ nav_cls(_bp == 'orders') }}" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
+                    <li><a class="{{ nav_cls(_bp == 'allegro') }}" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
+                    <li><a class="{{ nav_cls(_bp == 'price_reports') }}" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
                     <li>
-                        <a class="text-base-content hover:bg-base-content/20 rounded-lg" href="{{ url_for('discussions.discussions_list') }}">
+                        <a class="{{ nav_cls(_bp == 'discussions') }}" href="{{ url_for('discussions.discussions_list') }}">
                             Wiadomości / Dyskusje
                             {% if unread_count > 0 %}
                                 <span class="badge badge-error">{{ unread_count }}</span>
@@ -93,7 +96,7 @@
                     <li x-data="{ open: false }" class="relative"
                         @mouseenter="if(window.innerWidth >= 768) open = true"
                         @mouseleave="if(window.innerWidth >= 768) open = false">
-                        <a class="text-base-content hover:bg-base-content/20 rounded-lg" href="#"
+                        <a class="{{ nav_cls(_ep in ('settings_page', 'stats_billing_types') or _bp == 'sales') }}" href="#"
                            @click.prevent="if(window.innerWidth < 768) open = !open"
                            :aria-expanded="open">
                             Ustawienia
@@ -123,27 +126,28 @@
          :class="menuOpen && 'open'">
         <button @click="menuOpen = false" class="btn btn-ghost btn-sm absolute top-2 right-2 text-white" type="button" aria-label="Zamknij">&times;</button>
         <img src="https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png" alt="Logo" class="h-10 mx-auto mb-3">
+        {% macro mob_cls(active) %}text-white{% if active %} bg-white/15 font-semibold{% endif %}{% endmacro %}
         <ul class="menu flex flex-col h-full p-0">
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
+            <li><a class="{{ mob_cls(_ep == 'home') }}" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
+            <li><a class="{{ mob_cls(_ep == 'stats_dashboard') }}" @click="menuOpen = false" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
+            <li><a class="{{ mob_cls(_bp == 'products') }}" @click="menuOpen = false" href="{{ url_for('products.items') }}">Produkty</a></li>
+            <li><a class="{{ mob_cls(_bp == 'orders') }}" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
+            <li><a class="{{ mob_cls(_bp == 'allegro') }}" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
+            <li><a class="{{ mob_cls(_bp == 'price_reports') }}" @click="menuOpen = false" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
             <li>
-                <a class="text-white" @click="menuOpen = false" href="{{ url_for('discussions.discussions_list') }}">
+                <a class="{{ mob_cls(_bp == 'discussions') }}" @click="menuOpen = false" href="{{ url_for('discussions.discussions_list') }}">
                     Wiadomości / Dyskusje
                     {% if unread_count > 0 %}
                         <span class="badge badge-error">{{ unread_count }}</span>
                     {% endif %}
                 </a>
             </li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('stats_billing_types') }}">Mapowanie rozliczeń</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('agent_logs') }}">Logi</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
-            <li><a class="text-white" @click="menuOpen = false" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
+            <li><a class="{{ mob_cls(_ep == 'settings_page') }}" @click="menuOpen = false" href="{{ url_for('settings_page') }}">Ustawienia</a></li>
+            <li><a class="{{ mob_cls(_bp == 'sales') }}" @click="menuOpen = false" href="{{ url_for('sales.sales_settings') }}">Ustawienia sprzedaży</a></li>
+            <li><a class="{{ mob_cls(_ep == 'stats_billing_types') }}" @click="menuOpen = false" href="{{ url_for('stats_billing_types') }}">Mapowanie rozliczeń</a></li>
+            <li><a class="{{ mob_cls(_ep == 'agent_logs') }}" @click="menuOpen = false" href="{{ url_for('agent_logs') }}">Logi</a></li>
+            <li><a class="{{ mob_cls(_ep == 'scanning.scan_logs') }}" @click="menuOpen = false" href="{{ url_for('scanning.scan_logs') }}">Logi skanów</a></li>
+            <li><a class="{{ mob_cls(_ep == 'test_print') }}" @click="menuOpen = false" href="{{ url_for('test_print') }}">Testuj drukarkę</a></li>
             <li class="mt-auto text-center">
                 <a class="btn btn-error w-full" @click="menuOpen = false" href="{{ url_for('logout') }}">Wyloguj się</a>
             </li>
@@ -162,7 +166,7 @@
       {% if category == 'error' %}{% set cat = 'error' %}{% elif category == 'danger' %}{% set cat = 'error' %}{% elif category in ['success','warning','info'] %}{% set cat = category %}{% else %}{% set cat = 'info' %}{% endif %}
       <div class="alert alert-{{ cat }} mb-3 shadow-lg"
            x-data="{ show: true }" x-show="show" x-transition.duration.300ms
-           x-init="setTimeout(() => show = false, 5000)">
+           x-init="setTimeout(() => show = false, 8000)">
         {% if cat == 'success' %}<i class="bi bi-check-circle-fill mr-2"></i>
         {% elif cat == 'error' %}<i class="bi bi-exclamation-triangle-fill mr-2"></i>
         {% elif cat == 'warning' %}<i class="bi bi-exclamation-circle-fill mr-2"></i>

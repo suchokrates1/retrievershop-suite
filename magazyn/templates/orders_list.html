@@ -7,7 +7,7 @@
 <div class="flex justify-between items-center mb-3">
     <h2 class="mb-0">Zamowienia</h2>
     <a href="{{ url_for('orders.add_order') }}" class="btn btn-primary btn-sm sm:btn-md">
-        <i class="bi bi-plus-lg"></i> <span class="hidden sm:inline">Dodaj zamowienie</span>
+        <i class="bi bi-plus-lg"></i> <span class="hidden sm:inline">Dodaj zamówienie</span>
     </a>
 </div>
 
@@ -106,13 +106,13 @@
                     {% if order.return_info %}
                     {% set rs = order.return_info.status %}
                     {% if order.return_info.refund_processed or rs == 'completed' %}
-                    <span class="badge badge-xs text-white" style="background-color: oklch(0.55 0.15 25);"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-error"><i class="bi bi-arrow-return-left"></i></span>
                     {% elif rs == 'delivered' %}
-                    <span class="badge badge-xs text-white" style="background-color: oklch(0.65 0.18 50);"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-warning"><i class="bi bi-arrow-return-left"></i></span>
                     {% elif rs == 'in_transit' %}
-                    <span class="badge badge-xs text-white" style="background-color: oklch(0.7 0.15 65);"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-info"><i class="bi bi-arrow-return-left"></i></span>
                     {% else %}
-                    <span class="badge badge-xs text-white" style="background-color: oklch(0.6 0.2 30);"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-neutral"><i class="bi bi-arrow-return-left"></i></span>
                     {% endif %}
                     {% else %}
                     <span class="badge badge-xs {{ order.status_class }}">{{ order.status_text }}</span>
@@ -124,7 +124,7 @@
     {% else %}
     <div class="text-center text-base-content/60 py-4">
         <i class="bi bi-inbox text-4xl"></i>
-        <p class="mt-2 mb-0">Brak zamowien</p>
+        <p class="mt-2 mb-0">Brak zamówień</p>
     </div>
     {% endfor %}
 </div>
@@ -133,7 +133,7 @@
 <div class="overflow-x-auto hidden md:block">
 <table class="table table-zebra table-sm" id="orders-table-v2">
 
-    <thead hx-boost="true">
+    <thead hx-boost="true" class="sticky top-0 z-10 bg-base-100">
     <tr>
         {% set sort_params = {'search': search, 'per_page': per_page, 'status': status_filter, 'date_from': date_from, 'date_to': date_to} %}
         <th>
@@ -175,13 +175,13 @@
             {% if order.return_info %}
             {% set rs = order.return_info.status %}
             {% if order.return_info.refund_processed or rs == 'completed' %}
-            <span class="badge text-white" style="background-color: oklch(0.55 0.15 25);" title="Zwrot zakonczony"><i class="bi bi-arrow-return-left"></i> zakonczony</span>
+            <span class="badge badge-error" title="Zwrot zakończony"><i class="bi bi-arrow-return-left"></i> zakończony</span>
             {% elif rs == 'delivered' %}
-            <span class="badge text-white" style="background-color: oklch(0.65 0.18 50);" title="Paczka zwrotna odebrana"><i class="bi bi-arrow-return-left"></i> odebrano</span>
+            <span class="badge badge-warning" title="Paczka zwrotna odebrana"><i class="bi bi-arrow-return-left"></i> odebrano</span>
             {% elif rs == 'in_transit' %}
-            <span class="badge text-white" style="background-color: oklch(0.7 0.15 65);" title="Paczka zwrotna w drodze"><i class="bi bi-arrow-return-left"></i> w drodze</span>
+            <span class="badge badge-info" title="Paczka zwrotna w drodze"><i class="bi bi-arrow-return-left"></i> w drodze</span>
             {% else %}
-            <span class="badge text-white" style="background-color: oklch(0.6 0.2 30);" title="Zwrot zgloszony"><i class="bi bi-arrow-return-left"></i> zgloszony</span>
+            <span class="badge badge-neutral" title="Zwrot zgłoszony"><i class="bi bi-arrow-return-left"></i> zgłoszony</span>
             {% endif %}
             {% else %}
             <span class="badge {{ order.status_class }}">{{ order.status_text }}</span>
