@@ -11,7 +11,7 @@ from threading import RLock
 from types import SimpleNamespace
 from typing import Iterable, Mapping, Optional
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 from . import settings_io
 
@@ -53,6 +53,27 @@ class SettingsStore:
         if not db_path:
             return _default_db_path()
         return Path(db_path)
+
+    def _get_runtime_engine(self):
+        """Zwróć skonfigurowany engine lub tymczasowy engine z DATABASE_URL."""
+        from .db import engine as configured_engine
+
+        if configured_engine is not None:
+            return configured_engine, False
+
+        database_url = os.environ.get("DATABASE_URL", "")
+        if not database_url.startswith("postgresql"):
+            return None, False
+
+        try:
+            return create_engine(
+                database_url,
+                future=True,
+                pool_pre_ping=True,
+            ), True
+        except Exception as exc:
+            LOGGER.warning("Failed to create temporary settings engine: %s", exc)
+            return None, False
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
@@ -132,10 +153,13 @@ class SettingsStore:
     def _load_from_db(
         self, db_path: Path
     ) -> Optional[tuple["OrderedDict[str, str]", Optional[str]]]:
-        from .db import engine as _engine
-
-        if _engine is not None:
-            return self._load_via_engine(_engine)
+        runtime_engine, should_dispose = self._get_runtime_engine()
+        if runtime_engine is not None:
+            try:
+                return self._load_via_engine(runtime_engine)
+            finally:
+                if should_dispose:
+                    runtime_engine.dispose()
 
         # Engine nie skonfigurowany - bezposredni fallback SQLite
         if not db_path.exists():
@@ -184,12 +208,11 @@ class SettingsStore:
         return data, latest
 
     def _fetch_last_updated_at(self, db_path: Optional[Path] = None) -> Optional[str]:
-        from .db import engine as _engine
-
-        if _engine is None:
+        runtime_engine, should_dispose = self._get_runtime_engine()
+        if runtime_engine is None:
             return None
         try:
-            with _engine.connect() as conn:
+            with runtime_engine.connect() as conn:
                 row = conn.execute(
                     text("SELECT MAX(updated_at) FROM app_settings")
                 ).fetchone()
@@ -205,11 +228,15 @@ class SettingsStore:
                 return None
             LOGGER.debug("Failed to read app_settings.updated_at: %s", exc)
             return None
+        finally:
+            if should_dispose:
+                runtime_engine.dispose()
 
     def _persist_many(self, values: Mapping[str, str], db_path: Optional[Path] = None) -> bool:
         if not values:
             return True
 
+        from .db import engine as configured_engine
         from .db import db_connect as _db_connect
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -217,6 +244,42 @@ class SettingsStore:
             {"key": key, "value": "" if value is None else str(value), "now": now}
             for key, value in values.items()
         ]
+
+        runtime_engine, should_dispose = self._get_runtime_engine()
+
+        if configured_engine is None and runtime_engine is not None:
+            try:
+                with runtime_engine.connect() as conn:
+                    conn.execute(text(SCHEMA))
+                    conn.execute(
+                        text("""
+                            INSERT INTO app_settings(key, value, updated_at)
+                            VALUES (:key, :value, :now)
+                            ON CONFLICT(key) DO UPDATE SET
+                                value = excluded.value,
+                                updated_at = excluded.updated_at
+                        """),
+                        rows,
+                    )
+                    conn.commit()
+                    row = conn.execute(
+                        text("SELECT MAX(updated_at) FROM app_settings")
+                    ).fetchone()
+                    if row:
+                        latest = row[0]
+                        if latest is not None:
+                            self._db_last_updated_at = (
+                                latest if isinstance(latest, str) else str(latest)
+                            )
+                    return True
+            except Exception as exc:
+                LOGGER.exception("Failed to persist settings to database: %s", exc)
+                raise SettingsPersistenceError(
+                    "Failed to persist settings to the database"
+                ) from exc
+            finally:
+                if should_dispose:
+                    runtime_engine.dispose()
 
         try:
             with _db_connect() as conn:
@@ -257,7 +320,38 @@ class SettingsStore:
         if not keys:
             return True
 
+        from .db import engine as configured_engine
         from .db import db_connect as _db_connect
+
+        runtime_engine, should_dispose = self._get_runtime_engine()
+
+        if configured_engine is None and runtime_engine is not None:
+            try:
+                with runtime_engine.connect() as conn:
+                    conn.execute(text(SCHEMA))
+                    conn.execute(
+                        text("DELETE FROM app_settings WHERE key = :key"),
+                        [{"key": k} for k in keys],
+                    )
+                    conn.commit()
+                    row = conn.execute(
+                        text("SELECT MAX(updated_at) FROM app_settings")
+                    ).fetchone()
+                    if row:
+                        latest = row[0]
+                        if latest is not None:
+                            self._db_last_updated_at = (
+                                latest if isinstance(latest, str) else str(latest)
+                            )
+                    return True
+            except Exception as exc:
+                LOGGER.exception("Failed to delete settings from database: %s", exc)
+                raise SettingsPersistenceError(
+                    "Failed to delete settings from the database"
+                ) from exc
+            finally:
+                if should_dispose:
+                    runtime_engine.dispose()
 
         try:
             with _db_connect() as conn:
