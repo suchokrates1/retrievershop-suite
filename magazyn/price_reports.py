@@ -462,6 +462,58 @@ def recheck_item(item_id):
             offer_id = item.offer_id
             old_our_price = float(item.our_price) if item.our_price else None
             title = item.product_name
+            
+            # Sprawdz czy oferta ma tansza siostre (ten sam product_size_id)
+            offer = session.query(AllegroOffer).filter(
+                AllegroOffer.offer_id == offer_id
+            ).first()
+            ps_id = offer.product_size_id if offer else None
+            
+            has_cheaper_sibling = False
+            if ps_id and old_our_price:
+                cheaper = session.query(AllegroOffer).filter(
+                    AllegroOffer.product_size_id == ps_id,
+                    AllegroOffer.publication_status == "ACTIVE",
+                    AllegroOffer.offer_id != offer_id,
+                    AllegroOffer.price < old_our_price,
+                ).first()
+                if cheaper:
+                    has_cheaper_sibling = True
+                    cheaper_id = cheaper.offer_id
+                    cheaper_price = float(cheaper.price)
+        
+        if has_cheaper_sibling:
+            # Inna nasza oferta jest tansza - nie ma sensu scrapowac
+            with get_session() as session:
+                item = session.query(PriceReportItem).filter(
+                    PriceReportItem.id == item_id
+                ).first()
+                item.is_cheapest = False
+                item.competitor_price = None
+                item.competitor_seller = None
+                item.competitor_url = None
+                item.error = None
+                item.checked_at = datetime.now()
+                session.commit()
+            
+            return jsonify({
+                "success": True,
+                "price_updated": False,
+                "sibling_ok": True,
+                "data": {
+                    "our_price": old_our_price,
+                    "competitor_price": None,
+                    "competitor_seller": None,
+                    "is_cheapest": False,
+                    "price_difference": None,
+                    "our_position": None,
+                    "total_offers": None,
+                    "suggestion": None,
+                    "suggestion_note": "inna_aukcja_ok",
+                    "error": None,
+                    "message": f"Tansza siostra: {cheaper_id} ({cheaper_price} zl)",
+                }
+            })
         
         # Najpierw pobierz aktualna cene naszej oferty z Allegro API
         our_offer_data = get_offer_details(offer_id)
