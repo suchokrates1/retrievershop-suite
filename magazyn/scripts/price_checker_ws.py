@@ -23,7 +23,7 @@ import argparse
 import re
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Optional, List
 from dataclasses import dataclass, asdict
 from decimal import Decimal
@@ -48,13 +48,67 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 CDP_HOST = os.environ.get("CDP_HOST", "192.168.31.147")  # minipc
 CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 MY_SELLER = "Retriever_Shop"
-MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa (chinczycy)
+MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa w dniach roboczych (chinczycy)
 
 # Polskie miesiace do parsowania daty dostawy
 POLISH_MONTHS = {
     "sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6,
     "lip": 7, "sie": 8, "wrz": 9, "paz": 10, "lis": 11, "gru": 12
 }
+
+
+def _easter_date(year: int) -> date:
+    """Oblicza date Wielkanocy algorytmem Meeusa/Jonesa/Butchera."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def _polish_holidays(year: int) -> set:
+    """Zwraca zbior polskich swiat ustawowo wolnych od pracy."""
+    easter = _easter_date(year)
+    return {
+        date(year, 1, 1),                   # Nowy Rok
+        date(year, 1, 6),                   # Trzech Kroli
+        easter,                              # Wielkanoc
+        easter + timedelta(days=1),          # Poniedzialek Wielkanocny
+        date(year, 5, 1),                   # Swieto Pracy
+        date(year, 5, 3),                   # Konstytucja 3 Maja
+        easter + timedelta(days=60),         # Boze Cialo
+        date(year, 8, 15),                  # Wniebowziecie NMP
+        date(year, 11, 1),                  # Wszystkich Swietych
+        date(year, 11, 11),                 # Niepodleglosci
+        date(year, 12, 25),                 # Boze Narodzenie
+        date(year, 12, 26),                 # Drugi dzien swiat
+    }
+
+
+def _business_days_between(start: date, end: date) -> int:
+    """Liczy dni robocze miedzy datami (bez weekendow i swiat polskich)."""
+    if end <= start:
+        return 0
+    holidays = _polish_holidays(start.year)
+    if end.year != start.year:
+        holidays |= _polish_holidays(end.year)
+    count = 0
+    current = start + timedelta(days=1)
+    while current <= end:
+        if current.weekday() < 5 and current not in holidays:
+            count += 1
+        current += timedelta(days=1)
+    return count
 
 # Cache dla wykluczonych sprzedawcow (unikamy zapytan do DB przy kazdym sprawdzeniu)
 _excluded_sellers_cache: set = set()
@@ -140,20 +194,24 @@ def parse_price(price_str: str) -> float:
 
 
 def parse_delivery_days(text: str) -> Optional[int]:
-    """Parsuje tekst dostawy na liczbe dni.
+    """Parsuje tekst dostawy na liczbe dni ROBOCZYCH.
+    
+    Uwzglednia weekendy i polskie swieta ustawowe (Wielkanoc, Boze Cialo itd.).
+    Dzieki temu w okresie swiatecznym normalni sprzedawcy nie sa odfiltrowywani.
     
     Rozpoznaje formaty:
-    - 'dostawa pt. 6 lut.' -> dni do 6 lutego
-    - 'dostawa w sobote' -> oblicza dni do soboty
-    - 'dostawa za 2-3 dni' -> srednia (2)
-    - '5 lut' -> dni do 5 lutego
-    - 'pojutrze' -> 2
-    - 'jutro' -> 1
+    - 'dostawa pt. 6 lut.' -> dni robocze do 6 lutego
+    - 'dostawa w sobote' -> oblicza dni robocze do soboty
+    - 'dostawa za 2-3 dni' -> dni robocze do daty docelowej
+    - '5 lut' -> dni robocze do 5 lutego
+    - 'pojutrze' -> dni robocze
+    - 'jutro' -> dni robocze
     - 'dzisiaj' -> 0
     """
     if not text:
         return None
     t = text.lower().strip()
+    today = date.today()
     
     # 'dostawa od X' - pomijamy (nieznana data, czesto chinczycy)
     if re.match(r"^dostawa\s+od\s+\d", t):
@@ -162,12 +220,15 @@ def parse_delivery_days(text: str) -> Optional[int]:
     # 'dostawa za X-Y dni'
     m = re.search(r"dostawa\s+za\s+(\d+)\s*[–-]\s*(\d+)\s*dni", t)
     if m:
-        return (int(m.group(1)) + int(m.group(2))) // 2
+        avg_days = (int(m.group(1)) + int(m.group(2))) // 2
+        target = today + timedelta(days=avg_days)
+        return _business_days_between(today, target)
     
     # 'dostawa za X dni'
     m = re.search(r"dostawa\s+za\s+(\d+)\s*dni", t)
     if m:
-        return int(m.group(1))
+        target = today + timedelta(days=int(m.group(1)))
+        return _business_days_between(today, target)
     
     # 'X sty' lub 'pt. X sty' - konkretna data (np. '5 lut', 'pt. 6 lut.')
     # Usun opcjonalny dzien tygodnia na poczatku
@@ -177,13 +238,12 @@ def parse_delivery_days(text: str) -> Optional[int]:
         day = int(m.group(1))
         month_str = m.group(2).replace('ź', 'z')  # paz/paź -> paz
         month = POLISH_MONTHS.get(month_str, 1)
-        today = datetime.now()
         try:
-            target = datetime(today.year, month, day)
+            target = date(today.year, month, day)
             if target < today:
-                target = datetime(today.year + 1, month, day)
-            return (target - today).days
-        except:
+                target = date(today.year + 1, month, day)
+            return _business_days_between(today, target)
+        except ValueError:
             pass
     
     # Dni tygodnia - z polskimi znakami i bez
@@ -198,17 +258,19 @@ def parse_delivery_days(text: str) -> Optional[int]:
     }
     for day_name, day_num in days_of_week.items():
         if day_name in t:
-            today = datetime.now()
             today_weekday = today.weekday()
             days_ahead = day_num - today_weekday
             if days_ahead <= 0:
                 days_ahead += 7
-            return days_ahead
+            target = today + timedelta(days=days_ahead)
+            return _business_days_between(today, target)
     
     if "pojutrze" in t:
-        return 2
+        target = today + timedelta(days=2)
+        return _business_days_between(today, target)
     if "jutro" in t:
-        return 1
+        target = today + timedelta(days=1)
+        return _business_days_between(today, target)
     if "dzisiaj" in t or "dzis" in t or "dziś" in t:
         return 0
     
@@ -556,7 +618,7 @@ async def check_offer_price(
             filtered_by_excluded = len([o for o in competitors_all if o.seller in excluded_sellers])
             
             if filtered_by_delivery > 0:
-                logger.info(f"Odfiltrowano {filtered_by_delivery} ofert z dostawa >= {max_delivery_days} dni")
+                logger.info(f"Odfiltrowano {filtered_by_delivery} ofert z dostawa >= {max_delivery_days} dni roboczych")
             if filtered_by_excluded > 0:
                 logger.info(f"Odfiltrowano {filtered_by_excluded} ofert od wykluczonych sprzedawcow")
             
