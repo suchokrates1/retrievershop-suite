@@ -146,25 +146,27 @@ def report_detail(report_id: int):
                     "our_price": item.our_price,
                 })
         
-        # Znajdz product_size_id gdzie przynajmniej jedna oferta jest najtansza
-        products_with_cheapest = set()
-        for ps_id, ps_offers in product_size_offers.items():
-            if any(o["is_cheapest"] for o in ps_offers):
-                products_with_cheapest.add(ps_id)
-        
         items_data = []
         for item in items:
             ps_id = offer_to_product_size.get(item.offer_id)
             ps_offers = product_size_offers.get(ps_id, []) if ps_id else []
             has_multiple_offers = len(ps_offers) > 1
-            other_offer_is_cheapest = ps_id in products_with_cheapest and not item.is_cheapest
+            
+            # Sprawdz czy istnieje tansza siostra (inna nasza oferta tego produktu z nizsza cena)
+            has_cheaper_sibling = False
+            if has_multiple_offers and item.our_price:
+                our = float(item.our_price)
+                for o in ps_offers:
+                    if o["offer_id"] != item.offer_id and o["our_price"] and float(o["our_price"]) < our:
+                        has_cheaper_sibling = True
+                        break
             
             # Oblicz sugestie ceny
             suggestion = None
             suggestion_note = None
             
-            if other_offer_is_cheapest and has_multiple_offers:
-                # Inna oferta tego produktu jest najtansza - cena ustawiona celowo
+            if has_cheaper_sibling:
+                # Inna nasza oferta tego produktu jest tansza - pomijamy
                 suggestion_note = "inna_aukcja_ok"
             elif not item.is_cheapest and item.competitor_price and item.our_price:
                 target_price = float(item.competitor_price) - 0.01

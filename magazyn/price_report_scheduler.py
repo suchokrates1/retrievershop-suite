@@ -149,6 +149,87 @@ def create_new_report() -> int:
         return report.id
 
 
+def mark_sibling_offers(report_id: int) -> int:
+    """Oznacza oferty z tansza siostra (ten sam product_size_id) jako 'Inna OK'.
+    
+    Jesli mamy 2+ oferty tego samego product_size_id, ta o nizszej cenie
+    wymaga sprawdzenia z konkurencja, a drozsze dostaja wpis bez scrapingu.
+    
+    Returns
+    -------
+    int
+        Liczba ofert oznaczonych jako 'Inna OK'.
+    """
+    from .db import get_session
+    from .models import AllegroOffer, PriceReportItem, PriceReport
+
+    marked = 0
+    with get_session() as session:
+        # Znajdz oferty juz sprawdzone w tym raporcie
+        checked_offer_ids = set(
+            row[0] for row in session.query(PriceReportItem.offer_id).filter(
+                PriceReportItem.report_id == report_id
+            ).all()
+        )
+
+        # Pobierz wszystkie aktywne oferty pogrupowane po product_size_id
+        active_offers = session.query(AllegroOffer).filter(
+            AllegroOffer.publication_status == "ACTIVE",
+            AllegroOffer.product_size_id != None,
+        ).all()
+
+        # Grupuj po product_size_id
+        groups = {}
+        for o in active_offers:
+            groups.setdefault(o.product_size_id, []).append(o)
+
+        for ps_id, offers in groups.items():
+            if len(offers) < 2:
+                continue
+
+            # Posortuj po cenie rosnaco - najtansza wymaga sprawdzenia
+            offers_sorted = sorted(offers, key=lambda x: float(x.price) if x.price else 999999)
+            cheapest = offers_sorted[0]
+
+            for o in offers_sorted[1:]:
+                if o.offer_id in checked_offer_ids:
+                    continue
+
+                # Ta oferta jest drozsza od naszej innej - oznacz jako "Inna OK"
+                cheapest_price = float(cheapest.price) if cheapest.price else None
+                our_price = float(o.price) if o.price else None
+
+                if our_price and cheapest_price and our_price > cheapest_price:
+                    item = PriceReportItem(
+                        report_id=report_id,
+                        offer_id=o.offer_id,
+                        product_name=o.title,
+                        our_price=Decimal(str(our_price)),
+                        competitor_price=None,
+                        competitor_seller=None,
+                        is_cheapest=False,
+                        our_position=None,
+                        total_offers=None,
+                        error=None,
+                    )
+                    session.add(item)
+                    marked += 1
+                    logger.info(
+                        f"Inna OK: {o.offer_id} ({our_price} zl) - tansza siostra "
+                        f"{cheapest.offer_id} ({cheapest_price} zl) na product_size={ps_id}"
+                    )
+
+        if marked > 0:
+            # Zaktualizuj postep raportu
+            report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
+            if report:
+                report.items_checked += marked
+            session.commit()
+            logger.info(f"Oznaczono {marked} ofert jako 'Inna OK' w raporcie #{report_id}")
+
+    return marked
+
+
 def get_unchecked_offers(report_id: int, limit: int = BATCH_SIZE) -> List[dict]:
     """Pobiera oferty do sprawdzenia (jeszcze nie sprawdzone w tym raporcie).
     
@@ -395,6 +476,15 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
     
     mode_label = "reczny" if fast_mode else "wolny"
     logger.info(f"Rozpoczynam przetwarzanie raportu #{report_id}, {len(schedule)} partii (tryb: {mode_label})")
+    
+    # Przed scrapingiem oznacz drozsze siostry jako "Inna OK"
+    try:
+        with app.app_context():
+            sibling_count = mark_sibling_offers(report_id)
+            if sibling_count > 0:
+                logger.info(f"Pominiento {sibling_count} ofert (Inna OK) - zostaly drozsze siostry")
+    except Exception as e:
+        logger.warning(f"Blad oznaczania siostrzanych ofert: {e}")
     
     batch_idx = 0
     
