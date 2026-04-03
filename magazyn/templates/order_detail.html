@@ -10,7 +10,7 @@
             <i class="bi bi-arrow-left"></i> Powrot do listy
         </a>
         <h2 class="text-2xl font-bold">
-            Zamowienie #{{ order.order_id }}
+            Zamówienie #{{ order.order_id }}
             <span class="badge {{ current_status.status_class }} text-sm">{{ current_status.status_text }}</span>
             {% if return_info %}
             <span class="badge badge-error text-sm ml-1">
@@ -180,7 +180,7 @@
                             </tr>
                         {% else %}
                             <tr>
-                                <td colspan="4" class="text-center text-base-content/60">Brak produktow</td>
+                                <td colspan="4" class="text-center text-base-content/60">Brak produktów</td>
                             </tr>
                         {% endfor %}
                         {% if order.delivery_price and order.delivery_price > 0 %}
