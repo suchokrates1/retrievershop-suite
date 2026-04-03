@@ -1,5 +1,6 @@
 import importlib
 import re
+from collections import OrderedDict
 from urllib.parse import parse_qs, urlparse
 
 import magazyn.config as cfg
@@ -195,3 +196,67 @@ def test_allegro_authorize_redirects_to_provider(app_mod, client, login):
 
     with client.session_transaction() as sess:
         assert sess.get("allegro_oauth_state") == state
+
+
+def test_settings_store_reads_tokens_from_database_url_before_engine(monkeypatch):
+    import magazyn.db as db_mod
+    import magazyn.settings_store as store_mod
+
+    class DummyRows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class DummyConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, _query):
+            return DummyRows(
+                [
+                    ("ALLEGRO_ACCESS_TOKEN", "db-access-token", "2026-04-03 10:00:00"),
+                    ("ALLEGRO_REFRESH_TOKEN", "db-refresh-token", "2026-04-03 10:00:00"),
+                ]
+            )
+
+        def rollback(self):
+            return None
+
+    class DummyEngine:
+        def __init__(self):
+            self.disposed = False
+
+        def connect(self):
+            return DummyConnection()
+
+        def dispose(self):
+            self.disposed = True
+
+    dummy_engine = DummyEngine()
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db:5432/magazyn")
+    monkeypatch.setattr(db_mod, "engine", None)
+    monkeypatch.setattr(
+        store_mod.settings_io,
+        "load_settings",
+        lambda **kwargs: OrderedDict(
+            [
+                ("DB_PATH", "/tmp/unused.db"),
+                ("ALLEGRO_ACCESS_TOKEN", "env-access-token"),
+                ("ALLEGRO_REFRESH_TOKEN", "env-refresh-token"),
+                ("SECRET_KEY", "secret"),
+            ]
+        ),
+    )
+    monkeypatch.setattr(store_mod, "create_engine", lambda *args, **kwargs: dummy_engine)
+
+    store = store_mod.SettingsStore()
+
+    assert store.get("ALLEGRO_ACCESS_TOKEN") == "db-access-token"
+    assert store.get("ALLEGRO_REFRESH_TOKEN") == "db-refresh-token"
+    assert dummy_engine.disposed is True
