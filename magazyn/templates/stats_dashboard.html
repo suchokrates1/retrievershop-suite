@@ -136,11 +136,11 @@
         <div class="chart-wrap xl:col-span-2 reveal">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-lg font-semibold">Trend sprzedaży</h3>
-                <span class="badge badge-outline" x-text="salesMeta"></span>
+                <span class="badge badge-neutral" x-text="salesMeta"></span>
             </div>
             <div class="chart-canvas-shell relative">
                 <canvas id="salesChart" height="120"></canvas>
-                <div x-show="!salesChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/40">
+                <div x-show="!salesChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/60">
                     <div class="text-center">
                         <i class="bi bi-graph-up text-4xl block mb-2"></i>
                         <span>Brak danych do wyswietlenia wykresu</span>
@@ -153,7 +153,7 @@
             <h3 class="text-lg font-semibold mb-3">Struktura płatności</h3>
             <div class="chart-canvas-shell chart-canvas-shell-sm relative">
                 <canvas id="splitChart" height="120"></canvas>
-                <div x-show="!splitChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/40">
+                <div x-show="!splitChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/60">
                     <div class="text-center">
                         <i class="bi bi-pie-chart text-4xl block mb-2"></i>
                         <span>Brak danych</span>
@@ -167,7 +167,7 @@
         <h3 class="text-lg font-semibold mb-3">Waterfall finansowy</h3>
         <div class="chart-canvas-shell chart-canvas-shell-sm relative">
             <canvas id="waterfallChart" height="100"></canvas>
-            <div x-show="!waterfallChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/40">
+            <div x-show="!waterfallChartHasData && !loading" class="absolute inset-0 flex items-center justify-center bg-base-100/80 text-base-content/60">
                 <div class="text-center">
                     <i class="bi bi-bar-chart text-4xl block mb-2"></i>
                     <span>Brak danych</span>
@@ -905,7 +905,7 @@
                     <div class="text-xs uppercase opacity-70 mb-2">Status publikacji (snapshot)</div>
                     <div class="flex gap-2 flex-wrap text-sm">
                         <template x-for="(count, status) in (offerPublicationHistoryData.publication_status || {})" :key="status">
-                            <span class="badge badge-outline" x-text="status + ': ' + count"></span>
+                            <span class="badge badge-neutral" x-text="status + ': ' + count"></span>
                         </template>
                     </div>
                 </div>
