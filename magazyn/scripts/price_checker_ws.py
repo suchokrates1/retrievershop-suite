@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # Konfiguracja
 # Chrome DevTools wymaga IP lub localhost w Host header - hostname (np. "price-checker-chrome")
 # powoduje HTTP 500: "Host header is specified and is not an IP address or localhost."
-CDP_HOST = os.environ.get("CDP_HOST", "192.168.31.147")  # minipc
+CDP_HOST = os.environ.get("CDP_HOST", "192.168.31.5")  # minipc
 CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 MY_SELLER = "Retriever_Shop"
 MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa w dniach roboczych (chinczycy)
