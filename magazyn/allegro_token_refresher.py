@@ -22,6 +22,8 @@ from .settings_store import SettingsPersistenceError, settings_store
 
 LOGGER = logging.getLogger(__name__)
 
+TOKEN_FAILURE_NOTIFY_THRESHOLD = 3
+
 
 def _parse_int(value: object) -> Optional[int]:
     try:
@@ -61,6 +63,8 @@ class AllegroTokenRefresher:
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._consecutive_failures: int = 0
+        self._notification_sent: bool = False
 
     def start(self) -> bool:
         """Start the background refresher thread."""
@@ -208,6 +212,38 @@ class AllegroTokenRefresher:
         agent.reload_config()
         return True
 
+    def _send_token_alert(self, reason: str) -> None:
+        """Wyslij powiadomienie Messenger o problemie z tokenem Allegro."""
+        try:
+            from .notifications.messenger import send_messenger
+            message = (
+                f"ALLEGRO TOKEN - {reason}\n"
+                f"Kolejne bledy: {self._consecutive_failures}\n"
+                "Wymagana reczna reautoryzacja w ustawieniach aplikacji."
+            )
+            sent = send_messenger(message)
+            if sent:
+                LOGGER.info("Wyslano powiadomienie Messenger o problemie z tokenem Allegro")
+            else:
+                LOGGER.warning("Nie udalo sie wyslac powiadomienia Messenger o tokenie")
+        except Exception:
+            LOGGER.exception("Blad wysylania powiadomienia Messenger o tokenie")
+
+    def _track_failure(self, reason: str) -> None:
+        """Zlicz kolejny blad i wyslij alert po przekroczeniu progu."""
+        self._consecutive_failures += 1
+        if (
+            self._consecutive_failures >= TOKEN_FAILURE_NOTIFY_THRESHOLD
+            and not self._notification_sent
+        ):
+            self._send_token_alert(reason)
+            self._notification_sent = True
+
+    def _reset_failures(self) -> None:
+        """Wyzeruj licznik bledow po udanym odswiezeniu."""
+        self._consecutive_failures = 0
+        self._notification_sent = False
+
     def _run(self) -> None:
         backoff = self._error_backoff_initial
         _none_logged = False
@@ -219,17 +255,21 @@ class AllegroTokenRefresher:
                         "Brak tokenow Allegro lub daty wygasania - automatyczne odswiezanie niemozliwe"
                     )
                     _none_logged = True
+                self._track_failure("Brak tokenow lub daty wygasania")
                 wait_time = self._idle_interval
             elif seconds_until_refresh <= 0:
                 _none_logged = False
                 if self._refresh_tokens():
                     backoff = self._error_backoff_initial
+                    self._reset_failures()
                     continue
+                self._track_failure("Nie udalo sie odswiezyc tokenu")
                 ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL.inc()
                 wait_time = backoff
                 backoff = min(backoff * 2, self._error_backoff_max)
             else:
                 _none_logged = False
+                self._reset_failures()
                 wait_time = min(seconds_until_refresh, self._idle_interval)
             self._stop_event.wait(max(wait_time, 0.01))
 
