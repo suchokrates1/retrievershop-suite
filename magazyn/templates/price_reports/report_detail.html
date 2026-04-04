@@ -114,17 +114,17 @@
 
 {% if items %}
 <div x-data="reportDetail()" class="overflow-x-auto">
-    <table class="table table-zebra table-sm">
-        <thead class="bg-base-300 text-base-content">
+    <table class="table table-zebra table-sm table-auto w-full">
+        <thead class="bg-base-300 text-base-content sticky top-0 z-10">
             <tr>
-                <th>Produkt</th>
-                <th class="text-right w-[90px]">Nasza cena</th>
-                <th class="text-right w-[110px]">Cena konkurenta</th>
-                <th class="w-[120px]">Konkurent</th>
-                <th class="text-center w-[70px]">Pozycja</th>
-                <th class="text-center w-[65px]">Status</th>
-                <th class="w-[85px]">Sugestia</th>
-                <th class="w-[160px]">Akcje</th>
+                <th class="bg-base-300">Produkt</th>
+                <th class="bg-base-300 text-right">Nasza cena</th>
+                <th class="bg-base-300 text-right">Cena konkurenta</th>
+                <th class="bg-base-300">Konkurent</th>
+                <th class="bg-base-300 text-center">Pozycja</th>
+                <th class="bg-base-300 text-center">Status</th>
+                <th class="bg-base-300">Sugestia</th>
+                <th class="bg-base-300">Akcje</th>
             </tr>
         </thead>
         <tbody>
