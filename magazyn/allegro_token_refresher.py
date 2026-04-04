@@ -126,6 +126,14 @@ class AllegroTokenRefresher:
                 expires_at = obtained_at + timedelta(seconds=expires_in_value)
 
         if expires_at is None:
+            raw_ts = settings_store.get("ALLEGRO_TOKEN_EXPIRES_AT")
+            if raw_ts is not None:
+                try:
+                    expires_at = datetime.fromtimestamp(float(raw_ts), tz=timezone.utc)
+                except (TypeError, ValueError):
+                    pass
+
+        if expires_at is None:
             return None
 
         refresh_at = expires_at - timedelta(seconds=self._margin_seconds)
@@ -202,11 +210,18 @@ class AllegroTokenRefresher:
 
     def _run(self) -> None:
         backoff = self._error_backoff_initial
+        _none_logged = False
         while not self._stop_event.is_set():
             seconds_until_refresh = self._seconds_until_refresh()
             if seconds_until_refresh is None:
+                if not _none_logged:
+                    LOGGER.warning(
+                        "Brak tokenow Allegro lub daty wygasania - automatyczne odswiezanie niemozliwe"
+                    )
+                    _none_logged = True
                 wait_time = self._idle_interval
             elif seconds_until_refresh <= 0:
+                _none_logged = False
                 if self._refresh_tokens():
                     backoff = self._error_backoff_initial
                     continue
@@ -214,6 +229,7 @@ class AllegroTokenRefresher:
                 wait_time = backoff
                 backoff = min(backoff * 2, self._error_backoff_max)
             else:
+                _none_logged = False
                 wait_time = min(seconds_until_refresh, self._idle_interval)
             self._stop_event.wait(max(wait_time, 0.01))
 
