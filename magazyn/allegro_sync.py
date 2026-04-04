@@ -62,6 +62,19 @@ def _clear_cached_tokens():
         _raise_settings_store_read_only(exc)
 
 
+def _invalidate_access_token():
+    """Usun access_token zachowujac refresh_token do ponownej proby odswiezenia."""
+    from .settings_store import SettingsPersistenceError
+    try:
+        settings_store.update({
+            "ALLEGRO_ACCESS_TOKEN": None,
+            "ALLEGRO_TOKEN_EXPIRES_IN": None,
+            "ALLEGRO_TOKEN_METADATA": None,
+        })
+    except SettingsPersistenceError as exc:
+        _raise_settings_store_read_only(exc)
+
+
 def sync_offers():
     """Synchronize offers from Allegro with local database.
 
@@ -133,7 +146,7 @@ def sync_offers():
                     try:
                         token_data = allegro_api.refresh_token(refresh)
                     except Exception as refresh_exc:
-                        _clear_cached_tokens()
+                        _invalidate_access_token()
                         logger.exception("Failed to refresh Allegro token")
                         ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
                         raise RuntimeError(
@@ -142,7 +155,7 @@ def sync_offers():
                         ) from refresh_exc
                     new_token = token_data.get("access_token")
                     if not new_token:
-                        _clear_cached_tokens()
+                        _invalidate_access_token()
                         message = (
                             "Failed to refresh Allegro offers at offset "
                             f"{offset}: missing access token"
