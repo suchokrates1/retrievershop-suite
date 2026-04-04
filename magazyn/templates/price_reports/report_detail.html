@@ -114,33 +114,36 @@
 
 {% if items %}
 <div x-data="reportDetail()" class="overflow-x-auto">
-    <table class="table table-zebra table-sm min-w-[830px]">
+    <table class="table table-zebra table-sm">
         <thead class="bg-base-300 text-base-content">
             <tr>
-                <th class="w-[200px]">Produkt</th>
-                <th class="w-[110px] text-right">Cena konkurenta</th>
+                <th>Produkt</th>
+                <th class="text-right w-[90px]">Nasza cena</th>
+                <th class="text-right w-[110px]">Cena konkurenta</th>
                 <th class="w-[120px]">Konkurent</th>
-                <th class="w-[70px] text-center">Pozycja</th>
-                <th class="w-[65px] text-center">Status</th>
+                <th class="text-center w-[70px]">Pozycja</th>
+                <th class="text-center w-[65px]">Status</th>
                 <th class="w-[85px]">Sugestia</th>
-                <th class="w-[180px]">Akcje</th>
+                <th class="w-[160px]">Akcje</th>
             </tr>
         </thead>
         <tbody>
             {% for item in items %}
             <tr class="{% if item.error %}bg-warning/10{% elif not item.is_cheapest %}bg-error/10{% endif %}">
-                <td class="max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
-                    {% if item.product_id %}
-                    <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" class="no-underline" title="{{ item.product_name }}">
-                        {{ item.product_name }}
-                    </a>
-                    {% else %}
-                    <span title="{{ item.product_name }}">
-                        {{ item.product_name }}
-                    </span>
-                    {% endif %}
-                    <br>
-                    <small class="text-base-content/60">{{ item.offer_id }} | {% if item.our_price %}<strong>{{ "%.2f"|format(item.our_price) }} zł</strong>{% else %}-{% endif %}</small>
+                <td>
+                    <div class="leading-tight">
+                        {% if item.product_id %}
+                        <a href="{{ url_for('products.product_detail', product_id=item.product_id) }}" class="no-underline text-sm">
+                            {{ item.product_name }}
+                        </a>
+                        {% else %}
+                        <span class="text-sm">{{ item.product_name }}</span>
+                        {% endif %}
+                    </div>
+                    <small class="text-base-content/60">{{ item.offer_id }}</small>
+                </td>
+                <td class="text-right font-semibold">
+                    {% if item.our_price %}{{ "%.2f"|format(item.our_price) }} zl{% else %}-{% endif %}
                 </td>
                 <td class="text-right">
                     {% if item.competitor_price %}
@@ -223,7 +226,7 @@
                         </button>
                         {% if item.suggestion %}
                             <button type="button" class="btn btn-outline btn-{{ 'success' if item.suggestion.type == 'increase' else 'warning' }} btn-sm join-item" 
-                                    @click="openChangePrice('{{ item.id }}', '{{ item.our_price }}', '{{ item.suggestion.target_price }}', '{{ item.product_name[:30] }}', '{{ item.suggestion.type }}')"
+                                    @click="openChangePrice('{{ item.id }}', '{{ item.our_price }}', '{{ item.suggestion.target_price }}', `{{ item.product_name|replace('`', '') }}`, '{{ item.suggestion.type }}')"
                                     title="Zmień cenę na {{ item.suggestion.target_price }} zł">
                                 <i class="bi bi-cash-coin"></i>
                             </button>
@@ -244,68 +247,93 @@
 
 <!-- Modal potwierdzenia zmiany ceny -->
 <dialog id="changePriceModal" class="modal" x-ref="changePriceModal">
-    <div class="modal-box">
-        <h3 class="font-bold text-lg">Potwierdź zmianę ceny</h3>
-        <div class="py-4">
-            <p><strong x-text="priceModal.productName"></strong></p>
-            <div class="alert alert-warning">
-                <p class="mb-1">Czy na pewno chcesz zmienić cenę?</p>
-                <p class="mb-0">
-                    <strong x-text="priceModal.currentPrice"></strong> zł
-                    <i class="bi" :class="priceModal.changeType === 'increase' ? 'bi-arrow-up text-success' : 'bi-arrow-down text-error'"></i>
-                    <strong x-text="priceModal.targetPrice" :class="priceModal.changeType === 'increase' ? 'text-success' : 'text-error'"></strong> zł
-                    </p>
-                </div>
-                <div class="mb-3">
-                    <template x-if="profitCalc.loading">
-                        <p class="text-base-content/60 text-sm mb-1">Ladowanie kalkulacji zysku...</p>
-                    </template>
-                    <template x-if="profitCalc.error">
-                        <p class="text-error text-sm" x-text="profitCalc.error"></p>
-                    </template>
-                    <template x-if="profitCalc.data">
-                        <div>
-                            <table class="table table-sm mb-0">
-                                <tr>
-                                    <td>Zmiana ceny:</td>
-                                    <td class="text-right" x-text="'-' + profitCalc.data.price_change_percent + '%'"></td>
-                                </tr>
-                                <tr>
-                                    <td>Aktualny zysk:</td>
-                                    <td class="text-right" x-text="profitCalc.data.current_profit.toFixed(2) + ' zł'"></td>
-                                </tr>
-                                <tr>
-                                    <td>Nowy zysk:</td>
-                                    <td class="text-right" x-text="profitCalc.data.new_profit.toFixed(2) + ' zł'"></td>
-                                </tr>
-                                <tr :class="profitCalc.data.profit_change < 0 ? 'bg-error/10' : 'bg-success/10'">
-                                    <td><strong>Zmiana zysku:</strong></td>
-                                    <td class="text-right">
-                                        <strong x-text="(profitCalc.data.profit_change > 0 ? '+' : '') + profitCalc.data.profit_change.toFixed(2) + ' zł'"></strong>
-                                    </td>
-                                </tr>
-                            </table>
-                            <template x-if="profitCalc.data.note">
-                                <p class="text-base-content/60 text-sm mt-2 mb-0" x-text="profitCalc.data.note"></p>
-                            </template>
-                        </div>
-                    </template>
-                </div>
+    <div class="modal-box max-w-md">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+        </form>
+        <h3 class="font-bold text-lg mb-4">
+            <i class="bi" :class="priceModal.changeType === 'increase' ? 'bi-arrow-up-circle text-success' : 'bi-arrow-down-circle text-warning'"></i>
+            Zmiana ceny
+        </h3>
+
+        <!-- Nazwa produktu -->
+        <p class="text-sm leading-snug mb-4" x-text="priceModal.productName"></p>
+
+        <!-- Zmiana ceny -->
+        <div class="flex items-center justify-center gap-3 py-3 px-4 rounded-box mb-4"
+             :class="priceModal.changeType === 'increase' ? 'bg-success/10' : 'bg-warning/10'">
+            <div class="text-center">
+                <div class="text-xs text-base-content/60 uppercase">Obecna</div>
+                <div class="text-xl font-bold" x-text="priceModal.currentPrice + ' zl'"></div>
             </div>
-            <div class="modal-action">
-                <form method="dialog"><button class="btn">Anuluj</button></form>
-                <button type="button" class="btn btn-warning" @click="confirmChangePrice()" :disabled="changingPrice">
-                    <template x-if="changingPrice">
-                        <span><span class="loading loading-spinner loading-sm"></span> Zmieniam...</span>
-                    </template>
-                    <template x-if="!changingPrice">
-                        <span><i class="bi bi-check"></i> Zmień cenę</span>
-                    </template>
-                </button>
+            <i class="bi text-2xl" :class="priceModal.changeType === 'increase' ? 'bi-arrow-right text-success' : 'bi-arrow-right text-warning'"></i>
+            <div class="text-center">
+                <div class="text-xs text-base-content/60 uppercase">Nowa</div>
+                <div class="text-xl font-bold" :class="priceModal.changeType === 'increase' ? 'text-success' : 'text-warning'" x-text="priceModal.targetPrice + ' zl'"></div>
             </div>
         </div>
-        <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
+
+        <!-- Kalkulacja zysku -->
+        <template x-if="profitCalc.loading">
+            <div class="flex items-center gap-2 text-base-content/60 text-sm py-2">
+                <span class="loading loading-spinner loading-xs"></span> Obliczam wplyw na zysk...
+            </div>
+        </template>
+        <template x-if="profitCalc.error">
+            <div class="alert alert-error alert-sm text-sm mb-4">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span x-text="profitCalc.error"></span>
+            </div>
+        </template>
+        <template x-if="profitCalc.data">
+            <div class="bg-base-200 rounded-box p-3 mb-4">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td class="text-base-content/70">Zmiana ceny</td>
+                            <td class="text-right font-medium" x-text="(profitCalc.data.price_change_percent > 0 ? '+' : '') + profitCalc.data.price_change_percent + '%'"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-base-content/70">Aktualny zysk</td>
+                            <td class="text-right font-medium" x-text="profitCalc.data.current_profit.toFixed(2) + ' zl'"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-base-content/70">Nowy zysk</td>
+                            <td class="text-right font-medium" x-text="profitCalc.data.new_profit.toFixed(2) + ' zl'"></td>
+                        </tr>
+                        <tr :class="profitCalc.data.profit_change < 0 ? 'text-error' : 'text-success'">
+                            <td><strong>Roznica</strong></td>
+                            <td class="text-right">
+                                <strong x-text="(profitCalc.data.profit_change > 0 ? '+' : '') + profitCalc.data.profit_change.toFixed(2) + ' zl'"></strong>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <template x-if="profitCalc.data.note">
+                    <p class="text-base-content/60 text-xs mt-2 mb-0" x-text="profitCalc.data.note"></p>
+                </template>
+            </div>
+        </template>
+
+        <!-- Przyciski -->
+        <div class="modal-action">
+            <form method="dialog"><button class="btn btn-ghost">Anuluj</button></form>
+            <button type="button" 
+                    class="btn" 
+                    :class="priceModal.changeType === 'increase' ? 'btn-success' : 'btn-warning'"
+                    @click="confirmChangePrice()" 
+                    :disabled="changingPrice">
+                <template x-if="changingPrice">
+                    <span><span class="loading loading-spinner loading-sm"></span> Zmieniam...</span>
+                </template>
+                <template x-if="!changingPrice">
+                    <span><i class="bi bi-check-lg"></i> Potwierdz zmiane</span>
+                </template>
+            </button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 <!-- Modal wykluczenia sprzedawcy -->
 <dialog id="excludeSellerModal" class="modal" x-ref="excludeSellerModal">
