@@ -504,10 +504,21 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
                 }
             }
             
+            // Cena z aria-label - niezawodne zrodlo
+            // <p aria-label="219,45 zł aktualna cena"> = cena aktualna
+            // <button aria-label="-5% 229,00 zł cena z 30 dni ..."> = cena przed rabatem
+            let ariaPrice = null;
+            const priceEl = art.querySelector('p[aria-label*="aktualna cena"]');
+            if (priceEl) {
+                const m = priceEl.getAttribute('aria-label').match(/([\d\s]+(?:,\d{2})?)\s*zł/);
+                if (m) ariaPrice = m[1].replace(/\s/g, '');
+            }
+
             return {
                 index: idx,
                 offerId: offerId,
                 offerUrl: offerUrl,
+                ariaPrice: ariaPrice,
                 text: art.innerText || ''
             };
         });
@@ -556,21 +567,23 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
             # Fallback: szukaj po "od" (dla ofert bez "|", np. moja oferta)
             seller_match = re.search(r'\bod\s*\n(?:Super Sprzedawcy\s*\n)?\s*(\S+)', text)
         
-        # Cena glowna - gdy oferta ma przecene, w tekscie sa dwie ceny:
-        # "277 zl\n207 zl\n" - pierwsza to oryginalna (przekreslona), druga aktualna.
-        # Bierzemy OSTATNIA cene "X zl\n" - to zawsze cena aktualna.
-        # Cena z dostawa jest po "zl z dostaw" wiec nie koliduje.
-        # Usun kupony/cashbacki z tekstu zanim wyciagniesz ceny
-        # (np. "Kupon 5 zl" na koncu artykulu falszuje ostatnia cene)
-        clean_text = re.sub(r'(?:Kupon|Cashback|Rabat)\s+\d+(?:,\d{2})?\s*zł', '', text)
-        all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', clean_text)
-        # Odfiltruj ceny ktore sa czescia "z dostawa" (nie powinny byc w findall bo \n)
-        # Ostatnia cena przed "z dostawa" to aktualna cena oferty
+        # Cena glowna - priorytetowo z aria-label (niezawodne),
+        # fallback na parsowanie tekstu
+        aria_price = art.get("ariaPrice")
+        
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
         delivery_price_str = delivery_match.group(1) if delivery_match else None
         
-        # Cena glowna = ostatnia z listy cen "X zl\n"
-        price_match_value = all_prices[-1] if all_prices else None
+        if aria_price:
+            price_match_value = aria_price
+            logger.debug(f"Cena z aria-label: {aria_price}")
+        else:
+            # Fallback: regex na tekst (usun kupony zeby nie falszowaly ceny)
+            clean_text = re.sub(r'(?:Kupon|Cashback|Rabat)\s+\d+(?:,\d{2})?\s*zł', '', text)
+            all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', clean_text)
+            price_match_value = all_prices[-1] if all_prices else None
+            if price_match_value:
+                logger.debug(f"Cena z tekstu (fallback): {price_match_value}")
         # Tekst dostawy - rozszerzone wzorce:
         # Formaty z Allegro:
         # - "dostawa pt. 6 lut." (dzien + data)
