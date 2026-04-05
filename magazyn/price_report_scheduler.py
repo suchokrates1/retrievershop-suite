@@ -300,6 +300,15 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
     # Calkowita liczba konkurentow PRZED filtrami
     competitors_all_count = result.competitors_all_count if result.success else 0
     
+    # Nasze inne oferty z dialogu (offer_id + cena)
+    our_siblings = []
+    if result.success and result.our_other_offers:
+        our_siblings = [
+            {"offer_id": o.offer_id, "price": o.price}
+            for o in result.our_other_offers
+            if o.offer_id
+        ]
+    
     return {
         "offer_id": offer["offer_id"],
         "title": offer["title"],
@@ -311,6 +320,7 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
         "my_position": result.my_position,
         "competitors_count": len(result.competitors) if result.competitors else 0,
         "competitors_all_count": competitors_all_count,
+        "our_siblings": our_siblings,
         "cheapest": {
             "price": result.cheapest_competitor.price,
             "price_with_delivery": result.cheapest_competitor.price_with_delivery,
@@ -324,7 +334,7 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
 def save_report_item(report_id: int, result: dict):
     """Zapisuje wynik sprawdzenia oferty do raportu."""
     from .db import get_session
-    from .models import PriceReportItem, PriceReport
+    from .models import PriceReportItem, PriceReport, AllegroOffer
     
     with get_session() as session:
         our_price = Decimal(str(result["our_price"])) if result["our_price"] else None
@@ -365,10 +375,72 @@ def save_report_item(report_id: int, result: dict):
         )
         session.add(item)
         
+        # Oznacz siostry z CDP jako "Inna OK"
+        # Jesli sprawdzana oferta jest tansza od siostry widocznej w dialogu,
+        # siostra nie wymaga osobnego scrapingu - jest drozsza na pewno
+        siblings = result.get("our_siblings", [])
+        siblings_marked = 0
+        if our_price and siblings:
+            for sib in siblings:
+                sib_id = sib["offer_id"]
+                sib_price = sib["price"]
+
+                if sib_id == result["offer_id"]:
+                    continue
+                if sib_price is None or float(our_price) >= sib_price:
+                    continue
+
+                # Siostra jest drozsza - sprawdz czy juz istnieje w raporcie
+                existing_sib = session.query(PriceReportItem).filter(
+                    PriceReportItem.report_id == report_id,
+                    PriceReportItem.offer_id == sib_id,
+                ).first()
+
+                if existing_sib:
+                    # Siostra juz sprawdzona normalnie - nadpisz na "Inna OK"
+                    if existing_sib.competitor_price is not None:
+                        existing_sib.competitor_price = None
+                        existing_sib.competitor_seller = None
+                        existing_sib.is_cheapest = False
+                        existing_sib.our_position = None
+                        existing_sib.total_offers = None
+                        existing_sib.price_difference = None
+                        existing_sib.error = None
+                        logger.info(
+                            f"Inna OK (CDP update): {sib_id} ({sib_price} zl) - tansza siostra "
+                            f"{result['offer_id']} ({float(our_price)} zl) wykryta w dialogu"
+                        )
+                    continue
+
+                # Siostra nie sprawdzona - dodaj nowy item
+                sib_offer = session.query(AllegroOffer).filter(
+                    AllegroOffer.offer_id == sib_id
+                ).first()
+                sib_title = sib_offer.title if sib_offer else f"Siostra oferty {result['offer_id']}"
+
+                sib_item = PriceReportItem(
+                    report_id=report_id,
+                    offer_id=sib_id,
+                    product_name=sib_title,
+                    our_price=Decimal(str(sib_price)),
+                    competitor_price=None,
+                    competitor_seller=None,
+                    is_cheapest=False,
+                    our_position=None,
+                    total_offers=None,
+                    error=None,
+                )
+                session.add(sib_item)
+                siblings_marked += 1
+                logger.info(
+                    f"Inna OK (CDP): {sib_id} ({sib_price} zl) - tansza siostra "
+                    f"{result['offer_id']} ({float(our_price)} zl) wykryta w dialogu"
+                )
+        
         # Aktualizuj postep raportu
         report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
         if report:
-            report.items_checked += 1
+            report.items_checked += 1 + siblings_marked
             report.status = "running"
         
         session.commit()

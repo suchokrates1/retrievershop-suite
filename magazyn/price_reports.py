@@ -179,6 +179,9 @@ def report_detail(report_id: int):
             if has_cheaper_sibling:
                 # Inna nasza oferta tego produktu jest tansza - pomijamy
                 suggestion_note = "inna_aukcja_ok"
+            elif not item.is_cheapest and not item.competitor_price and not item.error:
+                # Pozycja oznaczona jako sibling (mark_sibling_offers lub CDP)
+                suggestion_note = "inna_aukcja_ok"
             elif not item.is_cheapest and item.competitor_price and item.our_price:
                 target_price = float(item.competitor_price) - 0.01
                 discount_needed = ((float(item.our_price) - target_price) / float(item.our_price)) * 100
