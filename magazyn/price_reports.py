@@ -532,6 +532,7 @@ def recheck_item(item_id):
             })
         
         # Najpierw pobierz aktualna cene naszej oferty z Allegro API
+        from .allegro_api.offers import get_offer_badge_price
         our_offer_data = get_offer_details(offer_id)
         current_our_price = old_our_price
         price_updated = False
@@ -541,6 +542,12 @@ def recheck_item(item_id):
             if old_our_price and abs(current_our_price - old_our_price) > 0.001:
                 price_updated = True
                 logger.info(f"Cena oferty {offer_id} zmienila sie: {old_our_price} -> {current_our_price}")
+        
+        # Sprawdz cene promocyjna z kampanii (np. Allegro Days)
+        badge_price = get_offer_badge_price(offer_id)
+        if badge_price:
+            current_our_price = float(badge_price)
+            logger.info(f"Oferta {offer_id} ma cene kampanii (badge): {current_our_price}")
         
         # Uruchom sprawdzenie konkurencji
         loop = asyncio.new_event_loop()
@@ -556,8 +563,8 @@ def recheck_item(item_id):
                 PriceReportItem.id == item_id
             ).first()
             
-            # Zaktualizuj nasza cene - preferuj cene ze strony (z promocjami)
-            effective_price = result.my_price if result.my_price else current_our_price
+            # Zaktualizuj nasza cene - badge price -> API price -> stara cena
+            effective_price = current_our_price
             if effective_price and old_our_price and abs(effective_price - old_our_price) > 0.001:
                 price_updated = True
                 item.our_price = Decimal(str(effective_price))

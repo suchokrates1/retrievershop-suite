@@ -282,11 +282,16 @@ def get_unchecked_offers(report_id: int, limit: int = BATCH_SIZE) -> List[dict]:
 async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
     """Sprawdza pojedyncza oferte przez CDP."""
     from .scripts.price_checker_ws import check_offer_price, MAX_DELIVERY_DAYS
+    from .allegro_api.offers import get_offer_badge_price
+    
+    # Sprawdz cene promocyjna z kampanii (np. Allegro Days) przez API
+    badge_price = get_offer_badge_price(offer["offer_id"])
+    effective_api_price = float(badge_price) if badge_price else offer["price"]
     
     result = await check_offer_price(
         offer["offer_id"],
         offer["title"],
-        offer["price"],
+        effective_api_price,
         cdp_host,
         cdp_port,
         MAX_DELIVERY_DAYS
@@ -298,8 +303,8 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
     return {
         "offer_id": offer["offer_id"],
         "title": offer["title"],
-        # Uzywaj ceny ze strony (z promocjami) jesli dostepna, fallback do API
-        "our_price": result.my_price if result.my_price else offer["price"],
+        # Priorytet: cena z kampanii (badge) -> cena bazowa z API
+        "our_price": effective_api_price,
         "product_size_id": offer["product_size_id"],
         "success": result.success,
         "error": result.error,

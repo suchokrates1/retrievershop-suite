@@ -209,9 +209,7 @@
                         <br>
                         <small class="text-base-content/60">+{{ "%.1f"|format(item.suggestion.raise_percent) }}% (+{{ "%.2f"|format(item.suggestion.extra_profit) }} zł)</small>
                     {% elif item.suggestion_note == "inna_aukcja_ok" %}
-                        <span class="badge badge-info" title="Inna aukcja tego produktu jest najtańsza - cena ustawiona celowo">
-                            <i class="bi bi-link-45deg"></i> Inna aukcja OK
-                        </span>
+                        -
                     {% else %}
                         -
                     {% endif %}

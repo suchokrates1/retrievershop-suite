@@ -688,16 +688,6 @@ async def check_offer_price(
             # Nawiguj do oferty
             await navigate_to_url(ws, url)
             
-            # Wyciagnij cene ze strony (widoczna dla kupujacego, z promocjami)
-            page_price = await extract_page_price(ws)
-            if page_price:
-                if my_price and abs(page_price - my_price) > 0.02:
-                    logger.info(
-                        f"Cena na stronie ({page_price:.2f}) rozni sie od API ({my_price:.2f}) "
-                        f"- prawdopodobnie aktywna promocja. Uzywam ceny ze strony."
-                    )
-                result.my_price = page_price
-            
             # Czekaj na dialog
             if not await wait_for_dialog(ws):
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
@@ -717,7 +707,7 @@ async def check_offer_price(
                 logger.info(f"Znaleziono {len(our_other_offers)} naszych innych ofert w dialogu: "
                             f"{', '.join(o.offer_id or '?' for o in our_other_offers)}")
             
-            # my_price: preferujemy cene ze strony (z promocjami), fallback do API
+            # my_price: ustawiana z zewnatrz (badge API -> API bazowa)
             # Dialog nie zawiera sprawdzanej oferty
             
             # Pobierz wykluczonych sprzedawcow
