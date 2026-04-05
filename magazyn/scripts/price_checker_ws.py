@@ -178,12 +178,15 @@ class PriceCheckResult:
     cheapest_competitor: Optional[CompetitorOffer] = None
     my_position: int = 0
     competitors_all_count: int = 0  # Przed filtrami (kontekst)
+    our_other_offers: List[CompetitorOffer] = None  # Nasze inne oferty z dialogu
     error: Optional[str] = None
     checked_at: str = ""
     
     def __post_init__(self):
         if self.competitors is None:
             self.competitors = []
+        if self.our_other_offers is None:
+            self.our_other_offers = []
         if not self.checked_at:
             self.checked_at = datetime.now().isoformat()
 
@@ -727,6 +730,7 @@ async def check_offer_price(
             # Sprawdzana oferta NIE pojawia sie w dialogu (to jest jej strona)
             # Ale inne nasze oferty tego samego produktu MOGA sie pojawic
             our_other_offers = [o for o in all_offers if o.is_mine]
+            result.our_other_offers = our_other_offers
             if our_other_offers:
                 logger.info(f"Znaleziono {len(our_other_offers)} naszych innych ofert w dialogu: "
                             f"{', '.join(o.offer_id or '?' for o in our_other_offers)}")
