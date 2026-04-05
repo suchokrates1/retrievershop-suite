@@ -94,7 +94,7 @@ def reports_list():
 @login_required
 def report_detail(report_id: int):
     """Szczegoly raportu cenowego."""
-    filter_mode = request.args.get("filter", "all")  # all, not_cheapest, cheapest, errors
+    filter_mode = request.args.get("filter", "all")  # all, not_cheapest, cheapest, inna_aukcja_ok, errors
     
     with get_session() as session:
         report = session.query(PriceReport).filter(
@@ -110,9 +110,20 @@ def report_detail(report_id: int):
         )
         
         if filter_mode == "not_cheapest":
-            query = query.filter(PriceReportItem.is_cheapest == False)
+            # Drozsi od konkurencji - wyklucz "inna_aukcja_ok" (brak competitor_price i brak bledu)
+            query = query.filter(
+                PriceReportItem.is_cheapest == False,
+                PriceReportItem.competitor_price != None,
+            )
         elif filter_mode == "cheapest":
             query = query.filter(PriceReportItem.is_cheapest == True)
+        elif filter_mode == "inna_aukcja_ok":
+            # Inna aukcja OK - oznaczone przez mark_sibling_offers
+            query = query.filter(
+                PriceReportItem.is_cheapest == False,
+                PriceReportItem.competitor_price == None,
+                PriceReportItem.error == None,
+            )
         elif filter_mode == "errors":
             query = query.filter(PriceReportItem.error != None)
         
@@ -251,7 +262,7 @@ def report_detail(report_id: int):
         stats = {
             "total": len(items),
             "cheapest": sum(1 for i in items if i.is_cheapest),
-            "not_cheapest": sum(1 for i in items if not i.is_cheapest),
+            "not_cheapest": sum(1 for i in items if not i.is_cheapest and i.competitor_price is not None),
             "with_suggestion": sum(1 for i in items_data if i.get("suggestion") and i["suggestion"].get("type") == "decrease"),
             "with_raise_suggestion": sum(1 for i in items_data if i.get("suggestion") and i["suggestion"].get("type") == "increase"),
             "other_offer_ok": sum(1 for i in items_data if i.get("suggestion_note") == "inna_aukcja_ok"),
@@ -545,15 +556,14 @@ def recheck_item(item_id):
                 PriceReportItem.id == item_id
             ).first()
             
-            # Zaktualizuj nasza cene jesli sie zmienila
-            if price_updated:
+            # Zaktualizuj nasza cene - preferuj cene ze strony (z promocjami)
+            effective_price = result.my_price if result.my_price else current_our_price
+            if effective_price and old_our_price and abs(effective_price - old_our_price) > 0.001:
+                price_updated = True
+                item.our_price = Decimal(str(effective_price))
+                logger.info(f"Cena oferty {offer_id} zaktualizowana: {old_our_price} -> {effective_price}")
+            elif price_updated:
                 item.our_price = Decimal(str(current_our_price))
-                # Zaktualizuj tez w tabeli AllegroOffer
-                offer = session.query(AllegroOffer).filter(
-                    AllegroOffer.offer_id == offer_id
-                ).first()
-                if offer:
-                    offer.price = Decimal(str(current_our_price))
             
             if result.success and result.cheapest_competitor:
                 item.competitor_price = Decimal(str(result.cheapest_competitor.price))
@@ -563,10 +573,6 @@ def recheck_item(item_id):
                 item.our_position = result.my_position
                 item.total_offers = len(result.competitors) + 1 if result.competitors else 1
                 item.competitors_all_count = getattr(result, 'competitors_all_count', None)
-                
-                # Uzywaj ceny z API (nie z dialogu - dialog moze zawierac inna nasza oferte)
-                if price_updated and current_our_price:
-                    item.our_price = Decimal(str(current_our_price))
                 
                 if item.our_price:
                     item.is_cheapest = item.our_price <= item.competitor_price
