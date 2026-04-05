@@ -378,6 +378,44 @@ async def wait_for_dialog(ws, timeout: int = 15) -> bool:
     return False
 
 
+async def extract_page_price(ws) -> Optional[float]:
+    """Wyciaga cene oferty ze strony (widoczna dla kupujacego, z uwzglednieniem promocji)."""
+    js_code = '''
+    (function() {
+        // Szukaj ceny w roznych miejscach na stronie oferty
+        // 1. Aria label "cena z" na elemencie z cena
+        const ariaPrice = document.querySelector('[aria-label*="cena z"]');
+        if (ariaPrice) {
+            const match = ariaPrice.getAttribute('aria-label').match(/(\\d+[,.]\\d{2})/);
+            if (match) return match[1].replace(',', '.');
+        }
+        
+        // 2. Meta tag og:price:amount
+        const metaPrice = document.querySelector('meta[property="product:price:amount"]');
+        if (metaPrice) return metaPrice.content;
+        
+        // 3. Szukaj elementu [data-testid] z cena
+        const priceEl = document.querySelector('[data-testid="price"]');
+        if (priceEl) {
+            const match = priceEl.innerText.match(/(\\d+[,.]\\d{2})/);
+            if (match) return match[1].replace(',', '.');
+        }
+        
+        return null;
+    })()
+    '''
+    result = await cdp_call(ws, "Runtime.evaluate",
+                            {"expression": js_code, "returnByValue": True},
+                            msg_id=50)
+    value = result.get("result", {}).get("result", {}).get("value")
+    if value:
+        try:
+            return float(str(value).replace(",", ".").replace(" ", ""))
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
 async def extract_competitor_offers(ws, product_title: str = "") -> List[CompetitorOffer]:
     """Wyciaga oferty konkurencji z dialogu.
     
@@ -390,7 +428,7 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
     # JavaScript ktory parsuje kazdy article osobno i wyciaga wszystkie dane
     js_code = r'''
     (function() {
-        const container = document.querySelector('[data-box-name="ProductOffersListingContainer"]');
+        let container = document.querySelector('[data-box-name="ProductOffersListingContainer"]');
         if (!container) {
             // Fallback - szukaj w dialogu
             const dialogs = document.querySelectorAll("[role='dialog']");
@@ -409,26 +447,59 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         const articles = container.querySelectorAll('article');
         
         return Array.from(articles).map((art, idx) => {
-            // Link do oferty - moze byc w /produkt/?offerId= lub /events/clicks?redirect=
+            // Link do oferty - szukaj offerId i pelny URL
             let offerId = null;
+            let offerUrl = null;
             
-            // 1. Szukaj linku /produkt/?offerId=
+            // 1. Szukaj linku /produkt/?offerId= (nowy format Allegro)
             const produktLink = art.querySelector('a[href*="/produkt/"]');
             if (produktLink) {
                 const match = produktLink.href.match(/offerId=(\d+)/);
                 if (match) offerId = match[1];
             }
             
-            // 2. Fallback: link /events/clicks z redirect do oferty
+            // 2. Szukaj linku /oferta/ (bezposredni link do oferty)
+            if (!offerId) {
+                const ofertaLink = art.querySelector('a[href*="/oferta/"]');
+                if (ofertaLink) {
+                    // URL w formacie /oferta/tytul-OFFER_ID
+                    const match = ofertaLink.href.match(/\/oferta\/[^?#]*?-(\d{8,})/);
+                    if (match) {
+                        offerId = match[1];
+                        offerUrl = ofertaLink.href;
+                    }
+                }
+            }
+            
+            // 3. Szukaj dowolnego linku z offerId w parametrze
+            if (!offerId) {
+                const allLinks = art.querySelectorAll('a[href]');
+                for (const link of allLinks) {
+                    const match = link.href.match(/offerId=(\d+)/);
+                    if (match) {
+                        offerId = match[1];
+                        break;
+                    }
+                }
+            }
+            
+            // 4. Fallback: link /events/clicks z redirect do oferty
             if (!offerId) {
                 const eventLink = art.querySelector('a[href*="/events/clicks"]');
                 if (eventLink) {
-                    // URL jest zakodowany w redirect= parametrze
                     const redirectMatch = eventLink.href.match(/redirect=([^&]+)/);
                     if (redirectMatch) {
                         const decoded = decodeURIComponent(redirectMatch[1]);
-                        const offerMatch = decoded.match(/-(\d{10,})/);  // ID oferty w URL
-                        if (offerMatch) offerId = offerMatch[1];
+                        // Szukaj offerId= w zdekodowanym URL
+                        const paramMatch = decoded.match(/offerId=(\d+)/);
+                        if (paramMatch) {
+                            offerId = paramMatch[1];
+                        } else {
+                            // Ostatni fallback: ID z URL /oferta/slug-ID
+                            const slugMatch = decoded.match(/\/oferta\/[^?#]*?-(\d{8,})/);
+                            if (slugMatch) offerId = slugMatch[1];
+                        }
+                        offerUrl = decoded;
                     }
                 }
             }
@@ -436,6 +507,7 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
             return {
                 index: idx,
                 offerId: offerId,
+                offerUrl: offerUrl,
                 text: art.innerText || ''
             };
         });
@@ -458,10 +530,17 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
     for art in articles:
         text = art.get("text", "")
         offer_id = art.get("offerId")
+        js_offer_url = art.get("offerUrl")
+        
+        # Pomin artykuly bez ceny lub zbyt krotkie (reklamy, UI elementy)
+        if not text or len(text) < 15 or "zł" not in text:
+            logger.debug(f"Pominiety article {art.get('index')}: brak ceny lub za krotki")
+            continue
         
         # DEBUG: loguj surowy tekst kafelka
         logger.debug(f"=== ARTICLE {art.get('index')} ===")
         logger.debug(f"Raw text: {repr(text[:300])}")
+        logger.debug(f"offerId: {offer_id}, offerUrl: {js_offer_url}")
         
         # Sprzedawca - dwa wzorce:
         # 1. "| \n sprzedawca" - normalne oferty konkurencji
@@ -471,10 +550,18 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
             # Fallback: szukaj po "od" (dla ofert bez "|", np. moja oferta)
             seller_match = re.search(r'\bod\s*\n(?:Super Sprzedawcy\s*\n)?\s*(\S+)', text)
         
-        # Cena glowna
-        price_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*\n', text)
-        # Cena z dostawa
+        # Cena glowna - gdy oferta ma przecene, w tekscie sa dwie ceny:
+        # "277 zl\n207 zl\n" - pierwsza to oryginalna (przekreslona), druga aktualna.
+        # Bierzemy OSTATNIA cene "X zl\n" - to zawsze cena aktualna.
+        # Cena z dostawa jest po "zl z dostaw" wiec nie koliduje.
+        all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', text)
+        # Odfiltruj ceny ktore sa czescia "z dostawa" (nie powinny byc w findall bo \n)
+        # Ostatnia cena przed "z dostawa" to aktualna cena oferty
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
+        delivery_price_str = delivery_match.group(1) if delivery_match else None
+        
+        # Cena glowna = ostatnia z listy cen "X zl\n"
+        price_match_value = all_prices[-1] if all_prices else None
         # Tekst dostawy - rozszerzone wzorce:
         # Formaty z Allegro:
         # - "dostawa pt. 6 lut." (dzien + data)
@@ -506,21 +593,26 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         # Smart! - darmowa dostawa Smart
         has_smart = bool(re.search(r'Smart!|smart!', text))
         
-        if price_match:
-            price = parse_price(price_match.group(1))
-            total = parse_price(delivery_match.group(1)) if delivery_match else price
+        if price_match_value:
+            price = parse_price(price_match_value)
+            total = parse_price(delivery_price_str) if delivery_price_str else price
             delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
             delivery_days = parse_delivery_days(delivery_text)
+            
+            # Log kiedy wykryto przecene (dwie ceny w tekscie)
+            if len(all_prices) > 1:
+                logger.debug(f"Wykryto przecene: oryginalna={all_prices[0]}, aktualna={all_prices[-1]}")
             
             # DEBUG: loguj wykryte wartosci
             logger.debug(f"Seller: {seller}, Price: {price}, Delivery text: '{delivery_text}', Days: {delivery_days}")
             
-            # Buduj URL oferty
+            # Buduj URL oferty - preferuje bezposredni URL z JS
             offer_url = ""
-            if offer_id:
+            if js_offer_url:
+                offer_url = js_offer_url
+            elif offer_id:
                 offer_url = f"https://allegro.pl/oferta/x-{offer_id}"
             elif seller and seller != "nieznany" and product_title:
-                # Fallback: URL wyszukiwania z loginem sprzedawcy
                 search_query = urllib.parse.quote(product_title[:50])
                 offer_url = f"https://allegro.pl/listing?string={search_query}&sellerLogin={seller}"
             
@@ -537,7 +629,24 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
                 offer_id=offer_id,
             ))
     
-    return offers
+    # Deduplikacja - ten sam offer_id lub (seller + price) to ta sama oferta
+    seen = set()
+    unique_offers = []
+    for o in offers:
+        if o.offer_id:
+            key = o.offer_id
+        else:
+            key = f"{o.seller}_{o.price:.2f}"
+        if key not in seen:
+            seen.add(key)
+            unique_offers.append(o)
+        else:
+            logger.debug(f"Duplikat oferty: {key} (seller={o.seller}, price={o.price})")
+    
+    if len(unique_offers) < len(offers):
+        logger.info(f"Usunieto {len(offers) - len(unique_offers)} duplikatow ofert")
+    
+    return unique_offers
 
 
 async def check_offer_price(
@@ -579,6 +688,16 @@ async def check_offer_price(
             # Nawiguj do oferty
             await navigate_to_url(ws, url)
             
+            # Wyciagnij cene ze strony (widoczna dla kupujacego, z promocjami)
+            page_price = await extract_page_price(ws)
+            if page_price:
+                if my_price and abs(page_price - my_price) > 0.02:
+                    logger.info(
+                        f"Cena na stronie ({page_price:.2f}) rozni sie od API ({my_price:.2f}) "
+                        f"- prawdopodobnie aktywna promocja. Uzywam ceny ze strony."
+                    )
+                result.my_price = page_price
+            
             # Czekaj na dialog
             if not await wait_for_dialog(ws):
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
@@ -598,8 +717,8 @@ async def check_offer_price(
                 logger.info(f"Znaleziono {len(our_other_offers)} naszych innych ofert w dialogu: "
                             f"{', '.join(o.offer_id or '?' for o in our_other_offers)}")
             
-            # my_price zachowujemy z parametru (cena z API naszej oferty)
-            # Dialog nie zawiera sprawdzanej oferty, nie mozemy stamtad wziac ceny
+            # my_price: preferujemy cene ze strony (z promocjami), fallback do API
+            # Dialog nie zawiera sprawdzanej oferty
             
             # Pobierz wykluczonych sprzedawcow
             excluded_sellers = get_excluded_sellers()
