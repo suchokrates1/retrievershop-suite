@@ -627,10 +627,6 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
             delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
             delivery_days = parse_delivery_days(delivery_text)
             
-            # Log kiedy wykryto przecene (dwie ceny w tekscie)
-            if len(all_prices) > 1:
-                logger.debug(f"Wykryto przecene: oryginalna={all_prices[0]}, aktualna={all_prices[-1]}")
-            
             # DEBUG: loguj wykryte wartosci
             logger.debug(f"Seller: {seller}, Price: {price}, Delivery text: '{delivery_text}', Days: {delivery_days}")
             
