@@ -380,6 +380,68 @@ def get_offer_price(offer_id: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+import logging as _logging
+
+_offers_logger = _logging.getLogger(__name__)
+
+
+def get_offer_badge_price(offer_id: str) -> Optional[Decimal]:
+    """
+    Sprawdza czy oferta uczestniczy w aktywnej kampanii (np. Allegro Days)
+    i zwraca cene promocyjna (bargain) widoczna dla kupujacego.
+
+    Uzywa endpointu GET /sale/badges?marketplace.id=allegro-pl&offer.id={offer_id}.
+
+    Returns
+    -------
+    Optional[Decimal]
+        Cena promocyjna (bargain) jesli oferta ma aktywna kampanie, None w przeciwnym razie.
+    """
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not token:
+        return None
+
+    url = f"{API_BASE_URL}/sale/badges"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    params = {
+        "marketplace.id": "allegro-pl",
+        "offer.id": offer_id,
+    }
+
+    try:
+        response = _request_with_retry(
+            requests.get,
+            url,
+            endpoint="get-badge-price",
+            headers=headers,
+            params=params,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        for badge in data.get("badges", []):
+            status = badge.get("process", {}).get("status")
+            if status != "ACTIVE":
+                continue
+            bargain = badge.get("prices", {}).get("bargain", {})
+            amount = bargain.get("amount")
+            if amount is not None:
+                campaign_name = badge.get("campaign", {}).get("name", "?")
+                _offers_logger.info(
+                    f"Oferta {offer_id} w kampanii '{campaign_name}': "
+                    f"cena bargain={amount}"
+                )
+                return Decimal(str(amount))
+
+        return None
+    except Exception as e:
+        _offers_logger.warning(f"Blad pobierania badge dla oferty {offer_id}: {e}")
+        return None
+
+
 def change_offer_name(offer_id: str, new_name: str) -> dict:
     """
     Zmienia nazwe (tytul) oferty na Allegro.
