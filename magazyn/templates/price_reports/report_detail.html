@@ -100,6 +100,12 @@
        class="btn btn-outline btn-error join-item {% if filter_mode == 'not_cheapest' %}btn-active{% endif %}">
         Drożsi ({{ stats.not_cheapest }})
     </a>
+    {% if stats.other_offer_ok > 0 %}
+    <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='inna_aukcja_ok') }}" 
+       class="btn btn-outline btn-info join-item {% if filter_mode == 'inna_aukcja_ok' %}btn-active{% endif %}">
+        Inna aukcja OK ({{ stats.other_offer_ok }})
+    </a>
+    {% endif %}
     <a href="{{ url_for('price_reports.report_detail', report_id=report.id, filter='cheapest') }}" 
        class="btn btn-outline btn-success join-item {% if filter_mode == 'cheapest' %}btn-active{% endif %}">
         Najtańsi ({{ stats.cheapest }})
@@ -181,6 +187,8 @@
                 <td class="text-center">
                     {% if item.error %}
                         <span class="badge badge-warning" title="{{ item.error }}">Błąd</span>
+                    {% elif item.suggestion_note == "inna_aukcja_ok" %}
+                        <span class="badge badge-info"><i class="bi bi-link-45deg"></i> Inna OK</span>
                     {% elif item.is_cheapest %}
                         <span class="badge badge-success"><i class="bi bi-check"></i> OK</span>
                     {% else %}
@@ -374,6 +382,9 @@
             </li>
             <li>
                 <span class="badge badge-error"><i class="bi bi-exclamation"></i> Drożsi</span> - Konkurent jest tańszy
+            </li>
+            <li>
+                <span class="badge badge-info"><i class="bi bi-link-45deg"></i> Inna OK</span> - Inna nasza aukcja tego produktu jest tańsza
             </li>
             <li>
                 <span class="badge badge-warning"><i class="bi bi-arrow-down"></i></span> - Sugerowana obniżka (max {{ max_discount }}%)
