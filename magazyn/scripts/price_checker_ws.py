@@ -537,6 +537,12 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
             logger.debug(f"Pominiety article {art.get('index')}: brak ceny lub za krotki")
             continue
         
+        # Pomin recenzje produktu (moga pojawic sie w dialogu ofert)
+        review_keywords = ("NAJBARDZIEJ POMOCNA", "Treść recenzji", "Tresc recenzji")
+        if any(kw in text for kw in review_keywords):
+            logger.debug(f"Pominiety article {art.get('index')}: recenzja produktu")
+            continue
+        
         # DEBUG: loguj surowy tekst kafelka
         logger.debug(f"=== ARTICLE {art.get('index')} ===")
         logger.debug(f"Raw text: {repr(text[:300])}")
@@ -595,6 +601,12 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         
         if price_match_value:
             price = parse_price(price_match_value)
+            
+            # Sanity check - cena < 1 zl to prawie na pewno blad parsowania
+            if price < 1.0:
+                logger.warning(f"Pominiety article {art.get('index')}: cena {price} zl < 1 zl (prawdopodobny blad parsowania)")
+                continue
+            
             total = parse_price(delivery_price_str) if delivery_price_str else price
             delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
             delivery_days = parse_delivery_days(delivery_text)
