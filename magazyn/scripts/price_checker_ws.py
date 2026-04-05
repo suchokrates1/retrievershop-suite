@@ -560,7 +560,10 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
         # "277 zl\n207 zl\n" - pierwsza to oryginalna (przekreslona), druga aktualna.
         # Bierzemy OSTATNIA cene "X zl\n" - to zawsze cena aktualna.
         # Cena z dostawa jest po "zl z dostaw" wiec nie koliduje.
-        all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', text)
+        # Usun kupony/cashbacki z tekstu zanim wyciagniesz ceny
+        # (np. "Kupon 5 zl" na koncu artykulu falszuje ostatnia cene)
+        clean_text = re.sub(r'(?:Kupon|Cashback|Rabat)\s+\d+(?:,\d{2})?\s*zł', '', text)
+        all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', clean_text)
         # Odfiltruj ceny ktore sa czescia "z dostawa" (nie powinny byc w findall bo \n)
         # Ostatnia cena przed "z dostawa" to aktualna cena oferty
         delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
