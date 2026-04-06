@@ -22,6 +22,8 @@ import urllib.request
 
 import pytest
 
+pytestmark = pytest.mark.e2e
+
 CDP_HOST = os.environ.get("E2E_CDP_HOST", "192.168.31.147")
 CDP_PORT = int(os.environ.get("E2E_CDP_PORT", "9223"))
 BASE_URL = os.environ.get("E2E_BASE_URL", "https://magazyn.retrievershop.pl")

@@ -334,7 +334,7 @@ def test_stats_logistics_returns_lead_time(client, app, login):
     stats_module._FAST_CACHE.clear()
     _seed_order(app, "ord_log_1", payment_done=150.0)
 
-    now = datetime.now()
+    now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
     with app.app_context():
         with get_session() as db:
             order = db.query(Order).filter(Order.order_id == "ord_log_1").first()
