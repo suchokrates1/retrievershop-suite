@@ -7,7 +7,14 @@ Aktualizacja snapshotow referencyjnych:
     pytest magazyn/tests/e2e/test_visual_snapshots.py --update-snapshots
 """
 import pytest
-from playwright.sync_api import Page
+
+playwright = pytest.importorskip(
+    "playwright.sync_api",
+    reason="Playwright nie jest zainstalowany w tym srodowisku testowym",
+)
+Page = playwright.Page
+
+pytestmark = pytest.mark.e2e
 
 VIEWPORTS = {
     "mobile": {"width": 360, "height": 800},

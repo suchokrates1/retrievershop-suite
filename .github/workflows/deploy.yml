@@ -32,7 +32,7 @@ jobs:
           SECRET_KEY: test-ci-key
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          pytest magazyn/tests/ -q --tb=line
+          pytest magazyn/tests/ -q --tb=line -m "not e2e"
 
   deploy:
     name: Deploy na minipc

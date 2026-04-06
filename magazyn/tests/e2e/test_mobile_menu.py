@@ -9,7 +9,15 @@ Weryfikuje:
 """
 import pytest
 import re
-from playwright.sync_api import Page, expect
+
+playwright = pytest.importorskip(
+    "playwright.sync_api",
+    reason="Playwright nie jest zainstalowany w tym srodowisku testowym",
+)
+Page = playwright.Page
+expect = playwright.expect
+
+pytestmark = pytest.mark.e2e
 
 
 MOBILE_VIEWPORT = {"width": 360, "height": 800}
