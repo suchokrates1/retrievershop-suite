@@ -788,7 +788,7 @@ async def check_offer_price(
                     }
                 }
                 return false;
-            })()''''
+            })()'''
             await cdp_call(ws, "Runtime.evaluate",
                           {"expression": reposition_js, "returnByValue": True},
                           msg_id=910)
@@ -822,7 +822,7 @@ async def check_offer_price(
                     htmlLen: htmlLen,
                     totalDialogs: dialogs.length
                 };
-            })()''''
+            })()'''
             diag = await cdp_call(ws, "Runtime.evaluate",
                                   {"expression": diag_js, "returnByValue": True},
                                   msg_id=950)
