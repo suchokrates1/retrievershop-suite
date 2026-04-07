@@ -776,10 +776,22 @@ async def check_offer_price(
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
             
-            # Pauza na zaladowanie lazy-loaded ofert (async fetch po IO trigger)
+            # Przenies dialog na ekran - to triggeruje IntersectionObserver
+            # naturalnie (elementy staja sie widoczne w viewport)
+            reposition_js = r'''(function() {
+                var d = document.querySelector("[role='dialog']");
+                if (!d) return false;
+                d.style.cssText = 'position: fixed !important; left: 0 !important; top: 0 !important; width: 768px !important; min-height: 100vh !important; z-index: 999999 !important; overflow: auto !important;';
+                return true;
+            })()'''
+            await cdp_call(ws, "Runtime.evaluate",
+                          {"expression": reposition_js, "returnByValue": True},
+                          msg_id=910)
+            
+            # Pauza na zaladowanie lazy-loaded ofert (IO + reposition trigger)
             await asyncio.sleep(7)
             
-            # Diagnostyka: sprawdz stan IO patcha i lazy elementow
+            # Diagnostyka: sprawdz stan lazy elementow
             diag_js = r'''(function() {
                 var d = document.querySelector("[role='dialog']");
                 if (!d) return {dialog: false};
@@ -787,15 +799,13 @@ async def check_offer_price(
                 var loaded = d.querySelectorAll('.lazyloaded').length;
                 var articles = d.querySelectorAll('article').length;
                 var container = d.querySelector('[data-box-name="ProductOffersListingContainer"]');
-                var containerText = container ? container.innerText.substring(0, 200) : 'brak';
                 return {
                     dialog: true,
                     ioPatch: !!window.__ioPatchApplied,
                     lazy: lazy,
                     loaded: loaded,
                     articles: articles,
-                    container: !!container,
-                    containerText: containerText
+                    container: !!container
                 };
             })()'''
             diag = await cdp_call(ws, "Runtime.evaluate",
