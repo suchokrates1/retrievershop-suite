@@ -436,11 +436,16 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
     (function() {
         let container = document.querySelector('[data-box-name="ProductOffersListingContainer"]');
         if (!container) {
+            // Fallback - szukaj w opbox-offers-list
+            container = document.querySelector('[data-role="opbox-offers-list"]');
+        }
+        if (!container) {
             // Fallback - szukaj w dialogu
             const dialogs = document.querySelectorAll("[role='dialog']");
             for (const d of dialogs) {
                 if (d.innerText?.includes("Inne oferty produktu")) {
-                    const c = d.querySelector('[data-box-name="ProductOffersListingContainer"]');
+                    const c = d.querySelector('[data-box-name="ProductOffersListingContainer"]')
+                           || d.querySelector('[data-role="opbox-offers-list"]');
                     if (c) {
                         container = c;
                         break;
@@ -715,6 +720,12 @@ async def check_offer_price(
         logger.debug(f"CDP WebSocket: {ws_url}")
         
         async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
+            # Ustaw standardowy viewport (Allegro renderuje inaczej na ultrawide)
+            await cdp_call(ws, "Emulation.setDeviceMetricsOverride", {
+                "width": 1920, "height": 1080,
+                "deviceScaleFactor": 1, "mobile": False
+            }, msg_id=899)
+            
             # Nawiguj do oferty (URL zawiera #inne-oferty-produktu)
             await navigate_to_url(ws, url)
             
@@ -723,14 +734,22 @@ async def check_offer_price(
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
             
-            # Czekaj na zaladowanie artykulow w dialogu (max 5s)
+            # Czekaj na zaladowanie artykulow (w dialogu lub opbox-offers-list)
             articles_js = r'''(function() {
+                // Szukaj w dialogu
                 var ds = document.querySelectorAll("[role='dialog']");
                 for (var d of ds) {
                     if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
-                        return d.querySelectorAll('article').length;
+                        var n = d.querySelectorAll('article').length;
+                        if (n > 0) return n;
                     }
                 }
+                // Szukaj w opbox-offers-list (renderowany poza dialogiem)
+                var c = document.querySelector('[data-role="opbox-offers-list"]');
+                if (c) return c.querySelectorAll('article').length;
+                // Szukaj w ProductOffersListingContainer
+                var plc = document.querySelector('[data-box-name="ProductOffersListingContainer"]');
+                if (plc) return plc.querySelectorAll('article').length;
                 return 0;
             })()'''
             for _ in range(20):
