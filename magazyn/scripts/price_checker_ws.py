@@ -50,35 +50,6 @@ CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 MY_SELLER = "Retriever_Shop"
 MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa w dniach roboczych (chinczycy)
 
-# IO patch - wymusza ladowanie lazy-loaded elementow w off-screen dialogu bocznym Allegro.
-# Allegro uzywa IntersectionObserver do lazy-loadingu ofert w dialogu "Inne oferty produktu".
-# Dialog jest renderowany poza viewport (x > viewport_width), wiec IO nigdy nie triggeruje.
-# Patch zmienia callback IO tak zeby zawsze raportowac isIntersecting=true.
-IO_PATCH_JS = r'''(function() {
-    if (window.__ioPatchApplied) return;
-    window.__ioPatchApplied = true;
-    var OrigIO = IntersectionObserver;
-    window.IntersectionObserver = function(callback, options) {
-        var modifiedCallback = function(entries, observer) {
-            var fakeEntries = entries.map(function(entry) {
-                return {
-                    boundingClientRect: entry.boundingClientRect,
-                    intersectionRatio: 1.0,
-                    intersectionRect: entry.boundingClientRect,
-                    isIntersecting: true,
-                    rootBounds: entry.rootBounds,
-                    target: entry.target,
-                    time: entry.time
-                };
-            });
-            callback(fakeEntries, observer);
-        };
-        var obs = new OrigIO(modifiedCallback, options);
-        return obs;
-    };
-    window.IntersectionObserver.prototype = OrigIO.prototype;
-})();'''
-
 # Polskie miesiace do parsowania daty dostawy
 POLISH_MONTHS = {
     "sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6,
@@ -741,153 +712,36 @@ async def check_offer_price(
         logger.debug(f"CDP WebSocket: {ws_url}")
         
         async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
-            # Wstrzyknij IO patch - wymusza ladowanie lazy-loaded elementow
-            # w off-screen dialogu bocznym Allegro
-            await cdp_call(ws, "Page.enable", msg_id=900)
-            add_script = await cdp_call(
-                ws, "Page.addScriptToEvaluateOnNewDocument",
-                {"source": IO_PATCH_JS}, msg_id=901
-            )
-            io_patch_id = add_script.get("result", {}).get("identifier")
-            
-            # Reset stanu - nawiguj do about:blank i zdrenuj bufor websocket
-            # (konsumuje Page.loadEventFired z about:blank, zeby navigate_to_url
-            # nie pomylil go z loadEventFired strony oferty)
-            await cdp_call(ws, "Page.navigate", {"url": "about:blank"}, msg_id=902)
-            await asyncio.sleep(0.3)
-            # Zdrenuj bufor - usun wszystkie oczekujace eventy
-            while True:
-                try:
-                    await asyncio.wait_for(ws.recv(), timeout=0.2)
-                except asyncio.TimeoutError:
-                    break
-            
-            # Nawiguj do oferty
+            # Nawiguj do oferty (URL zawiera #inne-oferty-produktu)
             await navigate_to_url(ws, url)
             
-            # Czekaj na dialog
+            # Czekaj na dialog "Inne oferty produktu"
             if not await wait_for_dialog(ws):
-                if io_patch_id:
-                    try:
-                        await cdp_call(ws, "Page.removeScriptToEvaluateOnNewDocument",
-                                      {"identifier": io_patch_id}, msg_id=903)
-                    except Exception:
-                        pass
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
             
-            # Przenies dialog "Inne oferty produktu" na ekran
-            # UWAGA: strona ma wiele [role='dialog'] - musimy znalezc wlasciwy
-            reposition_js = r'''(function() {
-                var dialogs = document.querySelectorAll("[role='dialog']");
-                for (var d of dialogs) {
+            # Czekaj na zaladowanie artykulow w dialogu (max 5s)
+            articles_js = r'''(function() {
+                var ds = document.querySelectorAll("[role='dialog']");
+                for (var d of ds) {
                     if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
-                        d.style.cssText = 'position: fixed !important; left: 0 !important; top: 0 !important; width: 768px !important; min-height: 100vh !important; z-index: 999999 !important; overflow: auto !important;';
-                        d.scrollTop = 0;
-                        return true;
+                        return d.querySelectorAll('article').length;
                     }
                 }
-                return false;
+                return 0;
             })()'''
-            await cdp_call(ws, "Runtime.evaluate",
-                          {"expression": reposition_js, "returnByValue": True},
-                          msg_id=910)
-            
-            # Wymus ladowanie lazy elementow w dialogu
-            force_lazy_js = r'''(function() {
-                var dialogs = document.querySelectorAll("[role='dialog']");
-                var target = null;
-                for (var d of dialogs) {
-                    if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
-                        target = d;
-                        break;
-                    }
-                }
-                if (!target) return 'no-dialog';
-                
-                var lazyEls = target.querySelectorAll('.lazyload');
-                var count = lazyEls.length;
-                
-                // 1. Sprobuj lazySizes API (jesli dostepne)
-                if (typeof lazySizes !== 'undefined' && lazySizes.loader) {
-                    lazyEls.forEach(function(el) {
-                        try { lazySizes.loader.unveil(el); } catch(e) {}
-                    });
-                    return 'lazySizes:' + count;
-                }
-                
-                // 2. Manualnie: zmien klase + wyslij eventy lazysizes
-                lazyEls.forEach(function(el) {
-                    el.classList.remove('lazyload');
-                    el.classList.add('lazyloading');
-                    el.dispatchEvent(new CustomEvent('lazybeforeunveil', {bubbles: true}));
-                });
-                
-                // 3. Scroll dialogu - triggeruje scroll-based lazy loading
-                target.scrollTop = 200;
-                setTimeout(function() { target.scrollTop = 0; }, 200);
-                
-                // 4. Dispatch scroll/resize na window
-                window.dispatchEvent(new Event('scroll'));
-                window.dispatchEvent(new Event('resize'));
-                
-                return 'manual:' + count;
-            })()'''
-            await cdp_call(ws, "Runtime.evaluate",
-                          {"expression": force_lazy_js, "returnByValue": True},
-                          msg_id=911)
-            
-            # Pauza na zaladowanie ofert po force-trigger
-            await asyncio.sleep(7)
-            
-            # Diagnostyka: sprawdz stan lazy elementow we WLASCIWYM dialogu
-            diag_js = r'''(function() {
-                var dialogs = document.querySelectorAll("[role='dialog']");
-                var target = null;
-                for (var d of dialogs) {
-                    if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
-                        target = d;
-                        break;
-                    }
-                }
-                if (!target) return {dialog: false, totalDialogs: dialogs.length};
-                var lazy = target.querySelectorAll('.lazyload').length;
-                var loaded = target.querySelectorAll('.lazyloaded').length;
-                var articles = target.querySelectorAll('article').length;
-                var container = target.querySelector('[data-box-name="ProductOffersListingContainer"]');
-                var htmlLen = target.innerHTML.length;
-                var boxes = [];
-                target.querySelectorAll('[data-box-name]').forEach(function(el) {
-                    boxes.push(el.getAttribute('data-box-name'));
-                });
-                return {
-                    dialog: true,
-                    ioPatch: !!window.__ioPatchApplied,
-                    lazy: lazy,
-                    loaded: loaded,
-                    articles: articles,
-                    container: !!container,
-                    htmlLen: htmlLen,
-                    totalDialogs: dialogs.length,
-                    boxes: boxes.slice(0, 10)
-                };
-            })()'''
-            diag = await cdp_call(ws, "Runtime.evaluate",
-                                  {"expression": diag_js, "returnByValue": True},
-                                  msg_id=950)
-            diag_val = diag.get("result", {}).get("result", {}).get("value", {})
-            logger.info(f"Diagnostyka oferty {offer_id}: {diag_val}")
+            for _ in range(10):
+                res = await cdp_call(ws, "Runtime.evaluate",
+                                    {"expression": articles_js, "returnByValue": True},
+                                    msg_id=950)
+                count = res.get("result", {}).get("result", {}).get("value", 0)
+                if count > 0:
+                    logger.debug(f"Znaleziono {count} artykulow w dialogu")
+                    break
+                await asyncio.sleep(0.5)
             
             # Wyciagnij oferty
             all_offers = await extract_competitor_offers(ws, title)
-            
-            # Usun IO patch (nie zaklocaj normalnego przegladania)
-            if io_patch_id:
-                try:
-                    await cdp_call(ws, "Page.removeScriptToEvaluateOnNewDocument",
-                                  {"identifier": io_patch_id}, msg_id=904)
-                except Exception:
-                    pass
             
             if not all_offers:
                 result.error = "Brak ofert w dialogu"
