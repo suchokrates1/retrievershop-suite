@@ -283,7 +283,10 @@ def parse_delivery_days(text: str) -> Optional[int]:
 def build_offer_url(offer_id: str, title: str = "") -> str:
     """Buduje URL oferty z fragmentem #inne-oferty-produktu."""
     if title:
-        slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")
+        # Transliteracja polskich znakow
+        _pl = str.maketrans('ąćęłńóśźżĄĆĘŁŃÓŚŹŻ', 'acelnoszzACELNOSZZ')
+        slug = title.lower().translate(_pl)
+        slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
         return f"https://allegro.pl/oferta/{slug}-{offer_id}#inne-oferty-produktu"
     return f"https://allegro.pl/oferta/x-{offer_id}#inne-oferty-produktu"
 
@@ -730,7 +733,7 @@ async def check_offer_price(
                 }
                 return 0;
             })()'''
-            for _ in range(10):
+            for _ in range(20):
                 res = await cdp_call(ws, "Runtime.evaluate",
                                     {"expression": articles_js, "returnByValue": True},
                                     msg_id=950)
