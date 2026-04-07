@@ -720,9 +720,12 @@ async def check_offer_price(
         logger.debug(f"CDP WebSocket: {ws_url}")
         
         async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
-            # Usun ewentualny stary viewport override -
-            # setDeviceMetricsOverride zabija requestAnimationFrame w Chrome/KasmVNC,
-            # co blokuje CSS transitions i IntersectionObserver (sidebar nigdy sie nie otwiera)
+            # Emuluj aktywna strone - w Chrome/KasmVNC (Wayland) strona jest
+            # traktowana jako nieaktywna, co wstrzymuje requestAnimationFrame.
+            # Bez rAF nie dzialaja CSS transitions ani IntersectionObserver,
+            # przez co sidebar Allegro nigdy sie nie otwiera.
+            await cdp_call(ws, "Emulation.setFocusEmulationEnabled",
+                           {"enabled": True}, msg_id=898)
             await cdp_call(ws, "Emulation.clearDeviceMetricsOverride", msg_id=899)
             
             # Nawiguj do oferty (URL zawiera #inne-oferty-produktu)
