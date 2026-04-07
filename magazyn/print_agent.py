@@ -900,6 +900,10 @@ class LabelAgent:
         # 2. Brak SM UUID - utworz nowa przesylke przez Shipment Management
         #    (checkout-forms moze miec przesylki, ale ich ID base64
         #     nie nadaja sie do pobierania etykiet)
+            self.logger.info(
+                "Brak zapisanego shipment_management_id dla %s - tworze nowa przesylke",
+                order_id,
+            )
         return self._create_allegro_shipment(order_id, checkout_form_id)
 
     def _create_allegro_shipment(
@@ -1309,18 +1313,32 @@ class LabelAgent:
         if not package_id:
             raise ApiError("Brak ID przesylki do pobrania etykiety")
 
-        try:
+        def _fetch_label_attempt(logical_attempt: int) -> Tuple[str, str]:
+            self.logger.info(
+                "Proba pobrania etykiety: shipment_id=%s courier_code=%s attempt=%d",
+                package_id,
+                courier_code or "",
+                logical_attempt,
+            )
             label_bytes = get_shipment_label([package_id], page_size="A6", cut_line=False)
             label_b64 = base64.b64encode(label_bytes).decode("ascii")
+            self.logger.info(
+                "Pobrano etykiete: shipment_id=%s courier_code=%s attempt=%d bytes=%d",
+                package_id,
+                courier_code or "",
+                logical_attempt,
+                len(label_bytes),
+            )
             return label_b64, "pdf"
+
+        try:
+            return _fetch_label_attempt(1)
         except RuntimeError as exc:
             # Etykieta nie gotowa - sprobuj ponownie po chwili
             self.logger.warning("Etykieta nie gotowa dla %s: %s", package_id, exc)
             time.sleep(3)
             try:
-                label_bytes = get_shipment_label([package_id], page_size="A6", cut_line=False)
-                label_b64 = base64.b64encode(label_bytes).decode("ascii")
-                return label_b64, "pdf"
+                return _fetch_label_attempt(2)
             except Exception as retry_exc:
                 raise ApiError(f"Etykieta niedostepna: {retry_exc}") from retry_exc
         except Exception as exc:

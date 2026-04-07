@@ -913,9 +913,13 @@ def sync_order_from_data(db, order_data: dict) -> Order:
     order.payment_done = order_data.get("payment_done")
     order.user_comments = order_data.get("user_comments")
     order.admin_comments = order_data.get("admin_comments")
-    order.courier_code = order_data.get("courier_code")
+    incoming_courier_code = order_data.get("courier_code")
+    if incoming_courier_code:
+        order.courier_code = incoming_courier_code
     order.delivery_package_module = order_data.get("delivery_package_module")
-    order.delivery_package_nr = order_data.get("delivery_package_nr")
+    incoming_delivery_package_nr = order_data.get("delivery_package_nr")
+    if incoming_delivery_package_nr:
+        order.delivery_package_nr = incoming_delivery_package_nr
     
     # Store raw products JSON
     products_list = order_data.get("products", [])

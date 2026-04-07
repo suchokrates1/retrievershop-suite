@@ -34,7 +34,12 @@ def generate_and_send_invoice(order_id: str) -> dict:
     result = {"success": False, "invoice_number": None, "errors": []}
 
     with get_session() as db:
-        order = db.query(Order).filter(Order.order_id == order_id).first()
+        order = (
+            db.query(Order)
+            .filter(Order.order_id == order_id)
+            .with_for_update()
+            .first()
+        )
         if not order:
             result["errors"].append(f"Zamowienie {order_id} nie znalezione")
             return result

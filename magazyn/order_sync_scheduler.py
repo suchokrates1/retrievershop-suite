@@ -102,7 +102,8 @@ def _sync_from_allegro_events(app):
         # Przetwarzaj zdarzenia
         with app.app_context():
             with get_session() as db:
-                seen_checkout_forms = set()
+                seen_import_checkout_forms = set()
+                import_event_types = {"BOUGHT", "FILLED_IN", "READY_FOR_PROCESSING"}
 
                 for event in all_events:
                     event_id = event.get("id", "")
@@ -122,9 +123,11 @@ def _sync_from_allegro_events(app):
 
                     order_id = f"allegro_{checkout_form_id}"
 
-                    # Deduplikacja - jedno zamowienie moze miec wiele zdarzen
-                    event_key = (checkout_form_id, event_type)
-                    if event_key in seen_checkout_forms:
+                    # Deduplikacja importu - w jednej partii jedno zamowienie
+                    # moze miec kilka eventow zakupowych (np. BOUGHT/FILLED_IN/
+                    # READY_FOR_PROCESSING). Pelny sync wykonujemy tylko raz,
+                    # ale raw event zapisujemy zawsze do analizy.
+                    if event_type in import_event_types and checkout_form_id in seen_import_checkout_forms:
                         stats["orders_skipped"] += 1
                         # Zapisz raw event nawet dla deduplikowanych zdarzen (analiza funnelu)
                         try:
@@ -144,9 +147,10 @@ def _sync_from_allegro_events(app):
                         except Exception:
                             nested.rollback()
                         continue
-                    seen_checkout_forms.add(event_key)
+                    if event_type in import_event_types:
+                        seen_import_checkout_forms.add(checkout_form_id)
 
-                    if event_type in ("BOUGHT", "FILLED_IN", "READY_FOR_PROCESSING"):
+                    if event_type in import_event_types:
                         try:
                             detail = fetch_allegro_order_detail(checkout_form_id)
                             order_data = parse_allegro_order_to_data(detail)
