@@ -197,6 +197,41 @@ def test_sync_events_dedup_same_checkout_form(app):
         mock_sync.assert_called_once()
 
 
+def test_sync_events_dedup_import_types_for_same_checkout_form(app):
+    """Rozne eventy zakupowe tego samego checkout-form syncujemy tylko raz."""
+    with app.app_context():
+        settings_store.update({"ALLEGRO_LAST_EVENT_ID": "evt-350"})
+
+        events = [
+            _make_event("evt-351", "BOUGHT", "cf-uuid-35"),
+            _make_event("evt-352", "FILLED_IN", "cf-uuid-35"),
+            _make_event("evt-353", "READY_FOR_PROCESSING", "cf-uuid-35"),
+        ]
+
+        with patch(
+            "magazyn.allegro_api.events.fetch_order_events",
+            return_value={"events": events},
+        ), patch(
+            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            return_value={"id": "cf-uuid-35", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
+        ), patch(
+            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            return_value={"order_id": "allegro_cf-uuid-35", "external_order_id": "cf-uuid-35"},
+        ), patch(
+            "magazyn.orders.sync_order_from_data",
+        ) as mock_sync, patch(
+            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            return_value="pobrano",
+        ), patch(
+            "magazyn.orders.add_order_status",
+        ):
+            stats = _sync_from_allegro_events(app)
+
+        assert stats["orders_synced"] == 1
+        assert stats["orders_skipped"] == 2
+        mock_sync.assert_called_once()
+
+
 def test_sync_events_mixed_types(app):
     """Mieszane typy zdarzen - importy i anulowanie."""
     with app.app_context():

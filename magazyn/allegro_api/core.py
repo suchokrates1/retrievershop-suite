@@ -3,6 +3,7 @@ Podstawowe funkcje HTTP dla Allegro API.
 
 Zawiera: retry logic, rate limiting, error handling.
 """
+import logging
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -26,6 +27,8 @@ API_BASE_URL = "https://api.allegro.pl"
 DEFAULT_TIMEOUT = 10
 MAX_RETRY_ATTEMPTS = 5
 MAX_BACKOFF_SECONDS = 30
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_int(value) -> Optional[int]:
@@ -104,6 +107,17 @@ def _rate_limit_delay(headers) -> float:
     return 0.0
 
 
+def _extract_request_id(headers) -> Optional[str]:
+    """Wyciagnij identyfikator requestu z naglowkow odpowiedzi."""
+    if not headers:
+        return None
+    for key in ("X-Request-Id", "x-request-id", "Trace-Id", "trace-id"):
+        value = headers.get(key)
+        if value:
+            return str(value)
+    return None
+
+
 def _sleep_for_limit(delay: float, endpoint: str) -> None:
     """Uśpij z metryką rate limitingu."""
     if delay <= 0:
@@ -129,17 +143,27 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
     """Wykonaj żądanie HTTP z retry logic i rate limiting."""
     attempt = 0
     backoff = 1.0
+    method_name = getattr(method, "__name__", str(method)).upper()
     while True:
         attempt += 1
         kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
         try:
             response = method(url, **kwargs)
-        except RequestException:
+        except RequestException as exc:
             ALLEGRO_API_ERRORS_TOTAL.labels(endpoint=endpoint, status="exception").inc()
             if attempt >= MAX_RETRY_ATTEMPTS:
                 raise
             ALLEGRO_API_RETRIES_TOTAL.labels(endpoint=endpoint).inc()
             delay = min(backoff, MAX_BACKOFF_SECONDS)
+            logger.warning(
+                "Allegro API retry: endpoint=%s method=%s attempt=%d/%d reason=exception error=%s delay=%.1fs",
+                endpoint,
+                method_name,
+                attempt,
+                MAX_RETRY_ATTEMPTS,
+                exc,
+                delay,
+            )
             _sleep_for_limit(delay, endpoint)
             backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
             continue
@@ -154,6 +178,16 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
                 delay = _rate_limit_delay(response.headers)
                 if delay <= 0:
                     delay = min(backoff, MAX_BACKOFF_SECONDS)
+                logger.warning(
+                    "Allegro API retry: endpoint=%s method=%s attempt=%d/%d status=%s request_id=%s delay=%.1fs",
+                    endpoint,
+                    method_name,
+                    attempt,
+                    MAX_RETRY_ATTEMPTS,
+                    status_code,
+                    _extract_request_id(response.headers),
+                    delay,
+                )
                 _sleep_for_limit(delay, endpoint)
                 backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
                 continue
@@ -164,6 +198,13 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
             ALLEGRO_API_ERRORS_TOTAL.labels(
                 endpoint=endpoint, status=str(status_code)
             ).inc()
+            logger.warning(
+                "Allegro API error: endpoint=%s method=%s status=%s request_id=%s",
+                endpoint,
+                method_name,
+                status_code,
+                _extract_request_id(response.headers),
+            )
             raise
 
         _respect_rate_limits(response, endpoint)
