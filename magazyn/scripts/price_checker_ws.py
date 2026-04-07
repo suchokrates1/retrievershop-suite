@@ -50,6 +50,35 @@ CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 MY_SELLER = "Retriever_Shop"
 MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa w dniach roboczych (chinczycy)
 
+# IO patch - wymusza ladowanie lazy-loaded elementow w off-screen dialogu bocznym Allegro.
+# Allegro uzywa IntersectionObserver do lazy-loadingu ofert w dialogu "Inne oferty produktu".
+# Dialog jest renderowany poza viewport (x > viewport_width), wiec IO nigdy nie triggeruje.
+# Patch zmienia callback IO tak zeby zawsze raportowac isIntersecting=true.
+IO_PATCH_JS = r'''(function() {
+    if (window.__ioPatchApplied) return;
+    window.__ioPatchApplied = true;
+    var OrigIO = IntersectionObserver;
+    window.IntersectionObserver = function(callback, options) {
+        var modifiedCallback = function(entries, observer) {
+            var fakeEntries = entries.map(function(entry) {
+                return {
+                    boundingClientRect: entry.boundingClientRect,
+                    intersectionRatio: 1.0,
+                    intersectionRect: entry.boundingClientRect,
+                    isIntersecting: true,
+                    rootBounds: entry.rootBounds,
+                    target: entry.target,
+                    time: entry.time
+                };
+            });
+            callback(fakeEntries, observer);
+        };
+        var obs = new OrigIO(modifiedCallback, options);
+        return obs;
+    };
+    window.IntersectionObserver.prototype = OrigIO.prototype;
+})();'''
+
 # Polskie miesiace do parsowania daty dostawy
 POLISH_MONTHS = {
     "sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6,
@@ -712,16 +741,46 @@ async def check_offer_price(
         logger.debug(f"CDP WebSocket: {ws_url}")
         
         async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
+            # Wstrzyknij IO patch - wymusza ladowanie lazy-loaded elementow
+            # w off-screen dialogu bocznym Allegro
+            await cdp_call(ws, "Page.enable", msg_id=900)
+            add_script = await cdp_call(
+                ws, "Page.addScriptToEvaluateOnNewDocument",
+                {"source": IO_PATCH_JS}, msg_id=901
+            )
+            io_patch_id = add_script.get("result", {}).get("identifier")
+            
+            # Reset stanu (IO patch zadziala przy nastepnym zaladowaniu strony)
+            await cdp_call(ws, "Page.navigate", {"url": "about:blank"}, msg_id=902)
+            await asyncio.sleep(0.5)
+            
             # Nawiguj do oferty
             await navigate_to_url(ws, url)
             
             # Czekaj na dialog
             if not await wait_for_dialog(ws):
+                if io_patch_id:
+                    try:
+                        await cdp_call(ws, "Page.removeScriptToEvaluateOnNewDocument",
+                                      {"identifier": io_patch_id}, msg_id=903)
+                    except Exception:
+                        pass
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
             
+            # Pauza na zaladowanie lazy-loaded ofert (async fetch po IO trigger)
+            await asyncio.sleep(7)
+            
             # Wyciagnij oferty
             all_offers = await extract_competitor_offers(ws, title)
+            
+            # Usun IO patch (nie zaklocaj normalnego przegladania)
+            if io_patch_id:
+                try:
+                    await cdp_call(ws, "Page.removeScriptToEvaluateOnNewDocument",
+                                  {"identifier": io_patch_id}, msg_id=904)
+                except Exception:
+                    pass
             
             if not all_offers:
                 result.error = "Brak ofert w dialogu"
