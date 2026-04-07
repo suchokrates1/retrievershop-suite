@@ -779,6 +779,31 @@ async def check_offer_price(
             # Pauza na zaladowanie lazy-loaded ofert (async fetch po IO trigger)
             await asyncio.sleep(7)
             
+            # Diagnostyka: sprawdz stan IO patcha i lazy elementow
+            diag_js = r'''(function() {
+                var d = document.querySelector("[role='dialog']");
+                if (!d) return {dialog: false};
+                var lazy = d.querySelectorAll('.lazyload').length;
+                var loaded = d.querySelectorAll('.lazyloaded').length;
+                var articles = d.querySelectorAll('article').length;
+                var container = d.querySelector('[data-box-name="ProductOffersListingContainer"]');
+                var containerText = container ? container.innerText.substring(0, 200) : 'brak';
+                return {
+                    dialog: true,
+                    ioPatch: !!window.__ioPatchApplied,
+                    lazy: lazy,
+                    loaded: loaded,
+                    articles: articles,
+                    container: !!container,
+                    containerText: containerText
+                };
+            })()'''
+            diag = await cdp_call(ws, "Runtime.evaluate",
+                                  {"expression": diag_js, "returnByValue": True},
+                                  msg_id=950)
+            diag_val = diag.get("result", {}).get("result", {}).get("value", {})
+            logger.info(f"Diagnostyka oferty {offer_id}: {diag_val}")
+            
             # Wyciagnij oferty
             all_offers = await extract_competitor_offers(ws, title)
             
