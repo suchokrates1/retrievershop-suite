@@ -750,9 +750,17 @@ async def check_offer_price(
             )
             io_patch_id = add_script.get("result", {}).get("identifier")
             
-            # Reset stanu (IO patch zadziala przy nastepnym zaladowaniu strony)
+            # Reset stanu - nawiguj do about:blank i zdrenuj bufor websocket
+            # (konsumuje Page.loadEventFired z about:blank, zeby navigate_to_url
+            # nie pomylil go z loadEventFired strony oferty)
             await cdp_call(ws, "Page.navigate", {"url": "about:blank"}, msg_id=902)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
+            # Zdrenuj bufor - usun wszystkie oczekujace eventy
+            while True:
+                try:
+                    await asyncio.wait_for(ws.recv(), timeout=0.2)
+                except asyncio.TimeoutError:
+                    break
             
             # Nawiguj do oferty
             await navigate_to_url(ws, url)
