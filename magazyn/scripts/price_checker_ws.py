@@ -720,11 +720,10 @@ async def check_offer_price(
         logger.debug(f"CDP WebSocket: {ws_url}")
         
         async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
-            # Ustaw standardowy viewport (Allegro renderuje inaczej na ultrawide)
-            await cdp_call(ws, "Emulation.setDeviceMetricsOverride", {
-                "width": 1920, "height": 1080,
-                "deviceScaleFactor": 1, "mobile": False
-            }, msg_id=899)
+            # Usun ewentualny stary viewport override -
+            # setDeviceMetricsOverride zabija requestAnimationFrame w Chrome/KasmVNC,
+            # co blokuje CSS transitions i IntersectionObserver (sidebar nigdy sie nie otwiera)
+            await cdp_call(ws, "Emulation.clearDeviceMetricsOverride", msg_id=899)
             
             # Nawiguj do oferty (URL zawiera #inne-oferty-produktu)
             await navigate_to_url(ws, url)
