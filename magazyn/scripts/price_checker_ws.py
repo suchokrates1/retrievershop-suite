@@ -793,7 +793,51 @@ async def check_offer_price(
                           {"expression": reposition_js, "returnByValue": True},
                           msg_id=910)
             
-            # Pauza na zaladowanie lazy-loaded ofert (IO + reposition trigger)
+            # Wymus ladowanie lazy elementow w dialogu
+            force_lazy_js = r'''(function() {
+                var dialogs = document.querySelectorAll("[role='dialog']");
+                var target = null;
+                for (var d of dialogs) {
+                    if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
+                        target = d;
+                        break;
+                    }
+                }
+                if (!target) return 'no-dialog';
+                
+                var lazyEls = target.querySelectorAll('.lazyload');
+                var count = lazyEls.length;
+                
+                // 1. Sprobuj lazySizes API (jesli dostepne)
+                if (typeof lazySizes !== 'undefined' && lazySizes.loader) {
+                    lazyEls.forEach(function(el) {
+                        try { lazySizes.loader.unveil(el); } catch(e) {}
+                    });
+                    return 'lazySizes:' + count;
+                }
+                
+                // 2. Manualnie: zmien klase + wyslij eventy lazysizes
+                lazyEls.forEach(function(el) {
+                    el.classList.remove('lazyload');
+                    el.classList.add('lazyloading');
+                    el.dispatchEvent(new CustomEvent('lazybeforeunveil', {bubbles: true}));
+                });
+                
+                // 3. Scroll dialogu - triggeruje scroll-based lazy loading
+                target.scrollTop = 200;
+                setTimeout(function() { target.scrollTop = 0; }, 200);
+                
+                // 4. Dispatch scroll/resize na window
+                window.dispatchEvent(new Event('scroll'));
+                window.dispatchEvent(new Event('resize'));
+                
+                return 'manual:' + count;
+            })()'''
+            await cdp_call(ws, "Runtime.evaluate",
+                          {"expression": force_lazy_js, "returnByValue": True},
+                          msg_id=911)
+            
+            # Pauza na zaladowanie ofert po force-trigger
             await asyncio.sleep(7)
             
             # Diagnostyka: sprawdz stan lazy elementow we WLASCIWYM dialogu
@@ -812,6 +856,10 @@ async def check_offer_price(
                 var articles = target.querySelectorAll('article').length;
                 var container = target.querySelector('[data-box-name="ProductOffersListingContainer"]');
                 var htmlLen = target.innerHTML.length;
+                var boxes = [];
+                target.querySelectorAll('[data-box-name]').forEach(function(el) {
+                    boxes.push(el.getAttribute('data-box-name'));
+                });
                 return {
                     dialog: true,
                     ioPatch: !!window.__ioPatchApplied,
@@ -820,7 +868,8 @@ async def check_offer_price(
                     articles: articles,
                     container: !!container,
                     htmlLen: htmlLen,
-                    totalDialogs: dialogs.length
+                    totalDialogs: dialogs.length,
+                    boxes: boxes.slice(0, 10)
                 };
             })()'''
             diag = await cdp_call(ws, "Runtime.evaluate",
