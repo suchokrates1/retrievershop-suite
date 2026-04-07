@@ -776,14 +776,19 @@ async def check_offer_price(
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
             
-            # Przenies dialog na ekran - to triggeruje IntersectionObserver
-            # naturalnie (elementy staja sie widoczne w viewport)
+            # Przenies dialog "Inne oferty produktu" na ekran
+            # UWAGA: strona ma wiele [role='dialog'] - musimy znalezc wlasciwy
             reposition_js = r'''(function() {
-                var d = document.querySelector("[role='dialog']");
-                if (!d) return false;
-                d.style.cssText = 'position: fixed !important; left: 0 !important; top: 0 !important; width: 768px !important; min-height: 100vh !important; z-index: 999999 !important; overflow: auto !important;';
-                return true;
-            })()'''
+                var dialogs = document.querySelectorAll("[role='dialog']");
+                for (var d of dialogs) {
+                    if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
+                        d.style.cssText = 'position: fixed !important; left: 0 !important; top: 0 !important; width: 768px !important; min-height: 100vh !important; z-index: 999999 !important; overflow: auto !important;';
+                        d.scrollTop = 0;
+                        return true;
+                    }
+                }
+                return false;
+            })()''''
             await cdp_call(ws, "Runtime.evaluate",
                           {"expression": reposition_js, "returnByValue": True},
                           msg_id=910)
@@ -791,23 +796,33 @@ async def check_offer_price(
             # Pauza na zaladowanie lazy-loaded ofert (IO + reposition trigger)
             await asyncio.sleep(7)
             
-            # Diagnostyka: sprawdz stan lazy elementow
+            # Diagnostyka: sprawdz stan lazy elementow we WLASCIWYM dialogu
             diag_js = r'''(function() {
-                var d = document.querySelector("[role='dialog']");
-                if (!d) return {dialog: false};
-                var lazy = d.querySelectorAll('.lazyload').length;
-                var loaded = d.querySelectorAll('.lazyloaded').length;
-                var articles = d.querySelectorAll('article').length;
-                var container = d.querySelector('[data-box-name="ProductOffersListingContainer"]');
+                var dialogs = document.querySelectorAll("[role='dialog']");
+                var target = null;
+                for (var d of dialogs) {
+                    if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
+                        target = d;
+                        break;
+                    }
+                }
+                if (!target) return {dialog: false, totalDialogs: dialogs.length};
+                var lazy = target.querySelectorAll('.lazyload').length;
+                var loaded = target.querySelectorAll('.lazyloaded').length;
+                var articles = target.querySelectorAll('article').length;
+                var container = target.querySelector('[data-box-name="ProductOffersListingContainer"]');
+                var htmlLen = target.innerHTML.length;
                 return {
                     dialog: true,
                     ioPatch: !!window.__ioPatchApplied,
                     lazy: lazy,
                     loaded: loaded,
                     articles: articles,
-                    container: !!container
+                    container: !!container,
+                    htmlLen: htmlLen,
+                    totalDialogs: dialogs.length
                 };
-            })()'''
+            })()''''
             diag = await cdp_call(ws, "Runtime.evaluate",
                                   {"expression": diag_js, "returnByValue": True},
                                   msg_id=950)
