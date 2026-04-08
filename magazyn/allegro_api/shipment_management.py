@@ -138,6 +138,8 @@ def create_shipment(
     ----------
     delivery_method_id : str
         ID metody dostawy (deliveryMethodId z get_delivery_services()).
+        WAZNE: uzywaj ID z checkout-form (Allegro Standard/SMART) aby
+        przesylka szla w ramach SMART, a nie ze srodkow umowy wlasnej.
     sender : dict
         Dane nadawcy: name, company, street, postalCode, city, countryCode, email, phone.
         Opcjonalnie point (jesli adres nadawczy to punkt).
@@ -158,7 +160,8 @@ def create_shipment(
     additional_properties : dict, optional
         Dodatkowe wlasciwosci (np. {"inpost#sendingMethod": "parcel_locker"}).
     credentials_id : str, optional
-        ID umowy wlasnej (jesli nie korzystasz z umowy Allegro).
+        DEPRECATED w API Allegro. Nie przekazywac - deliveryMethodId sam
+        determinuje umowe. Pole zachowane dla kompatybilnosci wstecznej.
 
     Returns
     -------
@@ -178,7 +181,11 @@ def create_shipment(
     }
 
     if credentials_id:
-        input_data["credentialsId"] = credentials_id
+        logger.warning(
+            "credentials_id jest DEPRECATED w API Allegro - "
+            "deliveryMethodId sam determinuje umowe. "
+            "Przekazano credentials_id=%s (ignorowane)", credentials_id,
+        )
     if cash_on_delivery:
         input_data["cashOnDelivery"] = cash_on_delivery
     if reference_number:

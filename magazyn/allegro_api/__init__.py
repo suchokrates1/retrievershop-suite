@@ -13,6 +13,7 @@ Moduły:
 """
 
 from .core import (
+    ALLEGRO_USER_AGENT,
     AUTH_URL,
     API_BASE_URL,
     DEFAULT_TIMEOUT,
@@ -126,6 +127,7 @@ from .carriers import (
 
 __all__ = [
     # Core
+    "ALLEGRO_USER_AGENT",
     "AUTH_URL",
     "API_BASE_URL",
     "DEFAULT_TIMEOUT",

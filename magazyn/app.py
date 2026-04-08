@@ -112,6 +112,21 @@ SETTINGS_GROUPS = {
 
 bp = Blueprint("main", __name__)
 
+
+@bp.get("/cenyiaukcjeinfo")
+def ceny_i_aukcje_info():
+    """Strona informacyjna aplikacji Allegro REST API (wymagana przez User-Agent)."""
+    return (
+        "<html><head><title>Ceny i aukcje - informacje</title></head><body>"
+        "<h1>Ceny i aukcje</h1>"
+        "<p>Aplikacja do zarzadzania zamowieniami, przesylkami i ofertami "
+        "na platformie Allegro.</p>"
+        "<p>Operator: Retriever Shop</p>"
+        "<p>Kontakt: kontakt@retrievershop.pl</p>"
+        "</body></html>"
+    ), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 # Backward compatibility placeholder
 app = None
 
