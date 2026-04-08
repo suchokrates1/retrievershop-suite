@@ -1181,7 +1181,7 @@ def test_refresh_token_uses_settings_store_even_if_env_present(app, monkeypatch)
         def json(self):
             return {"access_token": "new-token", "refresh_token": "new-refresh"}
 
-    def fake_post(url, data, auth=None, timeout=None):
+    def fake_post(url, data, auth=None, timeout=None, headers=None):
         assert url == AUTH_URL
         assert auth == ("settings-client-id", "settings-client-secret")
         assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}
@@ -1225,7 +1225,7 @@ def test_refresh_token_uses_settings_store_when_env_missing(app, monkeypatch):
         def json(self):
             return {"access_token": "new-token", "refresh_token": "new-refresh"}
 
-    def fake_post(url, data, auth=None, timeout=None):
+    def fake_post(url, data, auth=None, timeout=None, headers=None):
         assert url == AUTH_URL
         assert auth == ("settings-client-id", "settings-client-secret")
         assert data == {"grant_type": "refresh_token", "refresh_token": "refresh-token"}

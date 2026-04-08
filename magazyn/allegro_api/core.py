@@ -28,6 +28,11 @@ DEFAULT_TIMEOUT = 10
 MAX_RETRY_ATTEMPTS = 5
 MAX_BACKOFF_SECONDS = 30
 
+# User-Agent wymagany przez Allegro REST API (art. 3.4.c Regulaminu).
+# Nazwa musi byc spojne z nazwa zarejestrowanej aplikacji.
+# WAZNE: nie modyfikowac - uzyty jako czynnik whitelistingu.
+ALLEGRO_USER_AGENT = "CenyIAukcje/1.0.0 (+https://magazyn.retrievershop.pl/cenyiaukcjeinfo)"
+
 logger = logging.getLogger(__name__)
 
 
@@ -144,6 +149,10 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
     attempt = 0
     backoff = 1.0
     method_name = getattr(method, "__name__", str(method)).upper()
+    # Wstrzyknij User-Agent do kazdego requestu do API Allegro
+    headers = kwargs.get("headers") or {}
+    headers.setdefault("User-Agent", ALLEGRO_USER_AGENT)
+    kwargs["headers"] = headers
     while True:
         attempt += 1
         kwargs.setdefault("timeout", DEFAULT_TIMEOUT)

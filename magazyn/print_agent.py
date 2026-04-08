@@ -917,6 +917,10 @@ class LabelAgent:
 
         # Pobierz delivery_method_id (UUID) bezposrednio z Allegro API
         # DB model przechowuje wewnetrzny FK (Integer), wiec musimy pobrac UUID z API
+        # WAZNE: delivery.method.id z checkout-form to ID uslugi Allegro Standard (SMART).
+        # Jesli sprzedawca ma umowe wlasna z InPost, delivery-services zwraca dwa
+        # wpisy z ROZNYMI deliveryMethodId - Allegro Standard i umowa wlasna.
+        # Musimy uzywac Allegro Standard aby przesylka szla w ramach SMART.
         delivery_method_id = None
         delivery_method = order_data.get("delivery_method", "") or order_data.get("shipping", "")
         try:
@@ -926,8 +930,9 @@ class LabelAgent:
             if not delivery_method:
                 delivery_method = allegro_delivery.get("name", "")
             self.logger.info(
-                "Pobrano delivery_method_id=%s z Allegro API (zamowienie %s)",
-                delivery_method_id, order_id,
+                "Pobrano delivery_method_id=%s z checkout-form (Allegro Standard/SMART) "
+                "dla zamowienia %s (metoda: %s)",
+                delivery_method_id, order_id, delivery_method,
             )
         except Exception as exc:
             self.logger.warning(
@@ -936,7 +941,13 @@ class LabelAgent:
             )
 
         if not delivery_method_id:
-            # Fallback: sprobuj znalezc po nazwie
+            # Fallback: sprobuj znalezc po nazwie w delivery-services
+            # UWAGA: preferujemy uslugi Allegro Standard (SMART) nad umowami wlasnymi
+            self.logger.warning(
+                "Uzyto fallback _resolve_delivery_service_id dla zamowienia %s "
+                "(delivery_method='%s') - checkout form nie zwrocil delivery.method.id",
+                order_id, delivery_method,
+            )
             delivery_method_id = self._resolve_delivery_service_id(delivery_method)
 
         if not delivery_method_id:
@@ -1145,7 +1156,12 @@ class LabelAgent:
             return []
 
     def _resolve_delivery_service_id(self, delivery_method: str) -> Optional[str]:
-        """Mapuj nazwe metody dostawy Allegro na deliveryMethodId."""
+        """Mapuj nazwe metody dostawy Allegro na deliveryMethodId.
+
+        Preferuje uslugi Allegro Standard (SMART, bez credentialsId) nad
+        umowami wlasnymi, aby przesylki tworzone byly w ramach SMART
+        zamiast ze srodkow wlasnego konta przewoznika.
+        """
         if not delivery_method:
             return None
 
@@ -1164,26 +1180,57 @@ class LabelAgent:
                 return svc_id.get("deliveryMethodId")
             return svc_id
 
+        def _is_allegro_standard(svc):
+            """Sprawdz czy usluga to Allegro Standard (bez umowy wlasnej)."""
+            svc_id = svc.get("id")
+            if isinstance(svc_id, dict):
+                return not svc_id.get("credentialsId")
+            return True
+
+        def _pick_best(candidates):
+            """Wybierz usluge Allegro Standard (SMART) jesli dostepna."""
+            allegro_std = [s for s in candidates if _is_allegro_standard(s)]
+            if allegro_std:
+                chosen = allegro_std[0]
+                self.logger.info(
+                    "Wybrano usluge Allegro Standard (SMART): %s (id=%s)",
+                    chosen.get("name"), _get_method_id(chosen),
+                )
+                return _get_method_id(chosen)
+            # Brak uslugi Allegro Standard - uzyj umowy wlasnej
+            chosen = candidates[0]
+            self.logger.warning(
+                "Brak uslugi Allegro Standard dla '%s' - uzywam umowy wlasnej: %s (id=%s, credentialsId=%s)",
+                delivery_method, chosen.get("name"), _get_method_id(chosen),
+                (chosen.get("id") or {}).get("credentialsId", "?"),
+            )
+            return _get_method_id(chosen)
+
         # Szukaj dokladnego dopasowania po nazwie
-        for svc in services:
-            svc_name = (svc.get("name") or "").lower()
-            if svc_name == method_lower:
-                return _get_method_id(svc)
+        exact = [s for s in services if (s.get("name") or "").lower() == method_lower]
+        if exact:
+            return _pick_best(exact)
 
         # Szukaj czesciowego dopasowania
-        for svc in services:
-            svc_name = (svc.get("name") or "").lower()
-            if method_lower in svc_name or svc_name in method_lower:
-                return _get_method_id(svc)
+        partial = [
+            s for s in services
+            if method_lower in (s.get("name") or "").lower()
+            or (s.get("name") or "").lower() in method_lower
+        ]
+        if partial:
+            return _pick_best(partial)
 
         # Szukaj dopasowania po kluczowych slowach (np. "inpost", "paczkomat")
         method_keywords = set(method_lower.split())
+        keyword_matches = []
         for svc in services:
             svc_name = (svc.get("name") or "").lower()
             svc_keywords = set(svc_name.split())
             common = method_keywords & svc_keywords
             if len(common) >= 2:
-                return _get_method_id(svc)
+                keyword_matches.append(svc)
+        if keyword_matches:
+            return _pick_best(keyword_matches)
 
         self.logger.warning(
             "Nie znaleziono delivery_service_id dla '%s' "

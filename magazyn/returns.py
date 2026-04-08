@@ -157,9 +157,11 @@ def check_allegro_customer_returns() -> Dict[str, int]:
             logger.warning("Brak tokenu Allegro - pomijam sprawdzanie Customer Returns")
             return stats
         
+        from .allegro_api.core import ALLEGRO_USER_AGENT
         headers = {
             "Authorization": f"Bearer {access_token}",
-            "Accept": "application/vnd.allegro.beta.v1+json"
+            "Accept": "application/vnd.allegro.beta.v1+json",
+            "User-Agent": ALLEGRO_USER_AGENT,
         }
         
         # Pobierz wszystkie zwroty (ostatnie 100)
@@ -378,9 +380,11 @@ def track_return_parcel(return_id: int) -> Optional[str]:
             if not carrier_id:
                 carrier_id = "INPOST"  # Domyslnie InPost
             
+            from .allegro_api.core import ALLEGRO_USER_AGENT
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Accept": "application/vnd.allegro.public.v1+json",
+                "User-Agent": ALLEGRO_USER_AGENT,
             }
             
             url = f"https://api.allegro.pl/order/carriers/{carrier_id}/tracking"

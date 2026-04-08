@@ -5,7 +5,7 @@ from typing import Optional
 
 import requests
 
-from .core import AUTH_URL, DEFAULT_TIMEOUT
+from .core import ALLEGRO_USER_AGENT, AUTH_URL, DEFAULT_TIMEOUT
 from ..settings_store import SettingsPersistenceError, settings_store
 
 
@@ -39,7 +39,9 @@ def get_access_token(
         data["redirect_uri"] = redirect_uri
 
     response = requests.post(
-        AUTH_URL, data=data, auth=(client_id, client_secret), timeout=DEFAULT_TIMEOUT
+        AUTH_URL, data=data, auth=(client_id, client_secret),
+        timeout=DEFAULT_TIMEOUT,
+        headers={"User-Agent": ALLEGRO_USER_AGENT},
     )
     response.raise_for_status()
     return response.json()
@@ -77,6 +79,7 @@ def refresh_token(refresh_token: str) -> dict:
         data=data,
         auth=(store_client_id, store_client_secret),
         timeout=DEFAULT_TIMEOUT,
+        headers={"User-Agent": ALLEGRO_USER_AGENT},
     )
     if getattr(response, 'status_code', 200) >= 400:
         import logging

@@ -259,7 +259,12 @@ def _get_ean_for_offer(offer_id: str) -> str:
         if not access_token:
             return ""
         
-        headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.allegro.public.v1+json"}
+        from .allegro_api.core import ALLEGRO_USER_AGENT
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.allegro.public.v1+json",
+            "User-Agent": ALLEGRO_USER_AGENT,
+        }
         
         url1 = f"https://api.allegro.pl/sale/product-offers/{offer_id}"
         response1 = requests.get(url1, headers=headers, timeout=10)

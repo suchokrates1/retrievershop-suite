@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from ..allegro_api.core import API_BASE_URL, DEFAULT_TIMEOUT
+from ..allegro_api.core import ALLEGRO_USER_AGENT, API_BASE_URL, DEFAULT_TIMEOUT
 from ..settings_store import settings_store
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,8 @@ def _get_headers(access_token: str) -> Dict[str, str]:
     return {
         'Authorization': f'Bearer {access_token}',
         'Accept': 'application/vnd.allegro.public.v1+json',
-        'Content-Type': 'application/vnd.allegro.public.v1+json'
+        'Content-Type': 'application/vnd.allegro.public.v1+json',
+        'User-Agent': ALLEGRO_USER_AGENT,
     }
 
 

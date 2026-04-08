@@ -220,6 +220,7 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
         def __init__(self, status_code, data):
             self.status_code = status_code
             self._data = data
+            self.headers = {}
 
         def raise_for_status(self):
             if self.status_code >= 400:
@@ -311,6 +312,7 @@ def test_fetch_product_listing_raises_runtime_error_when_refresh_unavailable(
         def __init__(self, status_code, data):
             self.status_code = status_code
             self._data = data
+            self.headers = {}
 
         def raise_for_status(self):
             if self.status_code >= 400:
@@ -344,6 +346,7 @@ def test_fetch_product_listing_raises_when_refresh_fails(
         def __init__(self, status_code, data):
             self.status_code = status_code
             self._data = data
+            self.headers = {}
 
         def raise_for_status(self):
             if self.status_code >= 400:
