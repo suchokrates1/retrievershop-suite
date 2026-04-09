@@ -167,7 +167,7 @@
                                 </template>
                                 <template x-if="!loading && profit">
                                     <div>
-                                        <h3 class="mb-1" :class="profit.month > 0 ? 'text-success' : 'text-error'" x-text="Math.round(profit.month) + ' zł'"></h3>
+                                        <div class="text-3xl font-bold mb-1" :class="profit.month > 0 ? 'text-success' : 'text-error'" x-text="Math.round(profit.month) + ' zł'"></div>
                                         <small class="text-base-content/80">Realny zysk <i class="bi bi-info-circle"></i></small>
                                     </div>
                                 </template>
