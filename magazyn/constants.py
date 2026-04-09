@@ -22,6 +22,8 @@ PRODUCT_CATEGORIES = [
     "Smycz",
     "Pas bezpieczeństwa",
     "Obroża",
+    "Saszetki",
+    "Amortyzator",
 ]
 
 # Known brands
@@ -35,6 +37,7 @@ PRODUCT_BRANDS = [
 # Product series (mainly Truelove)
 PRODUCT_SERIES = [
     "Front Line Premium",
+    "Front Line Cordura",
     "Front Line",
     "Active",
     "Blossom",
@@ -50,6 +53,13 @@ PRODUCT_SERIES = [
     "Safe Hiking",
     "Handy",
     "Dogi",
+    "Outdoor",
+    "Security",
+    "Trail Bag",
+    "Standard",
+    "V1",
+    "V2",
+    "Treat Basic",
 ]
 
 # Common color names that may appear in product titles.  They are stored in

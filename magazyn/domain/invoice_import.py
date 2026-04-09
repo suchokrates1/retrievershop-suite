@@ -39,7 +39,11 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
     
     # Detect category - None if not recognized
     category = None
-    if "smycz" in name_lower:
+    if "saszetk" in name_lower or "sakw" in name_lower or "torebk" in name_lower or "nerk" in name_lower:
+        category = "Saszetki"
+    elif "amortyzator" in name_lower:
+        category = "Amortyzator"
+    elif "smycz" in name_lower:
         category = "Smycz"
     elif "pas" in name_lower and ("bezpiecz" in name_lower or "samochodow" in name_lower):
         category = "Pas bezpieczeństwa"
@@ -65,6 +69,10 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
     # Detect series (order matters - more specific first)
     series = None
     series_patterns = [
+        ("front line premium cordura", "Front Line Cordura"),
+        ("front line cordura", "Front Line Cordura"),
+        ("frolin-cor", "Front Line Cordura"),
+        ("frolin cor", "Front Line Cordura"),
         ("front line premium", "Front Line Premium"),
         ("front-line premium", "Front Line Premium"),
         ("frontline premium", "Front Line Premium"),
@@ -89,9 +97,20 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
         ("dogi", "Dogi"),
         ("adventure soft", "Adventure Soft"),
         ("advsoft", "Adventure Soft"),
+        ("adventure dog", "Adventure Dog"),
         ("adventure", "Adventure"),
         ("advent", "Adventure"),
+        ("safe hiking", "Safe Hiking"),
         ("handy", "Handy"),
+        ("outdoor", "Outdoor"),
+        ("outdoo", "Outdoor"),
+        ("security", "Security"),
+        ("securi", "Security"),
+        ("trail bag", "Trail Bag"),
+        ("treat basic", "Treat Basic"),
+        ("standard", "Standard"),
+        ("v2", "V2"),
+        ("v1", "V1"),
     ]
     
     for pattern, series_name in series_patterns:
@@ -280,15 +299,22 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                             color = token1 if token2_norm == p_norm else token2 if token1_norm == p_norm else token1
                             break
                 if not size:
-                    # Ostatnia szansa - pierwszy token jako rozmiar
-                    size = token1
-                    color = token2
+                    # Sprawdz czy token1 to znany kolor a nie rozmiar
+                    from ..constants import KNOWN_COLORS
+                    _known_color_lower = {c.lower() for c in KNOWN_COLORS}
+                    if token1.lower() in _known_color_lower:
+                        # Token1 to kolor, rozmiar zostaje pusty (domyslnie Uniwersalny)
+                        color = token1
+                    else:
+                        # Ostatnia szansa - pierwszy token jako rozmiar
+                        size = token1
+                        color = token2
         
-        # 3. Kod kreskowy
+        # 3. Kod kreskowy - bierz ostatni (wariantowy jest bardziej specyficzny niz produktowy)
         barcode = ""
-        barcode_match = re.search(r'Kod kreskowy:\s*(\d{8,13})', entry)
-        if barcode_match:
-            barcode = barcode_match.group(1)
+        barcode_matches = re.findall(r'Kod kreskowy:\s*(\d{8,13})', entry)
+        if barcode_matches:
+            barcode = barcode_matches[-1]
         
         # Parse the main line: find quantity pattern (X,XXX szt.)
         qty_match = re.search(r'(\d{1,3})[,.](\d{3})\s*szt\.?', entry)
@@ -319,7 +345,7 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                        'zielone', 'zielony', 'zielona',
                        'żółte', 'żółty', 'żółta',
                        'turkusowe', 'turkusowy', 'turkusowa',
-                       'różowe', 'różowy', 'różowa',
+                       'różowe', 'różowy', 'różowa', 'róż',
                        'szare', 'szary', 'szara',
                        'pomarańczowe', 'pomarańczowy', 'pomarańczowa',
                        'fioletowe', 'fioletowy', 'fioletowa', 'fiolet',
@@ -327,18 +353,28 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                        'limonkowe', 'limonkowy', 'limonkowa',
                        'khaki', 'zielony-khaki',
                        'stalowa róż', 'stalowa różowa']
+        # Kolory dwuwyrazowe - lista do sprawdzenia przed petla po slowach
+        _two_word_colors = ['stalowa róż', 'stalowa różowa', 'zielony-khaki']
         
         name_words = name_part.split()
-        for word in reversed(name_words):
-            if word.lower() in color_words:
-                if not color:  # Only if not already set from Wariant
+        # Sprawdz kolory dwuwyrazowe na koncu nazwy
+        if not color and len(name_words) >= 2:
+            two_word = f"{name_words[-2]} {name_words[-1]}".lower()
+            if two_word in _two_word_colors:
+                color = f"{name_words[-2]} {name_words[-1]}"
+                name_words = name_words[:-2]
+        # Jesli nie znaleziono dwuwyrazowego, szukaj jednowyrazowego
+        if not color:
+            for word in reversed(name_words):
+                if word.lower() in color_words:
                     color = word
-                name_words.remove(word)
-                break
+                    name_words.remove(word)
+                    break
         # Normalizuj kolory zlozone -> prosty kolor
         _color_normalize = {
             'zielony-khaki': 'zielony', 'khaki': 'zielony',
-            'stalowa roz': 'rozowy', 'stalowa rozowa': 'rozowy',
+            'stalowa roz': 'różowy', 'stalowa rozowa': 'różowy',
+            'stalowa róż': 'różowy',
         }
         color = _color_normalize.get(color.lower(), color)
         
@@ -527,6 +563,14 @@ def _import_invoice_df(
                         "Uzupelniono pusty rozmiar na '%s' dla product_id=%s",
                         size, product.id,
                     )
+
+            # Domyslny rozmiar Uniwersalny gdy brak rozmiaru po todas probach
+            if not size:
+                size = "Uniwersalny"
+                logger.info(
+                    "Ustawiono domyslny rozmiar 'Uniwersalny' dla product_id=%s",
+                    product.id if product else "?",
+                )
 
             ps = (
                 db.query(ProductSize)
