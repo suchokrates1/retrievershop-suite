@@ -30,21 +30,20 @@ MINIPC_CHECK_URL="https://magazyn.retrievershop.pl/healthz"
 MINIPC_RECOVERY_URL="https://minipc-check.retrievershop.pl/healthz"
 REQUIRED_FAILS=2
 
-CF_TOKEN="***CF_TOKEN_REDACTED***"
-ZONE_ID="***ZONE_ID_REDACTED***"
+# --- Sekrety z pliku (NIE commitowac do git) ---
+SECRETS_FILE="$FAILOVER_DIR/secrets.env"
+if [ ! -f "$SECRETS_FILE" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL: Brak $SECRETS_FILE" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "$SECRETS_FILE"
+
 VPS_TUNNEL_CNAME="59d6c42e-f783-448d-8302-905acb1bab14.cfargotunnel.com"
 CLOUDFLARED_CONFIG="/etc/cloudflared/config.yml"
 
 WAHA_URL="http://${MINIPC_TAILSCALE}:3001"
-WAHA_KEY="***WAHA_KEY_REDACTED***"
-WAHA_TO="***WAHA_TO_REDACTED***"
-
-# Messenger fallback (WAHA na minipc jest niedostepna gdy minipc pada)
-MESSENGER_TOKEN="***MESSENGER_TOKEN_REDACTED***"
-MESSENGER_RECIPIENT="***MESSENGER_RECIPIENT_REDACTED***"
 MESSENGER_API="https://graph.facebook.com/v22.0/me/messages"
-
-MIKRUS_DSN="***MIKRUS_DSN_REDACTED***"
 SNAPSHOT_FILE="$FAILOVER_DIR/snapshot.json"
 ACTIVATE_TIME_FILE="$FAILOVER_DIR/activate_time"
 
