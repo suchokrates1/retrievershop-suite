@@ -164,7 +164,7 @@ class AllegroSyncService:
                     "text": content,
                     "created_at": created_at,
                 }
-                conn.execute(text("UPDATE threads SET read = 0 WHERE id = :tid"), {"tid": discussion_id})
+                conn.execute(text("UPDATE threads SET read = :val WHERE id = :tid"), {"tid": discussion_id, "val": False})
         
         if latest_timestamp:
             conn.execute(
@@ -313,7 +313,7 @@ class AllegroSyncService:
                     "text": content,
                     "created_at": created_at,
                 }
-                conn.execute(text("UPDATE threads SET read = 0 WHERE id = :tid"), {"tid": thread_id})
+                conn.execute(text("UPDATE threads SET read = :val WHERE id = :tid"), {"tid": thread_id, "val": False})
         
         if latest_timestamp:
             conn.execute(

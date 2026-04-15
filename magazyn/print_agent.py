@@ -1883,8 +1883,14 @@ class LabelAgent:
                     self.logger.info("Token Allegro niedostępny lub nieważny, pomijam sprawdzanie.")
                 else:
                     ***REMOVED*** = self.settings.ALLEGRO_ACCESS_TOKEN
-                    self._check_allegro_discussions(***REMOVED***)
-                    self._check_allegro_messages(***REMOVED***)
+                    try:
+                        self._check_allegro_discussions(***REMOVED***)
+                    except Exception as exc:
+                        self.logger.error("Blad sprawdzania dyskusji Allegro: %s", exc)
+                    try:
+                        self._check_allegro_messages(***REMOVED***)
+                    except Exception as exc:
+                        self.logger.error("Blad sprawdzania wiadomosci Allegro: %s", exc)
                 last_allegro_check = datetime.now()
 
             self.clean_old_printed_orders()
