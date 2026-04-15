@@ -56,6 +56,7 @@ from .allegro_api.fulfillment import (
     update_fulfillment_status,
 )
 from .agent.allegro_sync import AllegroSyncService
+from .workers import TrackingWorker, MessagingWorker, ReportWorker
 from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
     PRINT_AGENT_ITERATION_SECONDS,
@@ -226,7 +227,8 @@ class LabelAgent:
         self._api_calls_success = 0
         self._last_api_log = datetime.now()
         self._api_call_times: Deque[float] = deque()
-        self._label_error_notifications: Dict[str, int] = {}  # Śledzenie ile razy wysłano powiadomienie o błędzie
+        self._label_error_notifications: Dict[str, int] = {}
+        self._workers: List = []
         self._configure_logging(initial=True)
         self._configure_db_engine()
 
@@ -1860,328 +1862,307 @@ class LabelAgent:
         service.check_messages(access_token)
 
     def _agent_loop(self) -> None:
-        allegro_check_interval = timedelta(minutes=5)
-        tracking_check_interval = timedelta(minutes=15)
-        last_allegro_check = datetime.now() - allegro_check_interval
-        last_tracking_check = datetime.now() - tracking_check_interval
-
         while not self._stop_event.is_set():
-            loop_start = datetime.now()
-            self._write_heartbeat()
-            self._send_periodic_reports()
-
-            # Check tracking statuses every 15 minutes
-            if datetime.now() - last_tracking_check >= tracking_check_interval:
-                self._check_tracking_statuses()
-                last_tracking_check = datetime.now()
-
-            if datetime.now() - last_allegro_check >= allegro_check_interval:
-                token_valid = hasattr(self.settings, 'ALLEGRO_ACCESS_TOKEN') and self.settings.ALLEGRO_ACCESS_TOKEN
-                expires_at = getattr(self.settings, 'ALLEGRO_TOKEN_EXPIRES_AT', 0)
-
-                if not token_valid or expires_at <= time.time():
-                    self.logger.info("Token Allegro niedostępny lub nieważny, pomijam sprawdzanie.")
-                else:
-                    access_token = self.settings.ALLEGRO_ACCESS_TOKEN
-                    try:
-                        self._check_allegro_discussions(access_token)
-                    except Exception as exc:
-                        self.logger.error("Blad sprawdzania dyskusji Allegro: %s", exc)
-                    try:
-                        self._check_allegro_messages(access_token)
-                    except Exception as exc:
-                        self.logger.error("Blad sprawdzania wiadomosci Allegro: %s", exc)
-                last_allegro_check = datetime.now()
-
-            self.clean_old_printed_orders()
-            printed_entries = self.load_printed_orders()
-            printed = {entry["order_id"]: entry["printed_at"] for entry in printed_entries}
-            queue = self.load_queue()
-
-            queue = self._restore_in_progress(queue)
-
-            queue = self._process_queue(queue, printed)
-            self.save_queue(queue)
-
             try:
+                self._run_print_iteration()
+            except Exception as exc:
+                self.logger.error("[BLAD ITERACJI GLOWNEJ] %s", exc, exc_info=True)
+                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+            self._stop_event.wait(self.config.poll_interval)
+
+    def _run_print_iteration(self) -> None:
+        """Pojedyncza iteracja petli drukowania - izolowana od bledow."""
+        loop_start = datetime.now()
+        self._write_heartbeat()
+
+        self.clean_old_printed_orders()
+        printed_entries = self.load_printed_orders()
+        printed = {entry["order_id"]: entry["printed_at"] for entry in printed_entries}
+        queue = self.load_queue()
+
+        queue = self._restore_in_progress(queue)
+
+        queue = self._process_queue(queue, printed)
+        self.save_queue(queue)
+
+        try:
+            try:
+                orders = self._retry(
+                    self.get_orders,
+                    stage="orders",
+                    retry_exceptions=(ApiError,),
+                )
+            except ApiError as exc:
+                self.logger.error("Blad pobierania zamowien: %s", exc)
+                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                orders = []
+            for order in orders:
+                order_id = str(order["order_id"])
+                prod_name, size, color = parse_product_info(
+                    (order.get("products") or [{}])[0]
+                )
+                self.last_order_data = {
+                    # Basic order info
+                    "order_id": order_id,
+                    "external_order_id": order.get("external_order_id", ""),
+                    "shop_order_id": order.get("shop_order_id"),
+                    "name": prod_name,
+                    "size": size,
+                    "color": color,
+                    # Customer info
+                    "customer": order.get("delivery_fullname", "Nieznany klient"),
+                    "email": order.get("email", ""),
+                    "phone": order.get("phone", ""),
+                    "user_login": order.get("user_login", ""),
+                    # Order source and status
+                    "platform": order.get("order_source", "brak"),
+                    "order_source_id": order.get("order_source_id"),
+                    "order_status_id": order.get("order_status_id"),
+                    "confirmed": order.get("confirmed", False),
+                    # Dates (unix timestamps)
+                    "date_add": order.get("date_add"),
+                    "date_confirmed": order.get("date_confirmed"),
+                    "date_in_status": order.get("date_in_status"),
+                    # Delivery address
+                    "shipping": order.get("delivery_method", "brak"),
+                    "delivery_method_id": order.get("delivery_method_id"),
+                    "delivery_price": order.get("delivery_price", 0),
+                    "delivery_fullname": order.get("delivery_fullname", ""),
+                    "delivery_company": order.get("delivery_company", ""),
+                    "delivery_address": order.get("delivery_address", ""),
+                    "delivery_city": order.get("delivery_city", ""),
+                    "delivery_postcode": order.get("delivery_postcode", ""),
+                    "delivery_country": order.get("delivery_country", ""),
+                    "delivery_country_code": order.get("delivery_country_code", ""),
+                    # Pickup point (paczkomat)
+                    "delivery_point_id": order.get("delivery_point_id", ""),
+                    "delivery_point_name": order.get("delivery_point_name", ""),
+                    "delivery_point_address": order.get("delivery_point_address", ""),
+                    "delivery_point_postcode": order.get("delivery_point_postcode", ""),
+                    "delivery_point_city": order.get("delivery_point_city", ""),
+                    # Invoice address
+                    "invoice_fullname": order.get("invoice_fullname", ""),
+                    "invoice_company": order.get("invoice_company", ""),
+                    "invoice_nip": order.get("invoice_nip", ""),
+                    "invoice_address": order.get("invoice_address", ""),
+                    "invoice_city": order.get("invoice_city", ""),
+                    "invoice_postcode": order.get("invoice_postcode", ""),
+                    "invoice_country": order.get("invoice_country", ""),
+                    "want_invoice": order.get("want_invoice", "0"),
+                    # Payment
+                    "currency": order.get("currency", "PLN"),
+                    "payment_method": order.get("payment_method", ""),
+                    "payment_method_cod": order.get("payment_method_cod", "0"),
+                    "payment_done": order.get("payment_done", 0),
+                    # Comments
+                    "user_comments": order.get("user_comments", ""),
+                    "admin_comments": order.get("admin_comments", ""),
+                    # Products with EAN
+                    "products": order.get("products", []),
+                    # Courier/shipping tracking (filled later)
+                    "courier_code": "",
+                    "delivery_package_module": order.get("delivery_package_module", ""),
+                    "delivery_package_nr": order.get("delivery_package_nr", ""),
+                    "package_ids": [],
+                    "tracking_numbers": [],
+                }
+
+                if order_id in printed:
+                    continue
+
+                # Sprawdź czy zamówienie jest już w kolejce oczekującej
+                queued_order_ids = {item["order_id"] for item in queue}
+                if order_id in queued_order_ids:
+                    continue
+
+                # Blokada druku dla nieopłaconych zamówień (nie dotyczy COD)
+                payment_done = float(order.get("payment_done") or 0)
+                is_cod = is_cod_order(
+                    order.get("payment_method_cod", "0"),
+                    order.get("payment_method", ""),
+                )
+                if not is_cod and payment_done <= 0:
+                    self.logger.info(
+                        "Pomijam %s - nieoplacone (payment_done=%.2f, cod=%s)",
+                        order_id, payment_done, is_cod,
+                    )
+                    continue
+
                 try:
-                    orders = self._retry(
-                        self.get_orders,
-                        stage="orders",
+                    packages = self._retry(
+                        self.get_order_packages,
+                        order_id,
+                        stage="packages",
                         retry_exceptions=(ApiError,),
                     )
                 except ApiError as exc:
-                    self.logger.error("Błąd pobierania zamówień: %s", exc)
+                    self.logger.error(
+                        "Błąd pobierania paczek dla %s: %s", order_id, exc
+                    )
                     PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
-                    orders = []
-                for order in orders:
-                    order_id = str(order["order_id"])
-                    prod_name, size, color = parse_product_info(
-                        (order.get("products") or [{}])[0]
-                    )
-                    self.last_order_data = {
-                        # Basic order info
-                        "order_id": order_id,
-                        "external_order_id": order.get("external_order_id", ""),
-                        "shop_order_id": order.get("shop_order_id"),
-                        "name": prod_name,
-                        "size": size,
-                        "color": color,
-                        # Customer info
-                        "customer": order.get("delivery_fullname", "Nieznany klient"),
-                        "email": order.get("email", ""),
-                        "phone": order.get("phone", ""),
-                        "user_login": order.get("user_login", ""),
-                        # Order source and status
-                        "platform": order.get("order_source", "brak"),
-                        "order_source_id": order.get("order_source_id"),
-                        "order_status_id": order.get("order_status_id"),
-                        "confirmed": order.get("confirmed", False),
-                        # Dates (unix timestamps)
-                        "date_add": order.get("date_add"),
-                        "date_confirmed": order.get("date_confirmed"),
-                        "date_in_status": order.get("date_in_status"),
-                        # Delivery address
-                        "shipping": order.get("delivery_method", "brak"),
-                        "delivery_method_id": order.get("delivery_method_id"),
-                        "delivery_price": order.get("delivery_price", 0),
-                        "delivery_fullname": order.get("delivery_fullname", ""),
-                        "delivery_company": order.get("delivery_company", ""),
-                        "delivery_address": order.get("delivery_address", ""),
-                        "delivery_city": order.get("delivery_city", ""),
-                        "delivery_postcode": order.get("delivery_postcode", ""),
-                        "delivery_country": order.get("delivery_country", ""),
-                        "delivery_country_code": order.get("delivery_country_code", ""),
-                        # Pickup point (paczkomat)
-                        "delivery_point_id": order.get("delivery_point_id", ""),
-                        "delivery_point_name": order.get("delivery_point_name", ""),
-                        "delivery_point_address": order.get("delivery_point_address", ""),
-                        "delivery_point_postcode": order.get("delivery_point_postcode", ""),
-                        "delivery_point_city": order.get("delivery_point_city", ""),
-                        # Invoice address
-                        "invoice_fullname": order.get("invoice_fullname", ""),
-                        "invoice_company": order.get("invoice_company", ""),
-                        "invoice_nip": order.get("invoice_nip", ""),
-                        "invoice_address": order.get("invoice_address", ""),
-                        "invoice_city": order.get("invoice_city", ""),
-                        "invoice_postcode": order.get("invoice_postcode", ""),
-                        "invoice_country": order.get("invoice_country", ""),
-                        "want_invoice": order.get("want_invoice", "0"),
-                        # Payment
-                        "currency": order.get("currency", "PLN"),
-                        "payment_method": order.get("payment_method", ""),
-                        "payment_method_cod": order.get("payment_method_cod", "0"),
-                        "payment_done": order.get("payment_done", 0),
-                        # Comments
-                        "user_comments": order.get("user_comments", ""),
-                        "admin_comments": order.get("admin_comments", ""),
-                        # Products with EAN
-                        "products": order.get("products", []),
-                        # Courier/shipping tracking (filled later)
-                        "courier_code": "",
-                        "delivery_package_module": order.get("delivery_package_module", ""),
-                        "delivery_package_nr": order.get("delivery_package_nr", ""),
-                        "package_ids": [],
-                        "tracking_numbers": [],
-                    }
+                    if self._should_send_error_notification(order_id):
+                        self._send_label_error_notification(order_id)
+                    else:
+                        self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
+                    continue
+                labels: List[Tuple[str, str]] = []
+                courier_code = ""
+                package_ids: List[str] = []
+                tracking_numbers: List[str] = []
 
-                    if order_id in printed:
+                for package in packages:
+                    shipment_id = package.get("shipment_id")
+                    code = package.get("carrier_id") or package.get("courier_code")
+                    tracking_number = package.get("waybill") or package.get("courier_package_nr")
+                    if code and not courier_code:
+                        courier_code = code
+                    if shipment_id:
+                        package_ids.append(str(shipment_id))
+                    if tracking_number:
+                        tracking_numbers.append(str(tracking_number))
+                    if not shipment_id:
+                        self.logger.warning("  Brak shipment_id dla zamowienia %s", order_id)
                         continue
-
-                    # Sprawdź czy zamówienie jest już w kolejce oczekującej
-                    queued_order_ids = {item["order_id"] for item in queue}
-                    if order_id in queued_order_ids:
-                        continue
-
-                    # Blokada druku dla nieopłaconych zamówień (nie dotyczy COD)
-                    payment_done = float(order.get("payment_done") or 0)
-                    is_cod = is_cod_order(
-                        order.get("payment_method_cod", "0"),
-                        order.get("payment_method", ""),
-                    )
-                    if not is_cod and payment_done <= 0:
-                        self.logger.info(
-                            "Pomijam %s - nieoplacone (payment_done=%.2f, cod=%s)",
-                            order_id, payment_done, is_cod,
-                        )
-                        continue
-
                     try:
-                        packages = self._retry(
-                            self.get_order_packages,
-                            order_id,
-                            stage="packages",
+                        label_data, ext = self._retry(
+                            self.get_label,
+                            courier_code,
+                            shipment_id,
+                            stage="label",
                             retry_exceptions=(ApiError,),
                         )
-                    except ApiError as exc:
-                        self.logger.error(
-                            "Błąd pobierania paczek dla %s: %s", order_id, exc
+                    except ShipmentExpiredError as exp_exc:
+                        self.logger.warning(
+                            "Przesylka %s wygasla (403) - anuluje i tworze nowa dla %s",
+                            shipment_id, order_id,
                         )
-                        PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
-                        if self._should_send_error_notification(order_id):
-                            self._send_label_error_notification(order_id)
-                        else:
-                            self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
-                        continue
-                    labels: List[Tuple[str, str]] = []
-                    courier_code = ""
-                    package_ids: List[str] = []
-                    tracking_numbers: List[str] = []
-
-                    for package in packages:
-                        shipment_id = package.get("shipment_id")
-                        code = package.get("carrier_id") or package.get("courier_code")
-                        tracking_number = package.get("waybill") or package.get("courier_package_nr")
-                        if code and not courier_code:
-                            courier_code = code
-                        if shipment_id:
-                            package_ids.append(str(shipment_id))
-                        if tracking_number:
-                            tracking_numbers.append(str(tracking_number))
-                        if not shipment_id:
-                            self.logger.warning("  Brak shipment_id dla zamowienia %s", order_id)
-                            continue
-                        try:
-                            label_data, ext = self._retry(
-                                self.get_label,
-                                courier_code,
-                                shipment_id,
-                                stage="label",
-                                retry_exceptions=(ApiError,),
-                            )
-                        except ShipmentExpiredError as exp_exc:
-                            self.logger.warning(
-                                "Przesylka %s wygasla (403) - anuluje i tworze nowa dla %s",
-                                shipment_id, order_id,
-                            )
-                            label_data, ext = self._recreate_shipment_and_get_label(
-                                order_id, shipment_id, courier_code,
-                                package_ids, tracking_numbers,
-                            )
-                            if not label_data:
-                                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
-                                continue
-                        except ApiError as exc:
-                            self.logger.error(
-                                "Blad pobierania etykiety %s/%s: %s",
-                                courier_code,
-                                shipment_id,
-                                exc,
-                            )
+                        label_data, ext = self._recreate_shipment_and_get_label(
+                            order_id, shipment_id, courier_code,
+                            package_ids, tracking_numbers,
+                        )
+                        if not label_data:
                             PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
                             continue
-                        if label_data:
-                            labels.append((label_data, ext))
+                    except ApiError as exc:
+                        self.logger.error(
+                            "Blad pobierania etykiety %s/%s: %s",
+                            courier_code,
+                            shipment_id,
+                            exc,
+                        )
+                        PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                        continue
+                    if label_data:
+                        labels.append((label_data, ext))
 
-                    if courier_code:
-                        self.last_order_data["courier_code"] = courier_code
-                    if package_ids:
-                        self.last_order_data["package_ids"] = list(dict.fromkeys(package_ids))
-                    if tracking_numbers:
-                        self.last_order_data["tracking_numbers"] = list(dict.fromkeys(tracking_numbers))
-                        # delivery_package_nr uzywany przez mark_as_printed
-                        self.last_order_data["delivery_package_nr"] = tracking_numbers[0]
+                if courier_code:
+                    self.last_order_data["courier_code"] = courier_code
+                if package_ids:
+                    self.last_order_data["package_ids"] = list(dict.fromkeys(package_ids))
+                if tracking_numbers:
+                    self.last_order_data["tracking_numbers"] = list(dict.fromkeys(tracking_numbers))
+                    # delivery_package_nr uzywany przez mark_as_printed
+                    self.last_order_data["delivery_package_nr"] = tracking_numbers[0]
 
-                    if labels:
-                        if self.is_quiet_time():
-                            for label_data, ext in labels:
-                                queue.append(
-                                    {
-                                        "order_id": order_id,
-                                        "label_data": label_data,
-                                        "ext": ext,
-                                        "last_order_data": self.last_order_data,
-                                        "queued_at": datetime.now().isoformat(),
-                                        "status": "queued",
-                                    }
-                                )
-                            # W quiet_hours etykieta jest w kolejce - wysyłamy info o sukcesie
-                            self._notify_messenger(self.last_order_data, print_success=True)
-                            self.mark_as_printed(order_id, self.last_order_data)
-                            printed[order_id] = datetime.now()
-                        else:
-                            entries: List[Dict[str, Any]] = []
-                            for label_data, ext in labels:
-                                entry = {
+                if labels:
+                    if self.is_quiet_time():
+                        for label_data, ext in labels:
+                            queue.append(
+                                {
                                     "order_id": order_id,
                                     "label_data": label_data,
                                     "ext": ext,
                                     "last_order_data": self.last_order_data,
                                     "queued_at": datetime.now().isoformat(),
-                                    "status": "in_progress",
+                                    "status": "queued",
                                 }
-                                queue.append(entry)
-                                entries.append(entry)
-                            self.save_queue(queue)
-                            print_success = True
-                            try:
-                                for entry in entries:
-                                    self._retry(
-                                        self.print_label,
-                                        entry["label_data"],
-                                        entry.get("ext", "pdf"),
-                                        entry["order_id"],
-                                        stage="print",
-                                        retry_exceptions=(PrintError,),
-                                    )
-                                consume_order_stock(
-                                    self.last_order_data.get("products", [])
-                                )
-                                self.mark_as_printed(order_id, self.last_order_data)
-                                printed[order_id] = datetime.now()
-                                for entry in entries:
-                                    if entry in queue:
-                                        queue.remove(entry)
-                            except Exception as exc:
-                                self.logger.error(
-                                    "Błąd drukowania zamówienia %s: %s", order_id, exc
-                                )
-                                print_success = False
-                                try:
-                                    from .orders import add_order_status
-                                    from .db import get_session
-                                    with get_session() as db:
-                                        add_order_status(db, order_id, "blad_druku", notes=f"Błąd drukowania: {exc}")
-                                except Exception:
-                                    self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
-                                for entry in entries:
-                                    entry["status"] = "queued"
-                                self.save_queue(queue)
-                                self.logger.info("Retry za 60s dla %s", order_id)
-                                self._stop_event.wait(60)
-                            # Zawsze wysyłaj wiadomość - z info o statusie drukowania
-                            self._notify_messenger(self.last_order_data, print_success=print_success)
+                            )
+                        # W quiet_hours etykieta jest w kolejce - wysyłamy info o sukcesie
+                        self._notify_messenger(self.last_order_data, print_success=True)
+                        self.mark_as_printed(order_id, self.last_order_data)
+                        printed[order_id] = datetime.now()
                     else:
-                        # Brak etykiety - nie mozna utworzyc przesylki w Allegro
-                        self.logger.error(
-                            "Brak etykiety dla zamowienia %s (Allegro nie zwrocilo danych)",
-                            order_id,
-                        )
-                        PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
+                        entries: List[Dict[str, Any]] = []
+                        for label_data, ext in labels:
+                            entry = {
+                                "order_id": order_id,
+                                "label_data": label_data,
+                                "ext": ext,
+                                "last_order_data": self.last_order_data,
+                                "queued_at": datetime.now().isoformat(),
+                                "status": "in_progress",
+                            }
+                            queue.append(entry)
+                            entries.append(entry)
+                        self.save_queue(queue)
+                        print_success = True
                         try:
-                            from .orders import add_order_status
-                            from .db import get_session
-                            with get_session() as db:
-                                add_order_status(db, order_id, "blad_druku", notes="Brak etykiety - Allegro nie zwróciło danych")
-                        except Exception:
-                            self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
-                        # Wyślij powiadomienie tylko przy 1 i 10 próbie
-                        if self._should_send_error_notification(order_id):
-                            self._send_label_error_notification(order_id)
-                        else:
-                            # Inkrementuj licznik bez wysyłania
-                            self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
-                        self.logger.info("Retry za 60s dla %s", order_id)
-                        self._stop_event.wait(60)
-            except Exception as exc:
-                self.logger.error("[BŁĄD GŁÓWNY] %s", exc)
-                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
+                            for entry in entries:
+                                self._retry(
+                                    self.print_label,
+                                    entry["label_data"],
+                                    entry.get("ext", "pdf"),
+                                    entry["order_id"],
+                                    stage="print",
+                                    retry_exceptions=(PrintError,),
+                                )
+                            consume_order_stock(
+                                self.last_order_data.get("products", [])
+                            )
+                            self.mark_as_printed(order_id, self.last_order_data)
+                            printed[order_id] = datetime.now()
+                            for entry in entries:
+                                if entry in queue:
+                                    queue.remove(entry)
+                        except Exception as exc:
+                            self.logger.error(
+                                "Błąd drukowania zamówienia %s: %s", order_id, exc
+                            )
+                            print_success = False
+                            try:
+                                from .orders import add_order_status
+                                from .db import get_session
+                                with get_session() as db:
+                                    add_order_status(db, order_id, "blad_druku", notes=f"Błąd drukowania: {exc}")
+                            except Exception:
+                                self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
+                            for entry in entries:
+                                entry["status"] = "queued"
+                            self.save_queue(queue)
+                            self.logger.info("Retry za 60s dla %s", order_id)
+                            self._stop_event.wait(60)
+                        # Zawsze wysyłaj wiadomość - z info o statusie drukowania
+                        self._notify_messenger(self.last_order_data, print_success=print_success)
+                else:
+                    # Brak etykiety - nie mozna utworzyc przesylki w Allegro
+                    self.logger.error(
+                        "Brak etykiety dla zamowienia %s (Allegro nie zwrocilo danych)",
+                        order_id,
+                    )
+                    PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
+                    try:
+                        from .orders import add_order_status
+                        from .db import get_session
+                        with get_session() as db:
+                            add_order_status(db, order_id, "blad_druku", notes="Brak etykiety - Allegro nie zwróciło danych")
+                    except Exception:
+                        self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
+                    # Wyślij powiadomienie tylko przy 1 i 10 próbie
+                    if self._should_send_error_notification(order_id):
+                        self._send_label_error_notification(order_id)
+                    else:
+                        # Inkrementuj licznik bez wysyłania
+                        self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
+                    self.logger.info("Retry za 60s dla %s", order_id)
+                    self._stop_event.wait(60)
+        except Exception as exc:
+            self.logger.error("[BLAD PETLI ZAMOWIEN] %s", exc)
+            PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
 
-            self.save_queue(queue)
-            duration = (datetime.now() - loop_start).total_seconds()
-            PRINT_AGENT_ITERATION_SECONDS.observe(duration)
-            self._write_heartbeat()
-            self._stop_event.wait(self.config.poll_interval)
+        self.save_queue(queue)
+        duration = (datetime.now() - loop_start).total_seconds()
+        PRINT_AGENT_ITERATION_SECONDS.observe(duration)
+        self._write_heartbeat()
 
     def start_agent_thread(self) -> bool:
         if self._agent_thread and self._agent_thread.is_alive():
@@ -2204,6 +2185,17 @@ class LabelAgent:
         self._stop_event = threading.Event()
         self._agent_thread = threading.Thread(target=self._agent_loop, daemon=True)
         self._agent_thread.start()
+
+        # Uruchom niezalezne workery
+        self._workers = [
+            TrackingWorker(self),
+            MessagingWorker(self),
+            ReportWorker(self),
+        ]
+        for worker in self._workers:
+            worker.start()
+            self.logger.info("Uruchomiono worker: %s", worker.name)
+
         return True
 
     def _notify_messenger(self, data: Dict[str, Any], print_success: bool) -> None:
@@ -2217,6 +2209,12 @@ class LabelAgent:
 
 
     def stop_agent_thread(self) -> None:
+        # Zatrzymaj workery
+        for worker in self._workers:
+            worker.stop()
+            self.logger.info("Zatrzymano worker: %s", worker.name)
+        self._workers = []
+
         if self._agent_thread and self._agent_thread.is_alive():
             self._stop_event.set()
             self._agent_thread.join()
