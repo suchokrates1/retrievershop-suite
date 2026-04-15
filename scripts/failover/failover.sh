@@ -59,11 +59,20 @@ get_fail_count() { cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0; }
 set_fail_count() { echo "$1" > "$FAIL_COUNT_FILE"; }
 
 check_minipc() {
-    # state=active -> uzyj URL dedykowanego minipc (nie overridowanego przez CF CNAME)
-    # state=normal -> uzyj publicznego URL magazyn (przez wildcard -> minipc tunnel)
-    local url="$MINIPC_CHECK_URL"
-    [ "$(get_state)" = "active" ] && url="$MINIPC_RECOVERY_URL"
-    curl -sf --connect-timeout 5 --max-time 10 "$url" > /dev/null 2>&1
+    # state=active -> recovery check: Tailscale (primary), CF minipc-check (fallback)
+    # state=normal -> publiczny URL magazyn (przez wildcard -> minipc tunnel)
+    if [ "$(get_state)" = "active" ]; then
+        # Primary: Tailscale bezposrednio do minipc (omija Cloudflare)
+        curl -sf --connect-timeout 5 --max-time 10 \
+            "http://${MINIPC_TAILSCALE}:8000/healthz" > /dev/null 2>&1 && return 0
+        # Fallback: CF tunnel minipc-check (wymaga public hostname w CF Zero Trust)
+        curl -sf --connect-timeout 5 --max-time 10 \
+            "$MINIPC_RECOVERY_URL" > /dev/null 2>&1 && return 0
+        return 1
+    else
+        curl -sf --connect-timeout 5 --max-time 10 \
+            "$MINIPC_CHECK_URL" > /dev/null 2>&1
+    fi
 }
 
 send_waha() {
