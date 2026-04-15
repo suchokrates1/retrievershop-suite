@@ -16,8 +16,11 @@ IMAGE_NAME="retrievershop-suite-magazyn_app"
 FAILOVER_DIR="/home/suchokrates1/failover"
 LOG_PREFIX="[vps-build]"
 
-MESSENGER_TOKEN="***MESSENGER_TOKEN_REDACTED***"
-MESSENGER_RECIPIENT="***MESSENGER_RECIPIENT_REDACTED***"
+# --- Sekrety z pliku ---
+SECRETS_FILE="$FAILOVER_DIR/secrets.env"
+if [ ! -f "$SECRETS_FILE" ]; then echo "FATAL: Brak $SECRETS_FILE" >&2; exit 1; fi
+. "$SECRETS_FILE"
+
 MESSENGER_API="https://graph.facebook.com/v22.0/me/messages"
 
 log()     { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_PREFIX} $*"; }
