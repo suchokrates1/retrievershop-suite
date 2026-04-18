@@ -254,15 +254,13 @@ class TestStocktakeScanUI:
         page.goto(f"http://127.0.0.1:{port}/stocktake/{st_id}/scan")
         page.wait_for_load_state("networkidle")
 
-        # Upewnij sie ze karta jest schowana przed skanem
-        card_class = page.get_attribute("#last-scan-card", "class") or ""
-        assert "d-none" in card_class
+        # Upewnij sie ze karta jest schowana przed skanem (Alpine x-show)
+        assert page.is_hidden("#last-scan-card")
 
         _simulate_barcode_scan(page, EAN)
 
         # Karta powinna sie pojawic z nazwa produktu
-        card = page.wait_for_selector("#last-scan-card:not(.d-none)", timeout=5000)
-        assert card is not None
+        page.wait_for_selector("#last-scan-card", state="visible", timeout=5000)
 
         product_text = page.inner_text("#last-scan-product")
         assert SERIES in product_text
@@ -281,7 +279,7 @@ class TestStocktakeScanUI:
 
         _simulate_barcode_scan(page, EAN)
 
-        page.wait_for_selector("#last-scan-card:not(.d-none)", timeout=5000)
+        page.wait_for_selector("#last-scan-card", state="visible", timeout=5000)
         after = int(page.inner_text("#stat-total-scanned").strip())
 
         assert after == before + 1, f"Oczekiwano {before + 1}, otrzymano {after}"
@@ -308,7 +306,7 @@ class TestStocktakeScanUI:
                 expected_qty = item.scanned_qty + 1  # po skanie
 
         _simulate_barcode_scan(page, EAN)
-        page.wait_for_selector("#last-scan-card:not(.d-none)", timeout=5000)
+        page.wait_for_selector("#last-scan-card", state="visible", timeout=5000)
 
         scanned_text = page.inner_text("#last-scan-scanned").strip()
         expected_text = page.inner_text("#last-scan-expected").strip()
@@ -328,7 +326,7 @@ class TestStocktakeScanUI:
 
         # Najpierw skan
         _simulate_barcode_scan(page, EAN)
-        page.wait_for_selector("#last-scan-card:not(.d-none)", timeout=5000)
+        page.wait_for_selector("#last-scan-card", state="visible", timeout=5000)
 
         before_total = int(page.inner_text("#stat-total-scanned").strip())
 
@@ -357,7 +355,7 @@ class TestStocktakeScanUI:
 
         # Dwa skany z krotkimi odstepem
         _simulate_barcode_scan(page, EAN)
-        page.wait_for_selector("#last-scan-card:not(.d-none)", timeout=5000)
+        page.wait_for_selector("#last-scan-card", state="visible", timeout=5000)
         time.sleep(0.3)
         _simulate_barcode_scan(page, EAN)
 
@@ -389,6 +387,5 @@ class TestStocktakeScanUI:
         # [data-barcode-error] lub data-barcode-result z base.html
         # Sprawdzamy ze karta sukcesu sie NIE pojawila
         page.wait_for_timeout(2000)
-        card_class = page.get_attribute("#last-scan-card", "class") or ""
-        # Karta powinna byc nadal schowana (nie bylo udanego skanu)
-        assert "d-none" in card_class or page.is_hidden("#last-scan-card")
+        # Karta powinna byc nadal schowana (nie bylo udanego skanu, Alpine x-show)
+        assert page.is_hidden("#last-scan-card")

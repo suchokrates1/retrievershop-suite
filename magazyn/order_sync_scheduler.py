@@ -3,7 +3,7 @@
 import threading
 import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -433,6 +433,86 @@ def _process_pending_invoices():
     return stats
 
 
+def _cancel_stale_unpaid_orders():
+    """Automatyczne anulowanie zamowien nieoplaconych przez 14 dni.
+
+    Szuka zamowien, ktorych ostatni status to 'nieoplacone' i minelo
+    wiecej niz 14 dni od momentu ustawienia tego statusu.
+
+    Returns
+    -------
+    dict
+        {"checked": int, "cancelled": int, "errors": int}
+    """
+    from .db import get_session
+    from .models import OrderStatusLog
+    from .orders import add_order_status
+    from sqlalchemy import and_, desc, func
+
+    STALE_DAYS = 14
+    stats = {"checked": 0, "cancelled": 0, "errors": 0}
+    cutoff = datetime.utcnow() - timedelta(days=STALE_DAYS)
+
+    try:
+        with get_session() as db:
+            # Znajdz ostatni status kazdego zamowienia
+            latest_subq = (
+                db.query(
+                    OrderStatusLog.order_id,
+                    func.max(OrderStatusLog.timestamp).label("max_ts"),
+                )
+                .group_by(OrderStatusLog.order_id)
+                .subquery()
+            )
+
+            stale = (
+                db.query(OrderStatusLog)
+                .join(
+                    latest_subq,
+                    and_(
+                        OrderStatusLog.order_id == latest_subq.c.order_id,
+                        OrderStatusLog.timestamp == latest_subq.c.max_ts,
+                    ),
+                )
+                .filter(
+                    OrderStatusLog.status == "nieoplacone",
+                    OrderStatusLog.timestamp < cutoff,
+                )
+                .all()
+            )
+
+            stats["checked"] = len(stale)
+            for log_entry in stale:
+                try:
+                    add_order_status(
+                        db,
+                        log_entry.order_id,
+                        "anulowano",
+                        notes=f"Auto-anulowanie: nieoplacone przez {STALE_DAYS} dni",
+                        send_email=False,
+                    )
+                    stats["cancelled"] += 1
+                    logger.info(
+                        "Auto-anulowanie: %s (nieoplacone od %s)",
+                        log_entry.order_id,
+                        log_entry.timestamp.isoformat(),
+                    )
+                except Exception as exc:
+                    stats["errors"] += 1
+                    logger.error(
+                        "Blad auto-anulowania %s: %s",
+                        log_entry.order_id, exc,
+                    )
+
+            db.commit()
+
+    except Exception as exc:
+        logger.error("Krytyczny blad auto-anulowania nieoplaconych: %s", exc, exc_info=True)
+        stats["errors"] += 1
+
+    return stats
+
+
 def _sync_worker(app):
     """Background worker that syncs orders and parcel statuses every 10 minutes."""
     from .parcel_tracking import sync_parcel_statuses
@@ -485,8 +565,19 @@ def _sync_worker(app):
                         )
                 except Exception as inv_err:
                     logger.error(f"Error in invoice processing: {inv_err}", exc_info=True)
+
+                # 5. Auto-anulowanie zamowien nieoplaconych przez 14 dni
+                try:
+                    cancel_stats = _cancel_stale_unpaid_orders()
+                    if cancel_stats["cancelled"] > 0:
+                        logger.info(
+                            f"Unpaid auto-cancel: checked={cancel_stats['checked']}, "
+                            f"cancelled={cancel_stats['cancelled']}, errors={cancel_stats['errors']}"
+                        )
+                except Exception as cancel_err:
+                    logger.error(f"Error in unpaid auto-cancel: {cancel_err}", exc_info=True)
                 
-                # 5. Codzienny sync ofert Allegro (raz dziennie)
+                # 6. Codzienny sync ofert Allegro (raz dziennie)
                 today = datetime.now().strftime("%Y-%m-%d")
                 if _last_offer_sync_date != today:
                     logger.info("Starting daily Allegro offer sync")
@@ -498,7 +589,7 @@ def _sync_worker(app):
                     except Exception as offer_err:
                         logger.error(f"Error in daily offer sync: {offer_err}", exc_info=True)
                     
-                    # 6. Sync promowanych ofert Allegro (raz dziennie)
+                    # 7. Sync promowanych ofert Allegro (raz dziennie)
                     logger.info("Starting daily promo sync")
                     try:
                         from .services.allegro_promotions import get_promotions_summary
