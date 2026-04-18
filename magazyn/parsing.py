@@ -53,31 +53,65 @@ COLOR_ALIASES = {
     "stalowa rozowa": "stalowy rozowy",
 }
 
-# Mapping of normalized product keywords to canonical product names.  The
-# priority value controls which keyword should win when multiple keywords are
-# present in the offer title.
-PRODUCT_KEYWORDS: list[tuple[str, str, int]] = [
-    ("tropical", "Szelki dla psa Truelove Tropical", 2),
-    ("adventure soft", "Szelki dla psa Truelove Adventure Soft", 3),
-    ("adventure dog", "Szelki dla psa Truelove Adventure Dog", 2),
-    ("adventure", "Szelki dla psa Truelove Adventure", 1),
-    ("safe hiking", "Szelki dla psa Truelove Safe Hiking", 2),
-    ("lumen", "Szelki dla psa Truelove Lumen", 1),
-    ("blossom", "Szelki dla psa Truelove Blossom", 2),
-    ("front line premium cordura", "Szelki dla psa Truelove Front Line Premium Cordura", 2),
-    ("front line cordura", "Szelki dla psa Truelove Front Line Premium Cordura", 2),
-    ("front line premium", "Szelki dla psa Truelove Front Line Premium", 1),
-    ("front line", "Szelki dla psa Truelove Front Line", 0),
-    # Smycze
-    ("handy", "Smycz dla psa Truelove Handy", 2),
-    ("smycz automatyczna", "Smycz dla psa Truelove Handy", 1),
-    # Pasy i akcesoria bez rozmiarow
-    ("pas samochodowy", "Pas samochodowy dla psa Truelove Premium", 2),
-    ("amortyzator do smyczy", "Amortyzator do smyczy Truelove Premium", 2),
-    ("amortyaator do smyczy", "Amortyzator do smyczy Truelove Premium", 2),
-    ("pas trekkingowy", "Pas trekkingowy Truelove Trek Go", 2),
-    ("pas do biegania", "Pas trekkingowy Truelove Trek Go", 1),
-    ("dogtrekking", "Pas trekkingowy Truelove Trek Go", 1),
+# Slowa kluczowe kategorii produktu w tytule oferty.
+# (keyword, prefiks_kategorii, domyslna_seria, priorytet)
+# Priorytet rozwiazuje konflikty gdy kilka kategorii pasuje (np. "amortyzator do smyczy").
+CATEGORY_KEYWORDS: list[tuple[str, str, str | None, int]] = [
+    ("pas samochodowy", "Pas samochodowy dla psa", "Premium", 3),
+    ("pas trekkingowy", "Pas trekkingowy dla psa", "Trek Go", 3),
+    ("pas do biegania", "Pas trekkingowy dla psa", "Trek Go", 3),
+    ("dogtrekking", "Pas trekkingowy dla psa", "Trek Go", 3),
+    ("amortyzator do smyczy", "Amortyzator dla psa", "Premium", 3),
+    ("amortyaator do smyczy", "Amortyzator dla psa", "Premium", 3),
+    ("amortyzator", "Amortyzator dla psa", "Premium", 2),
+    ("saszetki", "Saszetki dla psa", None, 2),
+    ("saszetka", "Saszetki dla psa", None, 2),
+    ("smycz automatyczna", "Smycz dla psa", "Handy", 2),
+    ("obroza", "Obroża dla psa", None, 1),
+    ("smycz", "Smycz dla psa", None, 1),
+    ("szelki", "Szelki dla psa", None, 0),
+]
+
+# Slowa kluczowe serii produktu w tytule oferty.
+# (keyword, nazwa_serii, priorytet)
+# Priorytet rozwiazuje konflikty (np. "front line" vs "front line premium").
+SERIES_KEYWORDS: list[tuple[str, str, int]] = [
+    # Aliasy: "Front Line (Premium) + seria" -> ta seria wygrywa
+    ("front line premium tropical", "Tropical", 5),
+    ("front line tropical", "Tropical", 4),
+    ("front line premium lumen", "Lumen", 5),
+    ("front line lumen", "Lumen", 4),
+    ("front line premium blossom", "Blossom", 5),
+    ("front line blossom", "Blossom", 4),
+    # Cordura - osobna seria
+    ("front line premium cordura", "Front Line Premium Cordura", 5),
+    ("front line cordura", "Front Line Premium Cordura", 4),
+    # Front Line
+    ("front line premium", "Front Line Premium", 2),
+    ("front line", "Front Line", 1),
+    # Pozostale serie
+    ("adventure soft", "Adventure Soft", 3),
+    ("adventure dog", "Adventure Dog", 2),
+    ("adventure", "Adventure", 1),
+    ("safe hiking", "Safe Hiking", 2),
+    ("lumen lite", "Lumen Lite", 2),
+    ("lumen", "Lumen", 1),
+    ("blossom", "Blossom", 2),
+    ("tropical", "Tropical", 2),
+    ("active", "Active", 1),
+    ("outdoor", "Outdoor", 2),
+    ("security", "Security", 2),
+    ("tracker", "Tracker", 2),
+    ("handy", "Handy", 2),
+    ("automatyczna", "Handy", 1),
+    ("dogi", "Dogi", 2),
+    ("trek go", "Trek Go", 2),
+    ("premium", "Premium", 0),
+    ("trail bag", "Trail Bag", 2),
+    ("standard", "Standard", 2),
+    ("treat basic", "Treat Basic", 3),
+    ("v2", "V2", 2),
+    ("v1", "V1", 2),
 ]
 
 
@@ -121,27 +155,59 @@ def _normalize_keyword_text(value: str) -> str:
     return normalized
 
 
-def _detect_product_keyword(title: str) -> str:
-    """Return canonical product name if *title* contains a known keyword."""
+def _detect_product_name(title: str) -> str:
+    """Rozpoznaj nazwe produktu z tytulu oferty: kategoria + seria.
 
-    normalized_title = _normalize_keyword_text(title)
+    Buduje kanonyczna nazwe produktu w formacie:
+    ``{kategoria} Truelove {seria}`` (np. "Obroza dla psa Truelove Lumen").
+    """
+
+    # Krok 0: Normalizacja literowek (Fron->Front, FrontLine->Front Line)
+    cleaned_title = normalize_product_title_fragment(title)
+    normalized_title = _normalize_keyword_text(cleaned_title)
     if not normalized_title:
         return ""
 
     padded_title = f" {normalized_title} "
-    matches: list[tuple[int, int, str]] = []
-    for keyword, canonical, priority in PRODUCT_KEYWORDS:
-        normalized_keyword = _normalize_keyword_text(keyword)
-        if not normalized_keyword:
-            continue
-        if f" {normalized_keyword} " in padded_title:
-            matches.append((priority, len(normalized_keyword), canonical))
 
-    if not matches:
+    # Krok 1: Wykryj kategorie (szelki, obroza, smycz, ...)
+    category_prefix = ""
+    implied_series = None
+    cat_matches: list[tuple[int, int, str, str | None]] = []
+    for keyword, prefix, default_series, priority in CATEGORY_KEYWORDS:
+        nk = _normalize_keyword_text(keyword)
+        if not nk:
+            continue
+        if f" {nk} " in padded_title:
+            cat_matches.append((priority, len(nk), prefix, default_series))
+
+    if cat_matches:
+        _, _, category_prefix, implied_series = max(
+            cat_matches, key=lambda x: (x[0], x[1])
+        )
+
+    if not category_prefix:
         return ""
 
-    priority, _, canonical = max(matches, key=lambda item: (item[0], item[1]))
-    return resolve_product_alias(normalize_product_title_fragment(canonical))
+    # Krok 2: Wykryj serie (Front Line Premium, Lumen, Active, ...)
+    series_name = ""
+    series_matches: list[tuple[int, int, str]] = []
+    for keyword, series, priority in SERIES_KEYWORDS:
+        nk = _normalize_keyword_text(keyword)
+        if not nk:
+            continue
+        if f" {nk} " in padded_title:
+            series_matches.append((priority, len(nk), series))
+
+    if series_matches:
+        _, _, series_name = max(series_matches, key=lambda x: (x[0], x[1]))
+    elif implied_series:
+        series_name = implied_series
+
+    # Krok 3: Zbuduj kanonyczna nazwe produktu
+    if series_name:
+        return f"{category_prefix} Truelove {series_name}"
+    return f"{category_prefix} Truelove"
 
 
 def parse_product_info(item: dict) -> tuple[str, str, str]:
@@ -260,7 +326,7 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
                 color = normalize_color(matched_color)
                 remaining_words.pop(index)
 
-    name = _detect_product_keyword(title)
+    name = _detect_product_name(title)
     if not name:
         name = " ".join(remaining_words).strip()
         name = normalize_product_title_fragment(name)

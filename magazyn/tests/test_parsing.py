@@ -16,7 +16,7 @@ from magazyn.parsing import normalize_color, parse_offer_title
 def test_parse_offer_title_detects_pink_variants(title, expected_size):
     name, color, size = parse_offer_title(title)
 
-    assert name == "Smycz"
+    assert name == "Smycz dla psa Truelove"
     assert color == "Różowy"
     assert size == expected_size
 
@@ -39,13 +39,13 @@ def test_normalize_color_returns_canonical_form(value):
     "title, expected_name, expected_color, expected_size",
     [
         (
-            "Mega okazja! Truelove Lumen dla aktywnych psów czerwone M",
+            "Szelki Mega okazja! Truelove Lumen dla aktywnych psów czerwone M",
             "Szelki dla psa Truelove Lumen",
             "Czerwony",
             "M",
         ),
         (
-            "Wyprzedaż FRONT LINE PREMIUM Tropical turkusowy komplet",
+            "Szelki Wyprzedaż FRONT LINE PREMIUM Tropical turkusowy komplet",
             "Szelki dla psa Truelove Tropical",
             "Turkusowy",
             "Uniwersalny",

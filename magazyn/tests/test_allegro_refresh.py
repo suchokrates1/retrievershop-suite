@@ -429,7 +429,7 @@ def test_sync_offers_matches_keyword_models(monkeypatch, app_mod):
                 "offers": [
                     {
                         "id": "KW1",
-                        "name": "Mega okazja! Truelove Lumen dla psa czerwone M",
+                        "name": "Szelki dla psa Truelove Lumen czerwone M",
                         "sellingMode": {"price": {"amount": "20.00"}},
                     }
                 ]
