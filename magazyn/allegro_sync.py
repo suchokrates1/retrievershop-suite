@@ -319,6 +319,14 @@ def sync_offers():
                         existing.product_size_id is None
                         and existing.product_id is None
                     ):
+                        if (existing.product_size_id is not None
+                                and existing.product_size_id != product_size_id):
+                            logger.warning(
+                                f"Zmiana przypisania oferty {offer_id}: "
+                                f"pid {existing.product_id}->{product_id}, "
+                                f"ps {existing.product_size_id}->{product_size_id} "
+                                f"(tytul: {title[:80]})"
+                            )
                         existing.product_id = product_id
                         existing.product_size_id = product_size_id
                     existing.synced_at = timestamp
