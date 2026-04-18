@@ -207,6 +207,15 @@ _PRODUCT_ALIAS_GROUPS: dict[str, set[str]] = {
         "Szelki dla psa Truelove Fron Line Blossom",
         "Szelki dla psa Truelove Fron Line Premium Blossom",
     },
+    "Szelki dla psa Truelove Front Line Premium Cordura": {
+        "Szelki dla psa Truelove Front Line Cordura",
+        "Szelki dla psa Truelove FrontLine Premium Cordura",
+        "Szelki dla psa Truelove FrontLine Cordura",
+        "Szelki dla psa Truelove Front-Line Premium Cordura",
+        "Szelki dla psa Truelove Front-Line Cordura",
+        "Szelki dla psa Truelove Fron Line Premium Cordura",
+        "Szelki dla psa Truelove Fron Line Cordura",
+    },
 }
 
 
