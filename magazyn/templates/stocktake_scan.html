@@ -145,7 +145,7 @@
   <div class="st-header">
     <div class="st-title">Remanent #{{ stocktake_id }}</div>
     <div class="flex gap-2">
-      <button class="btn btn-warning" @click="undo()">
+      <button id="btn-undo" class="btn btn-warning" @click="undo()">
         <i class="bi bi-arrow-counterclockwise mr-1"></i>Cofnij
       </button>
       <button class="btn btn-error" @click="finish()">
@@ -165,23 +165,23 @@
       <div class="st-stat-label">Wszystkich</div>
     </div>
     <div class="st-stat">
-      <div class="st-stat-value" x-text="stats.totalScanned"></div>
+      <div id="stat-total-scanned" class="st-stat-value" x-text="stats.totalScanned"></div>
       <div class="st-stat-label">Skanów</div>
     </div>
   </div>
 
   <!-- Ostatni skan -->
-  <div class="st-scan-card"
+  <div id="last-scan-card" class="st-scan-card"
        x-show="lastScan"
        :class="lastScan ? scanCardState : ''"
        x-cloak>
-    <div class="st-scan-name" x-text="lastScan?.name || ''"></div>
+    <div id="last-scan-product" class="st-scan-name" x-text="lastScan?.name || ''"></div>
     <div style="display:flex;align-items:baseline;justify-content:center;gap:0.1rem;">
-      <span class="st-scan-qty"
+      <span id="last-scan-scanned" class="st-scan-qty"
             :class="scanQtyClass"
             x-text="lastScan?.scannedQty ?? ''"></span>
       <span class="st-scan-divider">/</span>
-      <span class="st-scan-expected" x-text="lastScan?.expectedQty ?? ''"></span>
+      <span id="last-scan-expected" class="st-scan-expected" x-text="lastScan?.expectedQty ?? ''"></span>
     </div>
   </div>
 

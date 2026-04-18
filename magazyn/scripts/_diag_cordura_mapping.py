@@ -2,8 +2,10 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from magazyn.db import get_session
+from magazyn.db import configure_engine, get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
+
+configure_engine()
 
 with get_session() as s:
     # Znajdz oferty z "Cordura" w tytule
