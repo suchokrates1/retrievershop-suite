@@ -3,6 +3,7 @@ Moduł obsługujący dyskusje i wiadomości Allegro.
 Wydzielony z app.py dla lepszej czytelności.
 """
 from datetime import datetime, timezone
+import html as html_mod
 import uuid
 from typing import Optional
 
@@ -386,7 +387,7 @@ def get_messages(thread_id):
                 "id": msg.get("id"),
                 "author": author_data.get("login", "System"),
                 "author_role": author_data.get("role", ""),
-                "content": msg.get("text", ""),
+                "content": html_mod.unescape(msg.get("text", "")),
                 "created_at": msg.get("createdAt"),
                 "attachments": attachments,
             })

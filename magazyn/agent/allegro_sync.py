@@ -4,6 +4,7 @@ Modul do synchronizacji dyskusji i wiadomosci Allegro.
 Wyodrebniony z print_agent.py dla lepszej organizacji kodu.
 """
 
+import html as html_mod
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Callable
@@ -149,7 +150,7 @@ class AllegroSyncService:
             
             author_info = msg.get("author") or {}
             author_login = author_info.get("login") or buyer
-            content = msg.get("text", "")
+            content = html_mod.unescape(msg.get("text", ""))
             created_at = msg.get("date") or datetime.now(timezone.utc).isoformat()
             
             conn.execute(
@@ -298,7 +299,7 @@ class AllegroSyncService:
             
             author_info = msg.get("author") or {}
             author_login = author_info.get("login") or interlocutor
-            content = msg.get("text", "")
+            content = html_mod.unescape(msg.get("text", ""))
             created_at = msg.get("createdAt") or datetime.now(timezone.utc).isoformat()
             
             conn.execute(
