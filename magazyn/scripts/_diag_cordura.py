@@ -51,16 +51,30 @@ with app.app_context():
                           f"{item.our_price}zl {(offer.title or '')[:60]}")
         print(f"Lacznie blednych: {cnt}")
 
-        # Sprawdz skad pochodzi Inna OK - mark_sibling_offers czy CDP
-        # mark_sibling grupuje po product_size_id - nie powinno dotyczyc single-ps
-        # CDP grupuje po dialogu - moze dotyczyc roznych ps_id
-        # Sprawdz checked_at - jesli None, to z mark_sibling (preprocess)
-        print(f"\n--- ZRODLO BLEDNYCH ---")
-        for item in inna_ok:
-            offer = next((o for o in active if o.offer_id == item.offer_id), None)
-            if offer:
-                grp = len(ps_groups.get(offer.product_size_id, []))
-                if grp == 1:
-                    # Czy checked_at jest null?
-                    print(f"  {item.offer_id}: checked_at={item.checked_at}, "
-                          f"our_position={item.our_position}, total_offers={item.total_offers}")
+        # Pokaz WSZYSTKIE oferty na ps_id Cordury
+        cordura_ps_ids = set(o.product_size_id for o in cordura)
+        print(f"\n--- WSZYSTKIE OFERTY NA PS_ID CORDURY ---")
+        from magazyn.models import Product, ProductSize
+        for ps_id in sorted(cordura_ps_ids):
+            ps = s.query(ProductSize).filter(ProductSize.id == ps_id).first()
+            ps_label = f"{ps.size}" if ps else "?"
+            grp = ps_groups.get(ps_id, [])
+            print(f"\nps_id={ps_id} (rozmiar={ps_label}): {len(grp)} aktywnych ofert")
+            for o in sorted(grp, key=lambda x: float(x.price) if x.price else 999):
+                prod = s.query(Product).filter(Product.id == o.product_id).first()
+                prod_name = prod.name if prod else "?"
+                is_cordura = "cordura" in (o.title or "").lower()
+                item = next((i for i in items if i.offer_id == o.offer_id), None)
+                status = "brak"
+                if item:
+                    if item.error:
+                        status = f"BLAD"
+                    elif item.competitor_price is None and not item.is_cheapest:
+                        status = "Inna OK"
+                    elif item.is_cheapest:
+                        status = f"OK (vs {item.competitor_price})"
+                    else:
+                        status = f"Drozszy (vs {item.competitor_price})"
+                marker = " ** CORDURA" if is_cordura else ""
+                print(f"  {o.offer_id} cena={o.price} pid={o.product_id} "
+                      f"({prod_name}) -> {status}{marker}")
