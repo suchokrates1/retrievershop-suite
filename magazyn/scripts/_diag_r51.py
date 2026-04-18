@@ -6,14 +6,23 @@ from magazyn.models import AllegroOffer, PriceReportItem, PriceReport
 app = create_app()
 with app.app_context():
     with get_session() as s:
-        report = s.query(PriceReport).filter(PriceReport.id == 51).first()
+        # Pokaz dostepne raporty
+        all_reports = s.query(PriceReport).order_by(PriceReport.id.desc()).limit(10).all()
+        print("Dostepne raporty:")
+        for r in all_reports:
+            print(f"  #{r.id}: status={r.status}, {r.items_checked}/{r.items_total}, {r.created_at}")
+
+        # Sprawdz najnowszy ukonczony raport
+        report = s.query(PriceReport).filter(
+            PriceReport.status.in_(["completed", "completed_with_errors"])
+        ).order_by(PriceReport.id.desc()).first()
         if not report:
-            print("Raport #51 nie istnieje")
+            print("Brak ukonczonych raportow")
             exit()
-        print(f"Raport #51: status={report.status}, total={report.items_total}, "
+        print(f"\nRaport #{report.id}: status={report.status}, total={report.items_total}, "
               f"checked={report.items_checked}, created={report.created_at}")
 
-        items = s.query(PriceReportItem).filter(PriceReportItem.report_id == 51).all()
+        items = s.query(PriceReportItem).filter(PriceReportItem.report_id == report.id).all()
         inna_ok = [i for i in items if not i.is_cheapest and i.competitor_price is None and i.error is None]
         errors = [i for i in items if i.error is not None]
         checked = [i for i in items if (i.competitor_price is not None or i.is_cheapest) and i.error is None]
