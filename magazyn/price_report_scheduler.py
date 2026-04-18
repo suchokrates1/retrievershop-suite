@@ -155,6 +155,9 @@ def mark_sibling_offers(report_id: int) -> int:
     Jesli mamy 2+ oferty tego samego product_size_id, ta o nizszej cenie
     wymaga sprawdzenia z konkurencja, a drozsze dostaja wpis bez scrapingu.
     
+    Oferty z roznica cenowa >20% od najtanszej siostry sa traktowane jako
+    odrebne produkty (np. wariant Cordura vs zwykly) i sprawdzane normalnie.
+    
     Returns
     -------
     int
@@ -200,6 +203,18 @@ def mark_sibling_offers(report_id: int) -> int:
                 our_price = float(o.price) if o.price else None
 
                 if our_price and cheapest_price and our_price > cheapest_price:
+                    # Prog cenowy 20% - jesli oferta jest >20% drozsza od najtanszej,
+                    # traktujemy ja jako odrebny produkt (np. Cordura vs zwykly)
+                    price_ratio = our_price / cheapest_price
+                    if price_ratio > 1.20:
+                        logger.info(
+                            f"Pominieto siostre: {o.offer_id} ({our_price} zl) - "
+                            f"roznica cenowa {(price_ratio - 1) * 100:.0f}% od najtanszej "
+                            f"{cheapest.offer_id} ({cheapest_price} zl) na product_size={ps_id} "
+                            f"(prog 20%% - prawdopodobnie inny wariant)"
+                        )
+                        continue
+
                     item = PriceReportItem(
                         report_id=report_id,
                         offer_id=o.offer_id,
@@ -406,6 +421,17 @@ def save_report_item(report_id: int, result: dict):
                         f"- inny wariant niz {result['offer_id']} (ps_id={checked_ps_id})"
                     )
                     continue
+
+                # Prog cenowy 20% - jesli siostra jest >20% drozsza, to inny wariant
+                if sib_price and float(our_price) > 0:
+                    price_ratio = sib_price / float(our_price)
+                    if price_ratio > 1.20:
+                        logger.info(
+                            f"Pominieto siostre CDP: {sib_id} ({sib_price} zl) - "
+                            f"roznica cenowa {(price_ratio - 1) * 100:.0f}% od {result['offer_id']} "
+                            f"({float(our_price)} zl) (prog 20%% - prawdopodobnie inny wariant)"
+                        )
+                        continue
 
                 # Siostra jest drozsza i ten sam wariant - sprawdz czy juz w raporcie
                 existing_sib = session.query(PriceReportItem).filter(
