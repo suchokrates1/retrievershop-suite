@@ -376,10 +376,12 @@ def save_report_item(report_id: int, result: dict):
         session.add(item)
         
         # Oznacz siostry z CDP jako "Inna OK"
-        # Jesli sprawdzana oferta jest tansza od siostry widocznej w dialogu,
-        # siostra nie wymaga osobnego scrapingu - jest drozsza na pewno
+        # Jesli sprawdzana oferta jest tansza od siostry widocznej w dialogu
+        # I siostra ma ten sam product_size_id, to siostra nie wymaga scrapingu.
+        # Siostry z innym product_size_id musza byc sprawdzone osobno.
         siblings = result.get("our_siblings", [])
         siblings_marked = 0
+        checked_ps_id = result.get("product_size_id")
         if our_price and siblings:
             for sib in siblings:
                 sib_id = sib["offer_id"]
@@ -390,7 +392,22 @@ def save_report_item(report_id: int, result: dict):
                 if sib_price is None or float(our_price) >= sib_price:
                     continue
 
-                # Siostra jest drozsza - sprawdz czy juz istnieje w raporcie
+                # Sprawdz product_size_id siostry - oznaczaj tylko te same warianty
+                sib_offer = session.query(AllegroOffer).filter(
+                    AllegroOffer.offer_id == sib_id
+                ).first()
+
+                if not sib_offer:
+                    continue
+
+                if sib_offer.product_size_id != checked_ps_id:
+                    logger.info(
+                        f"Pominieto siostre CDP: {sib_id} (ps_id={sib_offer.product_size_id}) "
+                        f"- inny wariant niz {result['offer_id']} (ps_id={checked_ps_id})"
+                    )
+                    continue
+
+                # Siostra jest drozsza i ten sam wariant - sprawdz czy juz w raporcie
                 existing_sib = session.query(PriceReportItem).filter(
                     PriceReportItem.report_id == report_id,
                     PriceReportItem.offer_id == sib_id,
@@ -412,10 +429,6 @@ def save_report_item(report_id: int, result: dict):
                         )
                     continue
 
-                # Siostra nie sprawdzona - dodaj nowy item
-                sib_offer = session.query(AllegroOffer).filter(
-                    AllegroOffer.offer_id == sib_id
-                ).first()
                 sib_title = sib_offer.title if sib_offer else f"Siostra oferty {result['offer_id']}"
 
                 sib_item = PriceReportItem(
