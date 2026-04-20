@@ -1,0 +1,52 @@
+services:
+  magazyn_app:
+    container_name: retrievershop-magazyn
+    build:
+      context: .
+      dockerfile: magazyn/Dockerfile
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+      - ./.env.example:/app/.env.example:ro
+      - ./agent.log:/app/agent.log
+      # Mount full CUPS run dir with rshared so new sockets are visible after cupsd restarts
+      - type: bind
+        source: /var/run/cups
+        target: /var/run/cups
+        bind:
+          propagation: rshared
+    env_file: .env
+    environment:
+      - CUPS_SERVER=/var/run/cups/cups.sock
+      - CDP_HOST=192.168.31.147
+      - CDP_PORT=9223
+    user: root
+    command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
+    restart: always
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    dns_opt:
+      - use-vc
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.magazyn2.rule=Host(`magazyn.retrievershop.pl`)"
+      - "traefik.http.routers.magazyn2.entrypoints=https"
+      - "traefik.http.routers.magazyn2.tls=true"
+      - "traefik.http.services.magazyn2.loadbalancer.server.port=8000"
+      - "traefik.http.services.magazyn2.loadbalancer.server.scheme=http"
+
+
+networks:
+  proxy:
+    external: true

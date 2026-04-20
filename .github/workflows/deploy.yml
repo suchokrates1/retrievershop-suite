@@ -75,3 +75,16 @@ jobs:
               exit 1
             fi
             echo "Deploy OK - kontener healthy"
+
+      - name: Sync image do VPS failover
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 100.110.194.46
+          username: suchokrates1
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 3m
+          script: |
+            docker save retrievershop-suite-magazyn_app:latest | gzip | \
+              ssh -p 10136 -i ~/.ssh/vps_mikrus -o StrictHostKeyChecking=no \
+              suchokrates1@robert136.mikrus.xyz \
+              'gunzip | docker load 2>&1 | tail -3 && echo "VPS image updated"'
