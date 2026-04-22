@@ -13,6 +13,14 @@ from .client import WFirmaClient, WFirmaError
 logger = logging.getLogger(__name__)
 
 
+def _normalize_nip(value: Optional[str]) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
+
+
+def _normalize_name(value: Optional[str]) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
 def find_contractor(
     client: WFirmaClient,
     *,
@@ -44,7 +52,7 @@ def find_contractor(
     value = nip if nip else name
 
     data = {
-        "contractors": [{
+        "contractors": {
             "parameters": {
                 "conditions": {
                     "condition": {
@@ -54,7 +62,7 @@ def find_contractor(
                     }
                 }
             }
-        }]
+        }
     }
 
     result = client.request("contractors/find", data=data)
@@ -70,6 +78,26 @@ def find_contractor(
     else:
         first_key = next((k for k in sorted(contractors) if k != "parameters"), None)
         contractor = contractors[first_key].get("contractor", {}) if first_key else {}
+
+    if nip:
+        expected_nip = _normalize_nip(nip)
+        got_nip = _normalize_nip(contractor.get("nip"))
+        if expected_nip and expected_nip != got_nip:
+            logger.warning(
+                "find_contractor: odrzucono rekord id=%s, bo NIP nie pasuje (oczekiwany=%s, otrzymany=%s)",
+                contractor.get("id"), expected_nip, got_nip,
+            )
+            return None
+    elif name:
+        expected_name = _normalize_name(name)
+        got_name = _normalize_name(contractor.get("name") or contractor.get("altname"))
+        if expected_name and expected_name != got_name:
+            logger.warning(
+                "find_contractor: odrzucono rekord id=%s, bo nazwa nie pasuje (oczekiwana=%r, otrzymana=%r)",
+                contractor.get("id"), expected_name, got_name,
+            )
+            return None
+
     logger.debug("Znaleziono kontrahenta wFirma: %s (id=%s)", contractor.get("name"), contractor.get("id"))
     return contractor
 
@@ -174,7 +202,13 @@ def find_or_create_contractor(
     """
     logger.info("find_or_create_contractor: name=%r, nip=%r, street=%r, zip=%r, city=%r",
                 name, nip, street, zip_code, city)
-    existing = find_contractor(client, nip=nip, name=name)
+    existing = None
+    if nip:
+        # Przy NIP unikamy fallbacku po nazwie, zeby nie podpiac innego podmiotu.
+        existing = find_contractor(client, nip=nip)
+    if not existing and not nip and name:
+        existing = find_contractor(client, name=name)
+
     if existing:
         logger.info("Uzyto istniejacego kontrahenta id=%s dla %r", existing["id"], name)
         return existing["id"]
