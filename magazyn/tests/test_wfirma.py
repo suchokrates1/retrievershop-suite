@@ -270,7 +270,7 @@ def test_find_contractor_by_nip(client):
     assert result["name"] == "Firma XYZ"
 
     call_data = client.request.call_args[1]["data"]
-    condition = call_data["contractors"][0]["parameters"]["conditions"]["condition"]
+    condition = call_data["contractors"]["parameters"]["conditions"]["condition"]
     assert condition["field"] == "nip"
     assert condition["value"] == "1234567890"
 
@@ -287,8 +287,24 @@ def test_find_contractor_by_name(client):
     assert result["id"] == 6
 
     call_data = client.request.call_args[1]["data"]
-    condition = call_data["contractors"][0]["parameters"]["conditions"]["condition"]
+    condition = call_data["contractors"]["parameters"]["conditions"]["condition"]
     assert condition["field"] == "name"
+
+
+def test_find_contractor_rejects_mismatched_nip(client):
+    """Nie uzywaj kontrahenta, jesli odpowiedz ma inny NIP niz zapytanie."""
+    client.request = MagicMock(return_value={
+        "contractors": [{
+            "contractor": {
+                "id": 138282910,
+                "name": "Jinjiang",
+                "nip": "4201000090",
+            }
+        }]
+    })
+
+    result = find_contractor(client, nip="5270100493")
+    assert result is None
 
 
 def test_find_contractor_not_found(client):
@@ -364,5 +380,17 @@ def test_find_or_create_contractor_new(client):
     ])
 
     result = find_or_create_contractor(client, name="New", nip="222")
+    assert result == 77
+    assert client.request.call_count == 2
+
+
+def test_find_or_create_contractor_new_on_mismatched_nip(client):
+    """Gdy find zwroci zly NIP, tworzymy nowego kontrahenta."""
+    client.request = MagicMock(side_effect=[
+        {"contractors": [{"contractor": {"id": 1, "name": "Inny", "nip": "000"}}]},
+        {"contractors": [{"contractor": {"id": 77, "name": "Nowy", "nip": "222"}}]},
+    ])
+
+    result = find_or_create_contractor(client, name="Nowy", nip="222")
     assert result == 77
     assert client.request.call_count == 2
