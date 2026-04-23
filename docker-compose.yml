@@ -42,7 +42,7 @@ services:
       - CDP_HOST=192.168.31.5
       - CDP_PORT=9223
     user: root
-    command: ["gunicorn", "magazyn.wsgi:app", "--bind", "0.0.0.0:8000"]
+    command: ["gunicorn", "magazyn.wsgi:app", "--config", "/app/magazyn/gunicorn.conf.py"]
     restart: always
     ports:
       - "8000:8000"
