@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy
   cancel-in-progress: false
@@ -34,10 +37,43 @@ jobs:
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
           pytest magazyn/tests/ -q --tb=line -m "not e2e"
 
-  deploy:
-    name: Deploy na minipc
+  build_image:
+    name: Build i push GHCR
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ustaw Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Logowanie do GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build i push obrazu
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: magazyn/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:latest
+            ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:${{ github.sha }}
+
+  deploy:
+    name: Deploy na minipc
+    needs: build_image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Polaczenie Tailscale
         uses: tailscale/github-action@v2
@@ -55,8 +91,10 @@ jobs:
           command_timeout: 5m
           script: |
             cd /home/suchokrates1/retrievershop-suite
-            git pull origin main
-            docker compose up -d --build magazyn_app
+            echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            export MAGAZYN_IMAGE_TAG=latest
+            docker compose pull magazyn_app
+            docker compose up -d magazyn_app
 
       - name: Health check
         uses: appleboy/ssh-action@v1
@@ -84,7 +122,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 3m
           script: |
-            docker save retrievershop-suite-magazyn_app:latest | gzip | \
+            docker save ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:latest | gzip | \
               ssh -p 10136 -i ~/.ssh/vps_mikrus -o StrictHostKeyChecking=no \
               suchokrates1@robert136.mikrus.xyz \
               'gunzip | docker load 2>&1 | tail -3 && echo "VPS image updated"'

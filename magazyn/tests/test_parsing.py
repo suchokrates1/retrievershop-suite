@@ -66,3 +66,13 @@ def test_parse_offer_title_prefers_known_model_keywords(
     assert name == expected_name
     assert color == expected_color
     assert size == expected_size
+
+
+def test_parse_offer_title_resolves_amortyzator_alias_to_inventory_name():
+    name, color, size = parse_offer_title(
+        "Amortyzator do smyczy dla średniego psa Truelove żółty"
+    )
+
+    assert name == "Amortyzator do smyczy dla średniego psa"
+    assert color == "Żółty"
+    assert size == "Uniwersalny"

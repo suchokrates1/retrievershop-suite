@@ -19,6 +19,7 @@ services:
 
   magazyn_app:
     container_name: retrievershop-magazyn
+    image: ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:${MAGAZYN_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: magazyn/Dockerfile

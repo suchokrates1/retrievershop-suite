@@ -150,6 +150,32 @@ class TestCalculateOrderProfit:
         assert result.fee_source == 'api'
         assert result.profit == Decimal("200.00") - Decimal("25.50") - Decimal("60.00") - Decimal("0.16")
 
+    def test_profit_uses_prefetched_billing(self):
+        """Jesli billing zostal pobrany wczesniej, kalkulacja nie powinna czekac na API."""
+        order = MagicMock()
+        order.payment_done = "200.00"
+        order.order_id = "order-prefetched"
+        order.delivery_method = "InPost"
+        order.external_order_id = "ext-prefetched-123"
+
+        calc = FinancialCalculator(MagicMock(), settings_store=None)
+
+        with patch.object(calc, 'get_purchase_cost_for_order', return_value=Decimal("60.00")):
+            with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
+                result = calc.calculate_order_profit(
+                    order,
+                    access_token="token",
+                    prefetched_billing={
+                        "success": True,
+                        "total_fees": Decimal("25.50"),
+                        "entries": [{"id": "entry-1"}],
+                    },
+                )
+
+        assert result.fee_source == 'api'
+        assert result.allegro_fees == Decimal("25.50")
+        assert result.profit == Decimal("200.00") - Decimal("25.50") - Decimal("60.00") - Decimal("0.16")
+
     def test_zero_payment_profit(self):
         """Zamowienie z zerowa platnoscia."""
         order = MagicMock()

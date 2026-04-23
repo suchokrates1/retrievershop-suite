@@ -3,40 +3,53 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from decimal import Decimal
+from datetime import date
+
+
+class _FixedDate(date):
+    @classmethod
+    def today(cls):
+        return cls(2026, 4, 20)
 
 
 # --- Testy parse_delivery_days ---
 
 def test_parse_delivery_days_jutro():
-    from magazyn.scripts.price_checker_ws import parse_delivery_days
-    assert parse_delivery_days("dostawa jutro") == 1
+    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+        from magazyn.scripts.price_checker_ws import parse_delivery_days
+        assert parse_delivery_days("dostawa jutro") == 1
 
 
 def test_parse_delivery_days_pojutrze():
-    from magazyn.scripts.price_checker_ws import parse_delivery_days
-    assert parse_delivery_days("dostawa pojutrze") == 2
+    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+        from magazyn.scripts.price_checker_ws import parse_delivery_days
+        assert parse_delivery_days("dostawa pojutrze") == 2
 
 
 def test_parse_delivery_days_za_dni():
-    from magazyn.scripts.price_checker_ws import parse_delivery_days
-    assert parse_delivery_days("dostawa za 2-3 dni") == 2
+    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+        from magazyn.scripts.price_checker_ws import parse_delivery_days
+        assert parse_delivery_days("dostawa za 2-3 dni") == 2
 
 
 def test_parse_delivery_days_od_chinczyk():
-    from magazyn.scripts.price_checker_ws import parse_delivery_days
-    result = parse_delivery_days("dostawa od 14 dni")
-    assert result == 99  # Wysoka wartosc = odfiltruj
+    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+        from magazyn.scripts.price_checker_ws import parse_delivery_days
+        result = parse_delivery_days("dostawa od 14 dni")
+        assert result == 99  # Wysoka wartosc = odfiltruj
 
 
 def test_parse_delivery_days_none():
-    from magazyn.scripts.price_checker_ws import parse_delivery_days
-    assert parse_delivery_days(None) is None
-    assert parse_delivery_days("") is None
+    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+        from magazyn.scripts.price_checker_ws import parse_delivery_days
+        assert parse_delivery_days(None) is None
+        assert parse_delivery_days("") is None
 
 
 def test_parse_delivery_days_dzisiaj():
-    from magazyn.scripts.price_checker_ws import parse_delivery_days
-    assert parse_delivery_days("dostawa dzisiaj") == 0
+    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+        from magazyn.scripts.price_checker_ws import parse_delivery_days
+        assert parse_delivery_days("dostawa dzisiaj") == 0
 
 
 # --- Testy CompetitorOffer nowe pola ---

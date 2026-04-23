@@ -9,6 +9,7 @@ Centralizuje logike obliczania:
 """
 
 import json as _json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
 import logging
@@ -197,7 +198,8 @@ class FinancialCalculator:
         external_order_id: str, 
         sale_price: Decimal,
         access_token: Optional[str] = None,
-        delivery_method: Optional[str] = None
+        delivery_method: Optional[str] = None,
+        prefetched_billing: Optional[Dict[str, Any]] = None,
     ) -> tuple[Decimal, str]:
         """
         Pobiera oplaty Allegro dla zamowienia.
@@ -215,6 +217,19 @@ class FinancialCalculator:
             Tuple (oplaty, zrodlo) gdzie zrodlo to 'api' lub 'estimated'
         """
         billing_started_at = time.perf_counter()
+
+        if prefetched_billing and prefetched_billing.get("success"):
+            fees = Decimal(str(prefetched_billing.get("total_fees") or 0))
+            elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
+            logger.info(
+                "Profit billing prefetched: order_external_id=%s fees=%s entries=%s elapsed_ms=%.1f estimated_shipping=%s",
+                external_order_id,
+                fees,
+                len(prefetched_billing.get("entries") or []),
+                elapsed_ms,
+                bool(prefetched_billing.get("estimated_shipping")),
+            )
+            return (fees, 'api')
 
         # Probuj pobrac z API
         if access_token and external_order_id:
@@ -278,6 +293,7 @@ class FinancialCalculator:
         order,
         access_token: Optional[str] = None,
         trace_label: Optional[str] = None,
+        prefetched_billing: Optional[Dict[str, Any]] = None,
     ) -> ProfitBreakdown:
         """
         Oblicza pelny rozklad zysku dla zamowienia.
@@ -315,7 +331,8 @@ class FinancialCalculator:
             external_order_id,
             sale_price,
             access_token,
-            delivery_method
+            delivery_method,
+            prefetched_billing=prefetched_billing,
         )
         
         # Koszt zakupu
@@ -352,6 +369,67 @@ class FinancialCalculator:
             profit=profit,
             fee_source=fee_source
         )
+
+    def _prefetch_order_billing_summaries(
+        self,
+        orders: List[Any],
+        access_token: Optional[str],
+        trace_label: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        if not access_token:
+            return {}
+
+        order_ids = []
+        for order in orders:
+            external_order_id = getattr(order, 'external_order_id', None)
+            if external_order_id:
+                order_ids.append(external_order_id)
+
+        if len(order_ids) < 2:
+            return {}
+
+        from ..allegro_api import get_order_billing_summary
+
+        max_workers = min(8, len(order_ids))
+        started_at = time.perf_counter()
+        summaries: Dict[str, Dict[str, Any]] = {}
+        failed = 0
+
+        logger.info(
+            "Profit billing prefetch start: trace=%s orders=%s workers=%s",
+            trace_label or '-',
+            len(order_ids),
+            max_workers,
+        )
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_order_id = {
+                executor.submit(get_order_billing_summary, access_token, order_id): order_id
+                for order_id in order_ids
+            }
+            for future in as_completed(future_to_order_id):
+                order_id = future_to_order_id[future]
+                try:
+                    summaries[order_id] = future.result()
+                except Exception as exc:
+                    failed += 1
+                    logger.warning(
+                        "Profit billing prefetch failed: trace=%s order_external_id=%s error=%s",
+                        trace_label or '-',
+                        order_id,
+                        exc,
+                    )
+
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.info(
+            "Profit billing prefetch done: trace=%s requested=%s loaded=%s failed=%s elapsed_ms=%.1f",
+            trace_label or '-',
+            len(order_ids),
+            len(summaries),
+            failed,
+            elapsed_ms,
+        )
+        return summaries
     
     def get_period_summary(
         self,
@@ -470,9 +548,19 @@ class FinancialCalculator:
         slow_orders = 0
         slow_order_ids: list[str] = []
         loop_started_at = time.perf_counter()
+        prefetched_billings = self._prefetch_order_billing_summaries(
+            orders,
+            access_token,
+            trace_label=trace_label,
+        )
         
         for order in orders:
-            breakdown = self.calculate_order_profit(order, access_token, trace_label=trace_label)
+            breakdown = self.calculate_order_profit(
+                order,
+                access_token,
+                trace_label=trace_label,
+                prefetched_billing=prefetched_billings.get(getattr(order, 'external_order_id', None)),
+            )
             total_revenue += breakdown.sale_price
             total_purchase_cost += breakdown.purchase_cost
             total_allegro_fees += breakdown.allegro_fees

@@ -330,7 +330,7 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
     if not name:
         name = " ".join(remaining_words).strip()
         name = normalize_product_title_fragment(name)
-        name = resolve_product_alias(name)
+    name = resolve_product_alias(name)
 
     if not size:
         size = "Uniwersalny"
