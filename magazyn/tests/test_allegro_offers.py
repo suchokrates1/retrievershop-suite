@@ -52,6 +52,44 @@ def test_offers_page_shows_manual_mapping_dropdown(client, login):
     assert "selectOption(" in body
 
 
+def test_offers_and_prices_page_shows_searchable_mapping_dropdown(client, login):
+    with get_session() as session:
+        product = Product(name="Szelki treningowe", color="Zielone")
+        session.add(product)
+        session.flush()
+        size = ProductSize(
+            product_id=product.id,
+            size="L",
+            quantity=8,
+            barcode="5901234567890",
+        )
+        session.add(size)
+        session.flush()
+        session.add(
+            AllegroOffer(
+                offer_id="offer-prices-1",
+                title="Szelki treningowe Allegro",
+                price=Decimal("149.99"),
+                product_id=product.id,
+                product_size_id=size.id,
+                ean="5901234567890",
+            )
+        )
+
+    response = client.get("/offers-and-prices")
+
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "Szukaj produktu lub EAN..." in body
+    assert 'x-model="searchQuery"' in body
+    assert 'x-show="isOpen"' in body
+    assert '@click.outside="close()"' in body
+    assert "Brak pozycji pasujących do wyszukiwania." in body
+    assert "bg-base-100" in body
+    assert "Szelki treningowe" in body
+    assert "EAN: 5901234567890" in body
+
+
 def test_link_offer_to_product_size_updates_relation(client, login):
     with get_session() as session:
         product_current = Product(name="Smycz stara")

@@ -11,11 +11,16 @@ Centralizuje logike obliczania:
 import json as _json
 from datetime import datetime
 from decimal import Decimal
+import logging
+import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from sqlalchemy import desc
 from sqlalchemy import or_ as db_or
 from sqlalchemy.orm import Session
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -209,16 +214,44 @@ class FinancialCalculator:
         Returns:
             Tuple (oplaty, zrodlo) gdzie zrodlo to 'api' lub 'estimated'
         """
+        billing_started_at = time.perf_counter()
+
         # Probuj pobrac z API
         if access_token and external_order_id:
             try:
                 from ..allegro_api import get_order_billing_summary
-                billing = get_order_billing_summary(access_token, external_order_id)
+                billing = get_order_billing_summary(
+                    access_token,
+                    external_order_id,
+                )
                 if billing and billing.get("success") and billing.get("total_fees"):
                     fees = Decimal(str(billing["total_fees"]))
+                    elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
+                    logger.info(
+                        "Profit billing API success: order_external_id=%s fees=%s entries=%s elapsed_ms=%.1f estimated_shipping=%s",
+                        external_order_id,
+                        fees,
+                        len(billing.get("entries") or []),
+                        elapsed_ms,
+                        bool(billing.get("estimated_shipping")),
+                    )
                     return (fees, 'api')
-            except Exception:
-                pass
+                elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
+                logger.warning(
+                    "Profit billing API fallback: order_external_id=%s reason=empty_or_unsuccessful elapsed_ms=%.1f success=%s error=%s",
+                    external_order_id,
+                    elapsed_ms,
+                    billing.get("success") if isinstance(billing, dict) else None,
+                    billing.get("error") if isinstance(billing, dict) else None,
+                )
+            except Exception as exc:
+                elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
+                logger.warning(
+                    "Profit billing API exception: order_external_id=%s elapsed_ms=%.1f error=%s",
+                    external_order_id,
+                    elapsed_ms,
+                    exc,
+                )
         
         # Fallback - szacunkowa prowizja
         fees = sale_price * self.DEFAULT_ALLEGRO_FEE_RATE
@@ -243,7 +276,8 @@ class FinancialCalculator:
     def calculate_order_profit(
         self, 
         order,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
+        trace_label: Optional[str] = None,
     ) -> ProfitBreakdown:
         """
         Oblicza pelny rozklad zysku dla zamowienia.
@@ -255,6 +289,8 @@ class FinancialCalculator:
         Returns:
             ProfitBreakdown ze szczegolami kalkulacji
         """
+        order_started_at = time.perf_counter()
+
         # Cena sprzedazy - dla pobrania (COD) uzywamy kwoty zamowienia
         payment_method_cod = getattr(order, 'payment_method_cod', False)
         payment_method_str = str(getattr(order, 'payment_method', '') or '')
@@ -290,6 +326,22 @@ class FinancialCalculator:
         
         # Zysk
         profit = sale_price - allegro_fees - purchase_cost - packaging_cost
+
+        elapsed_ms = (time.perf_counter() - order_started_at) * 1000
+        order_id = getattr(order, 'order_id', None)
+        logger.info(
+            "Profit order calculated: trace=%s order_id=%s external_order_id=%s sale_price=%s fees=%s fee_source=%s purchase_cost=%s packaging_cost=%s profit=%s elapsed_ms=%.1f",
+            trace_label or '-',
+            order_id,
+            external_order_id,
+            sale_price,
+            allegro_fees,
+            fee_source,
+            purchase_cost,
+            packaging_cost,
+            profit,
+            elapsed_ms,
+        )
         
         return ProfitBreakdown(
             order_id=order.order_id,
@@ -306,7 +358,8 @@ class FinancialCalculator:
         start_timestamp: int,
         end_timestamp: int,
         include_fixed_costs: bool = True,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
+        trace_label: Optional[str] = None,
     ) -> PeriodSummary:
         """
         Generuje podsumowanie finansowe za okres.
@@ -323,11 +376,22 @@ class FinancialCalculator:
         from ..models import Order, OrderProduct, Return, FixedCost
         from sqlalchemy import func, select
 
+        total_started_at = time.perf_counter()
+        logger.info(
+            "Profit period summary start: trace=%s start_ts=%s end_ts=%s include_fixed_costs=%s access_token=%s",
+            trace_label or '-',
+            start_timestamp,
+            end_timestamp,
+            include_fixed_costs,
+            bool(access_token),
+        )
+
         # Wyklucz zamowienia ze zwrotem zakonczonym (status=completed)
         return_order_ids = select(Return.order_id).where(
             Return.status == 'completed'
         ).distinct()
 
+        orders_query_started_at = time.perf_counter()
         orders = self.db.query(Order).filter(
             Order.date_add >= start_timestamp,
             Order.date_add < end_timestamp,
@@ -339,8 +403,10 @@ class FinancialCalculator:
                 Order.payment_method_cod == True,
             )
         ).all()
+        orders_query_ms = (time.perf_counter() - orders_query_started_at) * 1000
 
         # Zlicz produkty
+        products_query_started_at = time.perf_counter()
         products_sold = self.db.query(func.sum(OrderProduct.quantity)).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
@@ -352,15 +418,18 @@ class FinancialCalculator:
                 Order.payment_method_cod == True,
             )
         ).scalar() or 0
+        products_query_ms = (time.perf_counter() - products_query_started_at) * 1000
 
         # Zwroty zakonczone w tym okresie (wg updated_at - kiedy status zmieniono na completed)
         start_dt_str = datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d %H:%M:%S')
         end_dt_str = datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        returns_query_started_at = time.perf_counter()
         returns_in_period = self.db.query(Return).filter(
             Return.status == 'completed',
             Return.updated_at >= start_dt_str,
             Return.updated_at < end_dt_str,
         ).all()
+        returns_query_ms = (time.perf_counter() - returns_query_started_at) * 1000
         returns_count = len(returns_in_period)
         returned_qty = 0
         returns_list = []
@@ -378,6 +447,17 @@ class FinancialCalculator:
                 'qty': ret_qty,
                 'updated_at': str(ret.updated_at)[:10] if ret.updated_at else '',
             })
+
+        logger.info(
+            "Profit period summary loaded inputs: trace=%s orders=%s products_sold=%s returns=%s orders_query_ms=%.1f products_query_ms=%.1f returns_query_ms=%.1f",
+            trace_label or '-',
+            len(orders),
+            products_sold,
+            returns_count,
+            orders_query_ms,
+            products_query_ms,
+            returns_query_ms,
+        )
         
         # Kalkuluj dla kazdego zamowienia
         total_revenue = Decimal("0")
@@ -385,13 +465,44 @@ class FinancialCalculator:
         total_allegro_fees = Decimal("0")
         packaging_cost = self.get_packaging_cost()
         total_packaging_cost = Decimal("0")
+        api_fee_orders = 0
+        estimated_fee_orders = 0
+        slow_orders = 0
+        slow_order_ids: list[str] = []
+        loop_started_at = time.perf_counter()
         
         for order in orders:
-            breakdown = self.calculate_order_profit(order, access_token)
+            breakdown = self.calculate_order_profit(order, access_token, trace_label=trace_label)
             total_revenue += breakdown.sale_price
             total_purchase_cost += breakdown.purchase_cost
             total_allegro_fees += breakdown.allegro_fees
             total_packaging_cost += packaging_cost
+            if breakdown.fee_source == 'api':
+                api_fee_orders += 1
+            else:
+                estimated_fee_orders += 1
+            if breakdown.fee_source == 'api' and getattr(breakdown, 'profit', None) is not None:
+                pass
+        loop_elapsed_ms = (time.perf_counter() - loop_started_at) * 1000
+
+        if loop_elapsed_ms > 5000:
+            logger.warning(
+                "Profit period summary slow loop: trace=%s orders=%s api_fee_orders=%s estimated_fee_orders=%s elapsed_ms=%.1f",
+                trace_label or '-',
+                len(orders),
+                api_fee_orders,
+                estimated_fee_orders,
+                loop_elapsed_ms,
+            )
+        else:
+            logger.info(
+                "Profit period summary loop done: trace=%s orders=%s api_fee_orders=%s estimated_fee_orders=%s elapsed_ms=%.1f",
+                trace_label or '-',
+                len(orders),
+                api_fee_orders,
+                estimated_fee_orders,
+                loop_elapsed_ms,
+            )
         
         # Zysk brutto
         gross_profit = total_revenue - total_allegro_fees - total_purchase_cost - total_packaging_cost
@@ -401,6 +512,7 @@ class FinancialCalculator:
         fixed_costs_list = []
         
         if include_fixed_costs:
+            fixed_costs_started_at = time.perf_counter()
             fc_query = self.db.query(FixedCost).filter(FixedCost.is_active == True).all()
             for fc in fc_query:
                 fixed_costs += Decimal(str(fc.amount))
@@ -408,9 +520,31 @@ class FinancialCalculator:
                     'name': fc.name,
                     'amount': float(fc.amount)
                 })
+            logger.info(
+                "Profit period summary fixed costs loaded: trace=%s count=%s total=%s elapsed_ms=%.1f",
+                trace_label or '-',
+                len(fc_query),
+                fixed_costs,
+                (time.perf_counter() - fixed_costs_started_at) * 1000,
+            )
         
         # Zysk netto
         net_profit = gross_profit - fixed_costs
+
+        total_elapsed_ms = (time.perf_counter() - total_started_at) * 1000
+        logger.info(
+            "Profit period summary done: trace=%s orders=%s revenue=%s purchase_cost=%s allegro_fees=%s packaging=%s gross_profit=%s fixed_costs=%s net_profit=%s total_elapsed_ms=%.1f",
+            trace_label or '-',
+            len(orders),
+            total_revenue,
+            total_purchase_cost,
+            total_allegro_fees,
+            total_packaging_cost,
+            gross_profit,
+            fixed_costs,
+            net_profit,
+            total_elapsed_ms,
+        )
         
         return PeriodSummary(
             start_date=start_timestamp,

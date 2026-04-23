@@ -7,6 +7,8 @@ Wyodrebniony z app.py dla lepszej organizacji kodu.
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
+import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, desc
@@ -23,6 +25,9 @@ MONTH_NAMES = [
     'Styczen', 'Luty', 'Marzec', 'Kwiecien', 'Maj', 'Czerwiec',
     'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien'
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -195,13 +200,23 @@ class DashboardService:
         """Pobiera statystyki zysku uzywajac FinancialCalculator."""
         tr = self.time_ranges
         calculator = FinancialCalculator(self.db, self.settings)
+        started_at = time.perf_counter()
+        trace_label = f"dashboard-profit:{tr.month_start_ts}:{int(tr.now.timestamp())}"
+        logger.info(
+            "Dashboard profit stats start: trace=%s month_start_ts=%s now_ts=%s access_token=%s",
+            trace_label,
+            tr.month_start_ts,
+            int(tr.now.timestamp()),
+            bool(access_token),
+        )
         
         now_ts = int(tr.now.timestamp())
         summary = calculator.get_period_summary(
             tr.month_start_ts,
             now_ts,
             include_fixed_costs=True,
-            access_token=access_token
+            access_token=access_token,
+            trace_label=trace_label,
         )
         
         # Pobierz koszty kampanii Ads (NSP) za biezacy miesiac
@@ -246,6 +261,17 @@ class DashboardService:
         # Zysk netto po odjeciu kosztow kampanii Ads
         net_profit_with_ads = summary.net_profit - ads_cost
         gross_profit_with_ads = summary.gross_profit - ads_cost
+
+        logger.info(
+            "Dashboard profit stats done: trace=%s products_sold=%s returns=%s ads_cost=%s net_profit=%s gross_profit=%s total_elapsed_ms=%.1f",
+            trace_label,
+            summary.products_sold,
+            summary.returns_count,
+            ads_cost,
+            net_profit_with_ads,
+            gross_profit_with_ads,
+            (time.perf_counter() - started_at) * 1000,
+        )
         
         return {
             'month': float(net_profit_with_ads),

@@ -10,6 +10,7 @@ import time
 from collections import defaultdict
 import io
 import csv
+import logging
 
 import pandas as pd
 from flask import Blueprint, jsonify, request, Response
@@ -35,6 +36,8 @@ from .settings_store import settings_store
 
 
 bp = Blueprint("stats", __name__, url_prefix="/api/stats")
+
+logger = logging.getLogger(__name__)
 
 _FAST_CACHE: dict[str, tuple[float, dict]] = {}
 _FAST_CACHE_TTL_SECONDS = 60
@@ -737,8 +740,11 @@ def stats_sales():
 @login_required
 def stats_profit():
     started_at = time.perf_counter()
+    trace_label = f"stats-profit:{int(time.time() * 1000)}"
+    logger.info("Stats profit start: trace=%s args=%s", trace_label, dict(request.args))
     filters, err = _parse_filters()
     if err:
+        logger.warning("Stats profit invalid filters: trace=%s", trace_label)
         return err
 
     cache_key = "profit|" + _build_cache_key(filters)
@@ -751,15 +757,31 @@ def stats_profit():
         cached["meta"] = dict(cached.get("meta") or {})
         cached["meta"]["cache"] = "hit"
         cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
+        logger.info(
+            "Stats profit cache hit: trace=%s cache_key=%s response_ms=%.1f",
+            trace_label,
+            cache_key,
+            response_ms,
+        )
         return jsonify(cached)
 
     with get_session() as db:
+        data_load_started_at = time.perf_counter()
         orders = _fetch_orders(db, filters, int(filters.date_from.timestamp()), int(filters.date_to.timestamp()))
         order_ids = [o.order_id for o in orders]
         products_map = _order_products_map(db, order_ids)
         prev_start, prev_end = int((filters.date_from - (filters.date_to - filters.date_from)).timestamp()), int(filters.date_from.timestamp())
         prev_orders = _fetch_orders(db, filters, prev_start, prev_end)
         prev_products = _order_products_map(db, [o.order_id for o in prev_orders])
+        logger.info(
+            "Stats profit db inputs loaded: trace=%s current_orders=%s prev_orders=%s current_order_products=%s prev_order_products=%s elapsed_ms=%.1f",
+            trace_label,
+            len(orders),
+            len(prev_orders),
+            len(products_map),
+            len(prev_products),
+            (time.perf_counter() - data_load_started_at) * 1000,
+        )
 
     current_revenue = sum((_order_revenue(o, products_map) for o in orders), Decimal("0"))
     prev_revenue = sum((_order_revenue(o, prev_products) for o in prev_orders), Decimal("0"))
@@ -771,6 +793,7 @@ def stats_profit():
             int(filters.date_from.timestamp()),
             int(filters.date_to.timestamp()),
             access_token=access_token,
+            trace_label=trace_label,
         )
 
     net_profit_cur = Decimal(str(summary.net_profit))
@@ -833,6 +856,14 @@ def stats_profit():
     response_ms = _record_telemetry(endpoint, "miss", started_at)
     payload["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
     _cache_set(cache_key, payload)
+    logger.info(
+        "Stats profit done: trace=%s response_ms=%.1f revenue=%s net_profit=%s waterfall_steps=%s",
+        trace_label,
+        response_ms,
+        current_revenue,
+        net_profit_cur,
+        len(waterfall),
+    )
     return jsonify(payload)
 
 

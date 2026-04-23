@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 from types import SimpleNamespace
 
 from magazyn.db import get_session
@@ -169,7 +170,7 @@ def test_stats_profit_returns_summary(client, app, login, monkeypatch):
             self.db = db
             self.settings = settings
 
-        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, access_token=None):
+        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, access_token=None, trace_label=None):
             return SimpleNamespace(
                 total_revenue=200.0,
                 total_purchase_cost=80.0,
@@ -190,6 +191,38 @@ def test_stats_profit_returns_summary(client, app, login, monkeypatch):
     assert payload["ok"] is True
     assert payload["data"]["summary"]["net_profit"] == 75.0
     assert len(payload["data"]["waterfall"]) >= 5
+
+
+def test_stats_profit_logs_trace_and_completion(client, app, login, monkeypatch, caplog):
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+
+    class _FakeCalculator:
+        def __init__(self, db, settings):
+            self.db = db
+            self.settings = settings
+
+        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, access_token=None, trace_label=None):
+            return SimpleNamespace(
+                total_revenue=200.0,
+                total_purchase_cost=80.0,
+                total_allegro_fees=20.0,
+                total_packaging_cost=10.0,
+                fixed_costs=15.0,
+                net_profit=75.0,
+                gross_profit=90.0,
+            )
+
+    monkeypatch.setattr(stats_module, "FinancialCalculator", _FakeCalculator)
+    monkeypatch.setattr(stats_module.settings_store, "get", lambda key, default=None: "token" if key == "ALLEGRO_ACCESS_TOKEN" else default)
+
+    with caplog.at_level(logging.INFO):
+        response = client.get("/api/stats/profit")
+
+    assert response.status_code == 200
+    assert any("Stats profit start:" in record.message for record in caplog.records)
+    assert any("Stats profit done:" in record.message for record in caplog.records)
 
 
 def test_stats_allegro_costs_returns_totals(client, app, login, monkeypatch):

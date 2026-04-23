@@ -2,12 +2,17 @@
 Billing Allegro API - wpisy billingowe i podsumowania.
 """
 from decimal import Decimal
+import logging
+import time
 from typing import Optional
 
 import requests
 
 from .core import API_BASE_URL, _request_with_retry
 from .shipping import estimate_allegro_shipping_cost
+
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_billing_entries(
@@ -234,6 +239,7 @@ def get_order_billing_summary(
         "fee_details": [],
         "error": None,
     }
+    started_at = time.perf_counter()
     
     try:
         data = fetch_billing_entries(access_token, order_id=order_id)
@@ -310,9 +316,26 @@ def get_order_billing_summary(
         )
         
         result["success"] = True
+        logger.info(
+            "Allegro billing summary success: order_id=%s entries=%s commission=%s shipping=%s promo=%s other=%s total_fees=%s elapsed_ms=%.1f",
+            order_id,
+            len(entries),
+            result["commission"],
+            result["shipping_fee"],
+            result["promo_fee"],
+            result["other_fees"],
+            result["total_fees"],
+            (time.perf_counter() - started_at) * 1000,
+        )
         
     except Exception as e:
         result["error"] = str(e)
+        logger.warning(
+            "Allegro billing summary failed: order_id=%s error=%s elapsed_ms=%.1f",
+            order_id,
+            e,
+            (time.perf_counter() - started_at) * 1000,
+        )
     
     if result["shipping_fee"] == Decimal("0") and delivery_method and order_value:
         estimate = estimate_allegro_shipping_cost(delivery_method, order_value)
@@ -329,6 +352,17 @@ def get_order_billing_summary(
         result["estimated_shipping"] = None
         result["shipping_fee_estimated"] = None
         result["total_fees_with_estimate"] = result["total_fees"]
+
+    logger.info(
+        "Allegro billing summary finalized: order_id=%s success=%s entries=%s total_fees=%s total_fees_with_estimate=%s shipping_estimated=%s total_elapsed_ms=%.1f",
+        order_id,
+        result["success"],
+        len(result["entries"]),
+        result["total_fees"],
+        result.get("total_fees_with_estimate"),
+        bool(result.get("estimated_shipping")),
+        (time.perf_counter() - started_at) * 1000,
+    )
     
     return result
 

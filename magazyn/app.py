@@ -310,12 +310,24 @@ def dashboard_heavy():
     from flask import jsonify
     from .domain.dashboard import DashboardService
     from .settings_store import settings_store as ss
+    started_at = datetime.now()
     
     access_token = ss.get("ALLEGRO_ACCESS_TOKEN")
+    current_app.logger.info(
+        "REQUEST START [dashboard-heavy] /api/dashboard/heavy access_token=%s",
+        bool(access_token),
+    )
     
     with get_session() as db:
         service = DashboardService(db, ss)
         heavy_data = service.get_heavy_dashboard(access_token)
+
+    elapsed_ms = (datetime.now() - started_at).total_seconds() * 1000
+    current_app.logger.info(
+        "REQUEST END [dashboard-heavy] /api/dashboard/heavy elapsed_ms=%.1f keys=%s",
+        elapsed_ms,
+        sorted(list(heavy_data.keys())),
+    )
     
     return jsonify(heavy_data)
 
