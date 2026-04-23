@@ -1028,6 +1028,23 @@ def sync_order_from_data(db, order_data: dict) -> Order:
             product_size_id=product_size_id,
         )
         db.add(order_product)
+
+    db.flush()
+
+    try:
+        from .domain.financial import FinancialCalculator
+        from .settings_store import settings_store
+
+        FinancialCalculator(db, settings_store).refresh_order_profit_cache(
+            order,
+            trace_label="sync-order",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Blad odswiezenia cache realnego zysku dla %s: %s",
+            order_id,
+            exc,
+        )
     
     initial_status = "pobrano"
     if (

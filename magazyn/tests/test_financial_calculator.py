@@ -176,6 +176,61 @@ class TestCalculateOrderProfit:
         assert result.allegro_fees == Decimal("25.50")
         assert result.profit == Decimal("200.00") - Decimal("25.50") - Decimal("60.00") - Decimal("0.16")
 
+    def test_profit_uses_estimated_shipping_until_billing_is_complete(self):
+        """Jesli shipping jest tylko estymowany, zapisujemy wartosc tymczasowa i nie oznaczamy jako finalna."""
+        order = MagicMock()
+        order.payment_done = "200.00"
+        order.order_id = "order-estimated-shipping"
+        order.delivery_method = "InPost"
+        order.external_order_id = "ext-estimated-shipping"
+        order.real_profit_allegro_fees = None
+        order.real_profit_is_final = False
+
+        calc = FinancialCalculator(MagicMock(), settings_store=None)
+
+        with patch.object(calc, 'get_purchase_cost_for_order', return_value=Decimal("60.00")):
+            with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
+                result = calc.calculate_order_profit(
+                    order,
+                    access_token="token",
+                    prefetched_billing={
+                        "success": True,
+                        "total_fees": Decimal("20.00"),
+                        "total_fees_with_estimate": Decimal("28.99"),
+                        "entries": [{"id": "entry-1"}],
+                        "estimated_shipping": {"estimated_cost": Decimal("8.99")},
+                    },
+                )
+
+        assert result.fee_source == 'api'
+        assert result.allegro_fees == Decimal("28.99")
+        assert result.billing_complete is False
+        assert result.shipping_estimated is True
+
+    def test_refresh_order_profit_cache_reuses_final_cached_fees_without_token(self):
+        """Synchronizacja zamowienia nie moze degradowac finalnie policzonych oplat Allegro."""
+        order = MagicMock()
+        order.payment_done = "150.00"
+        order.order_id = "order-final-cache"
+        order.delivery_method = "InPost"
+        order.external_order_id = "ext-final-cache"
+        order.real_profit_allegro_fees = Decimal("17.50")
+        order.real_profit_is_final = True
+        order.real_profit_fee_source = "api"
+        order.real_profit_shipping_estimated = False
+        order.real_profit_error = None
+
+        calc = FinancialCalculator(MagicMock(), settings_store=None)
+
+        with patch.object(calc, 'get_purchase_cost_for_order', return_value=Decimal("40.00")):
+            with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
+                result = calc.refresh_order_profit_cache(order)
+
+        assert result.allegro_fees == Decimal("17.50")
+        assert result.billing_complete is True
+        assert order.real_profit_is_final is True
+        assert order.real_profit_allegro_fees == Decimal("17.50")
+
     def test_zero_payment_profit(self):
         """Zamowienie z zerowa platnoscia."""
         order = MagicMock()

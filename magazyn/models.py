@@ -452,6 +452,18 @@ class Order(Base):
     wfirma_correction_number = Column(String, nullable=True)
     emails_sent = Column(Text, nullable=True)  # JSON: {"confirmation": true, ...}
 
+    # Cache realnego zysku per zamowienie
+    real_profit_sale_price = Column(Numeric(10, 2), nullable=True)
+    real_profit_purchase_cost = Column(Numeric(10, 2), nullable=True)
+    real_profit_packaging_cost = Column(Numeric(10, 2), nullable=True)
+    real_profit_allegro_fees = Column(Numeric(10, 2), nullable=True)
+    real_profit_amount = Column(Numeric(10, 2), nullable=True)
+    real_profit_fee_source = Column(String(32), nullable=True)
+    real_profit_shipping_estimated = Column(Boolean, nullable=True)
+    real_profit_is_final = Column(Boolean, nullable=True)
+    real_profit_error = Column(Text, nullable=True)
+    real_profit_updated_at = Column(DateTime, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

@@ -10,7 +10,7 @@ Centralizuje logike obliczania:
 
 import json as _json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 import logging
 import time
@@ -24,6 +24,15 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
+def _decimal_or_none(value: Any) -> Optional[Decimal]:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
 @dataclass
 class ProfitBreakdown:
     """Struktura reprezentujaca rozbicie zysku z zamowienia."""
@@ -34,6 +43,8 @@ class ProfitBreakdown:
     packaging_cost: Decimal
     profit: Decimal
     fee_source: str  # 'api' lub 'estimated'
+    billing_complete: bool = False
+    shipping_estimated: bool = False
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -44,6 +55,8 @@ class ProfitBreakdown:
             'packaging_cost': float(self.packaging_cost),
             'profit': float(self.profit),
             'fee_source': self.fee_source,
+            'billing_complete': self.billing_complete,
+            'shipping_estimated': self.shipping_estimated,
         }
 
 
@@ -216,41 +229,115 @@ class FinancialCalculator:
         Returns:
             Tuple (oplaty, zrodlo) gdzie zrodlo to 'api' lub 'estimated'
         """
+        snapshot = self._resolve_fee_snapshot(
+            order=None,
+            external_order_id=external_order_id,
+            sale_price=sale_price,
+            access_token=access_token,
+            delivery_method=delivery_method,
+            prefetched_billing=prefetched_billing,
+        )
+        return (snapshot["fees"], snapshot["fee_source"])
+
+    def _get_sale_price(self, order) -> Decimal:
+        payment_method_cod = getattr(order, 'payment_method_cod', False)
+        payment_method_str = str(getattr(order, 'payment_method', '') or '')
+        is_cod = bool(payment_method_cod) or 'pobranie' in payment_method_str.lower()
+        if is_cod and hasattr(order, 'products'):
+            try:
+                products_total = sum(
+                    Decimal(str(p.price_brutto or 0)) * p.quantity
+                    for p in order.products
+                )
+                delivery = Decimal(str(getattr(order, 'delivery_price', None) or 0))
+                return products_total + delivery
+            except Exception:
+                return Decimal(str(order.payment_done or 0))
+        return Decimal(str(order.payment_done or 0))
+
+    def _estimate_fee_snapshot(
+        self,
+        sale_price: Decimal,
+        delivery_method: Optional[str] = None,
+        billing_complete: bool = False,
+        error: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        fees = sale_price * self.DEFAULT_ALLEGRO_FEE_RATE
+        fees += self._estimate_shipping_cost(delivery_method)
+        return {
+            "fees": fees,
+            "fee_source": "estimated",
+            "shipping_estimated": not billing_complete,
+            "billing_complete": billing_complete,
+            "error": error,
+        }
+
+    def _snapshot_from_billing(self, billing: Dict[str, Any]) -> Dict[str, Any]:
+        shipping_estimated = bool(billing.get("estimated_shipping"))
+        fees_key = "total_fees_with_estimate" if shipping_estimated else "total_fees"
+        fees = Decimal(str(billing.get(fees_key) or billing.get("total_fees") or 0))
+        return {
+            "fees": fees,
+            "fee_source": "api",
+            "shipping_estimated": shipping_estimated,
+            "billing_complete": not shipping_estimated,
+            "error": billing.get("error"),
+        }
+
+    def _resolve_fee_snapshot(
+        self,
+        sale_price: Decimal,
+        access_token: Optional[str] = None,
+        delivery_method: Optional[str] = None,
+        prefetched_billing: Optional[Dict[str, Any]] = None,
+        order=None,
+        external_order_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         billing_started_at = time.perf_counter()
+        external_order_id = external_order_id or getattr(order, 'external_order_id', None)
+
+        cached_fees = _decimal_or_none(
+            getattr(order, 'real_profit_allegro_fees', None) if order is not None else None
+        )
+        cached_is_final = (getattr(order, 'real_profit_is_final', None) is True) if order is not None else False
+        if cached_is_final and cached_fees is not None and not access_token and prefetched_billing is None:
+            return {
+                "fees": cached_fees,
+                "fee_source": getattr(order, 'real_profit_fee_source', None) or 'api',
+                "shipping_estimated": bool(getattr(order, 'real_profit_shipping_estimated', False)),
+                "billing_complete": True,
+                "error": getattr(order, 'real_profit_error', None),
+            }
 
         if prefetched_billing and prefetched_billing.get("success"):
-            fees = Decimal(str(prefetched_billing.get("total_fees") or 0))
+            snapshot = self._snapshot_from_billing(prefetched_billing)
             elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
             logger.info(
                 "Profit billing prefetched: order_external_id=%s fees=%s entries=%s elapsed_ms=%.1f estimated_shipping=%s",
                 external_order_id,
-                fees,
+                snapshot["fees"],
                 len(prefetched_billing.get("entries") or []),
                 elapsed_ms,
-                bool(prefetched_billing.get("estimated_shipping")),
+                snapshot["shipping_estimated"],
             )
-            return (fees, 'api')
+            return snapshot
 
-        # Probuj pobrac z API
         if access_token and external_order_id:
             try:
                 from ..allegro_api import get_order_billing_summary
-                billing = get_order_billing_summary(
-                    access_token,
-                    external_order_id,
-                )
-                if billing and billing.get("success") and billing.get("total_fees"):
-                    fees = Decimal(str(billing["total_fees"]))
+                billing = get_order_billing_summary(access_token, external_order_id)
+                if billing and billing.get("success") and billing.get("total_fees") is not None:
+                    snapshot = self._snapshot_from_billing(billing)
                     elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
                     logger.info(
                         "Profit billing API success: order_external_id=%s fees=%s entries=%s elapsed_ms=%.1f estimated_shipping=%s",
                         external_order_id,
-                        fees,
+                        snapshot["fees"],
                         len(billing.get("entries") or []),
                         elapsed_ms,
-                        bool(billing.get("estimated_shipping")),
+                        snapshot["shipping_estimated"],
                     )
-                    return (fees, 'api')
+                    return snapshot
                 elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
                 logger.warning(
                     "Profit billing API fallback: order_external_id=%s reason=empty_or_unsuccessful elapsed_ms=%.1f success=%s error=%s",
@@ -258,6 +345,12 @@ class FinancialCalculator:
                     elapsed_ms,
                     billing.get("success") if isinstance(billing, dict) else None,
                     billing.get("error") if isinstance(billing, dict) else None,
+                )
+                return self._estimate_fee_snapshot(
+                    sale_price,
+                    delivery_method,
+                    billing_complete=not bool(external_order_id),
+                    error=billing.get("error") if isinstance(billing, dict) else None,
                 )
             except Exception as exc:
                 elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
@@ -267,15 +360,117 @@ class FinancialCalculator:
                     elapsed_ms,
                     exc,
                 )
-        
-        # Fallback - szacunkowa prowizja
-        fees = sale_price * self.DEFAULT_ALLEGRO_FEE_RATE
-        
-        # Dodaj szacowany koszt wysylki
-        shipping_cost = self._estimate_shipping_cost(delivery_method)
-        fees += shipping_cost
-        
-        return (fees, 'estimated')
+                return self._estimate_fee_snapshot(
+                    sale_price,
+                    delivery_method,
+                    billing_complete=not bool(external_order_id),
+                    error=str(exc),
+                )
+
+        return self._estimate_fee_snapshot(
+            sale_price,
+            delivery_method,
+            billing_complete=not bool(external_order_id),
+        )
+
+    def _build_profit_breakdown(
+        self,
+        order,
+        sale_price: Decimal,
+        fee_snapshot: Dict[str, Any],
+        trace_label: Optional[str] = None,
+        started_at: Optional[float] = None,
+    ) -> ProfitBreakdown:
+        purchase_cost = self.get_purchase_cost_for_order(order.order_id)
+        packaging_cost = self.get_packaging_cost()
+        profit = sale_price - fee_snapshot["fees"] - purchase_cost - packaging_cost
+
+        elapsed_ms = ((time.perf_counter() - started_at) * 1000) if started_at else 0
+        order_id = getattr(order, 'order_id', None)
+        logger.info(
+            "Profit order calculated: trace=%s order_id=%s external_order_id=%s sale_price=%s fees=%s fee_source=%s purchase_cost=%s packaging_cost=%s profit=%s billing_complete=%s elapsed_ms=%.1f",
+            trace_label or '-',
+            order_id,
+            getattr(order, 'external_order_id', None),
+            sale_price,
+            fee_snapshot["fees"],
+            fee_snapshot["fee_source"],
+            purchase_cost,
+            packaging_cost,
+            profit,
+            fee_snapshot["billing_complete"],
+            elapsed_ms,
+        )
+
+        return ProfitBreakdown(
+            order_id=order.order_id,
+            sale_price=sale_price,
+            allegro_fees=fee_snapshot["fees"],
+            purchase_cost=purchase_cost,
+            packaging_cost=packaging_cost,
+            profit=profit,
+            fee_source=fee_snapshot["fee_source"],
+            billing_complete=fee_snapshot["billing_complete"],
+            shipping_estimated=fee_snapshot["shipping_estimated"],
+        )
+
+    def get_cached_order_profit(self, order) -> Optional[ProfitBreakdown]:
+        cached_fields = [
+            getattr(order, 'real_profit_sale_price', None),
+            getattr(order, 'real_profit_purchase_cost', None),
+            getattr(order, 'real_profit_packaging_cost', None),
+            getattr(order, 'real_profit_allegro_fees', None),
+            getattr(order, 'real_profit_amount', None),
+        ]
+        if any(value is None for value in cached_fields):
+            return None
+
+        return ProfitBreakdown(
+            order_id=order.order_id,
+            sale_price=Decimal(str(order.real_profit_sale_price)),
+            allegro_fees=Decimal(str(order.real_profit_allegro_fees)),
+            purchase_cost=Decimal(str(order.real_profit_purchase_cost)),
+            packaging_cost=Decimal(str(order.real_profit_packaging_cost)),
+            profit=Decimal(str(order.real_profit_amount)),
+            fee_source=getattr(order, 'real_profit_fee_source', None) or 'estimated',
+            billing_complete=bool(getattr(order, 'real_profit_is_final', False)),
+            shipping_estimated=bool(getattr(order, 'real_profit_shipping_estimated', False)),
+        )
+
+    def refresh_order_profit_cache(
+        self,
+        order,
+        access_token: Optional[str] = None,
+        trace_label: Optional[str] = None,
+        prefetched_billing: Optional[Dict[str, Any]] = None,
+    ) -> ProfitBreakdown:
+        sale_price = self._get_sale_price(order)
+        fee_snapshot = self._resolve_fee_snapshot(
+            sale_price=sale_price,
+            access_token=access_token,
+            delivery_method=getattr(order, 'delivery_method', None),
+            prefetched_billing=prefetched_billing,
+            order=order,
+        )
+        breakdown = self._build_profit_breakdown(
+            order,
+            sale_price,
+            fee_snapshot,
+            trace_label=trace_label,
+            started_at=time.perf_counter(),
+        )
+
+        order.real_profit_sale_price = breakdown.sale_price
+        order.real_profit_purchase_cost = breakdown.purchase_cost
+        order.real_profit_packaging_cost = breakdown.packaging_cost
+        order.real_profit_allegro_fees = breakdown.allegro_fees
+        order.real_profit_amount = breakdown.profit
+        order.real_profit_fee_source = breakdown.fee_source
+        order.real_profit_shipping_estimated = breakdown.shipping_estimated
+        order.real_profit_is_final = breakdown.billing_complete
+        order.real_profit_error = fee_snapshot.get("error")
+        order.real_profit_updated_at = datetime.now(timezone.utc)
+        return breakdown
     
     def _estimate_shipping_cost(self, delivery_method: Optional[str] = None) -> Decimal:
         """Szacuje koszt wysylki na podstawie metody dostawy."""
@@ -306,68 +501,32 @@ class FinancialCalculator:
             ProfitBreakdown ze szczegolami kalkulacji
         """
         order_started_at = time.perf_counter()
-
-        # Cena sprzedazy - dla pobrania (COD) uzywamy kwoty zamowienia
-        payment_method_cod = getattr(order, 'payment_method_cod', False)
-        payment_method_str = str(getattr(order, 'payment_method', '') or '')
-        is_cod = bool(payment_method_cod) or 'pobranie' in payment_method_str.lower()
-        if is_cod and hasattr(order, 'products'):
-            try:
-                products_total = sum(
-                    Decimal(str(p.price_brutto or 0)) * p.quantity
-                    for p in order.products
-                )
-                delivery = Decimal(str(getattr(order, 'delivery_price', None) or 0))
-                sale_price = products_total + delivery
-            except Exception:
-                sale_price = Decimal(str(order.payment_done or 0))
-        else:
-            sale_price = Decimal(str(order.payment_done or 0))
-        
-        # Oplaty Allegro - uzyj external_order_id dla billing API
-        delivery_method = getattr(order, 'delivery_method', None)
-        external_order_id = getattr(order, 'external_order_id', None)
+        sale_price = self._get_sale_price(order)
         allegro_fees, fee_source = self.get_allegro_fees(
-            external_order_id,
+            getattr(order, 'external_order_id', None),
             sale_price,
             access_token,
-            delivery_method,
+            getattr(order, 'delivery_method', None),
             prefetched_billing=prefetched_billing,
         )
-        
-        # Koszt zakupu
-        purchase_cost = self.get_purchase_cost_for_order(order.order_id)
-        
-        # Koszt pakowania
-        packaging_cost = self.get_packaging_cost()
-        
-        # Zysk
-        profit = sale_price - allegro_fees - purchase_cost - packaging_cost
-
-        elapsed_ms = (time.perf_counter() - order_started_at) * 1000
-        order_id = getattr(order, 'order_id', None)
-        logger.info(
-            "Profit order calculated: trace=%s order_id=%s external_order_id=%s sale_price=%s fees=%s fee_source=%s purchase_cost=%s packaging_cost=%s profit=%s elapsed_ms=%.1f",
-            trace_label or '-',
-            order_id,
-            external_order_id,
+        shipping_estimated = bool(prefetched_billing.get("estimated_shipping")) if prefetched_billing else False
+        if fee_source == 'api':
+            billing_complete = not shipping_estimated
+        else:
+            billing_complete = not bool(getattr(order, 'external_order_id', None))
+        fee_snapshot = {
+            "fees": allegro_fees,
+            "fee_source": fee_source,
+            "shipping_estimated": shipping_estimated,
+            "billing_complete": billing_complete,
+            "error": prefetched_billing.get("error") if prefetched_billing else None,
+        }
+        return self._build_profit_breakdown(
+            order,
             sale_price,
-            allegro_fees,
-            fee_source,
-            purchase_cost,
-            packaging_cost,
-            profit,
-            elapsed_ms,
-        )
-        
-        return ProfitBreakdown(
-            order_id=order.order_id,
-            sale_price=sale_price,
-            allegro_fees=allegro_fees,
-            purchase_cost=purchase_cost,
-            packaging_cost=packaging_cost,
-            profit=profit,
-            fee_source=fee_source
+            fee_snapshot,
+            trace_label=trace_label,
+            started_at=order_started_at,
         )
 
     def _prefetch_order_billing_summaries(
@@ -541,52 +700,57 @@ class FinancialCalculator:
         total_revenue = Decimal("0")
         total_purchase_cost = Decimal("0")
         total_allegro_fees = Decimal("0")
-        packaging_cost = self.get_packaging_cost()
         total_packaging_cost = Decimal("0")
+        cache_hits = 0
+        cache_misses = 0
+        incomplete_orders = 0
         api_fee_orders = 0
         estimated_fee_orders = 0
-        slow_orders = 0
-        slow_order_ids: list[str] = []
         loop_started_at = time.perf_counter()
-        prefetched_billings = self._prefetch_order_billing_summaries(
-            orders,
-            access_token,
-            trace_label=trace_label,
-        )
         
         for order in orders:
-            breakdown = self.calculate_order_profit(
-                order,
-                access_token,
-                trace_label=trace_label,
-                prefetched_billing=prefetched_billings.get(getattr(order, 'external_order_id', None)),
-            )
+            breakdown = self.get_cached_order_profit(order)
+            if breakdown is None:
+                cache_misses += 1
+                breakdown = self.calculate_order_profit(
+                    order,
+                    access_token=None,
+                    trace_label=trace_label,
+                )
+            else:
+                cache_hits += 1
             total_revenue += breakdown.sale_price
             total_purchase_cost += breakdown.purchase_cost
             total_allegro_fees += breakdown.allegro_fees
-            total_packaging_cost += packaging_cost
+            total_packaging_cost += breakdown.packaging_cost
             if breakdown.fee_source == 'api':
                 api_fee_orders += 1
             else:
                 estimated_fee_orders += 1
-            if breakdown.fee_source == 'api' and getattr(breakdown, 'profit', None) is not None:
-                pass
+            if not breakdown.billing_complete:
+                incomplete_orders += 1
         loop_elapsed_ms = (time.perf_counter() - loop_started_at) * 1000
 
         if loop_elapsed_ms > 5000:
             logger.warning(
-                "Profit period summary slow loop: trace=%s orders=%s api_fee_orders=%s estimated_fee_orders=%s elapsed_ms=%.1f",
+                "Profit period summary slow loop: trace=%s orders=%s cache_hits=%s cache_misses=%s incomplete_orders=%s api_fee_orders=%s estimated_fee_orders=%s elapsed_ms=%.1f",
                 trace_label or '-',
                 len(orders),
+                cache_hits,
+                cache_misses,
+                incomplete_orders,
                 api_fee_orders,
                 estimated_fee_orders,
                 loop_elapsed_ms,
             )
         else:
             logger.info(
-                "Profit period summary loop done: trace=%s orders=%s api_fee_orders=%s estimated_fee_orders=%s elapsed_ms=%.1f",
+                "Profit period summary loop done: trace=%s orders=%s cache_hits=%s cache_misses=%s incomplete_orders=%s api_fee_orders=%s estimated_fee_orders=%s elapsed_ms=%.1f",
                 trace_label or '-',
                 len(orders),
+                cache_hits,
+                cache_misses,
+                incomplete_orders,
                 api_fee_orders,
                 estimated_fee_orders,
                 loop_elapsed_ms,

@@ -360,6 +360,85 @@ def _sync_allegro_fulfillment(app):
     return stats
 
 
+def _refresh_order_profit_cache(app):
+    """Odswieza zapisany realny zysk dla zamowien bez finalnych danych billingowych."""
+    from sqlalchemy import or_ as db_or
+
+    from .db import get_session
+    from .domain.financial import FinancialCalculator
+    from .models import Order
+    from .settings_store import settings_store
+
+    stats = {"checked": 0, "updated": 0, "finalized": 0, "pending": 0, "errors": 0}
+
+    try:
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+
+        with get_session() as db:
+            orders = (
+                db.query(Order)
+                .filter(
+                    db_or(
+                        Order.real_profit_amount.is_(None),
+                        Order.real_profit_is_final.is_(False),
+                        Order.real_profit_is_final.is_(None),
+                    )
+                )
+                .filter(
+                    db_or(
+                        Order.payment_done > 0,
+                        Order.payment_method_cod == True,
+                    )
+                )
+                .all()
+            )
+
+            if not orders:
+                return stats
+
+            calculator = FinancialCalculator(db, settings_store)
+            prefetched_billings = calculator._prefetch_order_billing_summaries(
+                orders,
+                access_token,
+                trace_label="scheduler-profit-cache",
+            )
+
+            logger.info(
+                "Profit cache refresh: znaleziono %s zamowien do odswiezenia",
+                len(orders),
+            )
+
+            for order in orders:
+                try:
+                    breakdown = calculator.refresh_order_profit_cache(
+                        order,
+                        access_token=access_token,
+                        trace_label="scheduler-profit-cache",
+                        prefetched_billing=prefetched_billings.get(order.external_order_id),
+                    )
+                    stats["checked"] += 1
+                    stats["updated"] += 1
+                    if breakdown.billing_complete:
+                        stats["finalized"] += 1
+                    else:
+                        stats["pending"] += 1
+                except Exception as exc:
+                    stats["errors"] += 1
+                    logger.warning(
+                        "Profit cache refresh error: order_id=%s external_order_id=%s error=%s",
+                        order.order_id,
+                        order.external_order_id,
+                        exc,
+                    )
+
+            db.commit()
+    except Exception as exc:
+        stats["errors"] += 1
+        logger.error("Krytyczny blad odswiezania cache realnego zysku: %s", exc, exc_info=True)
+
+    return stats
+
+
 def _process_pending_invoices():
     """Automatyczne wystawianie faktur dla nowych zamowien z Allegro.
 
@@ -540,6 +619,15 @@ def _sync_worker(app):
                 logger.info(
                     f"Parcel tracking sync completed: checked={stats['checked']}, "
                     f"updated={stats['updated']}, errors={stats['errors']}"
+                )
+
+                # 1a. Odswiez zapisany realny zysk per zamowienie
+                logger.info("Starting real profit cache refresh")
+                profit_stats = _refresh_order_profit_cache(app)
+                logger.info(
+                    f"Real profit cache refresh completed: checked={profit_stats['checked']}, "
+                    f"updated={profit_stats['updated']}, finalized={profit_stats['finalized']}, "
+                    f"pending={profit_stats['pending']}, errors={profit_stats['errors']}"
                 )
                 
                 # 2. Sync fulfillment status z Allegro checkout-forms API
