@@ -493,6 +493,17 @@ def offers_and_prices():
                         db.commit()
                 except Exception as e:
                     pass
+
+            if ean_value and not offer.product_size_id:
+                ps = db.query(ProductSize).filter(ProductSize.barcode == ean_value).first()
+                if ps:
+                    offer.product_size_id = ps.id
+                    offer.product_id = ps.product_id
+                    db.commit()
+                    current_app.logger.info(
+                        f"Linked offer {offer.offer_id} to product_size {ps.id} by EAN {ean_value} on offers-and-prices"
+                    )
+
             offer_data["ean"] = ean_value
             offers_data.append(offer_data)
 

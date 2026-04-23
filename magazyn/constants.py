@@ -171,6 +171,10 @@ def _normalize_alias_key(value: str) -> str:
 
 
 _PRODUCT_ALIAS_GROUPS: dict[str, set[str]] = {
+    "Amortyzator do smyczy dla średniego psa": {
+        "Amortyzator dla psa Truelove Premium",
+        "Amortyzator do smyczy dla średniego psa Truelove",
+    },
     "Szelki dla psa Truelove Tropical": {
         "Szelki dla psa Truelove Front Line Premium Tropical",
         "Szelki dla psa Truelove FrontLine Premium Tropical",

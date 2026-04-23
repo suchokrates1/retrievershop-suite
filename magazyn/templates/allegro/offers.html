@@ -27,33 +27,68 @@
                 <td>
                     <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="flex items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="grow relative" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')" @click.outside="close()" @keydown.escape.window="close()">
+                        <div class="grow" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
                             <input type="hidden" name="product_id" :value="productId">
                             <input type="hidden" name="product_size_id" :value="sizeId">
-                            <button class="btn btn-ghost w-full justify-between text-left" type="button" :aria-expanded="isOpen.toString()" x-ref="toggleBtn" @click="toggle()">
+                            <button class="btn btn-ghost w-full justify-between text-left" type="button" :aria-expanded="isOpen.toString()" x-ref="toggleBtn" @click="open()">
                                 <span class="truncate" x-text="selectedLabel"></span>
-                                <i class="bi bi-chevron-down text-xs transition-transform" :class="isOpen ? 'rotate-180' : ''"></i>
+                                <span class="flex items-center gap-2 text-sm text-base-content/70">
+                                    <i class="bi bi-search"></i>
+                                    Zmien
+                                </span>
                             </button>
-                            <div x-cloak x-show="isOpen" x-transition.opacity.duration.150ms class="absolute left-0 right-0 top-full z-50 mt-2 rounded-box border border-base-300 bg-base-100 p-3 shadow-2xl">
-                                <input type="text" class="input input-bordered input-sm mb-2 w-full" placeholder="Szukaj produktu lub EAN..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop @keydown.escape.prevent.stop="close()">
-                                <div class="flex flex-col gap-1">
-                                    <button type="button" class="btn btn-ghost justify-start text-left w-full" @click="selectOption('none', '', 'Wybierz z magazynu')">
-                                        <div class="font-semibold">Brak powiązania</div>
-                                        <div class="small text-base-content/60">Zostaw ofertę bez przypisania</div>
-                                    </button>
-                                    {% for item in inventory %}
-                                    <button type="button" class="btn btn-ghost justify-start text-left w-full" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
-                                        <div class="font-semibold">{{ item.label }}</div>
-                                        <div class="small text-base-content/60">
-                                            <span class="badge badge-neutral mr-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
+                            <dialog class="modal" x-ref="modal" @close="handleModalClose()">
+                                <div class="modal-box max-w-4xl p-0">
+                                    <div class="border-b border-base-300 px-5 py-4">
+                                        <div class="flex items-start justify-between gap-4">
+                                            <div>
+                                                <h3 class="text-lg font-semibold">Powiaz oferte z magazynem</h3>
+                                                <p class="mt-1 text-sm text-base-content/70">Wyszukaj produkt lub EAN i wybierz docelowe powiazanie dla tej oferty.</p>
+                                            </div>
+                                            <button type="button" class="btn btn-ghost btn-sm" @click="close()">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
                                         </div>
-                                    </button>
-                                    {% endfor %}
-                                    <div x-show="!hasMatches()" class="rounded-box border border-dashed border-base-300 px-3 py-2 text-sm text-base-content/60">
-                                        Brak pozycji pasujących do wyszukiwania.
+                                        <label class="mt-4 block">
+                                            <span class="sr-only">Szukaj produktu lub EAN</span>
+                                            <input type="text" class="input input-bordered w-full" placeholder="Szukaj produktu lub EAN..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" data-search-input @keydown.escape.prevent.stop="close()">
+                                        </label>
+                                    </div>
+                                    <div class="px-5 py-4">
+                                        <div class="mb-3 rounded-box border border-dashed border-base-300 bg-base-200/40 px-4 py-3 text-sm text-base-content/70">
+                                            Aktualnie wybrane: <span class="font-semibold text-base-content" x-text="selectedLabel"></span>
+                                        </div>
+                                        <div class="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
+                                            <button type="button" class="btn btn-ghost h-auto min-h-0 justify-start rounded-box border border-base-300 px-4 py-3 text-left w-full" @click="selectOption('none', '', 'Wybierz z magazynu')">
+                                                <div>
+                                                    <div class="font-semibold">Brak powiazania</div>
+                                                    <div class="small text-base-content/60">Zostaw oferte bez przypisania.</div>
+                                                </div>
+                                            </button>
+                                            {% for item in inventory %}
+                                            <button type="button" class="btn btn-ghost h-auto min-h-0 justify-start rounded-box border border-base-300 px-4 py-3 text-left w-full" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
+                                                <div class="w-full">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <span class="font-semibold">{{ item.label }}</span>
+                                                        <span class="badge badge-neutral">{{ item.type_label }}</span>
+                                                    </div>
+                                                    {% if item.extra %}
+                                                    <div class="mt-1 small text-base-content/60">{{ item.extra }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            </button>
+                                            {% endfor %}
+                                            <div x-show="!hasMatches()" class="rounded-box border border-dashed border-base-300 px-4 py-6 text-center text-sm text-base-content/60">
+                                                Brak pozycji pasujacych do wyszukiwania.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end border-t border-base-300 px-5 py-4">
+                                        <button type="button" class="btn btn-outline" @click="close()">Zamknij</button>
                                     </div>
                                 </div>
-                            </div>
+                                <form method="dialog" class="modal-backdrop"><button>Zamknij</button></form>
+                            </dialog>
                         </div>
                         <button type="submit" class="btn btn-primary btn-sm">Zapisz</button>
                     </form>
@@ -94,13 +129,13 @@ document.addEventListener('alpine:init', () => {
         selectedLabel: initLabel || 'Wybierz z magazynu',
         searchQuery: '',
 
-        toggle() {
-            this.isOpen ? this.close() : this.open();
-        },
-
         open() {
             this.isOpen = true;
             this.searchQuery = '';
+            const modal = this.$refs.modal;
+            if (modal && !modal.open) {
+                modal.showModal();
+            }
             this.$nextTick(() => {
                 const input = this.$refs.searchInput;
                 if (input) input.focus();
@@ -108,6 +143,15 @@ document.addEventListener('alpine:init', () => {
         },
 
         close() {
+            const modal = this.$refs.modal;
+            if (modal && modal.open) {
+                modal.close();
+                return;
+            }
+            this.isOpen = false;
+        },
+
+        handleModalClose() {
             this.isOpen = false;
         },
 

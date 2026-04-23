@@ -13,6 +13,7 @@ from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models import AllegroOffer, Product, ProductSize
 from magazyn.allegro_api import fetch_product_listing
+import magazyn.allegro as allegro_views
 
 
 def test_offers_page_shows_manual_mapping_dropdown(client, login):
@@ -45,7 +46,7 @@ def test_offers_page_shows_manual_mapping_dropdown(client, login):
     assert "Oferty wymagające przypięcia" in body
     assert "Oferty powiązane z magazynem" in body
     assert "data-search-input" in body or "x-ref=\"searchInput\"" in body
-    assert "Brak powiązania" in body
+    assert "Brak powiazania" in body
     assert "Szelki spacerowe" in body
     assert "EAN: 1234567890123" in body
     assert 'name="product_id"' in body
@@ -81,13 +82,51 @@ def test_offers_and_prices_page_shows_searchable_mapping_dropdown(client, login)
     assert response.status_code == 200
     body = response.data.decode("utf-8")
     assert "Szukaj produktu lub EAN..." in body
+    assert 'class="modal"' in body
+    assert "showModal()" in body
     assert 'x-model="searchQuery"' in body
-    assert 'x-show="isOpen"' in body
-    assert '@click.outside="close()"' in body
-    assert "Brak pozycji pasujących do wyszukiwania." in body
+    assert "Powiaz oferte z magazynem" in body
+    assert "Brak pozycji pasujacych do wyszukiwania." in body
     assert "bg-base-100" in body
     assert "Szelki treningowe" in body
     assert "EAN: 5901234567890" in body
+
+
+def test_offers_and_prices_page_links_offer_after_fetching_ean(client, login, monkeypatch):
+    with get_session() as session:
+        product = Product(name="Amortyzator do smyczy dla średniego psa", color="Żółty")
+        session.add(product)
+        session.flush()
+        size = ProductSize(
+            product_id=product.id,
+            size="Uniwersalny",
+            quantity=4,
+            barcode="6971273115538",
+        )
+        session.add(size)
+        session.flush()
+        session.add(
+            AllegroOffer(
+                offer_id="offer-yellow-1",
+                title="Amortyzator do smyczy dla średniego psa Truelove żółty",
+                price=Decimal("89.99"),
+                product_id=None,
+                product_size_id=None,
+                ean=None,
+            )
+        )
+
+    monkeypatch.setattr(allegro_views, "_get_ean_for_offer", lambda offer_id: "6971273115538")
+
+    response = client.get("/offers-and-prices")
+
+    assert response.status_code == 200
+    with get_session() as session:
+        offer = session.query(AllegroOffer).filter_by(offer_id="offer-yellow-1").first()
+        assert offer is not None
+        assert offer.ean == "6971273115538"
+        assert offer.product_id == product.id
+        assert offer.product_size_id == size.id
 
 
 def test_link_offer_to_product_size_updates_relation(client, login):
