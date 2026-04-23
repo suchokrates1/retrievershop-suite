@@ -101,26 +101,31 @@
                 <td>
                     <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="flex items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="dropdown grow" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
+                        <div class="grow relative" x-data="searchDropdown('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')" @click.outside="close()" @keydown.escape.window="close()">
                             <input type="hidden" name="product_id" :value="productId">
                             <input type="hidden" name="product_size_id" :value="sizeId">
-                            <button class="btn btn-outline dropdown-toggle w-full text-left" type="button" aria-expanded="false" x-ref="toggleBtn" x-text="selectedLabel">
+                            <button class="btn btn-outline w-full justify-between text-left" type="button" :aria-expanded="isOpen.toString()" x-ref="toggleBtn" @click="toggle()">
+                                <span class="truncate" x-text="selectedLabel"></span>
+                                <i class="bi bi-chevron-down text-xs transition-transform" :class="isOpen ? 'rotate-180' : ''"></i>
                             </button>
-                            <div class="dropdown-content menu bg-base-200 w-full p-3">
-                                <input type="text" class="input input-bordered input-sm mb-2" placeholder="Szukaj..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop>
-                                <div class="menu">
-                                    <button type="button" class="btn btn-ghost justify-start" @click="selectOption('none', '', 'Wybierz z magazynu')">
+                            <div x-cloak x-show="isOpen" x-transition.opacity.duration.150ms class="absolute left-0 right-0 top-full z-50 mt-2 rounded-box border border-base-300 bg-base-100 p-3 shadow-2xl">
+                                <input type="text" class="input input-bordered input-sm mb-2 w-full" placeholder="Szukaj produktu lub EAN..." autocomplete="off" x-model="searchQuery" x-ref="searchInput" @click.stop @keydown.escape.prevent.stop="close()">
+                                <div class="max-h-80 space-y-1 overflow-y-auto">
+                                    <button type="button" class="btn btn-ghost justify-start text-left w-full" @click="selectOption('none', '', 'Wybierz z magazynu')">
                                         <div class="font-semibold">Brak powiązania</div>
                                         <div class="text-sm text-base-content/60">Zostaw ofertę bez przypisania</div>
                                     </button>
                                     {% for item in inventory %}
-                                    <button type="button" class="btn btn-ghost justify-start" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
+                                    <button type="button" class="btn btn-ghost justify-start text-left w-full" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
                                         <div class="font-semibold">{{ item.label }}</div>
                                         <div class="text-sm text-base-content/60">
                                             <span class="badge badge-neutral mr-1">{{ item.type_label }}</span>{% if item.extra %} {{ item.extra }}{% endif %}
                                         </div>
                                     </button>
                                     {% endfor %}
+                                    <div x-show="!hasMatches()" class="rounded-box border border-dashed border-base-300 px-3 py-2 text-sm text-base-content/60">
+                                        Brak pozycji pasujących do wyszukiwania.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -168,10 +173,28 @@
 // Search dropdown functionality
 document.addEventListener('alpine:init', () => {
     Alpine.data('searchDropdown', (initProductId, initSizeId, initLabel) => ({
+        isOpen: false,
         productId: initProductId || '',
         sizeId: initSizeId || '',
         selectedLabel: initLabel || 'Wybierz z magazynu',
         searchQuery: '',
+
+        toggle() {
+            this.isOpen ? this.close() : this.open();
+        },
+
+        open() {
+            this.isOpen = true;
+            this.searchQuery = '';
+            this.$nextTick(() => {
+                const input = this.$refs.searchInput;
+                if (input) input.focus();
+            });
+        },
+
+        close() {
+            this.isOpen = false;
+        },
 
         selectOption(kind, value, label) {
             if (kind === 'product') {
@@ -185,8 +208,11 @@ document.addEventListener('alpine:init', () => {
                 this.sizeId = '';
             }
             this.selectedLabel = label || 'Wybierz z magazynu';
-            const btn = this.$refs.toggleBtn;
-            bootstrap.Dropdown.getOrCreateInstance(btn).hide();
+            this.close();
+            this.$nextTick(() => {
+                const button = this.$refs.toggleBtn;
+                if (button) button.focus();
+            });
         },
 
         matchesFilter(filter) {
@@ -194,13 +220,11 @@ document.addEventListener('alpine:init', () => {
             return (filter || '').includes(this.searchQuery.toLowerCase());
         },
 
-        init() {
-            this.$refs.toggleBtn.addEventListener('shown.bs.dropdown', () => {
-                this.searchQuery = '';
-                this.$nextTick(() => {
-                    const input = this.$refs.searchInput;
-                    if (input) input.focus();
-                });
+        hasMatches() {
+            if (!this.searchQuery) return true;
+            return Array.from(this.$root.querySelectorAll('[data-filter]')).some((item) => {
+                const filter = item.dataset.filter || '';
+                return this.matchesFilter(filter);
             });
         }
     }));
