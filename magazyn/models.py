@@ -11,6 +11,7 @@ from sqlalchemy import (
     func,
     Boolean,
     case,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -714,6 +715,7 @@ class PriceReportItem(Base):
     """Pojedynczy wpis w raporcie cenowym."""
     __tablename__ = "price_report_items"
     __table_args__ = (
+        UniqueConstraint("report_id", "offer_id", name="uq_price_report_items_report_offer"),
         Index("idx_price_report_items_report_id", "report_id"),
         Index("idx_price_report_items_offer_id", "offer_id"),
         Index("idx_price_report_items_is_cheapest", "is_cheapest"),

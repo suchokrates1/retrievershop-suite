@@ -1,6 +1,7 @@
 """Testy dla poprawek systemu scrapingu i raportow cenowych."""
 
 import pytest
+import asyncio
 from unittest.mock import MagicMock, patch
 from decimal import Decimal
 from datetime import date
@@ -89,19 +90,59 @@ def test_price_check_result_competitors_all_count():
     assert result.competitors_all_count == 15
 
 
-# --- Testy save_report_item z nowymi polami ---
+# --- Testy parsowania i filtrowania ofert ---
 
-def test_save_report_item_with_super_seller():
+def test_parse_competitor_articles_parses_condition_and_url():
+    from magazyn.scripts.price_checker_ws import parse_competitor_articles
+
+    offers = parse_competitor_articles([
+        {
+            "index": 0,
+            "offerId": "99988877766",
+            "offerUrl": "https://allegro.pl/oferta/x-99988877766",
+            "ariaPrice": "119,99",
+            "text": "Powystawowy\nod\nSuper Sprzedawcy\nWhatsUpDog\n119,99 zł\n119,99 zł z dostawą\nSmart!\ndostawa jutro",
+        }
+    ])
+
+    assert len(offers) == 1
+    assert offers[0].seller == "WhatsUpDog"
+    assert offers[0].offer_id == "99988877766"
+    assert offers[0].offer_url == "https://allegro.pl/oferta/x-99988877766"
+    assert offers[0].condition == "powystawowy"
+    assert offers[0].has_smart is True
+
+
+def test_filter_competitor_offers_excludes_bad_condition_and_delivery():
+    from magazyn.scripts.price_checker_ws import CompetitorOffer, filter_competitor_offers
+
+    offers = [
+        CompetitorOffer(seller="A", price=100.0, price_with_delivery=100.0, condition="nowy"),
+        CompetitorOffer(seller="B", price=99.0, price_with_delivery=99.0, condition="powystawowy"),
+        CompetitorOffer(seller="C", price=98.0, price_with_delivery=98.0, delivery_days=5, condition="nowy"),
+        CompetitorOffer(seller="D", price=97.0, price_with_delivery=97.0, condition="nowy"),
+    ]
+
+    filtered, stats = filter_competitor_offers(offers, {"D"}, 3)
+
+    assert [offer.seller for offer in filtered] == ["A"]
+    assert stats == {"delivery": 1, "excluded_sellers": 1, "condition": 1}
+
+
+# --- Testy save_report_item z nowymi polami i deduplikacja ---
+
+def test_save_report_item_with_super_seller(app):
     """Sprawdza czy save_report_item poprawnie zapisuje nowe pola."""
+    from magazyn.db import get_session
+    from magazyn.models import PriceReport, PriceReportItem
     from magazyn.price_report_scheduler import save_report_item
 
-    mock_session = MagicMock()
-    mock_report = MagicMock()
-    mock_session.query.return_value.filter.return_value.first.return_value = mock_report
-
-    with patch("magazyn.db.get_session") as mock_gs:
-        mock_gs.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_gs.return_value.__exit__ = MagicMock(return_value=False)
+    with app.app_context():
+        with get_session() as session:
+            report = PriceReport(status="pending", items_total=10, items_checked=0)
+            session.add(report)
+            session.flush()
+            report_id = report.id
 
         result_data = {
             "offer_id": "123",
@@ -121,31 +162,34 @@ def test_save_report_item_with_super_seller():
                 "is_super_seller": True,
             },
         }
-        save_report_item(1, result_data)
+        save_report_item(report_id, result_data)
 
-        # Sprawdz ze item zostal dodany z nowymi polami
-        added_item = mock_session.add.call_args[0][0]
-        assert added_item.competitor_is_super_seller is True
-        assert added_item.competitors_all_count == 8
-        assert added_item.is_cheapest is False  # 100 > 95
-        assert added_item.total_offers == 6  # 5 competitors + 1
+        with get_session() as session:
+            item = session.query(PriceReportItem).filter_by(report_id=report_id, offer_id="123").one()
+            report = session.query(PriceReport).filter_by(id=report_id).one()
+
+        assert item.competitor_is_super_seller is True
+        assert item.competitors_all_count == 8
+        assert item.is_cheapest is False
+        assert item.total_offers == 6
+        assert report.items_checked == 1
 
 
-def test_save_report_item_no_competitors():
-    """Test zapisu gdy brak konkurencji."""
+def test_save_report_item_updates_existing_row_without_duplicate(app):
+    from magazyn.db import get_session
+    from magazyn.models import PriceReport, PriceReportItem
     from magazyn.price_report_scheduler import save_report_item
 
-    mock_session = MagicMock()
-    mock_report = MagicMock()
-    mock_session.query.return_value.filter.return_value.first.return_value = mock_report
+    with app.app_context():
+        with get_session() as session:
+            report = PriceReport(status="pending", items_total=10, items_checked=0)
+            session.add(report)
+            session.flush()
+            report_id = report.id
 
-    with patch("magazyn.db.get_session") as mock_gs:
-        mock_gs.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_gs.return_value.__exit__ = MagicMock(return_value=False)
-
-        result_data = {
+        save_report_item(report_id, {
             "offer_id": "456",
-            "title": "Brak konkurencji",
+            "title": "Pierwszy zapis",
             "our_price": 200.0,
             "product_size_id": 2,
             "success": True,
@@ -154,12 +198,36 @@ def test_save_report_item_no_competitors():
             "competitors_count": 0,
             "competitors_all_count": 0,
             "cheapest": None,
-        }
-        save_report_item(1, result_data)
+        })
 
-        added_item = mock_session.add.call_args[0][0]
-        assert added_item.is_cheapest is True  # Domyslnie najtansi
-        assert added_item.competitor_is_super_seller is None
+        save_report_item(report_id, {
+            "offer_id": "456",
+            "title": "Drugi zapis",
+            "our_price": 200.0,
+            "product_size_id": 2,
+            "success": True,
+            "error": None,
+            "my_position": 2,
+            "competitors_count": 2,
+            "competitors_all_count": 4,
+            "cheapest": {
+                "price": 189.0,
+                "price_with_delivery": 189.0,
+                "seller": "NowyKonkurent",
+                "url": "https://allegro.pl/oferta/x-123",
+                "is_super_seller": False,
+            },
+        })
+
+        with get_session() as session:
+            items = session.query(PriceReportItem).filter_by(report_id=report_id, offer_id="456").all()
+            report = session.query(PriceReport).filter_by(id=report_id).one()
+
+        assert len(items) == 1
+        assert items[0].product_name == "Drugi zapis"
+        assert items[0].competitor_seller == "NowyKonkurent"
+        assert items[0].our_position == 2
+        assert report.items_checked == 1
 
 
 # --- Test check_single_offer uzywa ceny z API ---
