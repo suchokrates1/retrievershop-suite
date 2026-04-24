@@ -24,7 +24,7 @@ import re
 import sys
 import logging
 from datetime import datetime, date, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
 from decimal import Decimal
 from pathlib import Path
@@ -121,6 +121,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def ensure_runtime_db_configured() -> bool:
+    """Zapewnia skonfigurowany engine DB dla uruchomien standalone."""
+    try:
+        from magazyn.db import SessionLocal, configure_engine
+        if SessionLocal is not None:
+            return True
+
+        from magazyn.config import settings
+        configure_engine(settings.DB_PATH)
+        return True
+    except Exception as exc:
+        logger.warning(f"Nie udalo sie skonfigurowac bazy danych: {exc}")
+        return False
+
+
+def _cdp_json_request(host: str, port: int, path: str, method: str = "GET") -> Dict[str, Any]:
+    """Wykonuje zapytanie do HTTP JSON API Chrome DevTools."""
+    url = f"http://{host}:{port}{path}"
+    request = urllib.request.Request(url, method=method)
+    with urllib.request.urlopen(request, timeout=10) as resp:
+        payload = resp.read()
+    return json.loads(payload) if payload else {}
+
+
+def create_isolated_page_target(host: str, port: int) -> Dict[str, Any]:
+    """Tworzy nowa karte w Chrome i zwraca jej target CDP."""
+    return _cdp_json_request(host, port, "/json/new?about:blank", method="PUT")
+
+
+def close_page_target(host: str, port: int, target_id: str) -> None:
+    """Zamyka tymczasowa karte CDP."""
+    if not target_id:
+        return
+    try:
+        url = f"http://{host}:{port}/json/close/{target_id}"
+        request = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(request, timeout=10):
+            pass
+    except Exception as exc:
+        logger.warning(f"Nie udalo sie zamknac targetu CDP {target_id}: {exc}")
+
+
 def get_excluded_sellers() -> set:
     """Pobiera liste wykluczonych sprzedawcow z bazy danych."""
     global _excluded_sellers_cache, _excluded_sellers_loaded
@@ -129,6 +171,7 @@ def get_excluded_sellers() -> set:
         return _excluded_sellers_cache
     
     try:
+        ensure_runtime_db_configured()
         from magazyn.db import get_session
         from magazyn.models import ExcludedSeller
         
@@ -166,6 +209,7 @@ class CompetitorOffer:
     is_super_seller: bool = False
     has_smart: bool = False
     offer_id: Optional[str] = None
+    condition: str = ""
 
 
 @dataclass
@@ -291,23 +335,165 @@ def build_offer_url(offer_id: str, title: str = "") -> str:
     return f"https://allegro.pl/oferta/x-{offer_id}#inne-oferty-produktu"
 
 
-async def get_cdp_websocket_url(host: str = CDP_HOST, port: int = CDP_PORT) -> str:
-    """Pobiera URL WebSocket dla glownej strony z CDP."""
-    url = f"http://{host}:{port}/json"
-    
-    def fetch():
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            return json.loads(resp.read())
-    
-    loop = asyncio.get_event_loop()
-    pages = await loop.run_in_executor(None, fetch)
-    
-    # Znajdz glowna strone (nie devtools)
-    for page in pages:
-        if page.get("type") == "page" and "devtools" not in page.get("url", "").lower():
-            return page["webSocketDebuggerUrl"]
-    
-    raise RuntimeError("Nie znaleziono strony w CDP")
+def detect_offer_condition(text: str) -> str:
+    """Normalizuje stan oferty z tekstu kafelka Allegro."""
+    if not text:
+        return ""
+
+    normalized = text.lower().translate(str.maketrans("ąćęłńóśźż", "acelnoszz"))
+    patterns = (
+        (r"\bpowy?stawow\w*\b", "powystawowy"),
+        (r"\buzywan\w*\b", "uzywany"),
+        (r"\bodnowiony\s+przez\s+sprzedawc\w*\b", "odnowiony"),
+        (r"\bnowy\b", "nowy"),
+    )
+    for pattern, label in patterns:
+        if re.search(pattern, normalized):
+            return label
+    return ""
+
+
+def is_excluded_offer_condition(condition: str) -> bool:
+    """Zwraca True dla stanow ofert, ktorych nie chcemy uwzgledniac w rankingu."""
+    return condition in {"powystawowy", "uzywany", "odnowiony"}
+
+
+def parse_competitor_articles(articles: List[Dict[str, Any]], product_title: str = "") -> List[CompetitorOffer]:
+    """Parsuje surowe artykuly z dialogu na oferty konkurencji."""
+    if not articles:
+        return []
+
+    offers = []
+    for art in articles:
+        text = art.get("text", "")
+        offer_id = art.get("offerId")
+        js_offer_url = art.get("offerUrl")
+
+        # Pomin artykuly bez ceny lub zbyt krotkie (reklamy, UI elementy)
+        if not text or len(text) < 15 or "zł" not in text:
+            logger.debug(f"Pominiety article {art.get('index')}: brak ceny lub za krotki")
+            continue
+
+        # Pomin recenzje produktu (moga pojawic sie w dialogu ofert)
+        review_keywords = ("NAJBARDZIEJ POMOCNA", "Treść recenzji", "Tresc recenzji")
+        if any(kw in text for kw in review_keywords):
+            logger.debug(f"Pominiety article {art.get('index')}: recenzja produktu")
+            continue
+
+        logger.debug(f"=== ARTICLE {art.get('index')} ===")
+        logger.debug(f"Raw text: {repr(text[:300])}")
+        logger.debug(f"offerId: {offer_id}, offerUrl: {js_offer_url}")
+
+        seller_match = re.search(r'\|\s*\n\s*(\S+)', text)
+        if not seller_match:
+            seller_match = re.search(r'\bod\s*\n(?:Super Sprzedawcy\s*\n)?\s*(\S+)', text)
+
+        aria_price = art.get("ariaPrice")
+        delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
+        delivery_price_str = delivery_match.group(1) if delivery_match else None
+
+        if aria_price:
+            price_match_value = aria_price
+            logger.debug(f"Cena z aria-label: {aria_price}")
+        else:
+            clean_text = re.sub(r'(?:Kupon|Cashback|Rabat)\s+\d+(?:,\d{2})?\s*zł', '', text)
+            all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', clean_text)
+            price_match_value = all_prices[-1] if all_prices else None
+            if price_match_value:
+                logger.debug(f"Cena z tekstu (fallback): {price_match_value}")
+
+        delivery_text_match = re.search(
+            r'(dostawa\s+(?:'
+            r'(?:pon|wt|[sś]r|czw|pt|sob|niedz)\.?\s+\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)\.?' 
+            r'|w\s+\w+'
+            r'|za\s+\d+.*?dni'
+            r'|od\s+\d+'
+            r'|\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)\.?' 
+            r'|pojutrze|jutro|dzisiaj|dzi[sś]'
+            r'))',
+            text,
+            re.IGNORECASE
+        )
+
+        seller = seller_match.group(1) if seller_match else "nieznany"
+        is_mine = seller.lower() == MY_SELLER.lower()
+        is_super_seller = bool(re.search(r'Super\s+Sprzedawc', text))
+        has_smart = bool(re.search(r'Smart!|smart!', text))
+        condition = detect_offer_condition(text)
+
+        if price_match_value:
+            price = parse_price(price_match_value)
+            if price < 1.0:
+                logger.warning(f"Pominiety article {art.get('index')}: cena {price} zl < 1 zl (prawdopodobny blad parsowania)")
+                continue
+
+            total = parse_price(delivery_price_str) if delivery_price_str else price
+            delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
+            delivery_days = parse_delivery_days(delivery_text)
+
+            logger.debug(f"Seller: {seller}, Price: {price}, Delivery text: '{delivery_text}', Days: {delivery_days}, Condition: {condition}")
+
+            offer_url = ""
+            if js_offer_url:
+                offer_url = js_offer_url
+            elif offer_id:
+                offer_url = f"https://allegro.pl/oferta/x-{offer_id}"
+            elif seller and seller != "nieznany" and product_title:
+                search_query = urllib.parse.quote(product_title[:50])
+                offer_url = f"https://allegro.pl/listing?string={search_query}&sellerLogin={seller}"
+
+            offers.append(CompetitorOffer(
+                seller=seller,
+                price=price,
+                price_with_delivery=total,
+                is_mine=is_mine,
+                delivery_days=delivery_days,
+                delivery_text=delivery_text,
+                offer_url=offer_url,
+                is_super_seller=is_super_seller,
+                has_smart=has_smart,
+                offer_id=offer_id,
+                condition=condition,
+            ))
+
+    seen = set()
+    unique_offers = []
+    for offer in offers:
+        key = offer.offer_id if offer.offer_id else f"{offer.seller}_{offer.price:.2f}"
+        if key in seen:
+            logger.debug(f"Duplikat oferty: {key} (seller={offer.seller}, price={offer.price})")
+            continue
+        seen.add(key)
+        unique_offers.append(offer)
+
+    if len(unique_offers) < len(offers):
+        logger.info(f"Usunieto {len(offers) - len(unique_offers)} duplikatow ofert")
+
+    return unique_offers
+
+
+def filter_competitor_offers(
+    offers: List[CompetitorOffer],
+    excluded_sellers: set,
+    max_delivery_days: int,
+) -> Tuple[List[CompetitorOffer], Dict[str, int]]:
+    """Filtruje konkurencje po dostawie, liscie wykluczen i stanie oferty."""
+    stats = {"delivery": 0, "excluded_sellers": 0, "condition": 0}
+    filtered = []
+
+    for offer in offers:
+        if offer.delivery_days is not None and offer.delivery_days >= max_delivery_days:
+            stats["delivery"] += 1
+            continue
+        if offer.seller in excluded_sellers:
+            stats["excluded_sellers"] += 1
+            continue
+        if is_excluded_offer_condition(offer.condition):
+            stats["condition"] += 1
+            continue
+        filtered.append(offer)
+
+    return filtered, stats
 
 
 async def cdp_call(ws, method: str, params: dict = None, msg_id: int = 1) -> dict:
@@ -422,42 +608,45 @@ async def extract_page_price(ws) -> Optional[float]:
     return None
 
 
-async def extract_competitor_offers(ws, product_title: str = "") -> List[CompetitorOffer]:
-    """Wyciaga oferty konkurencji z dialogu.
-    
-    Parsuje kazdy kafelek (article) osobno, wyciagajac z niego:
-    - offerId z linku w tytule (href zawiera ?offerId=XXX)
-    - tekst z cenami, sprzedawca, dostawa
-    
-    Dzieki temu dane sa prawidlowo powiazane (bez mieszania linkow).
-    """
-    # JavaScript ktory parsuje kazdy article osobno i wyciaga wszystkie dane
+async def fetch_competitor_offer_payload(ws) -> Dict[str, Any]:
+    """Pobiera surowe artykuly ofert z aktywnego dialogu produktowego."""
     js_code = r'''
     (function() {
-        let container = document.querySelector('[data-box-name="ProductOffersListingContainer"]');
-        if (!container) {
-            // Fallback - szukaj w opbox-offers-list
-            container = document.querySelector('[data-role="opbox-offers-list"]');
-        }
-        if (!container) {
-            // Fallback - szukaj w dialogu
-            const dialogs = document.querySelectorAll("[role='dialog']");
-            for (const d of dialogs) {
-                if (d.innerText?.includes("Inne oferty produktu")) {
-                    const c = d.querySelector('[data-box-name="ProductOffersListingContainer"]')
-                           || d.querySelector('[data-role="opbox-offers-list"]');
-                    if (c) {
-                        container = c;
-                        break;
-                    }
-                }
+        let container = null;
+        let containerSource = null;
+
+        const dialogs = Array.from(document.querySelectorAll("[role='dialog']"));
+        const activeDialog = dialogs.find((dialog) => dialog.innerText?.includes("Inne oferty produktu"));
+
+        if (activeDialog) {
+            container = activeDialog.querySelector('[data-box-name="ProductOffersListingContainer"]')
+                || activeDialog.querySelector('[data-role="opbox-offers-list"]');
+            if (container) {
+                containerSource = 'dialog';
             }
         }
-        if (!container) return [];
+
+        if (!container) {
+            const visibleContainers = Array.from(
+                document.querySelectorAll('[data-box-name="ProductOffersListingContainer"], [data-role="opbox-offers-list"]')
+            ).filter((candidate) => candidate.querySelectorAll('article').length > 0);
+
+            if (visibleContainers.length === 1) {
+                container = visibleContainers[0];
+                containerSource = 'visible-fallback';
+            }
+        }
+
+        if (!container) {
+            return { containerSource: null, articleCount: 0, articles: [] };
+        }
         
         const articles = container.querySelectorAll('article');
-        
-        return Array.from(articles).map((art, idx) => {
+
+        return {
+            containerSource,
+            articleCount: articles.length,
+            articles: Array.from(articles).map((art, idx) => {
             // Link do oferty - szukaj offerId i pelny URL
             let offerId = null;
             let offerUrl = null;
@@ -532,156 +721,37 @@ async def extract_competitor_offers(ws, product_title: str = "") -> List[Competi
                 ariaPrice: ariaPrice,
                 text: art.innerText || ''
             };
-        });
+            })
+        };
     })()
     '''
-    
+
     result = await cdp_call(ws, "Runtime.evaluate", 
                             {"expression": js_code, "returnByValue": True}, 
                             msg_id=200)
-    
-    articles = result.get("result", {}).get("result", {}).get("value", [])
-    
+
+    return result.get("result", {}).get("result", {}).get("value", {}) or {
+        "containerSource": None,
+        "articleCount": 0,
+        "articles": [],
+    }
+
+
+async def extract_competitor_offers(ws, product_title: str = "") -> List[CompetitorOffer]:
+    """Wyciaga i parsuje oferty konkurencji z aktywnego dialogu."""
+    payload = await fetch_competitor_offer_payload(ws)
+    articles = payload.get("articles", [])
+
     if not articles:
         logger.warning("Nie znaleziono artykulow w dialogu")
         return []
-    
-    logger.debug(f"Znaleziono {len(articles)} artykulow")
-    
-    offers = []
-    for art in articles:
-        text = art.get("text", "")
-        offer_id = art.get("offerId")
-        js_offer_url = art.get("offerUrl")
-        
-        # Pomin artykuly bez ceny lub zbyt krotkie (reklamy, UI elementy)
-        if not text or len(text) < 15 or "zł" not in text:
-            logger.debug(f"Pominiety article {art.get('index')}: brak ceny lub za krotki")
-            continue
-        
-        # Pomin recenzje produktu (moga pojawic sie w dialogu ofert)
-        review_keywords = ("NAJBARDZIEJ POMOCNA", "Treść recenzji", "Tresc recenzji")
-        if any(kw in text for kw in review_keywords):
-            logger.debug(f"Pominiety article {art.get('index')}: recenzja produktu")
-            continue
-        
-        # DEBUG: loguj surowy tekst kafelka
-        logger.debug(f"=== ARTICLE {art.get('index')} ===")
-        logger.debug(f"Raw text: {repr(text[:300])}")
-        logger.debug(f"offerId: {offer_id}, offerUrl: {js_offer_url}")
-        
-        # Sprzedawca - dwa wzorce:
-        # 1. "| \n sprzedawca" - normalne oferty konkurencji
-        # 2. "od \n Super Sprzedawcy? \n | \n sprzedawca" LUB "od \n sprzedawca" - bez "|"
-        seller_match = re.search(r'\|\s*\n\s*(\S+)', text)
-        if not seller_match:
-            # Fallback: szukaj po "od" (dla ofert bez "|", np. moja oferta)
-            seller_match = re.search(r'\bod\s*\n(?:Super Sprzedawcy\s*\n)?\s*(\S+)', text)
-        
-        # Cena glowna - priorytetowo z aria-label (niezawodne),
-        # fallback na parsowanie tekstu
-        aria_price = art.get("ariaPrice")
-        
-        delivery_match = re.search(r'(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw', text)
-        delivery_price_str = delivery_match.group(1) if delivery_match else None
-        
-        if aria_price:
-            price_match_value = aria_price
-            logger.debug(f"Cena z aria-label: {aria_price}")
-        else:
-            # Fallback: regex na tekst (usun kupony zeby nie falszowaly ceny)
-            clean_text = re.sub(r'(?:Kupon|Cashback|Rabat)\s+\d+(?:,\d{2})?\s*zł', '', text)
-            all_prices = re.findall(r'(\d+(?:,\d{2})?)\s*zł\s*\n', clean_text)
-            price_match_value = all_prices[-1] if all_prices else None
-            if price_match_value:
-                logger.debug(f"Cena z tekstu (fallback): {price_match_value}")
-        # Tekst dostawy - rozszerzone wzorce:
-        # Formaty z Allegro:
-        # - "dostawa pt. 6 lut." (dzien + data)
-        # - "dostawa czw. 5 lut. – pt. 6 lut." (zakres)
-        # - "dostawa pojutrze"
-        # - "dostawa jutro"
-        # - "dostawa w sobote"
-        # - "dostawa za 2-3 dni"
-        # - "dostawa od 5 dni"
-        delivery_text_match = re.search(
-            r'(dostawa\s+(?:'
-            r'(?:pon|wt|[sś]r|czw|pt|sob|niedz)\.?\s+\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)\.?'  # "pt. 6 lut."
-            r'|w\s+\w+'  # "w sobote"
-            r'|za\s+\d+.*?dni'  # "za 2-3 dni"
-            r'|od\s+\d+'  # "od 5"
-            r'|\d{1,2}\s+(?:sty|lut|mar|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru)\.?'  # "6 lut"
-            r'|pojutrze|jutro|dzisiaj|dzi[sś]'  # slowa
-            r'))',
-            text,
-            re.IGNORECASE
-        )
-        # Czy to moja oferta? - sprawdz TYLKO nazwe sprzedawcy (nie "Top oferta" bo moze byc u konkurencji)
-        seller = seller_match.group(1) if seller_match else "nieznany"
-        is_mine = seller.lower() == MY_SELLER.lower()
-        
-        # Super Sprzedawca - tekst moze zawierac "Super Sprzedawc" (odmienne formy)
-        is_super_seller = bool(re.search(r'Super\s+Sprzedawc', text))
-        
-        # Smart! - darmowa dostawa Smart
-        has_smart = bool(re.search(r'Smart!|smart!', text))
-        
-        if price_match_value:
-            price = parse_price(price_match_value)
-            
-            # Sanity check - cena < 1 zl to prawie na pewno blad parsowania
-            if price < 1.0:
-                logger.warning(f"Pominiety article {art.get('index')}: cena {price} zl < 1 zl (prawdopodobny blad parsowania)")
-                continue
-            
-            total = parse_price(delivery_price_str) if delivery_price_str else price
-            delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
-            delivery_days = parse_delivery_days(delivery_text)
-            
-            # DEBUG: loguj wykryte wartosci
-            logger.debug(f"Seller: {seller}, Price: {price}, Delivery text: '{delivery_text}', Days: {delivery_days}")
-            
-            # Buduj URL oferty - preferuje bezposredni URL z JS
-            offer_url = ""
-            if js_offer_url:
-                offer_url = js_offer_url
-            elif offer_id:
-                offer_url = f"https://allegro.pl/oferta/x-{offer_id}"
-            elif seller and seller != "nieznany" and product_title:
-                search_query = urllib.parse.quote(product_title[:50])
-                offer_url = f"https://allegro.pl/listing?string={search_query}&sellerLogin={seller}"
-            
-            offers.append(CompetitorOffer(
-                seller=seller,
-                price=price,
-                price_with_delivery=total,
-                is_mine=is_mine,
-                delivery_days=delivery_days,
-                delivery_text=delivery_text,
-                offer_url=offer_url,
-                is_super_seller=is_super_seller,
-                has_smart=has_smart,
-                offer_id=offer_id,
-            ))
-    
-    # Deduplikacja - ten sam offer_id lub (seller + price) to ta sama oferta
-    seen = set()
-    unique_offers = []
-    for o in offers:
-        if o.offer_id:
-            key = o.offer_id
-        else:
-            key = f"{o.seller}_{o.price:.2f}"
-        if key not in seen:
-            seen.add(key)
-            unique_offers.append(o)
-        else:
-            logger.debug(f"Duplikat oferty: {key} (seller={o.seller}, price={o.price})")
-    
-    if len(unique_offers) < len(offers):
-        logger.info(f"Usunieto {len(offers) - len(unique_offers)} duplikatow ofert")
-    
-    return unique_offers
+
+    logger.info(
+        "Pobrano %s artykulow z kontenera %s",
+        payload.get("articleCount", len(articles)),
+        payload.get("containerSource") or "brak",
+    )
+    return parse_competitor_articles(articles, product_title)
 
 
 async def check_offer_price(
@@ -714,9 +784,14 @@ async def check_offer_price(
         return result
     
     url = build_offer_url(offer_id, title)
+    target_id = None
     
     try:
-        ws_url = await get_cdp_websocket_url(cdp_host, cdp_port)
+        target_info = create_isolated_page_target(cdp_host, cdp_port)
+        target_id = target_info.get("id")
+        ws_url = target_info.get("webSocketDebuggerUrl")
+        if not ws_url:
+            raise RuntimeError("Chrome nie zwrocil webSocketDebuggerUrl dla nowej karty")
         logger.debug(f"CDP WebSocket: {ws_url}")
         
         async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
@@ -736,36 +811,23 @@ async def check_offer_price(
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
             
-            # Czekaj na zaladowanie artykulow (w dialogu lub opbox-offers-list)
-            articles_js = r'''(function() {
-                // Szukaj w dialogu
-                var ds = document.querySelectorAll("[role='dialog']");
-                for (var d of ds) {
-                    if (d.innerText && d.innerText.includes('Inne oferty produktu')) {
-                        var n = d.querySelectorAll('article').length;
-                        if (n > 0) return n;
-                    }
-                }
-                // Szukaj w opbox-offers-list (renderowany poza dialogiem)
-                var c = document.querySelector('[data-role="opbox-offers-list"]');
-                if (c) return c.querySelectorAll('article').length;
-                // Szukaj w ProductOffersListingContainer
-                var plc = document.querySelector('[data-box-name="ProductOffersListingContainer"]');
-                if (plc) return plc.querySelectorAll('article').length;
-                return 0;
-            })()'''
+            payload = {"articleCount": 0, "articles": [], "containerSource": None}
             for _ in range(20):
-                res = await cdp_call(ws, "Runtime.evaluate",
-                                    {"expression": articles_js, "returnByValue": True},
-                                    msg_id=950)
-                count = res.get("result", {}).get("result", {}).get("value", 0)
+                payload = await fetch_competitor_offer_payload(ws)
+                count = payload.get("articleCount", 0)
                 if count > 0:
-                    logger.debug(f"Znaleziono {count} artykulow w dialogu")
+                    logger.debug(f"Znaleziono {count} artykulow w dialogu ({payload.get('containerSource')})")
                     break
                 await asyncio.sleep(0.5)
             
-            # Wyciagnij oferty
-            all_offers = await extract_competitor_offers(ws, title)
+            all_offers = parse_competitor_articles(payload.get("articles", []), title)
+            logger.info(
+                "Oferta %s: container=%s, raw_articles=%s, parsed_offers=%s",
+                offer_id,
+                payload.get("containerSource") or "brak",
+                payload.get("articleCount", 0),
+                len(all_offers),
+            )
             
             if not all_offers:
                 result.error = "Brak ofert w dialogu"
@@ -788,20 +850,18 @@ async def check_offer_price(
             # Konkurencja = wszystkie oferty POZA naszymi (inne nasze to "inna OK")
             competitors_all = [o for o in all_offers if not o.is_mine]
             result.competitors_all_count = len(competitors_all)
-            competitors_filtered = [
-                o for o in competitors_all
-                if (o.delivery_days is None or o.delivery_days < max_delivery_days)
-                and o.seller not in excluded_sellers
-            ]
+            competitors_filtered, filter_stats = filter_competitor_offers(
+                competitors_all,
+                excluded_sellers,
+                max_delivery_days,
+            )
             
-            # Loguj odfiltrowanych
-            filtered_by_delivery = len([o for o in competitors_all if o.delivery_days is not None and o.delivery_days >= max_delivery_days])
-            filtered_by_excluded = len([o for o in competitors_all if o.seller in excluded_sellers])
-            
-            if filtered_by_delivery > 0:
-                logger.info(f"Odfiltrowano {filtered_by_delivery} ofert z dostawa >= {max_delivery_days} dni roboczych")
-            if filtered_by_excluded > 0:
-                logger.info(f"Odfiltrowano {filtered_by_excluded} ofert od wykluczonych sprzedawcow")
+            if filter_stats["delivery"] > 0:
+                logger.info(f"Odfiltrowano {filter_stats['delivery']} ofert z dostawa >= {max_delivery_days} dni roboczych")
+            if filter_stats["excluded_sellers"] > 0:
+                logger.info(f"Odfiltrowano {filter_stats['excluded_sellers']} ofert od wykluczonych sprzedawcow")
+            if filter_stats["condition"] > 0:
+                logger.info(f"Odfiltrowano {filter_stats['condition']} ofert z nieobslugiwanym stanem (np. powystawowy/uzywany)")
             
             result.competitors = competitors_filtered
             
@@ -824,6 +884,8 @@ async def check_offer_price(
     except Exception as e:
         logger.error(f"Blad podczas sprawdzania oferty {offer_id}: {e}")
         result.error = str(e)
+    finally:
+        close_page_target(cdp_host, cdp_port, target_id)
     
     return result
 
@@ -846,7 +908,8 @@ def print_result(result: PriceCheckResult):
     for i, c in enumerate(result.competitors, 1):
         # Wyswietl czas dostawy jesli znany
         days_str = f" [{c.delivery_days}d]" if c.delivery_days is not None else ""
-        print(f"  {i}. {c.seller}: {c.price:.2f} zl ({c.price_with_delivery:.2f} zl z dostawa){days_str}")
+        condition_str = f" [{c.condition}]" if c.condition else ""
+        print(f"  {i}. {c.seller}: {c.price:.2f} zl ({c.price_with_delivery:.2f} zl z dostawa){days_str}{condition_str}")
     
     if result.cheapest_competitor:
         c = result.cheapest_competitor

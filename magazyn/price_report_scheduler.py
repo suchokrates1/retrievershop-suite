@@ -21,6 +21,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 from decimal import Decimal
+from sqlalchemy import func, distinct
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,50 @@ def create_new_report() -> int:
         return report.id
 
 
+def _count_checked_offers(session, report_id: int) -> int:
+    """Zwraca liczbe unikalnych ofert sprawdzonych w raporcie."""
+    from .models import PriceReportItem
+
+    return (
+        session.query(func.count(distinct(PriceReportItem.offer_id)))
+        .filter(PriceReportItem.report_id == report_id)
+        .scalar()
+        or 0
+    )
+
+
+def _sync_report_progress(session, report_id: int, status: str = "running"):
+    """Synchronizuje licznik postepu z faktyczna liczba unikalnych ofert."""
+    from .models import PriceReport
+
+    session.flush()
+    report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
+    if report:
+        report.items_checked = _count_checked_offers(session, report_id)
+        if status:
+            report.status = status
+
+
+def _get_or_create_report_item(session, report_id: int, offer_id: str):
+    """Zwraca pojedynczy wpis raportu dla oferty i usuwa ewentualne duplikaty."""
+    from .models import PriceReportItem
+
+    items = session.query(PriceReportItem).filter(
+        PriceReportItem.report_id == report_id,
+        PriceReportItem.offer_id == offer_id,
+    ).order_by(PriceReportItem.id.desc()).all()
+
+    if items:
+        keeper = items[0]
+        for duplicate in items[1:]:
+            session.delete(duplicate)
+        return keeper, False, max(0, len(items) - 1)
+
+    item = PriceReportItem(report_id=report_id, offer_id=offer_id)
+    session.add(item)
+    return item, True, 0
+
+
 def mark_sibling_offers(report_id: int) -> int:
     """Oznacza oferty z tansza siostra (ten sam product_size_id) jako 'Inna OK'.
     
@@ -220,10 +265,7 @@ def mark_sibling_offers(report_id: int) -> int:
                     )
 
         if marked > 0:
-            # Zaktualizuj postep raportu
-            report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
-            if report:
-                report.items_checked += marked
+            _sync_report_progress(session, report_id)
             session.commit()
             logger.info(f"Oznaczono {marked} ofert jako 'Inna OK' w raporcie #{report_id}")
 
@@ -337,6 +379,19 @@ def save_report_item(report_id: int, result: dict):
     from .models import PriceReportItem, PriceReport, AllegroOffer
     
     with get_session() as session:
+        item, created, removed_duplicates = _get_or_create_report_item(
+            session,
+            report_id,
+            result["offer_id"],
+        )
+        if removed_duplicates:
+            logger.warning(
+                "Usunieto %s duplikatow wpisu raportu dla report=%s offer=%s",
+                removed_duplicates,
+                report_id,
+                result["offer_id"],
+            )
+
         our_price = Decimal(str(result["our_price"])) if result["our_price"] else None
         competitor_price = None
         competitor_seller = None
@@ -356,24 +411,20 @@ def save_report_item(report_id: int, result: dict):
                 # Porownujemy po cenie bazowej (wszyscy maja Smart)
                 is_cheapest = our_price <= competitor_price
                 price_difference = float(our_price - competitor_price)
-        
-        item = PriceReportItem(
-            report_id=report_id,
-            offer_id=result["offer_id"],
-            product_name=result["title"],
-            our_price=our_price,
-            competitor_price=competitor_price,
-            competitor_seller=competitor_seller,
-            competitor_url=competitor_url,
-            is_cheapest=is_cheapest,
-            price_difference=price_difference,
-            our_position=result["my_position"],
-            total_offers=result["competitors_count"] + 1,
-            competitors_all_count=result.get("competitors_all_count"),
-            competitor_is_super_seller=competitor_is_super,
-            error=result["error"],
-        )
-        session.add(item)
+
+        item.product_name = result["title"]
+        item.our_price = our_price
+        item.competitor_price = competitor_price
+        item.competitor_seller = competitor_seller
+        item.competitor_url = competitor_url
+        item.is_cheapest = is_cheapest
+        item.price_difference = price_difference
+        item.our_position = result["my_position"]
+        item.total_offers = result["competitors_count"] + 1
+        item.competitors_all_count = result.get("competitors_all_count")
+        item.competitor_is_super_seller = competitor_is_super
+        item.error = result["error"]
+        item.checked_at = datetime.now()
         
         # Oznacz siostry z CDP jako "Inna OK"
         # Jesli sprawdzana oferta jest tansza od siostry widocznej w dialogu
@@ -422,18 +473,25 @@ def save_report_item(report_id: int, result: dict):
                 existing_sib = session.query(PriceReportItem).filter(
                     PriceReportItem.report_id == report_id,
                     PriceReportItem.offer_id == sib_id,
-                ).first()
+                ).order_by(PriceReportItem.id.desc()).all()
 
-                if existing_sib:
+                existing_sib_item = existing_sib[0] if existing_sib else None
+                for duplicate in existing_sib[1:]:
+                    session.delete(duplicate)
+
+                if existing_sib_item:
                     # Siostra juz sprawdzona normalnie - nadpisz na "Inna OK"
-                    if existing_sib.competitor_price is not None:
-                        existing_sib.competitor_price = None
-                        existing_sib.competitor_seller = None
-                        existing_sib.is_cheapest = False
-                        existing_sib.our_position = None
-                        existing_sib.total_offers = None
-                        existing_sib.price_difference = None
-                        existing_sib.error = None
+                    if existing_sib_item.competitor_price is not None:
+                        existing_sib_item.competitor_price = None
+                        existing_sib_item.competitor_seller = None
+                        existing_sib_item.competitor_url = None
+                        existing_sib_item.competitor_is_super_seller = None
+                        existing_sib_item.is_cheapest = False
+                        existing_sib_item.our_position = None
+                        existing_sib_item.total_offers = None
+                        existing_sib_item.price_difference = None
+                        existing_sib_item.error = None
+                        existing_sib_item.checked_at = datetime.now()
                         logger.info(
                             f"Inna OK (CDP update): {sib_id} ({sib_price} zl) - tansza siostra "
                             f"{result['offer_id']} ({float(our_price)} zl) wykryta w dialogu"
@@ -442,30 +500,36 @@ def save_report_item(report_id: int, result: dict):
 
                 sib_title = sib_offer.title if sib_offer else f"Siostra oferty {result['offer_id']}"
 
-                sib_item = PriceReportItem(
-                    report_id=report_id,
-                    offer_id=sib_id,
-                    product_name=sib_title,
-                    our_price=Decimal(str(sib_price)),
-                    competitor_price=None,
-                    competitor_seller=None,
-                    is_cheapest=False,
-                    our_position=None,
-                    total_offers=None,
-                    error=None,
-                )
-                session.add(sib_item)
+                sib_item, _, removed_sib_duplicates = _get_or_create_report_item(session, report_id, sib_id)
+                if removed_sib_duplicates:
+                    logger.warning(
+                        "Usunieto %s duplikatow siostrzanego wpisu dla report=%s offer=%s",
+                        removed_sib_duplicates,
+                        report_id,
+                        sib_id,
+                    )
+                sib_item.product_name = sib_title
+                sib_item.our_price = Decimal(str(sib_price))
+                sib_item.competitor_price = None
+                sib_item.competitor_seller = None
+                sib_item.competitor_url = None
+                sib_item.competitor_is_super_seller = None
+                sib_item.is_cheapest = False
+                sib_item.our_position = None
+                sib_item.total_offers = None
+                sib_item.price_difference = None
+                sib_item.error = None
+                sib_item.checked_at = datetime.now()
                 siblings_marked += 1
                 logger.info(
                     f"Inna OK (CDP): {sib_id} ({sib_price} zl) - tansza siostra "
                     f"{result['offer_id']} ({float(our_price)} zl) wykryta w dialogu"
                 )
-        
-        # Aktualizuj postep raportu
-        report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
-        if report:
-            report.items_checked += 1 + siblings_marked
-            report.status = "running"
+
+        if not created and siblings_marked:
+            logger.debug("Zaktualizowano istniejący wpis raportu %s i oznaczono %s siostrzanych ofert", result["offer_id"], siblings_marked)
+
+        _sync_report_progress(session, report_id)
         
         session.commit()
 
@@ -505,14 +569,14 @@ def send_report_notification(report_id: int):
             if not report:
                 return
             
-            total = session.query(PriceReportItem).filter(
+            total = session.query(func.count(distinct(PriceReportItem.offer_id))).filter(
                 PriceReportItem.report_id == report_id
-            ).count()
+            ).scalar() or 0
             
-            cheapest = session.query(PriceReportItem).filter(
+            cheapest = session.query(func.count(distinct(PriceReportItem.offer_id))).filter(
                 PriceReportItem.report_id == report_id,
                 PriceReportItem.is_cheapest == True
-            ).count()
+            ).scalar() or 0
             
             not_cheapest = total - cheapest
         
@@ -837,9 +901,7 @@ def resume_price_report(report_id: int = None) -> int:
             AllegroOffer.publication_status == "ACTIVE"
         ).count()
         
-        already_checked = session.query(PriceReportItem).filter(
-            PriceReportItem.report_id == report_id
-        ).count()
+        already_checked = _count_checked_offers(session, report_id)
         
         remaining = total_active - already_checked
         
@@ -897,9 +959,7 @@ def restart_price_report(report_id: int) -> dict:
             session.delete(item)
         
         # Zaktualizuj licznik items_checked
-        checked_count = session.query(PriceReportItem).filter(
-            PriceReportItem.report_id == report_id
-        ).count()
+        checked_count = _count_checked_offers(session, report_id)
         report.items_checked = checked_count
         
         # Ile ofert zostalo do sprawdzenia
