@@ -455,7 +455,6 @@ def _process_pending_invoices():
     from .db import get_session
     from .models import Order
     from .services.invoice_service import generate_and_send_invoice
-    import time
 
     stats = {"processed": 0, "success": 0, "errors": 0}
 
@@ -526,7 +525,7 @@ def _cancel_stale_unpaid_orders():
     from .db import get_session
     from .models import OrderStatusLog
     from .orders import add_order_status
-    from sqlalchemy import and_, desc, func
+    from sqlalchemy import and_, func
 
     STALE_DAYS = 14
     stats = {"checked": 0, "cancelled": 0, "errors": 0}

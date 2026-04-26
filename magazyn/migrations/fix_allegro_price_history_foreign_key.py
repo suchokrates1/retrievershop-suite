@@ -76,7 +76,7 @@ def _rebuild_price_history(conn):
             cur.execute(CREATE_TABLE_SQL)
             columns = ", ".join(COLUMN_LIST)
             cur.execute(
-                f"INSERT INTO allegro_price_history ({columns}) "
+                f"INSERT INTO allegro_price_history ({columns}) "  # nosec B608
                 f"SELECT {columns} FROM allegro_price_history_old"
             )
             cur.execute("DROP TABLE allegro_price_history_old")

@@ -91,12 +91,12 @@ def migrate_from_legacy_db(db_path: str, legacy_db: Path) -> None:
             )
             if not old_cur.fetchone():
                 continue
-            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            cur.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608
             if cur.fetchone()[0]:
                 continue
             placeholders = ",".join(["?"] * columns)
-            for row in old_cur.execute(f"SELECT * FROM {table}"):
-                cur.execute(f"INSERT INTO {table} VALUES ({placeholders})", row)
+            for row in old_cur.execute(f"SELECT * FROM {table}"):  # nosec B608
+                cur.execute(f"INSERT INTO {table} VALUES ({placeholders})", row)  # nosec B608
         conn.commit()
     finally:
         old_conn.close()

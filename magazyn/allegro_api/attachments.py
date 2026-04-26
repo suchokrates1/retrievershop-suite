@@ -236,7 +236,7 @@ def upload_issue_attachment(
         "Content-Type": content_type,
     }
     url = f"{API_BASE_URL}/sale/issues/attachments/{attachment_id}"
-    response = _request_with_retry(
+    _request_with_retry(
         requests.put, 
         url, 
         endpoint="upload_issue_attachment", 

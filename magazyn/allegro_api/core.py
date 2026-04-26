@@ -9,12 +9,11 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Optional
 
-import requests
 from requests import Response
 from requests.exceptions import HTTPError, RequestException
 
-from ..env_tokens import clear_allegro_tokens, update_allegro_tokens
-from ..settings_store import SettingsPersistenceError, settings_store
+from ..env_tokens import empty_allegro_token_values
+from ..settings_store import settings_store
 from ..metrics import (
     ALLEGRO_API_ERRORS_TOTAL,
     ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS,
@@ -46,14 +45,7 @@ def _safe_int(value) -> Optional[int]:
 
 def _force_clear_allegro_tokens() -> None:
     """Wyczysc tokeny Allegro bezpośrednio z settings store."""
-    settings_store.update(
-        {
-            "ALLEGRO_ACCESS_TOKEN": None,
-            "ALLEGRO_REFRESH_TOKEN": None,
-            "ALLEGRO_TOKEN_EXPIRES_IN": None,
-            "ALLEGRO_TOKEN_METADATA": None,
-        }
-    )
+    settings_store.update(empty_allegro_token_values())
 
 
 def _parse_retry_after(value: Optional[str]) -> float:

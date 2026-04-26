@@ -32,7 +32,7 @@ from .domain.products import (
     delete_product,
     find_by_barcode,
     get_product_details,
-    list_products,
+    list_products as list_products,
     update_product as _update_product_new,
 )
 from .domain.reports import get_sales_summary

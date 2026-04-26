@@ -11,6 +11,17 @@ from .settings_store import settings_store
 
 LOGGER = logging.getLogger(__name__)
 
+ALLEGRO_TOKEN_SETTING_KEYS = (
+    "ALLEGRO_ACCESS_TOKEN",
+    "ALLEGRO_REFRESH_TOKEN",
+    "ALLEGRO_TOKEN_EXPIRES_IN",
+    "ALLEGRO_TOKEN_METADATA",
+)
+
+
+def empty_allegro_token_values() -> dict[str, None]:
+    return dict.fromkeys(ALLEGRO_TOKEN_SETTING_KEYS)
+
 
 def update_allegro_tokens(
     access_token: Optional[str] = None,
@@ -99,12 +110,5 @@ def update_allegro_tokens(
 def clear_allegro_tokens() -> None:
     """Remove Allegro OAuth tokens from the environment and persisted settings."""
 
-    settings_store.update(
-        {
-            "ALLEGRO_ACCESS_TOKEN": None,
-            "ALLEGRO_REFRESH_TOKEN": None,
-            "ALLEGRO_TOKEN_EXPIRES_IN": None,
-            "ALLEGRO_TOKEN_METADATA": None,
-        }
-    )
+    settings_store.update(empty_allegro_token_values())
 

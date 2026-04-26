@@ -1,5 +1,3 @@
-import base64
-from decimal import Decimal
 import json
 import requests
 import secrets
@@ -15,27 +13,43 @@ from flask import (
     redirect,
     url_for,
     flash,
-    jsonify,
     session,
-    has_app_context,
 )
 
-from sqlalchemy import case, or_, text
-from .db import get_session, SessionLocal
-from .models import AllegroOffer, Product, ProductSize, AllegroPriceHistory
+from sqlalchemy import case, or_
+from .db import get_session
+from .models import AllegroOffer, Product, ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
-from .config import settings
 from .env_tokens import update_allegro_tokens
 from .print_agent import agent
 from .auth import login_required
-from .allegro_helpers import build_inventory_list, format_decimal
+from .allegro_helpers import build_inventory_list
 from . import allegro_api
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RequestException
 
 ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 
 bp = Blueprint("allegro", __name__)
+
+SENSITIVE_DEBUG_KEYS = {
+    "access_token",
+    "refresh_token",
+    "code",
+    "client_secret",
+    "ALLEGRO_CLIENT_SECRET",
+}
+
+
+def _redact_debug_value(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if str(key) in SENSITIVE_DEBUG_KEYS else _redact_debug_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_debug_value(item) for item in value]
+    return value
 
 
 def _format_debug_value(value: object) -> str:
@@ -50,7 +64,7 @@ def _format_debug_value(value: object) -> str:
 
 
 def _record_debug_step(steps: list[dict[str, str]], label: str, value: object) -> None:
-    steps.append({"label": label, "value": _format_debug_value(value)})
+    steps.append({"label": label, "value": _format_debug_value(_redact_debug_value(value))})
 
 
 def _append_debug_log(
@@ -66,18 +80,16 @@ def _append_debug_log(
     return formatted, line
 
 
-def _format_decimal(value: Optional[Decimal]) -> Optional[str]:
-    """Format decimal value for display. Delegacja do allegro_helpers."""
-    return format_decimal(value)
-
-
 def _process_oauth_response() -> dict[str, object]:
     debug_steps: list[dict[str, str]] = []
 
     # Loguj wszystkie parametry z callbacka (w tym bledy od Allegro)
     all_args = dict(request.args)
     _record_debug_step(debug_steps, "Wszystkie parametry callbacka", all_args)
-    current_app.logger.info(f"Allegro OAuth callback args: {all_args}")
+    current_app.logger.info(
+        "Allegro OAuth callback args: %s",
+        _redact_debug_value(all_args),
+    )
     
     # Sprawdz czy Allegro zwrocilo blad
     error = request.args.get("error")
@@ -101,7 +113,7 @@ def _process_oauth_response() -> dict[str, object]:
         return {"ok": False, "message": message, "debug_steps": debug_steps}
 
     code = request.args.get("code")
-    _record_debug_step(debug_steps, "Kod autoryzacyjny Allegro", code)
+    _record_debug_step(debug_steps, "Kod autoryzacyjny Allegro", {"code": code})
     if not code:
         current_app.logger.warning("Allegro OAuth callback without authorization code")
         message = "Brak kodu autoryzacyjnego w odpowiedzi Allegro."
@@ -111,7 +123,7 @@ def _process_oauth_response() -> dict[str, object]:
     client_secret = settings_store.get("ALLEGRO_CLIENT_SECRET")
     redirect_uri = settings_store.get("ALLEGRO_REDIRECT_URI")
     _record_debug_step(debug_steps, "ALLEGRO_CLIENT_ID", client_id)
-    _record_debug_step(debug_steps, "ALLEGRO_CLIENT_SECRET", client_secret)
+    _record_debug_step(debug_steps, "ALLEGRO_CLIENT_SECRET", {"ALLEGRO_CLIENT_SECRET": client_secret})
     _record_debug_step(debug_steps, "ALLEGRO_REDIRECT_URI", redirect_uri)
     if not client_id or not client_secret or not redirect_uri:
         current_app.logger.error(
@@ -165,8 +177,8 @@ def _process_oauth_response() -> dict[str, object]:
     access_token = token_payload.get("access_token")
     refresh_token = token_payload.get("refresh_token")
     expires_in_raw = token_payload.get("expires_in")
-    _record_debug_step(debug_steps, "Access token", access_token)
-    _record_debug_step(debug_steps, "Refresh token", refresh_token)
+    _record_debug_step(debug_steps, "Access token", {"access_token": access_token})
+    _record_debug_step(debug_steps, "Refresh token", {"refresh_token": refresh_token})
     _record_debug_step(debug_steps, "Wartość expires_in z odpowiedzi", expires_in_raw)
     if not access_token or not refresh_token:
         message = "Nieprawidłowa odpowiedź Allegro: brak tokenów."
@@ -336,7 +348,7 @@ def offers():
                     if ean:
                         offer.ean = ean
                         db.commit()
-                except Exception as e:
+                except Exception:
                     ean = ""
             
             # Try to link by EAN if we have EAN but no product_size_id
@@ -491,8 +503,12 @@ def offers_and_prices():
                     if ean_value:
                         offer.ean = ean_value
                         db.commit()
-                except Exception as e:
-                    pass
+                except Exception as exc:
+                    current_app.logger.debug(
+                        "Nie udało się pobrać EAN dla oferty %s: %s",
+                        offer.offer_id,
+                        exc,
+                    )
 
             if ean_value and not offer.product_size_id:
                 ps = db.query(ProductSize).filter(ProductSize.barcode == ean_value).first()

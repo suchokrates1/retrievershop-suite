@@ -305,7 +305,7 @@ def discussions_list():
             else:
                 error_message = f"Błąd API Allegro: {status_code}"
             current_app.logger.exception("Błąd pobierania wątków z Allegro")
-        except RequestException as exc:
+        except RequestException:
             error_message = "Nie udało się połączyć z Allegro."
             current_app.logger.exception("Błąd sieci podczas pobierania wątków")
     
@@ -405,7 +405,7 @@ def get_messages(thread_id):
             try:
                 error_body = response_obj.json()
                 error_details = f" Details: {error_body}"
-            except:
+            except ValueError:
                 error_details = f" Response text: {response_obj.text[:200]}"
         
         current_app.logger.warning(
@@ -668,7 +668,7 @@ def upload_attachment():
         else:
             return {"error": f"Błąd API: {status_code}"}, 502
     
-    except Exception as exc:
+    except Exception:
         current_app.logger.exception("Błąd przy przesyłaniu załącznika")
         return {"error": "Nie udało się przesłać załącznika"}, 500
 
@@ -707,6 +707,6 @@ def download_attachment(attachment_id):
         else:
             return {"error": f"Błąd API: {status_code}"}, 502
     
-    except Exception as exc:
+    except Exception:
         current_app.logger.exception("Błąd przy pobieraniu załącznika")
         return {"error": "Nie udało się pobrać załącznika"}, 500

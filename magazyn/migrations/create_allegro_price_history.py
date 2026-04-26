@@ -1,5 +1,4 @@
 from magazyn import DB_PATH
-from magazyn import DB_PATH
 from magazyn.db import sqlite_connect
 
 

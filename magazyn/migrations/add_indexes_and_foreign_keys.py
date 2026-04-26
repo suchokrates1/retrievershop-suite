@@ -81,7 +81,7 @@ def _rebuild_table(conn, table: str, create_sql: str, columns: tuple[str, ...]):
             cur.execute(create_sql)
             column_list = ", ".join(columns)
             cur.execute(
-                f"INSERT INTO {table} ({column_list}) SELECT {column_list} FROM {table}_old"
+                f"INSERT INTO {table} ({column_list}) SELECT {column_list} FROM {table}_old"  # nosec B608
             )
             cur.execute(f"DROP TABLE {table}_old")
             conn.commit()

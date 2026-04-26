@@ -26,6 +26,22 @@ from ..returns import (
 logger = logging.getLogger(__name__)
 
 
+__all__ = [
+    "ReturnSyncService",
+    "create_return_sync_service",
+    "sync_returns",
+    "check_allegro_customer_returns",
+    "send_pending_return_notifications",
+    "_map_carrier_to_allegro",
+    "send_return_notification",
+    "RETURN_STATUS_PENDING",
+    "RETURN_STATUS_IN_TRANSIT",
+    "RETURN_STATUS_DELIVERED",
+    "RETURN_STATUS_COMPLETED",
+    "RETURN_STATUS_CANCELLED",
+]
+
+
 class ReturnSyncService:
     """
     Adapter klasy serwisowej nad returns.py.

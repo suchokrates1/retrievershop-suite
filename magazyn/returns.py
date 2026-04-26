@@ -19,7 +19,6 @@ from sqlalchemy import desc
 
 from .db import get_session
 from .models import Return, ReturnStatusLog, Order, OrderProduct, ProductSize, AllegroOffer
-from .config import settings
 from .notifications import send_messenger
 from . import allegro_api
 
@@ -768,7 +767,6 @@ def process_refund(
         Tuple (sukces, komunikat)
     """
     from .settings_store import settings_store
-    from . import allegro_api
     
     with get_session() as db:
         # Znajdz zwrot dla zamowienia
@@ -822,25 +820,6 @@ def process_refund(
             
             logger.info(f"Zwrot pieniedzy dla zamowienia {order_id} przetworzony pomyslnie")
             
-            # Oblicz kwote zwrotu z odpowiedzi API
-            refund_amount = None
-            if response_data:
-                total_val = response_data.get("totalValue", {})
-                try:
-                    refund_amount = float(total_val.get("amount", 0))
-                except (ValueError, TypeError):
-                    pass
-
-            # Przygotuj liste zwracanych produktow
-            return_items = []
-            if return_record.items_json:
-                try:
-                    return_items = json.loads(return_record.items_json)
-                except Exception:
-                    pass
-
-            correction_sent = False
-
             # Wystaw korekte faktury (jesli zamowienie ma fakture wFirma)
             try:
                 from .services.invoice_service import generate_correction_invoice
@@ -851,7 +830,6 @@ def process_refund(
                     include_delivery=delivery_cost_covered,
                 )
                 if correction["success"]:
-                    correction_sent = True
                     logger.info(
                         "Korekta %s wystawiona dla zamowienia %s",
                         correction["invoice_number"], order_id,
@@ -886,7 +864,6 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         Tuple (kwalifikuje_sie, komunikat, szczegoly)
     """
     from .settings_store import settings_store
-    from . import allegro_api
     
     with get_session() as db:
         return_record = db.query(Return).filter(Return.order_id == order_id).first()

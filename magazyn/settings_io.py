@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, MutableMapping, Optional
+from typing import Callable, Iterable, Mapping, Optional
 
 from dotenv import dotenv_values
 

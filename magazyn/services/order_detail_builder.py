@@ -11,15 +11,12 @@ from typing import Optional
 
 from sqlalchemy import desc
 
-from ..db import get_session
 from ..domain.financial import FinancialCalculator
 from ..models import (
     Order, 
-    OrderProduct, 
     OrderStatusLog,
     ProductSize, 
     AllegroOffer,
-    PurchaseBatch,
     Return,
     ReturnStatusLog,
 )
@@ -29,7 +26,7 @@ from ..settings_store import settings_store
 logger = logging.getLogger(__name__)
 
 
-from ..status_config import STATUS_DISPLAY, get_status_display
+from ..status_config import get_status_display
 
 
 # Statusy wysylki z ikonami i opisami

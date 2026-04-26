@@ -222,7 +222,7 @@ class WFirmaClient:
             params["company_id"] = self.company_id
 
         try:
-            response = requests.get(
+            response = requests.get(  # nosec B113
                 url,
                 headers=self._headers,
                 params=params,

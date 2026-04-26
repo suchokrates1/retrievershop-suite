@@ -1,6 +1,7 @@
 """
 Pobieranie ofert z Allegro API.
 """
+import logging
 from typing import Callable, Optional
 from decimal import Decimal
 
@@ -8,16 +9,16 @@ import requests
 
 from .core import (
     API_BASE_URL,
-    DEFAULT_TIMEOUT,
     _request_with_retry,
     _describe_token,
     _extract_allegro_error_details,
     _safe_int,
-    _force_clear_allegro_tokens,
 )
 from .auth import refresh_token
-from ..env_tokens import clear_allegro_tokens, update_allegro_tokens
+from ..env_tokens import update_allegro_tokens
 from ..settings_store import SettingsPersistenceError, settings_store
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_offers(access_token: str, offset: int = 0, limit: int = 100, **kwargs) -> dict:
@@ -84,8 +85,8 @@ def fetch_product_listing(
             return
         try:
             debug(label, value)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Pominięto błąd callbacka debug ofert Allegro: %s", exc)
 
     token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")

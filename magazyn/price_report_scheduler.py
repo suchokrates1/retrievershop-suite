@@ -19,7 +19,7 @@ import time
 import random
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from decimal import Decimal
 from sqlalchemy import func, distinct
 
@@ -87,14 +87,14 @@ def calculate_schedule(total_offers: int, start_time: datetime, end_time: dateti
         for i in range(num_batches):
             base_idx = int(i * step)
             # Dodaj losowe odchylenie (-2 do +2 slotow, czyli +/- 30 min)
-            jitter = random.randint(-2, 2)
+            jitter = random.randint(-2, 2)  # nosec B311
             idx = max(0, min(len(available_slots) - 1, base_idx + jitter))
             schedule.append(available_slots[idx])
     
     # Dodaj losowe minuty do kazdego slotu
     final_schedule = []
     for slot in schedule:
-        jitter_minutes = random.randint(0, 14)
+        jitter_minutes = random.randint(0, 14)  # nosec B311
         final_schedule.append(slot + timedelta(minutes=jitter_minutes))
     
     return sorted(final_schedule)
@@ -206,7 +206,7 @@ def mark_sibling_offers(report_id: int) -> int:
         Liczba ofert oznaczonych jako 'Inna OK'.
     """
     from .db import get_session
-    from .models import AllegroOffer, PriceReportItem, PriceReport
+    from .models import AllegroOffer, PriceReportItem
 
     marked = 0
     with get_session() as session:
@@ -376,7 +376,7 @@ async def check_single_offer(offer: dict, cdp_host: str, cdp_port: int) -> dict:
 def save_report_item(report_id: int, result: dict):
     """Zapisuje wynik sprawdzenia oferty do raportu."""
     from .db import get_session
-    from .models import PriceReportItem, PriceReport, AllegroOffer
+    from .models import PriceReportItem, AllegroOffer
     
     with get_session() as session:
         item, created, removed_duplicates = _get_or_create_report_item(
@@ -707,7 +707,7 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
                         logger.info(f"Sprawdzono: {offer['offer_id']} - {'OK' if result['success'] else result['error']}")
                         
                         # Losowe opoznienie miedzy ofertami w partii (2-5 sek)
-                        time.sleep(random.uniform(2, 5))
+                        time.sleep(random.uniform(2, 5))  # nosec B311
                         
                     except Exception as e:
                         logger.error(f"Blad sprawdzania oferty {offer['offer_id']}: {e}")
@@ -729,7 +729,7 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
         # Tryb reczny: losowe opoznienie miedzy partiami (3-6 min)
         # Zapobiega wykryciu przez Allegro, celuje w ~8h dla calego raportu
         if fast_mode and not _stop_event.is_set() and batch_idx < len(schedule):
-            delay = random.uniform(MANUAL_MIN_BATCH_DELAY, MANUAL_MAX_BATCH_DELAY)
+            delay = random.uniform(MANUAL_MIN_BATCH_DELAY, MANUAL_MAX_BATCH_DELAY)  # nosec B311
             logger.info(f"Tryb reczny: czekam {delay/60:.1f} min do nastepnej partii")
             _stop_event.wait(delay)
     
@@ -879,7 +879,7 @@ def resume_price_report(report_id: int = None) -> int:
     """
     from flask import current_app
     from .db import get_session
-    from .models import PriceReport, AllegroOffer, PriceReportItem
+    from .models import PriceReport, AllegroOffer
     
     with get_session() as session:
         if report_id:
@@ -1003,7 +1003,7 @@ def restart_price_report(report_id: int) -> dict:
         "success": True,
         "removed_errors": removed_errors,
         "remaining": remaining,
-        "message": f"Raport zrestartowany"
+        "message": "Raport zrestartowany"
     }
 
 
@@ -1017,7 +1017,6 @@ def auto_resume_incomplete_reports():
     """
     from .db import get_session
     from .models import PriceReport
-    from flask import current_app
     
     try:
         with get_session() as session:

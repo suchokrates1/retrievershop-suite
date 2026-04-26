@@ -11,9 +11,6 @@ from pypdf import PdfReader
 
 from ..constants import (
     ALL_SIZES,
-    PRODUCT_CATEGORIES,
-    PRODUCT_BRANDS,
-    PRODUCT_SERIES,
     normalize_product_title_fragment,
     resolve_product_alias,
 )

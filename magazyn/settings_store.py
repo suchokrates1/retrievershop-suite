@@ -444,7 +444,8 @@ class SettingsStore:
     def settings(self) -> SimpleNamespace:
         self._ensure_loaded()
         self._refresh_if_stale()
-        assert self._namespace is not None
+        if self._namespace is None:
+            raise RuntimeError("Settings namespace is not loaded")
         return self._namespace
 
     def as_ordered_dict(

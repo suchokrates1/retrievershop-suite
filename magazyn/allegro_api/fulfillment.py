@@ -19,7 +19,7 @@ from .core import (
     API_BASE_URL,
     _request_with_retry,
 )
-from .orders import _get_allegro_token, _refresh_allegro_token
+from .tokens import get_allegro_token as _get_allegro_token, refresh_allegro_token as _refresh_allegro_token
 
 logger = logging.getLogger(__name__)
 

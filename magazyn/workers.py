@@ -9,8 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .print_agent import LabelAgent

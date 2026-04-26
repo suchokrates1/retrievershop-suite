@@ -71,7 +71,7 @@ class MessengerClient:
             )
             
             if response.status_code == 200:
-                logger.debug(f"Wiadomosc wyslana pomyslnie")
+                logger.debug("Wiadomosc wyslana pomyslnie")
                 return True
             else:
                 logger.error(f"Blad wysylania: {response.status_code} - {response.text}")

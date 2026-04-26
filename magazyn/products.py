@@ -1,4 +1,3 @@
-import json
 import re
 
 from flask import (
@@ -13,30 +12,27 @@ from flask import (
     after_this_request,
     abort,
     session,
-    current_app,
 )
 import pandas as pd
 import tempfile
 import os
 import io
 
-from .db import get_session, record_purchase, sqlite_connect
+from .db import get_session, record_purchase
 from .domain.inventory import (
     export_rows,
     get_product_sizes,
-    get_product_size_by_barcode,
     get_products_for_delivery,
     import_from_dataframe,
     record_delivery,
     update_quantity as inventory_update_quantity,
 )
-from .domain.invoice_import import _parse_pdf, import_invoice_rows, parse_product_name_to_fields
+from .domain.invoice_import import _parse_pdf, import_invoice_rows
 from .domain.products import (
     _to_decimal,
     _to_int,
     create_product,
     delete_product,
-    find_by_barcode,
     get_product_details,
     list_products,
     update_product,
@@ -44,8 +40,7 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import ProductSize, Product, PurchaseBatch, OrderProduct, Order, AllegroOffer
-from .parsing import parse_product_info
+from .models import ProductSize, Product, PurchaseBatch, OrderProduct, AllegroOffer
 from sqlalchemy import desc, or_, func
 
 
@@ -461,7 +456,6 @@ def edit_item(product_id):
 @login_required
 def product_history_api(product_id):
     """API endpoint do lazy loadingu historii produktu (zamowienia/dostawy)."""
-    from sqlalchemy import func
     history_type = request.args.get("type", "orders")  # orders | deliveries
     offset = request.args.get("offset", 0, type=int)
     limit = request.args.get("limit", 50, type=int)
@@ -549,9 +543,6 @@ def product_history_api(product_id):
 @login_required
 def product_detail(product_id):
     """Readonly product detail view with order and delivery history."""
-    from decimal import Decimal
-    from sqlalchemy import func
-    from .models import AllegroOffer
     
     with get_session() as db:
         product = db.query(Product).filter(Product.id == product_id).first()

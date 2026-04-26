@@ -9,10 +9,10 @@ Umożliwia:
 
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 
 from ..db import get_session
-from ..models import ShipmentError, Order
+from ..models import ShipmentError
 
 logger = logging.getLogger(__name__)
 

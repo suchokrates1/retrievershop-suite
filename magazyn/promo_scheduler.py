@@ -6,7 +6,6 @@ ktore przedluza sie nastepnego dnia i wysyla powiadomienia.
 """
 
 import threading
-import time
 import logging
 from datetime import datetime, timedelta
 from typing import Optional

@@ -250,8 +250,8 @@ def initiate_refund(
         error_data = {}
         try:
             error_data = response.json()
-        except Exception:
-            pass
+        except ValueError as exc:
+            logger.debug("Nie udało się zdekodować błędu zwrotu Allegro jako JSON: %s", exc)
 
         errors = error_data.get("errors", [])
         error_msg = "; ".join(e.get("message", str(e)) for e in errors) if errors else error_data.get("message", response.text[:300])

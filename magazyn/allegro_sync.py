@@ -13,10 +13,11 @@ from . import allegro_api
 from .models import AllegroOffer, Product, ProductSize
 from .db import get_session
 from .parsing import parse_offer_title, normalize_color
-from .env_tokens import clear_allegro_tokens, update_allegro_tokens
+from .env_tokens import clear_allegro_tokens, empty_allegro_token_values, update_allegro_tokens
 from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
 from .domain import allegro_prices
 from .settings_store import settings_store, SettingsPersistenceError
+from .utils import parse_optional_int
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,6 @@ def _normalized_product_color_components(value: str) -> set[str]:
 
 
 def _raise_settings_store_read_only(exc):
-    from .settings_store import SettingsPersistenceError
     guidance = (
         "Cannot modify Allegro credentials because the settings store is read-only. "
         "Update them manually in the configuration file and rerun the synchronisation."
@@ -66,11 +66,9 @@ def _invalidate_access_token():
     """Usun access_token zachowujac refresh_token do ponownej proby odswiezenia."""
     from .settings_store import SettingsPersistenceError
     try:
-        settings_store.update({
-            "ALLEGRO_ACCESS_TOKEN": None,
-            "ALLEGRO_TOKEN_EXPIRES_IN": None,
-            "ALLEGRO_TOKEN_METADATA": None,
-        })
+        updates = empty_allegro_token_values()
+        updates.pop("ALLEGRO_REFRESH_TOKEN", None)
+        settings_store.update(updates)
     except SettingsPersistenceError as exc:
         _raise_settings_store_read_only(exc)
 
@@ -385,13 +383,6 @@ def sync_offers():
     return {"fetched": fetched_count, "matched": matched_count, "trend_report": trend_report}
 
 
-def _parse_int(value):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _extract_from_href(href):
     try:
         query = parse_qs(urlparse(href).query)
@@ -401,10 +392,10 @@ def _extract_from_href(href):
     limit = None
     offset_values = query.get("offset")
     if offset_values:
-        offset = _parse_int(offset_values[0])
+        offset = parse_optional_int(offset_values[0])
     limit_values = query.get("limit")
     if limit_values:
-        limit = _parse_int(limit_values[0])
+        limit = parse_optional_int(limit_values[0])
     return offset, limit
 
 
@@ -413,8 +404,8 @@ def _extract_pagination(next_data, current_limit):
     next_limit = current_limit
 
     if isinstance(next_data, Mapping):
-        next_offset = _parse_int(next_data.get("offset"))
-        new_limit = _parse_int(next_data.get("limit"))
+        next_offset = parse_optional_int(next_data.get("offset"))
+        new_limit = parse_optional_int(next_data.get("limit"))
         if new_limit is not None:
             next_limit = new_limit
         href = next_data.get("href")

@@ -10,11 +10,9 @@ from __future__ import annotations
 import io
 import logging
 import re
-import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -331,9 +329,6 @@ def _find_size_in_line(line: str) -> Optional[str]:
 def _parse_table_lines(lines: List[str]) -> List[InvoiceItem]:
     """Parse invoice table lines into items."""
     items = []
-    
-    # Group related lines (item might span multiple lines)
-    current_item = None
     
     for line in lines:
         line = line.strip()

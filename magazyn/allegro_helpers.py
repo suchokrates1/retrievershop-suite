@@ -3,7 +3,6 @@ Funkcje pomocnicze wspoldzielone przez modul allegro.
 
 Wyodrebnione z allegro.py dla eliminacji duplikatow i lepszej czytelnosci.
 """
-import json
 from decimal import Decimal
 from typing import Optional
 

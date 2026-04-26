@@ -15,12 +15,11 @@ from sqlalchemy import desc, func, or_
 from .auth import login_required
 from .config import settings
 from .db import get_session
-from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, PurchaseBatch, Return, ReturnStatusLog, AllegroOffer
-from .settings_store import settings_store
+from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, Return
 from .services.order_detail_builder import (
-    OrderDetailBuilder,
     build_order_detail_context,
 )
+from .services.tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
 
@@ -190,67 +189,7 @@ def _get_status_display(status: str) -> tuple[str, str]:
     return get_status_display(status)
 
 
-def _get_tracking_url(courier_code: Optional[str], delivery_package_module: Optional[str], tracking_number: Optional[str], delivery_method: Optional[str] = None) -> Optional[str]:
-    """
-    Generate tracking URL based on courier info and tracking number.
-    
-    UWAGA: Allegro Smart (One Box, Orlen Paczka) używa różnych przewoźników.
-    Nie ma uniwersalnego URL - każda przesyłka wymaga sprawdzenia przez API Allegro
-    lub ma dedykowany URL przewoźnika.
-    """
-    if not tracking_number:
-        return None
-    
-    # Normalize courier identifiers
-    courier_text = f"{courier_code or ''} {delivery_package_module or ''} {delivery_method or ''}".lower()
-    
-    # Debug logging
-    current_app.logger.debug(f"_get_tracking_url: courier_text='{courier_text}' tracking_number={tracking_number}")
-    
-    # Courier tracking URL patterns
-    # Zwraca None dla kurierów bez publicznego śledzenia (np. Allegro Smart, Orlen Paczka)
-    TRACKING_URLS = {
-        # InPost Paczkomaty
-        "inpost": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-        "paczkomat": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-        
-        # DPD  
-        "dpd": f"https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
-        
-        # Poczta Polska / Pocztex
-        "pocztex": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
-        "poczta": f"https://emonitoring.poczta-polska.pl/?numer={tracking_number}",
-        
-        # DHL
-        "dhl": f"https://www.dhl.com/pl-pl/home/tracking.html?tracking-id={tracking_number}",
-        
-        # UPS
-        "ups": f"https://www.ups.com/track?tracknum={tracking_number}",
-        
-        # FedEx
-        "fedex": f"https://www.fedex.com/fedextrack/?tracknumbers={tracking_number}",
-        
-        # GLS
-        "gls": f"https://gls-group.com/PL/pl/sledzenie-paczek?match={tracking_number}",
-        
-        # Orlen Paczka - BRAK publicznego URL śledzenia
-        # Wymaga aplikacji mobilnej lub panelu Allegro - zwracamy None
-        "orlen": None,
-        
-        # Allegro Smart (One Box, One Kurier, One Punkt) - BRAK publicznego URL
-        # Śledzenie tylko przez panel Allegro - zwracamy None
-        "allegro": None,
-    }
-    
-    # Try to match courier - zwróć None jeśli brak publicznego URL
-    for key, url in TRACKING_URLS.items():
-        if key in courier_text:
-            current_app.logger.debug(f"_get_tracking_url: Matched '{key}' -> {url or 'NO_PUBLIC_URL'}")
-            return url  # Może być None dla kurierów bez publicznego śledzenia
-    
-    # Default: return None if courier not recognized
-    current_app.logger.debug(f"_get_tracking_url: No match found for courier_text='{courier_text}'")
-    return None
+_get_tracking_url = get_tracking_url
 
 
 @bp.route("/orders")
@@ -487,7 +426,7 @@ def order_detail(order_id: str):
         # Dodaj dodatkowe dane potrzebne w szablonie
         context["date_add"] = _unix_to_datetime(order.date_add)
         context["date_confirmed"] = _unix_to_datetime(order.date_confirmed)
-        context["tracking_url"] = _get_tracking_url(
+        context["tracking_url"] = get_tracking_url(
             order.courier_code, 
             order.delivery_package_module, 
             order.delivery_package_nr, 
@@ -815,8 +754,12 @@ def download_label(order_id: str):
                 def remove_file(response):
                     try:
                         os.remove(tmp.name)
-                    except Exception:
-                        pass
+                    except OSError as exc:
+                        current_app.logger.debug(
+                            "Nie udało się usunąć tymczasowej etykiety %s: %s",
+                            tmp.name,
+                            exc,
+                        )
                     return response
                 
                 return send_file(
@@ -988,14 +931,12 @@ def sync_order_from_data(db, order_data: dict) -> Order:
         
         # Try to link to warehouse product
         product_size_id = None
-        ean_matched = False
         
         # 1. Try by EAN first (most reliable)
         if ean:
             ps = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
             if ps:
                 product_size_id = ps.id
-                ean_matched = True
         
         # 2. If no EAN or EAN didn't match, try intelligent matching by name/color/size
         if not product_size_id:

@@ -8,11 +8,11 @@ Strona zamowienia z danymi, trackingiem, faktura.
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, render_template, abort, current_app, Response
+from flask import Blueprint, render_template, abort, Response
 
 from ..db import get_session
-from ..models import Order, OrderProduct, OrderStatusLog
-from ..orders import _get_tracking_url
+from ..models import Order, OrderStatusLog
+from ..services.tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
 
@@ -114,14 +114,14 @@ def customer_order_page(token):
         tracking_number = order.delivery_package_nr
         if tracking_number:
             try:
-                tracking_url = _get_tracking_url(
+                tracking_url = get_tracking_url(
                     order.courier_code,
                     order.delivery_package_module,
                     tracking_number,
                     order.delivery_method,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Nie udało się zbudować linku śledzenia %s: %s", tracking_number, exc)
 
         # Historia statusow
         status_history = []

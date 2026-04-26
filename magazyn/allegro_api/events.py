@@ -21,7 +21,7 @@ from .core import (
     _request_with_retry,
     _extract_allegro_error_details,
 )
-from .orders import _get_allegro_token, _refresh_allegro_token
+from .tokens import get_allegro_token as _get_allegro_token, refresh_allegro_token as _refresh_allegro_token
 
 logger = logging.getLogger(__name__)
 

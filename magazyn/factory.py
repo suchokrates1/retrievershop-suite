@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import atexit
-import os
 import sys
 from typing import Optional, Mapping, Any
 
@@ -26,7 +25,7 @@ from .blueprints import scanning_bp, stocktake_bp, customer_order_bp
 from .price_reports import bp as price_reports_bp
 from .socketio_extension import socketio
 from .csrf_extension import csrf
-from .db import configure_engine, create_default_user_if_needed, Base, engine
+from .db import configure_engine, create_default_user_if_needed
 from .settings_store import settings_store
 from . import order_sync_scheduler
 from . import promo_scheduler

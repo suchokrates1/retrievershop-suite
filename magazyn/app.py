@@ -15,17 +15,14 @@ from flask import (
     flash,
     has_request_context,
     has_app_context,
-    make_response,
     jsonify,
 )
 from datetime import datetime
 import os
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
-from typing import Optional
-from pathlib import Path
 
-from .models import User, Thread, Product, ProductSize, Order, OrderProduct, PurchaseBatch, AllegroOffer, Sale
+from .models import User, Thread
 from .forms import LoginForm
 
 from .db import get_session
@@ -111,6 +108,15 @@ SETTINGS_GROUPS = {
 
 
 bp = Blueprint("main", __name__)
+
+
+def _test_routes_enabled() -> bool:
+    return bool(current_app.debug or os.environ.get("ENABLE_TEST_ROUTES") == "1")
+
+
+def _redirect_disabled_test_route():
+    flash("Endpoint testowy jest wyłączony w tym środowisku.", "warning")
+    return redirect(url_for("settings_page"))
 
 
 @bp.get("/cenyiaukcjeinfo")
@@ -307,7 +313,6 @@ def home():
 @login_required
 def dashboard_heavy():
     """Endpoint API dla ciezkich danych dashboardu (lazy loading)."""
-    from flask import jsonify
     from .domain.dashboard import DashboardService
     from .settings_store import settings_store as ss
     started_at = datetime.now()
@@ -588,6 +593,8 @@ def agent_logs():
 @bp.route("/testprint", methods=["GET", "POST"])
 @login_required
 def test_print():
+    if not _test_routes_enabled():
+        return _redirect_disabled_test_route()
     message = None
     if request.method == "POST":
         success = print_agent.print_test_page()
@@ -600,6 +607,8 @@ def test_print():
 @bp.route("/test", methods=["GET", "POST"])
 @login_required
 def test_message():
+    if not _test_routes_enabled():
+        return _redirect_disabled_test_route()
     msg = None
     if request.method == "POST":
         if print_agent.last_order_data:
@@ -614,6 +623,8 @@ def test_message():
 @login_required
 def test_monthly_report():
     """Wyslij testowy raport miesiczny przez Messenger."""
+    if not _test_routes_enabled():
+        return _redirect_disabled_test_route()
     from datetime import datetime
     from .notifications import send_report
     

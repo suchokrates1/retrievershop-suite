@@ -9,11 +9,10 @@ Ten moduł odpowiada za:
 """
 
 import logging
-from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from collections import defaultdict
 
-from sqlalchemy import and_, desc, func
+from sqlalchemy import and_, func
 
 from .db import get_session
 from .models import Order, OrderStatusLog
