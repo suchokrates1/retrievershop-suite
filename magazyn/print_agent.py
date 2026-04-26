@@ -527,7 +527,7 @@ class LabelAgent:
         
         # Also update order status in orders table
         try:
-            from .orders import add_order_status
+            from .services.order_status import add_order_status
             from .db import get_session
             with get_session() as db:
                 add_order_status(
@@ -1502,7 +1502,7 @@ class LabelAgent:
     def _check_tracking_statuses(self) -> None:
         """Sprawdz i zaktualizuj statusy przesylek przez Allegro Tracking API."""
         try:
-            from .orders import add_order_status
+            from .services.order_status import add_order_status
             from .db import get_session
             from .models import Order, OrderStatusLog
             from .allegro_api.tracking import fetch_parcel_tracking
@@ -2078,7 +2078,7 @@ class LabelAgent:
                             )
                             print_success = False
                             try:
-                                from .orders import add_order_status
+                                from .services.order_status import add_order_status
                                 from .db import get_session
                                 with get_session() as db:
                                     add_order_status(db, order_id, "blad_druku", notes=f"Błąd drukowania: {exc}")
@@ -2099,7 +2099,7 @@ class LabelAgent:
                     )
                     PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
                     try:
-                        from .orders import add_order_status
+                        from .services.order_status import add_order_status
                         from .db import get_session
                         with get_session() as db:
                             add_order_status(db, order_id, "blad_druku", notes="Brak etykiety - Allegro nie zwróciło danych")
