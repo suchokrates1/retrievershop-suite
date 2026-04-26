@@ -45,15 +45,9 @@ def _add_return_status_log(db, return_id: int, status: str, notes: str = None) -
 
 def _get_order_products_summary(order: Order) -> List[Dict[str, Any]]:
     """Pobierz podsumowanie produktow z zamowienia dla zwrotu."""
-    items = []
-    for product in order.products:
-        items.append({
-            "ean": product.ean,
-            "name": product.name,
-            "quantity": product.quantity,
-            "product_size_id": product.product_size_id,
-        })
-    return items
+    from .services.return_notifications import get_order_products_summary as _get_order_products_summary_service
+
+    return _get_order_products_summary_service(order)
 
 
 def _send_return_notification(return_record: Return) -> bool:
@@ -62,31 +56,13 @@ def _send_return_notification(return_record: Return) -> bool:
     
     Format: Klient [nazwa], zglosil zwrot [przedmioty zwrotu]
     """
-    try:
-        items = json.loads(return_record.items_json) if return_record.items_json else []
-        items_text = ", ".join([
-            f"{item.get('name', 'Nieznany produkt')} x{item.get('quantity', 1)}"
-            for item in items
-        ])
-        
-        message = (
-            f"[ZWROT] Klient {return_record.customer_name or 'Nieznany'} "
-            f"zglosil zwrot: {items_text}"
-        )
-        
-        if return_record.return_tracking_number:
-            message += f"\nNumer sledzenia: {return_record.return_tracking_number}"
-        
-        success = send_messenger(message)
-        if success:
-            logger.info(f"Wyslano powiadomienie o zwrocie #{return_record.id}")
-        else:
-            logger.warning(f"Nie udalo sie wyslac powiadomienia o zwrocie #{return_record.id}")
-        
-        return success
-    except Exception as e:
-        logger.error(f"Blad wysylania powiadomienia o zwrocie: {e}")
-        return False
+    from .services.return_notifications import send_return_notification as _send_return_notification_service
+
+    return _send_return_notification_service(
+        return_record,
+        send_message=send_messenger,
+        log=logger,
+    )
 
 
 def create_return_from_order(order: Order, tracking_number: str = None, allegro_return_id: str = None) -> Optional[Return]:
