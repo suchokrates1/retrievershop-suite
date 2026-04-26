@@ -34,6 +34,7 @@ from .config import settings
 from .settings_store import SettingsPersistenceError, settings_store
 from .settings_io import HIDDEN_KEYS
 from .domain.financial import FinancialCalculator
+from .services.app_runtime import start_print_agent_runtime
 
 # Settings with boolean values represented as "1" or "0"
 BOOLEAN_KEYS = {
@@ -235,26 +236,12 @@ def start_print_agent(app_obj=None):
         return
     _print_agent_started = True
     app_ctx = app_obj or current_app
-    agent = print_agent.agent
-    started = False
-    failed = False
-    try:
-        agent.validate_env()
-        agent.ensure_db_init()
-        started = agent.start_agent_thread()
-    except print_agent.ConfigError as e:
-        app_ctx.logger.error(f"Failed to start print agent: {e}")
-        failed = True
-    except Exception as e:
-        app_ctx.logger.error(f"Failed to start print agent: {e}")
-        failed = True
-    finally:
-        pass  # Token refresher is started via gunicorn hook (single worker only)
-    if failed:
+    result = start_print_agent_runtime(app_ctx, print_agent)
+    # Token refresher is started via gunicorn hook (single worker only).
+    if result.failed:
         _print_agent_started = False
         return
-    if not started:
-        app_ctx.logger.info("Print agent already running")
+    if not result.started:
         _print_agent_started = False
 
 
