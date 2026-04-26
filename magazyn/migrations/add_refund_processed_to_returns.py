@@ -10,7 +10,6 @@ Description: Separate flag for money refund vs stock restore.
 
 import sqlite3
 import sys
-from pathlib import Path
 
 
 def migrate(db_path):

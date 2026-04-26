@@ -24,7 +24,6 @@ from ..allegro_api.shipment_management import (
 from ..allegro_api.carriers import resolve_carrier_id
 from ..allegro_api.fulfillment import (
     add_shipment_tracking,
-    update_fulfillment_status,
 )
 from ..settings_store import settings_store
 

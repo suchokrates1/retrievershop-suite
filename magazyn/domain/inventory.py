@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 

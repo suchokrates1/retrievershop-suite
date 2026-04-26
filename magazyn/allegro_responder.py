@@ -1,4 +1,3 @@
-from sqlalchemy.orm import Session
 from . import allegro_api
 from .models import AllegroRepliedThread, AllegroRepliedDiscussion
 from .settings_store import settings_store

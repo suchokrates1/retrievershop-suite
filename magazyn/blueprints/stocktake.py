@@ -8,7 +8,6 @@ Funkcjonalnosc:
 - Zakonczenie remanentu i generowanie raportu
 - Eksport raportu do PDF
 """
-import json
 import logging
 from datetime import datetime
 
@@ -21,7 +20,6 @@ from flask import (
     url_for,
     flash,
     session,
-    g,
     make_response,
 )
 from sqlalchemy import func
@@ -29,12 +27,10 @@ from sqlalchemy import func
 from ..db import get_session
 from ..auth import login_required
 from ..models import (
-    Product,
     ProductSize,
     Stocktake,
     StocktakeItem,
 )
-from ..domain.products import find_by_barcode
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +229,7 @@ def stocktake_barcode_scan(stocktake_id):
         return jsonify({
             "success": True,
             "tts_name": tts_name,
+            "tts_message": tts_message,
             "name": product.name,
             "product_name": product.name,
             "color": product.color or "",

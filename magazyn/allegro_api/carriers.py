@@ -16,9 +16,11 @@ from typing import Optional
 import requests
 
 from .core import API_BASE_URL, _request_with_retry
-from .orders import _get_allegro_token, _refresh_allegro_token
+from .tokens import get_allegro_token as _get_allegro_token, refresh_allegro_token as _refresh_allegro_token
+from ..status_config import SHIPMENT_TRACKING_MAP
 
 logger = logging.getLogger(__name__)
+TRACKING_TO_INTERNAL = SHIPMENT_TRACKING_MAP
 
 _carriers_cache: Optional[list] = None
 _carriers_cache_time: float = 0.0
@@ -43,7 +45,6 @@ DELIVERY_METHOD_TO_CARRIER = {
     "allegro kurier fedex": "FEDEX",
 }
 
-from ..status_config import SHIPMENT_TRACKING_MAP as TRACKING_TO_INTERNAL
 
 
 def _call_with_refresh(method, url, endpoint, **kwargs):

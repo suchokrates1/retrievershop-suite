@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import threading
 import time
 import unicodedata
@@ -18,30 +17,23 @@ except ImportError:
     fcntl = None
 from collections import deque
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, time as dt_time, timezone
+from datetime import datetime, timedelta, time as dt_time
 from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
 import requests
-from requests.exceptions import HTTPError
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from .config import load_config, settings
-from .db import db_connect, is_postgres, table_has_column
-from .notifications import send_report, send_messenger
+from .db import db_connect, table_has_column
+from .notifications import send_report
 from .parsing import parse_product_info
-from .services import consume_order_stock, get_sales_summary
-from .utils import short_preview
+from .services import consume_order_stock, get_sales_summary  # noqa: F401
+from .services.printing import CupsPrinter, PrintCommandError
 from .allegro_token_refresher import token_refresher
 from .allegro_api import (
     fetch_allegro_order_detail,
-    fetch_discussions,
-    fetch_discussion_chat,
-    fetch_message_threads,
-    fetch_thread_messages,
-    send_discussion_message,
-    send_thread_message,
 )
 from .allegro_api.shipment_management import (
     cancel_shipment,
@@ -229,6 +221,11 @@ class LabelAgent:
         self._api_call_times: Deque[float] = deque()
         self._label_error_notifications: Dict[str, int] = {}
         self._workers: List = []
+        self.printer = CupsPrinter(
+            printer_name=config.printer_name,
+            cups_server=config.cups_server,
+            cups_port=config.cups_port,
+        )
         self._configure_logging(initial=True)
         self._configure_db_engine()
 
@@ -454,7 +451,12 @@ class LabelAgent:
                 for oid, data_json in rows:
                     try:
                         data = json.loads(data_json) if data_json else {}
-                    except Exception:
+                    except Exception as exc:
+                        self.logger.debug(
+                            "Pominięto uszkodzone last_order_data dla %s: %s",
+                            oid,
+                            exc,
+                        )
                         continue
                     name = (data.get("name") or "").strip()
                     cust = (data.get("customer") or "").strip()
@@ -747,7 +749,7 @@ class LabelAgent:
         ktore nie zostaly jeszcze wydrukowane.
         """
         from .db import get_session
-        from .models import Order, OrderStatusLog, OrderProduct
+        from .models import Order, OrderStatusLog
         from sqlalchemy import desc
 
         orders = []
@@ -1399,67 +1401,24 @@ class LabelAgent:
             raise ApiError(f"Blad pobierania etykiety: {exc}") from exc
 
     def print_label(self, base64_data: str, extension: str, order_id: str) -> None:
-        file_path = f"/tmp/label_{order_id}.{extension}"
         try:
-            pdf_data = base64.b64decode(base64_data)
-            with open(file_path, "wb") as handle:
-                handle.write(pdf_data)
-            cmd = ["lp"]
-            host = None
-            if self.config.cups_server or self.config.cups_port:
-                server = self.config.cups_server or "localhost"
-                host = (
-                    f"{server}:{self.config.cups_port}"
-                    if self.config.cups_port
-                    else server
-                )
-            if host:
-                cmd.extend(["-h", host])
-            cmd.extend(["-d", self.config.printer_name, file_path])
-            result = subprocess.run(cmd, capture_output=True, check=False)
-            if result.returncode != 0:
-                message = result.stderr.decode().strip()
-                self.logger.error(
-                    "Błąd drukowania (kod %s): %s",
-                    result.returncode,
-                    message,
-                )
-                PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
-                raise PrintError(message or str(result.returncode))
-            self.logger.info("📨 Label printed")
+            self.printer.print_label_base64(base64_data, extension)
+            self.logger.info("Label printed")
             PRINT_LABELS_TOTAL.inc()
+        except PrintCommandError as exc:
+            PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
+            raise PrintError(str(exc)) from exc
         except PrintError:
             raise
         except Exception as exc:
             self.logger.error("Błąd drukowania: %s", exc)
             PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
             raise PrintError(str(exc)) from exc
-        finally:
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-            except OSError:  # pragma: no cover - defensive
-                pass
 
     def print_test_page(self) -> bool:
         try:
-            file_path = "/tmp/print_test.txt"
-            with open(file_path, "w", encoding="utf-8") as handle:
-                handle.write("=== TEST PRINT ===\n")
-            result = subprocess.run(
-                ["lp", "-d", self.config.printer_name, file_path],
-                capture_output=True,
-                check=False,
-            )
-            os.remove(file_path)
-            if result.returncode != 0:
-                self.logger.error(
-                    "Błąd testowego druku (kod %s): %s",
-                    result.returncode,
-                    result.stderr.decode().strip(),
-                )
-                return False
-            self.logger.info("🔧 Testowa strona została wysłana do drukarki.")
+            self.printer.print_text("=== TEST PRINT ===\n")
+            self.logger.info("Testowa strona została wysłana do drukarki.")
             return True
         except Exception as exc:
             self.logger.error("Błąd testowego druku: %s", exc)
@@ -1690,7 +1649,6 @@ class LabelAgent:
         - Miesięczny: "W miesiącu [nazwa] sprzedałaś [ilość] produktów za [suma] zł co dało [zysk] zł zysku"
         """
         from datetime import datetime, timedelta
-        from decimal import Decimal
         
         now = datetime.now()
         
@@ -2031,7 +1989,7 @@ class LabelAgent:
                             stage="label",
                             retry_exceptions=(ApiError,),
                         )
-                    except ShipmentExpiredError as exp_exc:
+                    except ShipmentExpiredError:
                         self.logger.warning(
                             "Przesylka %s wygasla (403) - anuluje i tworze nowa dla %s",
                             shipment_id, order_id,

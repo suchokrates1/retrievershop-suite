@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404
 from typing import Dict, Tuple
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 
@@ -40,7 +40,7 @@ def _check_cups() -> Tuple[str, str]:
     cmd = ["lpstat", "-r"] if not host else ["lpstat", "-h", host, "-r"]
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             cmd,
             capture_output=True,
             check=False,

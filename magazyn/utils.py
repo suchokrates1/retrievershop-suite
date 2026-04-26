@@ -28,3 +28,12 @@ def short_preview(text: str, limit: int = 140, normalize_whitespace: bool = Fals
         return clean
     
     return clean[:max(limit - 3, 0)] + "..."
+
+
+def parse_optional_int(value: object) -> int | None:
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None

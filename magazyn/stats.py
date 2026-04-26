@@ -797,7 +797,6 @@ def stats_profit():
         )
 
     net_profit_cur = Decimal(str(summary.net_profit))
-    net_profit_prev_data = Decimal(str(prev_revenue)) - Decimal(str(getattr(summary, "total_purchase_cost", 0) or 0))
 
     purchase_cost = Decimal(str(summary.total_purchase_cost or 0))
     allegro_fees = Decimal(str(summary.total_allegro_fees or 0))
@@ -2282,7 +2281,7 @@ def stats_order_funnel():
     - transitions: szczegoly czasow przejsc BOUGHT -> FILLED_IN -> READY_FOR_PROCESSING
     - summary: statystyki ogolne (total_orders, avg_time_to_ready, etc.)
     """
-    from .models import OrderEvent, Order
+    from .models import OrderEvent
     
     started_at = time.perf_counter()
     filters, err = _parse_filters()

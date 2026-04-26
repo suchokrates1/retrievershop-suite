@@ -7,10 +7,8 @@ dziennych, tygodniowych i miesiecznych.
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
-from decimal import Decimal
 
-from .messenger import send_messenger, send_messenger_lines, MessengerClient
+from .messenger import send_messenger, MessengerClient
 
 
 logger = logging.getLogger(__name__)

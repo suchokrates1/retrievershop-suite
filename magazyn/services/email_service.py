@@ -20,9 +20,7 @@ from email.utils import formataddr
 from flask import render_template
 
 from ..config import settings
-from ..db import get_session
-from ..models import Order, OrderProduct
-from ..orders import _get_tracking_url
+from .tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
 
@@ -235,14 +233,18 @@ def send_shipment_notification(order) -> bool:
 
     tracking_url = None
     try:
-        tracking_url = _get_tracking_url(
+        tracking_url = get_tracking_url(
             order.courier_code,
             order.delivery_package_module,
             tracking_number,
             order.delivery_method,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(
+            "Nie udało się zbudować linku śledzenia dla zamówienia %s: %s",
+            order.order_id,
+            exc,
+        )
 
     ctx = _load_order_context(order)
     ctx["tracking_number"] = tracking_number

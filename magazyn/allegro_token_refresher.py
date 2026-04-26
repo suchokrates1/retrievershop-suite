@@ -19,19 +19,11 @@ from .metrics import (
     ALLEGRO_TOKEN_REFRESH_RETRIES_TOTAL,
 )
 from .settings_store import SettingsPersistenceError, settings_store
+from .utils import parse_optional_int
 
 LOGGER = logging.getLogger(__name__)
 
 TOKEN_FAILURE_NOTIFY_THRESHOLD = 3
-
-
-def _parse_int(value: object) -> Optional[int]:
-    try:
-        if value is None:
-            return None
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _parse_datetime(value: object) -> Optional[datetime]:
@@ -124,7 +116,7 @@ class AllegroTokenRefresher:
             expires_in = metadata.get("expires_in")
             if expires_in is None:
                 expires_in = settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN")
-            expires_in_value = _parse_int(expires_in)
+            expires_in_value = parse_optional_int(expires_in)
             obtained_at = _parse_datetime(metadata.get("obtained_at"))
             if expires_in_value is not None and obtained_at is not None:
                 expires_at = obtained_at + timedelta(seconds=expires_in_value)
@@ -182,7 +174,7 @@ class AllegroTokenRefresher:
             new_refresh_raw = payload.get("refresh_token")
             if new_refresh_raw:
                 new_refresh_token = new_refresh_raw
-            expires_in = _parse_int(payload.get("expires_in"))
+            expires_in = parse_optional_int(payload.get("expires_in"))
             if payload.get("scope"):
                 metadata["scope"] = payload["scope"]
             if payload.get("token_type"):

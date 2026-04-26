@@ -708,7 +708,7 @@ class DashboardService:
         for delivery in latest_deliveries[:3]:
             try:
                 batch_date = datetime.strptime(delivery['purchase_date'], '%Y-%m-%d')
-            except:
+            except (TypeError, ValueError):
                 batch_date = now
             
             title_suffix = delivery['supplier'] or delivery['invoice_number'] or f"{delivery['total_quantity']} szt."

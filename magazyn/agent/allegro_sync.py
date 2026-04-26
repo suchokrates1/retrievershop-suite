@@ -182,7 +182,7 @@ class AllegroSyncService:
             
             if auto_enabled:
                 self._send_auto_reply_discussion(
-                    cur, ***REMOVED***, discussion_id, auto_reply_text
+                    conn, ***REMOVED***, discussion_id, auto_reply_text
                 )
     
     def _send_auto_reply_discussion(

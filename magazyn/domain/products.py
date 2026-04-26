@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from ..constants import ALL_SIZES, PRODUCT_CATEGORIES, PRODUCT_BRANDS, PRODUCT_SERIES
+from ..constants import ALL_SIZES
 from ..db import get_session
 from ..models import Product, ProductSize, PurchaseBatch
 

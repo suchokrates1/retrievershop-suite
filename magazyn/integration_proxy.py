@@ -11,7 +11,7 @@ from flask_wtf.csrf import generate_csrf
 
 from .auth import login_required
 from .allegro_api.core import API_BASE_URL, _extract_allegro_error_details, _request_with_retry
-from .allegro_api.orders import _get_allegro_token, _refresh_allegro_token
+from .allegro_api.tokens import get_allegro_token as _get_allegro_token, refresh_allegro_token as _refresh_allegro_token
 from .wfirma_api.client import WFirmaClient, WFirmaError
 
 

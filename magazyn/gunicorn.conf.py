@@ -1,6 +1,7 @@
 # gunicorn.conf.py
 import os
 import fcntl
+import tempfile
 
 bind = "0.0.0.0:8000"
 workers = 6  # Optimal for N100 (4 cores) with I/O-heavy operations
@@ -14,7 +15,7 @@ def post_worker_init(worker):
     """Hook called after worker is initialized - start scheduler only in first worker."""
     
     # Use lock file to ensure only ONE worker starts the scheduler
-    lock_file = "/tmp/magazyn_scheduler.lock"
+    lock_file = os.path.join(tempfile.gettempdir(), "magazyn_scheduler.lock")
     
     try:
         # Try to acquire exclusive lock (non-blocking)

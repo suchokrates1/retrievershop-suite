@@ -3,13 +3,10 @@ import os
 from contextlib import contextmanager
 import logging
 from pathlib import Path
-import importlib.util
 import sqlite3
-from datetime import timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
@@ -20,7 +17,6 @@ from .models import (
     PurchaseBatch,
     Sale,
     Product,
-    AllegroOffer,
 )
 from .config import settings
 from .notifications import send_stock_alert
@@ -164,7 +160,7 @@ def configure_engine(db_path=None):
 
     if database_url.startswith("postgresql"):
         _is_postgres = True
-        print(f"Configuring engine for PostgreSQL")
+        logger.info("Configuring engine for PostgreSQL")
         engine = create_engine(
             database_url,
             future=True,
@@ -176,7 +172,7 @@ def configure_engine(db_path=None):
         _is_postgres = False
         if db_path is None:
             raise ValueError("db_path is required when DATABASE_URL is not set")
-        print(f"Configuring engine for {db_path}")
+        logger.info("Configuring engine for %s", db_path)
         engine = create_engine(
             f"sqlite:///{db_path}",
             future=True,
@@ -192,7 +188,7 @@ def configure_engine(db_path=None):
         autoflush=False,
         expire_on_commit=False,
     )
-    print(f"SessionLocal set to: {SessionLocal}")
+    logger.debug("SessionLocal set to: %s", SessionLocal)
 
 
 @contextmanager

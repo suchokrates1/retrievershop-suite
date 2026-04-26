@@ -138,9 +138,11 @@ def ensure_runtime_db_configured() -> bool:
 
 def _cdp_json_request(host: str, port: int, path: str, method: str = "GET") -> Dict[str, Any]:
     """Wykonuje zapytanie do HTTP JSON API Chrome DevTools."""
+    if not path.startswith("/") or "://" in path:
+        raise ValueError("Nieprawidlowa sciezka CDP")
     url = f"http://{host}:{port}{path}"
     request = urllib.request.Request(url, method=method)
-    with urllib.request.urlopen(request, timeout=10) as resp:
+    with urllib.request.urlopen(request, timeout=10) as resp:  # nosec B310
         payload = resp.read()
     return json.loads(payload) if payload else {}
 
@@ -157,7 +159,7 @@ def close_page_target(host: str, port: int, target_id: str) -> None:
     try:
         url = f"http://{host}:{port}/json/close/{target_id}"
         request = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(request, timeout=10):
+        with urllib.request.urlopen(request, timeout=10):  # nosec B310
             pass
     except Exception as exc:
         logger.warning(f"Nie udalo sie zamknac targetu CDP {target_id}: {exc}")

@@ -80,7 +80,7 @@ class Product(Base):
     @classmethod
     def _name_expression(cls):
         """SQL expression for name - builds full name from category/brand/series or uses _name."""
-        from sqlalchemy import case, func
+        from sqlalchemy import func
         # Build name from category + "dla psa" + brand + series when category exists
         # Otherwise fallback to _name
         return case(
