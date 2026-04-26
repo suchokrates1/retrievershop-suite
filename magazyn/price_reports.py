@@ -19,21 +19,21 @@ from flask import (
     redirect,
     url_for,
 )
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
 import logging
-import asyncio
 
 from .auth import login_required
 from .db import get_session
-from .models import (
-    PriceReport,
-    PriceReportItem,
-    AllegroOffer,
-)
+from .models import PriceReportItem
 from .settings_store import settings_store
+from .domain.exceptions import EntityNotFoundError
 from .domain.price_report_profit import calculate_report_item_profit
 from .services import price_report_admin
+from .services.price_report_mutation import change_report_item_price, recheck_report_item
+from .services.price_report_view import (
+    build_report_detail_context,
+    build_reports_list_context,
+    current_report_status_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,38 +49,7 @@ def get_max_discount_percent() -> float:
 @login_required
 def reports_list():
     """Lista wszystkich raportow cenowych."""
-    with get_session() as session:
-        reports = session.query(PriceReport).order_by(
-            PriceReport.created_at.desc()
-        ).all()
-        
-        reports_data = []
-        for report in reports:
-            items_count = session.query(PriceReportItem).filter(
-                PriceReportItem.report_id == report.id
-            ).count()
-            
-            cheaper_count = session.query(PriceReportItem).filter(
-                PriceReportItem.report_id == report.id,
-                PriceReportItem.is_cheapest == True
-            ).count()
-            
-            reports_data.append({
-                "id": report.id,
-                "created_at": report.created_at,
-                "completed_at": report.completed_at,
-                "status": report.status,
-                "items_checked": report.items_checked,
-                "items_total": report.items_total,
-                "total_offers": items_count,
-                "we_are_cheapest": cheaper_count,
-                "we_are_not_cheapest": items_count - cheaper_count,
-            })
-        
-        return render_template(
-            "price_reports/reports_list.html",
-            reports=reports_data
-        )
+    return render_template("price_reports/reports_list.html", **build_reports_list_context())
 
 
 @bp.route("/<int:report_id>")
@@ -88,216 +57,20 @@ def reports_list():
 def report_detail(report_id: int):
     """Szczegoly raportu cenowego."""
     filter_mode = request.args.get("filter", "all")  # all, not_cheapest, cheapest, inna_aukcja_ok, errors
-    
-    with get_session() as session:
-        report = session.query(PriceReport).filter(
-            PriceReport.id == report_id
-        ).first()
-        
-        if not report:
-            flash("Raport nie istnieje", "error")
-            return redirect(url_for("price_reports.reports_list"))
-        
-        query = session.query(PriceReportItem).filter(
-            PriceReportItem.report_id == report_id
-        )
-        
-        if filter_mode == "not_cheapest":
-            # Drozsi od konkurencji - wyklucz "inna_aukcja_ok" (brak competitor_price i brak bledu)
-            query = query.filter(
-                PriceReportItem.is_cheapest == False,
-                PriceReportItem.competitor_price != None,
-            )
-        elif filter_mode == "cheapest":
-            query = query.filter(PriceReportItem.is_cheapest == True)
-        elif filter_mode == "inna_aukcja_ok":
-            # Inna aukcja OK - oznaczone przez mark_sibling_offers
-            query = query.filter(
-                PriceReportItem.is_cheapest == False,
-                PriceReportItem.competitor_price == None,
-                PriceReportItem.error == None,
-            )
-        elif filter_mode == "errors":
-            query = query.filter(PriceReportItem.error != None)
-        
-        items = query.all()
-        
-        max_discount = get_max_discount_percent()
-        
-        # Pobierz mapowanie offer_id -> product_size_id oraz product_id z AllegroOffer
-        offer_ids = [item.offer_id for item in items]
-        offers = session.query(AllegroOffer).filter(
-            AllegroOffer.offer_id.in_(offer_ids)
-        ).all()
-        offer_to_product_size = {o.offer_id: o.product_size_id for o in offers}
-        offer_to_product_id = {o.offer_id: o.product_id for o in offers}
-        
-        # Znajdz wszystkie oferty dla kazdego product_size_id (w calym raporcie, nie tylko filtrowane)
-        all_items = session.query(PriceReportItem).filter(
-            PriceReportItem.report_id == report_id
-        ).all()
-        
-        # Grupuj oferty wg product_size_id
-        product_size_offers = {}
-        for item in all_items:
-            ps_id = offer_to_product_size.get(item.offer_id)
-            if ps_id:
-                if ps_id not in product_size_offers:
-                    product_size_offers[ps_id] = []
-                product_size_offers[ps_id].append({
-                    "offer_id": item.offer_id,
-                    "is_cheapest": item.is_cheapest,
-                    "our_price": item.our_price,
-                })
-        
-        items_data = []
-        for item in items:
-            ps_id = offer_to_product_size.get(item.offer_id)
-            ps_offers = product_size_offers.get(ps_id, []) if ps_id else []
-            has_multiple_offers = len(ps_offers) > 1
-            
-            # Sprawdz czy istnieje tansza siostra (inna nasza oferta tego produktu z nizsza cena)
-            has_cheaper_sibling = False
-            if has_multiple_offers and item.our_price:
-                our = float(item.our_price)
-                for o in ps_offers:
-                    if o["offer_id"] != item.offer_id and o["our_price"] and float(o["our_price"]) < our:
-                        has_cheaper_sibling = True
-                        break
-            
-            # Oblicz sugestie ceny
-            suggestion = None
-            suggestion_note = None
-            
-            if has_cheaper_sibling:
-                # Inna nasza oferta tego produktu jest tansza - pomijamy
-                suggestion_note = "inna_aukcja_ok"
-            elif not item.is_cheapest and not item.competitor_price and not item.error:
-                # Pozycja oznaczona jako sibling (mark_sibling_offers lub CDP)
-                suggestion_note = "inna_aukcja_ok"
-            elif not item.is_cheapest and item.competitor_price and item.our_price:
-                target_price = float(item.competitor_price) - 0.01
-                discount_needed = ((float(item.our_price) - target_price) / float(item.our_price)) * 100
-                
-                if discount_needed <= max_discount:
-                    suggestion = {
-                        "type": "decrease",
-                        "target_price": round(target_price, 2),
-                        "discount_percent": round(discount_needed, 2),
-                        "savings": round(float(item.our_price) - target_price, 2),
-                    }
-            elif item.is_cheapest and item.competitor_price and item.our_price:
-                # Jestesmy najtansi - sprawdz czy mozna podniesc cene
-                competitor = float(item.competitor_price)
-                our = float(item.our_price)
-                # Cena docelowa: 1 grosz ponizej konkurenta
-                raise_target = round(competitor - 0.01, 2)
-                if raise_target > our and our > 9.99:
-                    extra_profit = round(raise_target - our, 2)
-                    raise_percent = ((raise_target - our) / our) * 100
-                    # Sugeruj podwyzke tylko jesli roznica >= 9.99 zl (mniejsze nie maja sensu)
-                    if extra_profit >= 9.99:
-                        suggestion = {
-                            "type": "increase",
-                            "target_price": raise_target,
-                            "raise_percent": round(raise_percent, 2),
-                            "extra_profit": round(raise_target - our, 2),
-                        }
-            
-            items_data.append({
-                "id": item.id,
-                "offer_id": item.offer_id,
-                "product_id": offer_to_product_id.get(item.offer_id),
-                "product_name": item.product_name,
-                "our_price": item.our_price,
-                "competitor_price": item.competitor_price,
-                "competitor_seller": item.competitor_seller,
-                "competitor_url": item.competitor_url,
-                "is_cheapest": item.is_cheapest,
-                "price_difference": item.price_difference,
-                "our_position": item.our_position,
-                "total_offers": item.total_offers,
-                "competitors_all_count": getattr(item, 'competitors_all_count', None),
-                "competitor_is_super_seller": getattr(item, 'competitor_is_super_seller', None),
-                "suggestion": suggestion,
-                "suggestion_note": suggestion_note,
-                "has_multiple_offers": has_multiple_offers,
-                "checked_at": item.checked_at,
-                "error": item.error,
-            })
-        
-        # Sortowanie grupami:
-        # 1. Drozsi (nie najtansi, z konkurencja) - wg price_difference rosnaco
-        # 2. Inna aukcja OK (siostry)
-        # 3. Tansi (najtansi) - wg price_difference malejaco (duzo tansi -> malo tansi)
-        # 4. Bledy / brak danych - na koncu
-        def sort_key(item):
-            diff = item.get("price_difference")
-            note = item.get("suggestion_note")
-            name = item["product_name"].lower() if item["product_name"] else ""
-            
-            if item.get("error"):
-                return (4, 0, name)
-            
-            if note == "inna_aukcja_ok":
-                return (2, 0, name)
-            
-            if diff is None:
-                return (4, 0, name)
-            
-            diff = float(diff)
-            if diff > 0:
-                # Drozsi - grupa 1, sortuj rosnaco (niewiele -> duzo)
-                return (1, diff, name)
-            else:
-                # Tansi (lub rowni) - grupa 3, sortuj malejaco (duzo tansi -> malo tansi)
-                return (3, diff, name)
-        
-        items_data.sort(key=sort_key)
-        
-        stats = {
-            "total": len(items),
-            "cheapest": sum(1 for i in items if i.is_cheapest),
-            "not_cheapest": sum(1 for i in items if not i.is_cheapest and i.competitor_price is not None),
-            "with_suggestion": sum(1 for i in items_data if i.get("suggestion") and i["suggestion"].get("type") == "decrease"),
-            "with_raise_suggestion": sum(1 for i in items_data if i.get("suggestion") and i["suggestion"].get("type") == "increase"),
-            "other_offer_ok": sum(1 for i in items_data if i.get("suggestion_note") == "inna_aukcja_ok"),
-            "errors": sum(1 for i in items if i.error),
-        }
-        
-        return render_template(
-            "price_reports/report_detail.html",
-            report=report,
-            items=items_data,
-            stats=stats,
-            filter_mode=filter_mode,
-            max_discount=max_discount,
-        )
+    try:
+        context = build_report_detail_context(report_id, filter_mode)
+    except EntityNotFoundError:
+        flash("Raport nie istnieje", "error")
+        return redirect(url_for("price_reports.reports_list"))
+
+    return render_template("price_reports/report_detail.html", **context)
 
 
 @bp.route("/current-status")
 @login_required
 def current_status():
     """Zwraca status biezacego raportu (dla AJAX)."""
-    with get_session() as session:
-        report = session.query(PriceReport).filter(
-            PriceReport.status.in_(["pending", "running"])
-        ).order_by(PriceReport.created_at.desc()).first()
-        
-        if not report:
-            return jsonify({"status": "none"})
-        
-        return jsonify({
-            "status": report.status,
-            "id": report.id,
-            "items_checked": report.items_checked,
-            "items_total": report.items_total,
-            "progress_percent": round(
-                (report.items_checked / report.items_total * 100) 
-                if report.items_total > 0 else 0, 1
-            ),
-            "started_at": report.created_at.isoformat() if report.created_at else None,
-        })
+    return jsonify(current_report_status_payload())
 
 
 @bp.route("/start-manual", methods=["POST"])
@@ -413,296 +186,17 @@ def recheck_item(item_id):
     - Pobiera aktualna cene naszej oferty z Allegro i aktualizuje jesli sie zmienila
     - Przelicza statystyki raportu
     """
-    from .scripts.price_checker_ws import check_offer_price, CDP_HOST, CDP_PORT, MAX_DELIVERY_DAYS
-    from .allegro_api.offers import get_offer_details
-    
-    try:
-        with get_session() as session:
-            item = session.query(PriceReportItem).filter(
-                PriceReportItem.id == item_id
-            ).first()
-            
-            if not item:
-                return jsonify({"success": False, "error": "Nie znaleziono pozycji"})
-            
-            offer_id = item.offer_id
-            old_our_price = float(item.our_price) if item.our_price else None
-            title = item.product_name
-            
-            # Sprawdz czy oferta ma tansza siostre (ten sam product_size_id)
-            offer = session.query(AllegroOffer).filter(
-                AllegroOffer.offer_id == offer_id
-            ).first()
-            ps_id = offer.product_size_id if offer else None
-            
-            has_cheaper_sibling = False
-            if ps_id and old_our_price:
-                cheaper = session.query(AllegroOffer).filter(
-                    AllegroOffer.product_size_id == ps_id,
-                    AllegroOffer.publication_status == "ACTIVE",
-                    AllegroOffer.offer_id != offer_id,
-                    AllegroOffer.price < old_our_price,
-                ).first()
-                if cheaper:
-                    has_cheaper_sibling = True
-                    cheaper_id = cheaper.offer_id
-                    cheaper_price = float(cheaper.price)
-        
-        if has_cheaper_sibling:
-            # Inna nasza oferta jest tansza - nie ma sensu scrapowac
-            with get_session() as session:
-                item = session.query(PriceReportItem).filter(
-                    PriceReportItem.id == item_id
-                ).first()
-                item.is_cheapest = False
-                item.competitor_price = None
-                item.competitor_seller = None
-                item.competitor_url = None
-                item.error = None
-                item.checked_at = datetime.now()
-                session.commit()
-            
-            return jsonify({
-                "success": True,
-                "price_updated": False,
-                "sibling_ok": True,
-                "data": {
-                    "our_price": old_our_price,
-                    "competitor_price": None,
-                    "competitor_seller": None,
-                    "is_cheapest": False,
-                    "price_difference": None,
-                    "our_position": None,
-                    "total_offers": None,
-                    "suggestion": None,
-                    "suggestion_note": "inna_aukcja_ok",
-                    "error": None,
-                    "message": f"Tansza siostra: {cheaper_id} ({cheaper_price} zl)",
-                }
-            })
-        
-        # Najpierw pobierz aktualna cene naszej oferty z Allegro API
-        from .allegro_api.offers import get_offer_badge_price
-        our_offer_data = get_offer_details(offer_id)
-        current_our_price = old_our_price
-        price_updated = False
-        
-        if our_offer_data.get("success") and our_offer_data.get("price"):
-            current_our_price = float(our_offer_data["price"])
-            if old_our_price and abs(current_our_price - old_our_price) > 0.001:
-                price_updated = True
-                logger.info(f"Cena oferty {offer_id} zmienila sie: {old_our_price} -> {current_our_price}")
-        
-        # Sprawdz cene promocyjna z kampanii (np. Allegro Days)
-        badge_price = get_offer_badge_price(offer_id)
-        if badge_price:
-            current_our_price = float(badge_price)
-            logger.info(f"Oferta {offer_id} ma cene kampanii (badge): {current_our_price}")
-        
-        # Uruchom sprawdzenie konkurencji
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(
-            check_offer_price(offer_id, title, current_our_price, CDP_HOST, CDP_PORT, MAX_DELIVERY_DAYS)
-        )
-        loop.close()
-        
-        # Zaktualizuj wynik w bazie
-        with get_session() as session:
-            item = session.query(PriceReportItem).filter(
-                PriceReportItem.id == item_id
-            ).first()
-            
-            # Zaktualizuj nasza cene - badge price -> API price -> stara cena
-            effective_price = current_our_price
-            if effective_price and old_our_price and abs(effective_price - old_our_price) > 0.001:
-                price_updated = True
-                item.our_price = Decimal(str(effective_price))
-                logger.info(f"Cena oferty {offer_id} zaktualizowana: {old_our_price} -> {effective_price}")
-            elif price_updated:
-                item.our_price = Decimal(str(current_our_price))
-            
-            if result.success and result.cheapest_competitor:
-                item.competitor_price = Decimal(str(result.cheapest_competitor.price))
-                item.competitor_seller = result.cheapest_competitor.seller
-                item.competitor_url = result.cheapest_competitor.offer_url
-                item.competitor_is_super_seller = getattr(result.cheapest_competitor, 'is_super_seller', None)
-                item.our_position = result.my_position
-                item.total_offers = len(result.competitors) + 1 if result.competitors else 1
-                item.competitors_all_count = getattr(result, 'competitors_all_count', None)
-                
-                if item.our_price:
-                    item.is_cheapest = item.our_price <= item.competitor_price
-                    item.price_difference = float(item.our_price - item.competitor_price)
-                
-                item.error = None
-            elif result.success and not result.cheapest_competitor:
-                # Brak konkurencji - jestesmy jedyni
-                item.competitor_price = None
-                item.competitor_seller = None
-                item.competitor_url = None
-                item.competitor_is_super_seller = None
-                item.our_position = 1
-                item.total_offers = 1
-                item.competitors_all_count = getattr(result, 'competitors_all_count', 0)
-                item.is_cheapest = True
-                item.price_difference = None
-                item.error = None
-            else:
-                item.error = result.error or "Blad sprawdzania"
-            
-            item.checked_at = datetime.now()
-            session.commit()
-            
-            # Przygotuj odpowiedz
-            max_discount = get_max_discount_percent()
-            suggestion = None
-            if not item.is_cheapest and item.competitor_price and item.our_price:
-                target_price = float(item.competitor_price) - 0.01
-                discount_needed = ((float(item.our_price) - target_price) / float(item.our_price)) * 100
-                if discount_needed <= max_discount:
-                    suggestion = {
-                        "type": "decrease",
-                        "target_price": round(target_price, 2),
-                        "discount_percent": round(discount_needed, 2),
-                    }
-            elif item.is_cheapest and item.competitor_price and item.our_price:
-                competitor = float(item.competitor_price)
-                our = float(item.our_price)
-                raise_target = round(competitor - 0.01, 2)
-                if raise_target > our and our > 9.99:
-                    raise_percent = ((raise_target - our) / our) * 100
-                    if raise_percent >= 1.0:
-                        suggestion = {
-                            "type": "increase",
-                            "target_price": raise_target,
-                            "raise_percent": round(raise_percent, 2),
-                            "extra_profit": round(raise_target - our, 2),
-                        }
-            
-            return jsonify({
-                "success": True,
-                "price_updated": price_updated,
-                "old_price": old_our_price,
-                "data": {
-                    "our_price": float(item.our_price) if item.our_price else None,
-                    "competitor_price": float(item.competitor_price) if item.competitor_price else None,
-                    "competitor_seller": item.competitor_seller,
-                    "is_cheapest": item.is_cheapest,
-                    "price_difference": item.price_difference,
-                    "our_position": item.our_position,
-                    "total_offers": item.total_offers,
-                    "suggestion": suggestion,
-                    "error": item.error,
-                }
-            })
-            
-    except Exception as e:
-        logger.error(f"Blad ponownego sprawdzania: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)})
+    return jsonify(recheck_report_item(item_id, max_discount_provider=get_max_discount_percent))
 
 
 @bp.route("/change-price/<int:item_id>", methods=["POST"])
 @login_required
 def change_price(item_id):
-    """Zmienia cene oferty na Allegro z weryfikacja przez API."""
-    from .allegro_api.offers import change_offer_price, get_offer_price
-    
-    new_price = request.form.get("new_price")
-    if not new_price:
-        return jsonify({"success": False, "error": "Podaj nowa cene"})
-    
-    try:
-        new_price = Decimal(new_price)
-    except (InvalidOperation, ValueError):
-        return jsonify({"success": False, "error": "Nieprawidlowa cena"})
-    
-    try:
-        with get_session() as session:
-            item = session.query(PriceReportItem).filter(
-                PriceReportItem.id == item_id
-            ).first()
-            
-            if not item:
-                return jsonify({"success": False, "error": "Nie znaleziono pozycji"})
-            
-            offer_id = item.offer_id
-            old_price = item.our_price
-            offer_name = item.product_name
-        
-        # Krok 1: Zmien cene przez API
-        result = change_offer_price(offer_id, new_price)
-        
-        if not result.get("success"):
-            logger.warning(
-                f"Nieudana zmiana ceny oferty {offer_id} ({offer_name}): "
-                f"{result.get('error', 'nieznany blad')}"
-            )
-            return jsonify({
-                "success": False,
-                "error": result.get("error", "Blad API Allegro")
-            })
-        
-        # Krok 2: Weryfikacja - pobierz aktualna cene z Allegro
-        verify_result = get_offer_price(offer_id)
-        
-        if not verify_result.get("success"):
-            logger.warning(
-                f"Zmiana ceny oferty {offer_id} wyslana, ale weryfikacja nieudana: "
-                f"{verify_result.get('error', 'nieznany blad')}"
-            )
-            # Mimo bledu weryfikacji, zmiana mogla sie udac - aktualizuj baze
-            verified_price = new_price
-        else:
-            verified_price = verify_result.get("price")
-            
-            # Krok 3: Sprawdz czy cena sie zgadza (tolerancja na grosz)
-            if abs(verified_price - new_price) > Decimal("0.01"):
-                logger.error(
-                    f"Rozbieznosc ceny oferty {offer_id}: "
-                    f"zadana={new_price}, potwierdzona={verified_price}"
-                )
-                return jsonify({
-                    "success": False,
-                    "error": f"Cena na Allegro ({verified_price}) rozni sie od zadanej ({new_price})"
-                })
-        
-        # Krok 4: Zaktualizuj w bazie lokalnej (tylko po weryfikacji)
-        with get_session() as session:
-            # Zaktualizuj PriceReportItem
-            item = session.query(PriceReportItem).filter(
-                PriceReportItem.id == item_id
-            ).first()
-            if item:
-                item.our_price = verified_price
-                if item.competitor_price:
-                    item.is_cheapest = verified_price <= item.competitor_price
-                    item.price_difference = float(verified_price - item.competitor_price)
-            
-            # Zaktualizuj AllegroOffer
-            offer = session.query(AllegroOffer).filter(
-                AllegroOffer.offer_id == offer_id
-            ).first()
-            if offer:
-                offer.price = verified_price
-            
-            session.commit()
-        
-        # Logowanie sukcesu
-        logger.info(
-            f"Zmiana ceny oferty {offer_id} ({offer_name}): "
-            f"{old_price} -> {verified_price} zl [zweryfikowano przez API]"
-        )
-        
-        return jsonify({
-            "success": True,
-            "message": f"Zmieniono cene z {old_price} na {verified_price} zl",
-            "verified": True
-        })
-            
-    except Exception as e:
-        logger.error(f"Blad zmiany ceny: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)})
+    """Zmienia cene oferty na Allegro z weryfikacja przez API.
+
+    Serwis mutacji pobiera nazwe oferty z ``item.product_name``.
+    """
+    return jsonify(change_report_item_price(item_id, request.form.get("new_price")))
 
 
 @bp.route("/calculate-profit/<int:item_id>")

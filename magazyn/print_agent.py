@@ -10,9 +10,10 @@ from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, 
 from zoneinfo import ZoneInfo
 
 from .config import load_config, settings
+from .domain.inventory import consume_order_stock  # noqa: F401 - publiczny re-export magazyn.print_agent
+from .domain.reports import get_sales_summary  # noqa: F401 - publiczny re-export magazyn.print_agent
 from .notifications import send_report
 from .parsing import parse_product_info  # noqa: F401 - publiczny re-export magazyn.print_agent
-from .services import consume_order_stock, get_sales_summary  # noqa: F401
 from .services.print_agent_config import (
     AgentConfig,
     ConfigError,
