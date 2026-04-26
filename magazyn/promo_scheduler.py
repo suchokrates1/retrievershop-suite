@@ -10,10 +10,13 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+from .services.runtime import BackgroundThreadRuntime
+
 logger = logging.getLogger(__name__)
 
 _promo_thread: Optional[threading.Thread] = None
-_stop_event = threading.Event()
+_runtime = BackgroundThreadRuntime(name="PromoScheduler", logger=logger)
+_stop_event = _runtime.stop_event
 
 # Godzina sprawdzania wyrozien (domyslnie 18:00 - wieczorem przed przedluzeniem)
 CHECK_HOUR = 18
@@ -89,33 +92,24 @@ def start_promo_scheduler(app):
     """Uruchamia scheduler sprawdzania wyrozien."""
     global _promo_thread
     
-    if _promo_thread is not None and _promo_thread.is_alive():
-        logger.warning("Promo scheduler already running")
-        return
-    
-    _stop_event.clear()
-    _promo_thread = threading.Thread(
-        target=_promo_worker,
-        args=(app,),
-        daemon=True,
-        name="PromoScheduler"
+    _runtime.start(
+        _promo_worker,
+        app,
+        already_running_message="Promo scheduler already running",
+        started_message="Promo scheduler thread started",
     )
-    _promo_thread.start()
-    logger.info("Promo scheduler thread started")
+    _promo_thread = _runtime.thread
 
 
 def stop_promo_scheduler():
     """Zatrzymuje scheduler sprawdzania wyrozien."""
     global _promo_thread
     
-    if _promo_thread is None or not _promo_thread.is_alive():
-        return
-    
-    logger.info("Stopping promo scheduler...")
-    _stop_event.set()
-    _promo_thread.join(timeout=5)
+    _runtime.stop(
+        stopping_message="Stopping promo scheduler...",
+        stopped_message="Promo scheduler stopped",
+    )
     _promo_thread = None
-    logger.info("Promo scheduler stopped")
 
 
 def run_promo_check_now(app) -> dict:

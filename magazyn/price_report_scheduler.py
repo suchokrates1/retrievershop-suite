@@ -32,11 +32,13 @@ from .services.price_report_processing import (
     mark_sibling_offers,
     save_report_item,
 )
+from .services.runtime import BackgroundThreadRuntime
 
 logger = logging.getLogger(__name__)
 
 _scheduler_thread: Optional[threading.Thread] = None
-_stop_event = threading.Event()
+_runtime = BackgroundThreadRuntime(name="PriceReportScheduler", logger=logger)
+_stop_event = _runtime.stop_event
 _current_report_id: Optional[int] = None
 _worker_lock = threading.Lock()          # zapobiega rownoleglosci workerow
 _active_worker_thread: Optional[threading.Thread] = None
@@ -373,19 +375,13 @@ def start_price_report_scheduler(app):
     """Uruchamia scheduler raportow cenowych."""
     global _scheduler_thread
     
-    if _scheduler_thread is not None and _scheduler_thread.is_alive():
-        logger.warning("Scheduler juz uruchomiony")
-        return
-    
-    _stop_event.clear()
-    _scheduler_thread = threading.Thread(
-        target=_scheduler_main,
-        args=(app,),
-        daemon=True,
-        name="PriceReportScheduler"
+    _runtime.start(
+        _scheduler_main,
+        app,
+        already_running_message="Scheduler juz uruchomiony",
+        started_message="Uruchomiono scheduler raportow cenowych",
     )
-    _scheduler_thread.start()
-    logger.info("Uruchomiono scheduler raportow cenowych")
+    _scheduler_thread = _runtime.thread
 
 
 def stop_price_report_scheduler():
@@ -393,12 +389,11 @@ def stop_price_report_scheduler():
     global _scheduler_thread
     
     _stop_event.set()
-    
-    if _scheduler_thread is not None:
-        _scheduler_thread.join(timeout=5)
-        _scheduler_thread = None
-    
-    logger.info("Zatrzymano scheduler raportow cenowych")
+    _runtime.stop(
+        stopping_message="Zatrzymywanie schedulera raportow cenowych...",
+        stopped_message="Zatrzymano scheduler raportow cenowych",
+    )
+    _scheduler_thread = None
 
 
 def start_price_report_now() -> int:
