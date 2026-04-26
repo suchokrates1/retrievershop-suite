@@ -81,7 +81,7 @@
                 <ul class="menu menu-horizontal flex-nowrap gap-1 hidden md:flex items-center mt-2 p-0">
                     <li><a class="{{ nav_cls(_ep == 'home') }}" href="{{ url_for('home') }}">Strona główna</a></li>
                     <li><a class="{{ nav_cls(_ep == 'stats_dashboard') }}" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
-                    <li><a class="{{ nav_cls(_bp == 'products') }}" href="{{ url_for('products.items') }}">Produkty</a></li>
+                    <li><a class="{{ nav_cls(_bp == 'products') }}" href="{{ url_for('products.items') }}">Przedmioty</a></li>
                     <li><a class="{{ nav_cls(_bp == 'orders') }}" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
                     <li><a class="{{ nav_cls(_bp == 'allegro') }}" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
                     <li><a class="{{ nav_cls(_bp == 'price_reports') }}" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
@@ -130,7 +130,7 @@
         <ul class="menu flex flex-col h-full p-0">
             <li><a class="{{ mob_cls(_ep == 'home') }}" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
             <li><a class="{{ mob_cls(_ep == 'stats_dashboard') }}" @click="menuOpen = false" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
-            <li><a class="{{ mob_cls(_bp == 'products') }}" @click="menuOpen = false" href="{{ url_for('products.items') }}">Produkty</a></li>
+            <li><a class="{{ mob_cls(_bp == 'products') }}" @click="menuOpen = false" href="{{ url_for('products.items') }}">Przedmioty</a></li>
             <li><a class="{{ mob_cls(_bp == 'orders') }}" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
             <li><a class="{{ mob_cls(_bp == 'allegro') }}" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
             <li><a class="{{ mob_cls(_bp == 'price_reports') }}" @click="menuOpen = false" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>
