@@ -12,7 +12,6 @@ Pokryte scenariusze:
 - barcode_endpoint w renderowanym HTML
 """
 import json
-import pytest
 from magazyn.db import get_session
 from magazyn.models import Product, ProductSize, Stocktake, StocktakeItem
 
@@ -284,7 +283,7 @@ class TestStocktakeUndo:
 
         with app.app_context():
             with get_session() as db:
-                item = db.query(StocktakeItem).get(item_id)
+                item = db.get(StocktakeItem, item_id)
                 assert item.scanned_qty == 2
 
 
