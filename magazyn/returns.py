@@ -18,19 +18,20 @@ import requests
 from sqlalchemy import desc
 
 from .db import get_session
+from .domain.returns import (
+    RETURN_STATUS_CANCELLED,
+    RETURN_STATUS_COMPLETED,
+    RETURN_STATUS_DELIVERED,
+    RETURN_STATUS_IN_TRANSIT,
+    RETURN_STATUS_PENDING,
+    map_allegro_return_status as _map_allegro_return_status,
+    map_carrier_to_allegro as _map_carrier_to_allegro,
+)
 from .models import Return, ReturnStatusLog, Order, OrderProduct, ProductSize, AllegroOffer
 from .notifications import send_messenger
 from . import allegro_api
 
 logger = logging.getLogger(__name__)
-
-# Statusy zwrotu
-RETURN_STATUS_PENDING = "pending"        # Zgloszony zwrot
-RETURN_STATUS_IN_TRANSIT = "in_transit"  # Paczka w drodze
-RETURN_STATUS_DELIVERED = "delivered"    # Paczka dostarczona do nas
-RETURN_STATUS_COMPLETED = "completed"    # Stan przywrocony
-RETURN_STATUS_CANCELLED = "cancelled"    # Anulowany
-
 
 def _add_return_status_log(db, return_id: int, status: str, notes: str = None) -> None:
     """Dodaj wpis do historii statusow zwrotu."""
@@ -300,24 +301,6 @@ def check_allegro_customer_returns() -> Dict[str, int]:
     return stats
 
 
-def _map_allegro_return_status(allegro_status: str) -> str:
-    """Mapuj status Allegro na wewnetrzny status zwrotu."""
-    # Statusy Allegro: CREATED, WAITING_FOR_PARCEL, PARCEL_IN_TRANSIT, 
-    # DELIVERED, ACCEPTED, REJECTED, COMMISSION_REFUNDED, FINISHED
-    status_map = {
-        "CREATED": RETURN_STATUS_PENDING,
-        "WAITING_FOR_PARCEL": RETURN_STATUS_PENDING,
-        "PARCEL_IN_TRANSIT": RETURN_STATUS_IN_TRANSIT,
-        "PARCEL_DELIVERED": RETURN_STATUS_DELIVERED,
-        "DELIVERED": RETURN_STATUS_DELIVERED,
-        "ACCEPTED": RETURN_STATUS_DELIVERED,
-        "COMMISSION_REFUNDED": RETURN_STATUS_COMPLETED,
-        "FINISHED": RETURN_STATUS_COMPLETED,
-        "REJECTED": RETURN_STATUS_CANCELLED,
-    }
-    return status_map.get(allegro_status, RETURN_STATUS_PENDING)
-
-
 def send_pending_return_notifications() -> Dict[str, int]:
     """
     Wyslij powiadomienia Messenger dla zwrotow bez powiadomienia.
@@ -409,32 +392,6 @@ def track_return_parcel(return_id: int) -> Optional[str]:
             logger.error(f"Blad sledzenia paczki zwrotnej: {e}")
         
         return None
-
-
-def _map_carrier_to_allegro(carrier_name: str) -> Optional[str]:
-    """Mapuj nazwe przewoznika na ID w Allegro API."""
-    if not carrier_name:
-        return None
-    
-    carrier_lower = carrier_name.lower()
-    
-    CARRIER_MAP = {
-        "inpost": "INPOST",
-        "paczkomat": "INPOST",
-        "dpd": "DPD",
-        "dhl": "DHL",
-        "ups": "UPS",
-        "fedex": "FEDEX",
-        "gls": "GLS",
-        "pocztex": "POCZTA_POLSKA",
-        "poczta": "POCZTA_POLSKA",
-    }
-    
-    for key, value in CARRIER_MAP.items():
-        if key in carrier_lower:
-            return value
-    
-    return "ALLEGRO"
 
 
 def check_and_update_return_statuses() -> Dict[str, int]:

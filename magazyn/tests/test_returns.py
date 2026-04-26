@@ -3,7 +3,6 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime
 
 # Importy beda dzialac w kontekscie testow
 # from magazyn.returns import (

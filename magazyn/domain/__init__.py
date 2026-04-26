@@ -8,4 +8,5 @@ __all__ = [
     "allegro_prices",
     "financial",
     "dashboard",
+    "returns",
 ]
