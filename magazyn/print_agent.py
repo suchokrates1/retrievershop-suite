@@ -4,10 +4,8 @@ import base64
 import json
 import logging
 import os
-import re
 import threading
 import time
-import unicodedata
 
 # fcntl is Unix-only, provide fallback for Windows
 try:
@@ -15,26 +13,33 @@ try:
 except ImportError:
     fcntl = None
 from collections import deque
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
 import requests
-from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 
 from .config import load_config, settings
-from .db import db_connect, table_has_column
 from .notifications import send_report
 from .parsing import parse_product_info
 from .services import consume_order_stock, get_sales_summary  # noqa: F401
 from .services.print_agent_config import (
     AgentConfig,
     ConfigError,
-    calculate_cod_amount,
+    calculate_cod_amount,  # noqa: F401 - publiczny re-export magazyn.print_agent
     is_cod_order,
     parse_time_str,
+)
+from .services.print_agent_delivery import resolve_delivery_service_id
+from .services.print_agent_storage import PrintAgentStorage, SuccessMarker
+from .services.print_agent_shipments import (
+    build_additional_services,
+    build_cod_payload,
+    build_packages,
+    build_receiver,
+    build_sender,
+    resolve_carrier_id,
+    shorten_product_name,
 )
 from .services.printing import CupsPrinter, PrintCommandError
 from .allegro_token_refresher import token_refresher
@@ -59,10 +64,10 @@ from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
     PRINT_AGENT_ITERATION_SECONDS,
     PRINT_AGENT_RETRIES_TOTAL,
+    PRINT_QUEUE_OLDEST_AGE_SECONDS,  # noqa: F401 - publiczny re-export magazyn.print_agent
+    PRINT_QUEUE_SIZE,  # noqa: F401 - publiczny re-export magazyn.print_agent
     PRINT_LABEL_ERRORS_TOTAL,
     PRINT_LABELS_TOTAL,
-    PRINT_QUEUE_OLDEST_AGE_SECONDS,
-    PRINT_QUEUE_SIZE,
 )
 
 
@@ -88,12 +93,6 @@ T = TypeVar("T")
 # Uzywamy short_preview z modulu utils
 
 
-@dataclass
-class SuccessMarker:
-    order_id: Optional[str]
-    timestamp: Optional[str]
-
-
 class LabelAgent:
     """Encapsulates the state and behaviour of the label printing agent."""
 
@@ -112,6 +111,11 @@ class LabelAgent:
         self._api_call_times: Deque[float] = deque()
         self._label_error_notifications: Dict[str, int] = {}
         self._workers: List = []
+        self.storage = PrintAgentStorage(
+            logger=self.logger,
+            now=lambda: datetime.now(),
+            handle_readonly_error=self._handle_readonly_error,
+        )
         self.printer = CupsPrinter(
             printer_name=config.printer_name,
             cups_server=config.cups_server,
@@ -297,301 +301,47 @@ class LabelAgent:
             raise ConfigError("Missing environment variables: " + ", ".join(missing))
 
     def ensure_db(self) -> None:
-        try:
-            with db_connect() as conn:
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS printed_orders("
-                    "order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
-                ))
-                if not table_has_column("printed_orders", "last_order_data"):
-                    conn.execute(text(
-                        "ALTER TABLE printed_orders ADD COLUMN last_order_data TEXT"
-                    ))
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS label_queue("
-                    "order_id TEXT, label_data TEXT, ext TEXT, last_order_data TEXT,"
-                    " queued_at TEXT, status TEXT, retry_count INTEGER DEFAULT 0)"
-                ))
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS agent_state("
-                    "key TEXT PRIMARY KEY, value TEXT)"
-                ))
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS allegro_replied_threads("
-                    "thread_id TEXT PRIMARY KEY, replied_at TEXT)"
-                ))
-                for col, default in [
-                    ("queued_at", None),
-                    ("status", "'queued'"),
-                    ("retry_count", "0"),
-                ]:
-                    if not table_has_column("label_queue", col):
-                        ddl = f"ALTER TABLE label_queue ADD COLUMN {col}"
-                        ddl += f" TEXT DEFAULT {default}" if default and col != "retry_count" else ""
-                        if col == "retry_count":
-                            ddl += " INTEGER DEFAULT 0"
-                        try:
-                            conn.execute(text(ddl))
-                        except (DBAPIError, Exception):
-                            pass
-
-                # Czyszczenie wpisow gdzie nazwa produktu zostala zamieniona na klienta
-                rows = conn.execute(text(
-                    "SELECT order_id, last_order_data FROM printed_orders"
-                )).fetchall()
-                for oid, data_json in rows:
-                    try:
-                        data = json.loads(data_json) if data_json else {}
-                    except Exception as exc:
-                        self.logger.debug(
-                            "Pominięto uszkodzone last_order_data dla %s: %s",
-                            oid,
-                            exc,
-                        )
-                        continue
-                    name = (data.get("name") or "").strip()
-                    cust = (data.get("customer") or "").strip()
-                    if name and cust and name == cust:
-                        prod_name, size, color = parse_product_info(
-                            (data.get("products") or [{}])[0]
-                        )
-                        data["name"] = prod_name
-                        data["size"] = size
-                        data["color"] = color
-                        conn.execute(
-                            text("UPDATE printed_orders SET last_order_data = :data WHERE order_id = :oid"),
-                            {"data": json.dumps(data), "oid": oid},
-                        )
-        except (DBAPIError, Exception) as exc:
-            if self._handle_readonly_error("database migrations", exc):
-                return
-            # Ignoruj race condition: wielu workerow probuje rownoczesnie stworzyc tabele
-            err_msg = str(exc).lower()
-            if "unique" in err_msg and ("pg_type" in err_msg or "already exists" in err_msg):
-                self.logger.debug("ensure_db: tabele juz istnieja (race condition) - pomijam")
-                return
-            self.logger.error("Blad ensure_db: %s", exc)
-            raise
+        self.storage.ensure_db()
 
     def ensure_db_init(self) -> None:
         self.ensure_db()
 
     def load_printed_orders(self) -> List[Dict[str, Any]]:
-        self.ensure_db()
-        with db_connect() as conn:
-            rows = conn.execute(text(
-                "SELECT order_id, printed_at, last_order_data FROM printed_orders ORDER BY printed_at DESC"
-            )).fetchall()
-        items: List[Dict[str, Any]] = []
-        for oid, ts, data_json in rows:
-            try:
-                data = json.loads(data_json) if data_json else {}
-            except Exception:  # pragma: no cover - defensive
-                data = {}
-            items.append(
-                {
-                    "order_id": oid,
-                    "printed_at": datetime.fromisoformat(ts),
-                    "last_order_data": data,
-                }
-            )
-        return items
+        return self.storage.load_printed_orders()
 
     def mark_as_printed(
         self, order_id: str, last_order_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        data_json = json.dumps(last_order_data or {})
-        try:
-            with db_connect() as conn:
-                conn.execute(
-                    text(
-                        "INSERT INTO printed_orders(order_id, printed_at, last_order_data) "
-                        "VALUES (:oid, :ts, :data) "
-                        "ON CONFLICT(order_id) DO UPDATE SET last_order_data = excluded.last_order_data"
-                    ),
-                    {"oid": order_id, "ts": datetime.now().isoformat(), "data": data_json},
-                )
-        except (DBAPIError, Exception) as exc:
-            if self._handle_readonly_error("mark_as_printed", exc):
-                return
-            raise
-        
-        # Also update order status in orders table
-        try:
-            from .services.order_status import add_order_status
-            from .db import get_session
-            with get_session() as db:
-                add_order_status(
-                    db, order_id, "wydrukowano",
-                    courier_code=last_order_data.get("courier_code") if last_order_data else None,
-                    tracking_number=last_order_data.get("delivery_package_nr") if last_order_data else None,
-                )
-                db.commit()
-        except Exception as status_exc:
-            self.logger.warning(
-                "Could not update order status for %s: %s", order_id, status_exc
-            )
+        self.storage.mark_as_printed(order_id, last_order_data)
 
     def _load_state_value(self, key: str) -> Optional[str]:
-        self.ensure_db()
-        with db_connect() as conn:
-            row = conn.execute(
-                text("SELECT value FROM agent_state WHERE key = :k"), {"k": key}
-            ).fetchone()
-        return row[0] if row else None
+        return self.storage.load_state_value(key)
 
     def _save_state_value(self, key: str, value: Optional[str]) -> None:
-        self.ensure_db()
-        try:
-            with db_connect() as conn:
-                if value is None:
-                    conn.execute(text("DELETE FROM agent_state WHERE key = :k"), {"k": key})
-                else:
-                    conn.execute(
-                        text(
-                            "INSERT INTO agent_state(key, value) VALUES (:k, :v) "
-                            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-                        ),
-                        {"k": key, "v": value},
-                    )
-        except (DBAPIError, Exception) as exc:
-            if self._handle_readonly_error("save agent state", exc):
-                return
-            raise
+        self.storage.save_state_value(key, value)
 
     def load_last_success_marker(self) -> SuccessMarker:
-        return SuccessMarker(
-            order_id=self._load_state_value("last_success_order_id"),
-            timestamp=self._load_state_value("last_success_timestamp"),
-        )
+        return self.storage.load_last_success_marker()
 
     def update_last_success_marker(
         self, order_id: Optional[str], timestamp: Optional[str] = None
     ) -> None:
-        if timestamp is None:
-            timestamp = datetime.now().isoformat()
-        self._save_state_value("last_success_timestamp", timestamp)
-        if order_id is not None:
-            self._save_state_value("last_success_order_id", order_id)
+        self.storage.update_last_success_marker(order_id, timestamp)
 
     def clean_old_printed_orders(self) -> None:
-        threshold = datetime.now() - timedelta(days=self.config.printed_expiry_days)
-        try:
-            with db_connect() as conn:
-                conn.execute(
-                    text("DELETE FROM printed_orders WHERE printed_at < :ts"),
-                    {"ts": threshold.isoformat()},
-                )
-        except (DBAPIError, Exception) as exc:
-            if self._handle_readonly_error("clean_old_printed_orders", exc):
-                return
-            raise
+        self.storage.clean_old_printed_orders(self.config.printed_expiry_days)
 
     def _deduplicate_queue(self, queue: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        items = list(queue)
-        seen: set[tuple] = set()
-        unique: List[Dict[str, Any]] = []
-        for item in items:
-            # Allow multiple labels per order (multi-package). Only drop exact duplicates.
-            key = (
-                item.get("order_id"),
-                item.get("ext"),
-                item.get("label_data"),
-            )
-            if key in seen:
-                self.logger.debug("Dropping duplicate queue entry for %s", item.get("order_id"))
-                continue
-            seen.add(key)
-            unique.append(item)
-        return unique
+        return self.storage.deduplicate_queue(queue)
 
     def _update_queue_metrics(self, queue: Iterable[Dict[str, Any]]) -> None:
-        queue_list = self._deduplicate_queue(queue)
-        size = len(queue_list)
-        PRINT_QUEUE_SIZE.set(size)
-
-        oldest = None
-        for item in queue_list:
-            queued_at = item.get("queued_at")
-            if not queued_at:
-                continue
-            try:
-                queued_time = datetime.fromisoformat(queued_at)
-            except ValueError:  # pragma: no cover - defensive
-                continue
-            if oldest is None or queued_time < oldest:
-                oldest = queued_time
-
-        if oldest is not None:
-            age = max(0.0, (datetime.now() - oldest).total_seconds())
-            PRINT_QUEUE_OLDEST_AGE_SECONDS.set(age)
-        else:
-            PRINT_QUEUE_OLDEST_AGE_SECONDS.set(0)
-
-        return queue_list
+        return self.storage.update_queue_metrics(queue)
 
     def load_queue(self) -> List[Dict[str, Any]]:
-        self.ensure_db()
-        with db_connect() as conn:
-            rows = conn.execute(text(
-                "SELECT order_id, label_data, ext, last_order_data, queued_at, status, retry_count FROM label_queue"
-            )).fetchall()
-        items: List[Dict[str, Any]] = []
-        for row in rows:
-            order_id, label_data, ext, last_order_json, queued_at, status = row[:6]
-            retry_count = row[6] if len(row) > 6 else 0
-            try:
-                last_data = json.loads(last_order_json) if last_order_json else {}
-            except Exception:  # pragma: no cover - defensive
-                last_data = {}
-            if not queued_at:
-                queued_at = datetime.now().isoformat()
-            items.append(
-                {
-                    "order_id": order_id,
-                    "label_data": label_data,
-                    "ext": ext,
-                    "last_order_data": last_data,
-                    "queued_at": queued_at,
-                    "status": status or "queued",
-                    "retry_count": retry_count or 0,
-                }
-            )
-        deduped = self._deduplicate_queue(items)
-        if len(deduped) != len(items):
-            self.logger.info(
-                "Removed %s duplicate queue entries from storage",
-                len(items) - len(deduped),
-            )
-            self.save_queue(deduped)
-        return deduped
+        return self.storage.load_queue()
 
     def save_queue(self, items: Iterable[Dict[str, Any]]) -> None:
-        items_list = self._update_queue_metrics(items)
-
-        try:
-            with db_connect() as conn:
-                conn.execute(text("DELETE FROM label_queue"))
-                for item in items_list:
-                    conn.execute(
-                        text(
-                            "INSERT INTO label_queue(order_id, label_data, ext, last_order_data, queued_at, status, retry_count)"
-                            " VALUES (:oid, :ldata, :ext, :odata, :qat, :st, :rc)"
-                        ),
-                        {
-                            "oid": item.get("order_id"),
-                            "ldata": item.get("label_data"),
-                            "ext": item.get("ext"),
-                            "odata": json.dumps(item.get("last_order_data", {}), default=str),
-                            "qat": item.get("queued_at"),
-                            "st": item.get("status", "queued"),
-                            "rc": item.get("retry_count", 0),
-                        },
-                    )
-        except (DBAPIError, Exception) as exc:
-            if self._handle_readonly_error("save_queue", exc):
-                return
-            raise
+        self.storage.save_queue(items)
 
     # ------------------------------------------------------------------
     # External integrations
@@ -852,104 +602,16 @@ class LabelAgent:
             )
             return []
 
-        # Dane nadawcy z ustawien (nazwy pol wg dokumentacji API)
         from .settings_store import settings_store
-        sender = {
-            "name": settings_store.get("SENDER_NAME") or "Alexandra Kaługa",
-            "street": settings_store.get("SENDER_STREET") or "",
-            "postalCode": settings_store.get("SENDER_ZIPCODE") or "",
-            "city": settings_store.get("SENDER_CITY") or "",
-            "countryCode": "PL",
-            "phone": settings_store.get("SENDER_PHONE") or "",
-            "email": settings_store.get("SENDER_EMAIL") or "",
-        }
-        sender_company = settings_store.get("SENDER_COMPANY") or "Retriever Shop"
-        if sender_company:
-            sender["company"] = sender_company[:30]
-
-        # Dane odbiorcy z zamowienia (nazwy pol wg dokumentacji API)
-        receiver = {
-            "name": order_data.get("delivery_fullname", ""),
-            "street": order_data.get("delivery_address", ""),
-            "postalCode": order_data.get("delivery_postcode", ""),
-            "city": order_data.get("delivery_city", ""),
-            "countryCode": order_data.get("delivery_country_code", "PL"),
-            "email": order_data.get("email", ""),
-            "phone": order_data.get("phone", ""),
-        }
-
-        # Punkt odbioru (paczkomat itp.) - pole "point" wg dokumentacji
-        point_id = order_data.get("delivery_point_id", "")
-        if point_id:
-            receiver["point"] = point_id
-
-        # Gabaryty InPost Paczkomat:
-        #   A: max  8 x 38 x 64 cm
-        #   B: max 19 x 38 x 64 cm
-        #   C: max 41 x 38 x 64 cm
+        sender = build_sender(settings_store)
+        receiver = build_receiver(order_data)
         products = order_data.get("products", [])
-        total_qty = sum(p.get("quantity", 1) for p in products)
-        if total_qty > 5:
-            pkg_dims = {"length": 64, "width": 38, "height": 19}  # Gabaryt B
-        else:
-            pkg_dims = {"length": 64, "width": 38, "height": 8}   # Gabaryt A
-
-        # Nazwy produktow na etykiecie
-        text_on_label = None
-        reference_number = None
-        if products:
-            product_names = []
-            for p in products:
-                name = shorten_product_name(p.get("name", ""))
-                qty = p.get("quantity", 1)
-                attrs = p.get("attributes", "")
-                label = name
-                if attrs:
-                    label = f"{name} ({attrs})"
-                if qty > 1:
-                    label = f"{label} x{qty}"
-                if label:
-                    product_names.append(label)
-            if product_names:
-                raw_ref = "; ".join(product_names)
-                # API dopuszcza tylko litery bez diakrytykow, cyfry, spacje i _/-
-                nfkd = unicodedata.normalize('NFKD', raw_ref)
-                ascii_ref = ''.join(c for c in nfkd if not unicodedata.combining(c))
-                sanitized = re.sub(r'[^a-zA-Z0-9 _/\-]', '', ascii_ref)
-                # textOnLabel - opis na etykiecie paczki (limit 30 znakow)
-                text_on_label = sanitized[:30]
-                # referenceNumber - sygnatura wewnetrzna (limit 30 znakow wg API)
-                reference_number = sanitized[:30]
-
-        packages = [
-            {
-                "type": "PACKAGE",
-                "weight": {"value": 1.0, "unit": "KILOGRAMS"},
-                "length": {"value": pkg_dims["length"], "unit": "CENTIMETER"},
-                "width": {"value": pkg_dims["width"], "unit": "CENTIMETER"},
-                "height": {"value": pkg_dims["height"], "unit": "CENTIMETER"},
-                **({"textOnLabel": text_on_label} if text_on_label else {}),
-            }
-        ]
-
-        # Nadanie InPost w punkcie (paczkomat/paczkopunkt)
-        additional_services = None
+        packages, reference_number = build_packages(products)
         carrier_id = self._resolve_carrier_id(delivery_method)
-        if carrier_id == "INPOST":
-            additional_services = ["sendingAtPoint"]
+        additional_services = build_additional_services(carrier_id)
 
         try:
-            cod_payload = None
-            if is_cod_order(
-                order_data.get("payment_method_cod", "0"),
-                order_data.get("payment_method", ""),
-            ):
-                cod_amount = calculate_cod_amount(order_data)
-                if cod_amount > 0:
-                    cod_payload = {
-                        "amount": str(cod_amount),
-                        "currency": "PLN",
-                    }
+            cod_payload = build_cod_payload(order_data)
 
             # 1. Wyslij komende tworzenia (async)
             cmd_result = create_shipment(
@@ -1060,108 +722,16 @@ class LabelAgent:
         if not delivery_method:
             return None
 
-        method_lower = delivery_method.lower()
-
         try:
             services = get_delivery_services()
         except Exception as exc:
             self.logger.error("Blad pobierania delivery services: %s", exc)
             return None
-
-        def _get_method_id(svc):
-            """Wyciagnij deliveryMethodId z id uslugi."""
-            svc_id = svc.get("id")
-            if isinstance(svc_id, dict):
-                return svc_id.get("deliveryMethodId")
-            return svc_id
-
-        def _is_allegro_standard(svc):
-            """Sprawdz czy usluga to Allegro Standard (bez umowy wlasnej)."""
-            svc_id = svc.get("id")
-            if isinstance(svc_id, dict):
-                return not svc_id.get("credentialsId")
-            return True
-
-        def _pick_best(candidates):
-            """Wybierz usluge Allegro Standard (SMART) jesli dostepna."""
-            allegro_std = [s for s in candidates if _is_allegro_standard(s)]
-            if allegro_std:
-                chosen = allegro_std[0]
-                self.logger.info(
-                    "Wybrano usluge Allegro Standard (SMART): %s (id=%s)",
-                    chosen.get("name"), _get_method_id(chosen),
-                )
-                return _get_method_id(chosen)
-            # Brak uslugi Allegro Standard - uzyj umowy wlasnej
-            chosen = candidates[0]
-            self.logger.warning(
-                "Brak uslugi Allegro Standard dla '%s' - uzywam umowy wlasnej: %s (id=%s, credentialsId=%s)",
-                delivery_method, chosen.get("name"), _get_method_id(chosen),
-                (chosen.get("id") or {}).get("credentialsId", "?"),
-            )
-            return _get_method_id(chosen)
-
-        # Szukaj dokladnego dopasowania po nazwie
-        exact = [s for s in services if (s.get("name") or "").lower() == method_lower]
-        if exact:
-            return _pick_best(exact)
-
-        # Szukaj czesciowego dopasowania
-        partial = [
-            s for s in services
-            if method_lower in (s.get("name") or "").lower()
-            or (s.get("name") or "").lower() in method_lower
-        ]
-        if partial:
-            return _pick_best(partial)
-
-        # Szukaj dopasowania po kluczowych slowach (np. "inpost", "paczkomat")
-        method_keywords = set(method_lower.split())
-        keyword_matches = []
-        for svc in services:
-            svc_name = (svc.get("name") or "").lower()
-            svc_keywords = set(svc_name.split())
-            common = method_keywords & svc_keywords
-            if len(common) >= 2:
-                keyword_matches.append(svc)
-        if keyword_matches:
-            return _pick_best(keyword_matches)
-
-        self.logger.warning(
-            "Nie znaleziono delivery_service_id dla '%s' "
-            "wsrod %d dostepnych uslug: %s", delivery_method, len(services),
-            [s.get("name") for s in services[:20]],
-        )
-        return None
+        return resolve_delivery_service_id(delivery_method, services, self.logger)
 
     def _resolve_carrier_id(self, delivery_method: str) -> Optional[str]:
         """Mapuj nazwe metody dostawy na carrier_id Allegro."""
-        if not delivery_method:
-            return None
-
-        method_lower = delivery_method.lower()
-
-        carrier_map = {
-            "inpost": "INPOST",
-            "paczkomat": "INPOST",
-            "dhl": "DHL",
-            "dpd": "DPD",
-            "poczta": "POCZTA_POLSKA",
-            "pocztex": "POCZTA_POLSKA",
-            "ups": "UPS",
-            "gls": "GLS",
-            "fedex": "FEDEX",
-            "orlen": "ALLEGRO",
-            "allegro one": "ALLEGRO",
-            "allegro kurier": "ALLEGRO",
-            "allegro automat": "ALLEGRO",
-        }
-
-        for key, carrier_id in carrier_map.items():
-            if key in method_lower:
-                return carrier_id
-
-        return "OTHER"
+        return resolve_carrier_id(delivery_method)
 
     def _recreate_shipment_and_get_label(
         self,
@@ -2084,13 +1654,6 @@ class LabelAgent:
         token_refresher.stop()
 
 
-def shorten_product_name(full_name: str) -> str:
-    words = full_name.strip().split()
-    if len(words) >= 3:
-        return f"{words[0]} {' '.join(words[-2:])}"
-    return full_name
-
-
 # Instantiate default agent used throughout the application.
 agent = LabelAgent(AgentConfig.from_settings(settings), settings)
 logger = agent.logger
@@ -2113,6 +1676,10 @@ __all__ = [
     "PrintError",
     "agent",
     "logger",
+    "calculate_cod_amount",
+    "parse_product_info",
     "parse_time_str",
+    "PRINT_QUEUE_OLDEST_AGE_SECONDS",
+    "PRINT_QUEUE_SIZE",
     "shorten_product_name",
 ]
