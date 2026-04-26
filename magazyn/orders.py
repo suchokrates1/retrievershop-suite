@@ -19,6 +19,10 @@ from .models import Order, OrderProduct, OrderStatusLog, ProductSize, Product, R
 from .services.order_detail_builder import (
     build_order_detail_context,
 )
+from .services.order_status import (
+    add_order_status as _add_order_status_service,
+    dispatch_status_email,
+)
 from .services.tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
@@ -167,8 +171,9 @@ bp = Blueprint("orders", __name__)
 
 
 from .status_config import (
-    VALID_STATUSES, STATUS_HIERARCHY, STATUS_EMAIL_MAP,
-    STATUS_FILTER_GROUPS, get_status_display,
+    VALID_STATUSES,
+    STATUS_FILTER_GROUPS,
+    get_status_display,
 )
 
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
@@ -1005,69 +1010,8 @@ def sync_order_from_data(db, order_data: dict) -> Order:
 
 
 def _dispatch_status_email(db, order_id: str, status: str):
-    """Wyslij email do klienta przy zmianie statusu zamowienia."""
-    email_type = STATUS_EMAIL_MAP.get(status)
-    if not email_type:
-        logger.debug("Email dispatch: brak mapowania dla statusu '%s'", status)
-        return
-
-    from .services.invoice_service import _was_email_sent, _mark_email_sent
-
-    # Flush sesji aby nowo dodane obiekty (zamowienie, produkty) byly
-    # widoczne w zapytaniach - SessionLocal ma autoflush=False.
-    db.flush()
-
-    order = db.query(Order).filter(Order.order_id == order_id).first()
-    if not order or not order.email:
-        logger.warning(
-            "Email dispatch: brak zamowienia lub adresu email dla %s", order_id
-        )
-        return
-
-    if _was_email_sent(order, email_type):
-        logger.debug(
-            "Email '%s' juz wyslany dla %s - pomijam", email_type, order_id
-        )
-        return
-
-    logger.info(
-        "Wysylam email '%s' dla zamowienia %s na %s",
-        email_type, order_id, order.email,
-    )
-
-    try:
-        from .services.email_service import (
-            send_order_confirmation,
-            send_shipment_notification,
-            send_delivery_confirmation,
-            send_invoice_correction,
-        )
-
-        sent = False
-        if email_type == "confirmation":
-            sent = send_order_confirmation(order)
-        elif email_type == "shipment":
-            sent = send_shipment_notification(order)
-        elif email_type == "delivery":
-            sent = send_delivery_confirmation(order)
-        elif email_type == "correction":
-            sent = send_invoice_correction(order)
-
-        if sent:
-            _mark_email_sent(db, order, email_type)
-            logger.info(
-                "Email '%s' wyslany dla zamowienia %s", email_type, order_id
-            )
-        else:
-            logger.warning(
-                "Email '%s' NIE wyslany dla zamowienia %s (send zwrocilo False)",
-                email_type, order_id,
-            )
-    except Exception as exc:
-        logger.error(
-            "Blad wysylki emaila '%s' dla zamowienia %s: %s",
-            email_type, order_id, exc, exc_info=True,
-        )
+    """Kompatybilny wrapper dla starego importu z orders.py."""
+    return dispatch_status_email(db, order_id, status)
 
 
 def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, allow_backwards: bool = False, send_email: bool = True, **kwargs) -> Optional[OrderStatusLog]:
@@ -1086,57 +1030,16 @@ def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, 
     Returns:
         OrderStatusLog lub None jeśli pominięto (duplikat lub cofnięcie)
     """
-    order = db.query(Order).filter(Order.order_id == order_id).first()
-
-    tracking_number = kwargs.get("tracking_number")
-    courier_code = kwargs.get("courier_code")
-
-    if order is not None:
-        if tracking_number:
-            order.delivery_package_nr = tracking_number
-        if courier_code:
-            order.courier_code = courier_code
-
-    # Sprawdź ostatni status
-    last_status = db.query(OrderStatusLog).filter(
-        OrderStatusLog.order_id == order_id
-    ).order_by(desc(OrderStatusLog.timestamp)).first()
-    
-    # Sprawdź czy to duplikat (ten sam status)
-    if skip_if_same and last_status and last_status.status == status:
-        return None  # Status się nie zmienił, pomijamy
-    
-    # Sprawdź hierarchię statusów (nie pozwól na cofanie)
-    if not allow_backwards and last_status:
-        last_priority = STATUS_HIERARCHY.get(last_status.status, -1)
-        new_priority = STATUS_HIERARCHY.get(status, -1)
-        
-        # Przejscie ze statusu problemowego (999) do normalnego jest zawsze dozwolone
-        # (np. blad_druku -> wydrukowano po udanym retry)
-        if new_priority != 999 and last_priority != 999 and last_priority != -1 and new_priority < last_priority:
-            # Cofnięcie statusu - logujemy i pomijamy
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                f"Pominięto cofnięcie statusu zamówienia {order_id}: "
-                f"{last_status.status} (priorytet {last_priority}) → {status} (priorytet {new_priority})"
-            )
-            return None
-    
-    log = OrderStatusLog(
-        order_id=order_id,
-        status=status,
-        tracking_number=tracking_number,
-        courier_code=courier_code,
-        notes=kwargs.get("notes"),
+    return _add_order_status_service(
+        db,
+        order_id,
+        status,
+        skip_if_same=skip_if_same,
+        allow_backwards=allow_backwards,
+        send_email=send_email,
+        dispatch_email=_dispatch_status_email,
+        **kwargs,
     )
-    db.add(log)
-
-    # Wyslij email do klienta przy zmianie statusu
-    if send_email:
-        _dispatch_status_email(db, order_id, status)
-
-    return log
 
 
 
