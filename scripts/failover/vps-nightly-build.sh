@@ -15,27 +15,24 @@ REPO_DIR="/home/suchokrates1/retrievershop-suite"
 IMAGE_NAME="retrievershop-suite-magazyn_app"
 FAILOVER_DIR="/home/suchokrates1/failover"
 LOG_PREFIX="[vps-build]"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMMON_FILE="${FAILOVER_COMMON:-$SCRIPT_DIR/common.sh}"
+if [ ! -f "$COMMON_FILE" ] && [ -f "$FAILOVER_DIR/common.sh" ]; then
+    COMMON_FILE="$FAILOVER_DIR/common.sh"
+fi
+if [ ! -f "$COMMON_FILE" ]; then
+    echo "FATAL: Brak common.sh" >&2
+    exit 1
+fi
+. "$COMMON_FILE"
 
 # --- Sekrety z pliku ---
 SECRETS_FILE="$FAILOVER_DIR/secrets.env"
-if [ ! -f "$SECRETS_FILE" ]; then echo "FATAL: Brak $SECRETS_FILE" >&2; exit 1; fi
-. "$SECRETS_FILE"
+load_secrets "$SECRETS_FILE"
 
-MESSENGER_API="https://graph.facebook.com/v22.0/me/messages"
-
-log()     { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_PREFIX} $*"; }
-log_ok()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_PREFIX} OK: $*"; }
-log_err() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_PREFIX} ERROR: $*"; }
-
-send_messenger() {
-    local msg="$1"
-    curl -sf --max-time 10 \
-        -X POST "$MESSENGER_API" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${MESSENGER_TOKEN}" \
-        -d "{\"recipient\":{\"id\":\"${MESSENGER_RECIPIENT}\"},\"messaging_type\":\"UPDATE\",\"message\":{\"text\":$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$msg")}}" \
-        > /dev/null 2>&1
-}
+LOCK_FILE="$FAILOVER_DIR/vps-nightly-build.lock"
+exec 201>"$LOCK_FILE"
+flock -n 201 || { log "Inny nightly build juz dziala - pomijam"; exit 0; }
 
 log "=== Nocny build VPS start ==="
 
@@ -51,10 +48,31 @@ log "git pull..."
 cd "$REPO_DIR" || { log_err "Brak katalogu $REPO_DIR"; exit 1; }
 
 OLD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-if ! git pull --ff-only origin main 2>&1; then
-    log_err "git pull nie powiodl sie - probujesz reset"
-    git fetch origin main
-    git reset --hard origin/main
+if [ -n "$(git status --porcelain)" ]; then
+    log_err "Repo na VPS ma lokalne zmiany - przerywam build bez resetowania"
+    send_messenger "VPS build BLAD!
+Repo ma lokalne zmiany, build przerwany bez resetowania
+Commit: $OLD_COMMIT
+$(date '+%Y-%m-%d %H:%M')"
+    exit 1
+fi
+
+if ! git fetch origin main 2>&1; then
+    log_err "git fetch nie powiodl sie"
+    send_messenger "VPS build BLAD!
+git fetch nie powiodl sie
+Commit: $OLD_COMMIT
+$(date '+%Y-%m-%d %H:%M')"
+    exit 1
+fi
+
+if ! git merge --ff-only origin/main 2>&1; then
+    log_err "git merge --ff-only nie powiodl sie - przerywam bez resetowania"
+    send_messenger "VPS build BLAD!
+Nie mozna wykonac fast-forward merge, build przerwany bez resetowania
+Commit: $OLD_COMMIT
+$(date '+%Y-%m-%d %H:%M')"
+    exit 1
 fi
 NEW_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -68,7 +86,7 @@ log "Commit: $OLD_COMMIT -> $NEW_COMMIT"
 log "Docker build..."
 BUILD_START=$(date +%s)
 
-if docker build -t "$IMAGE_NAME" -f magazyn/Dockerfile . 2>&1 | tail -5; then
+if docker build --pull -t "$IMAGE_NAME" -f magazyn/Dockerfile . 2>&1 | tail -5; then
     BUILD_END=$(date +%s)
     BUILD_TIME=$(( BUILD_END - BUILD_START ))
     IMAGE_SIZE=$(docker images "$IMAGE_NAME" --format '{{.Size}}' | head -1)
@@ -82,9 +100,22 @@ $(date '+%Y-%m-%d %H:%M')"
     exit 1
 fi
 
+log "Smoke test obrazu..."
+if docker run --rm --entrypoint python "$IMAGE_NAME" -m compileall -q /app/magazyn; then
+    log_ok "Smoke test obrazu przeszedl"
+else
+    log_err "Smoke test obrazu nie powiodl sie"
+    send_messenger "VPS build BLAD!
+Smoke test obrazu nie powiodl sie
+Commit: $NEW_COMMIT
+$(date '+%Y-%m-%d %H:%M')"
+    exit 1
+fi
+
 # 3. Usun stary kontener (wymusi uzycie nowego image przy nastepnym failoverze)
-if docker ps -a --format '{{.Names}}' | grep -q "^magazyn-failover$"; then
-    # Tylko jezeli nie jest uruchomiony (failover nieaktywny - sprawdzilismy wyzej)
+if docker ps --format '{{.Names}}' | grep -q "^magazyn-failover$"; then
+    log_warn "magazyn-failover jest uruchomiony - nie usuwam kontenera"
+elif docker ps -a --format '{{.Names}}' | grep -q "^magazyn-failover$"; then
     docker rm -f magazyn-failover 2>/dev/null
     log_ok "Stary kontener magazyn-failover usuniety"
 fi

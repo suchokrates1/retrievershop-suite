@@ -21,6 +21,7 @@ from .services.order_status import (
     add_order_status as _add_order_status_service,
     dispatch_status_email,
 )
+from .services.order_labels import reprint_order_labels
 from .services.order_presentation import _get_status_display, _unix_to_datetime
 from .services.tracking import get_tracking_url
 
@@ -435,33 +436,11 @@ def update_order_status(order_id: str):
 @login_required
 def reprint_label(order_id: str):
     """Reprint shipping label for an order."""
-    from . import print_agent
-    
     try:
-        # Try to get packages and print labels
-        packages = print_agent.get_order_packages(order_id)
-        printed_any = False
-        
-        for pkg in packages:
-            pid = pkg.get("shipment_id") or pkg.get("package_id")
-            code = pkg.get("courier_code") or pkg.get("carrier_id") or ""
-            if not pid:
-                continue
-            label_data, ext = print_agent.get_label(code, pid)
-            if label_data:
-                print_agent.print_label(label_data, ext, order_id)
-                printed_any = True
-        
-        if printed_any:
-            # Add status log entry
-            with get_session() as db:
-                add_order_status(db, order_id, "wydrukowano", notes="Reprint etykiety")
-                db.commit()
-            flash("Etykieta została wysłana do drukarki", "success")
-        else:
-            flash("Nie znaleziono etykiety do wydruku", "warning")
-            
+        result = reprint_order_labels(order_id)
+        flash(result.message, result.category)
     except Exception as exc:
+        logger.exception("Blad drukowania etykiety dla zamowienia %s", order_id)
         flash(f"Błąd drukowania: {exc}", "error")
     
     # Redirect back to wherever the user came from

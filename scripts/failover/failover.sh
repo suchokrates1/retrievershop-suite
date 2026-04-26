@@ -14,6 +14,17 @@
 set -uo pipefail
 
 FAILOVER_DIR="/home/suchokrates1/failover"
+LOG_PREFIX="[failover]"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMMON_FILE="${FAILOVER_COMMON:-$SCRIPT_DIR/common.sh}"
+if [ ! -f "$COMMON_FILE" ] && [ -f "$FAILOVER_DIR/common.sh" ]; then
+    COMMON_FILE="$FAILOVER_DIR/common.sh"
+fi
+if [ ! -f "$COMMON_FILE" ]; then
+    echo "FATAL: Brak common.sh" >&2
+    exit 1
+fi
+. "$COMMON_FILE"
 STATE_FILE="$FAILOVER_DIR/state"
 FAIL_COUNT_FILE="$FAILOVER_DIR/fail_count"
 CF_RECORD_FILE="$FAILOVER_DIR/cf_record_id"
@@ -21,7 +32,7 @@ CF_RECORD_FILE="$FAILOVER_DIR/cf_record_id"
 # --- flock: zapobieganie rownoleglemu uruchomieniu z crona ---
 LOCK_FILE="$FAILOVER_DIR/failover.lock"
 exec 200>"$LOCK_FILE"
-flock -n 200 || { echo "[$(date '+%Y-%m-%d %H:%M:%S')] Inny failover.sh juz dziala - pomijam"; exit 0; }
+flock -n 200 || { log "Inny failover.sh juz dziala - pomijam"; exit 0; }
 
 MINIPC_TAILSCALE="100.110.194.46"
 # Normalny check: publiczny URL przez Cloudflare tunnel minipc
@@ -32,25 +43,14 @@ REQUIRED_FAILS=2
 
 # --- Sekrety z pliku (NIE commitowac do git) ---
 SECRETS_FILE="$FAILOVER_DIR/secrets.env"
-if [ ! -f "$SECRETS_FILE" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL: Brak $SECRETS_FILE" >&2
-    exit 1
-fi
-# shellcheck source=/dev/null
-. "$SECRETS_FILE"
+load_secrets "$SECRETS_FILE"
 
 VPS_TUNNEL_CNAME="59d6c42e-f783-448d-8302-905acb1bab14.cfargotunnel.com"
 CLOUDFLARED_CONFIG="/etc/cloudflared/config.yml"
 
 WAHA_URL="http://${MINIPC_TAILSCALE}:3001"
-MESSENGER_API="https://graph.facebook.com/v22.0/me/messages"
 SNAPSHOT_FILE="$FAILOVER_DIR/snapshot.json"
 ACTIVATE_TIME_FILE="$FAILOVER_DIR/activate_time"
-
-log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-log_ok()   { echo "[$(date '+%Y-%m-%d %H:%M:%S')] OK: $*"; }
-log_err()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*"; }
-log_warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $*"; }
 
 get_state()      { cat "$STATE_FILE" 2>/dev/null || echo "normal"; }
 set_state()      { echo "$1" > "$STATE_FILE"; }
@@ -80,17 +80,7 @@ send_waha() {
         -X POST "${WAHA_URL}/api/sendText" \
         -H "Content-Type: application/json" \
         -H "X-Api-Key: ${WAHA_KEY}" \
-        -d "{\"chatId\":\"${WAHA_TO}\",\"text\":$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$msg"),\"session\":\"default\"}" \
-        > /dev/null 2>&1 && return 0 || return 1
-}
-
-send_messenger() {
-    local msg="$1"
-    curl -sf --max-time 10 \
-        -X POST "$MESSENGER_API" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${MESSENGER_TOKEN}" \
-        -d "{\"recipient\":{\"id\":\"${MESSENGER_RECIPIENT}\"},\"messaging_type\":\"UPDATE\",\"message\":{\"text\":$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$msg")}}" \
+        -d "{\"chatId\":\"${WAHA_TO}\",\"text\":$(json_string "$msg"),\"session\":\"default\"}" \
         > /dev/null 2>&1 && return 0 || return 1
 }
 

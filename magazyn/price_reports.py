@@ -30,10 +30,10 @@ from .models import (
     PriceReport,
     PriceReportItem,
     AllegroOffer,
-    ExcludedSeller,
 )
 from .settings_store import settings_store
 from .domain.price_report_profit import calculate_report_item_profit
+from .services import price_report_admin
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,7 @@ bp = Blueprint("price_reports", __name__, url_prefix="/price-reports")
 
 def get_max_discount_percent() -> float:
     """Pobiera maksymalny procent znizki z ustawien."""
-    try:
-        value = settings_store.get("PRICE_MAX_DISCOUNT_PERCENT", "5")
-        return float(value)
-    except (ValueError, TypeError):
-        return 5.0
+    return price_report_admin.get_max_discount_percent()
 
 
 @bp.route("/")
@@ -308,14 +304,12 @@ def current_status():
 @login_required
 def start_manual_report():
     """Reczne uruchomienie raportu cenowego."""
-    from .price_report_scheduler import start_price_report_now
-    
     try:
-        report_id = start_price_report_now()
-        flash(f"Rozpoczeto generowanie raportu #{report_id}", "success")
-    except Exception as e:
-        logger.error(f"Blad uruchamiania raportu: {e}", exc_info=True)
-        flash(f"Blad: {e}", "error")
+        result = price_report_admin.start_manual_report()
+        flash(result.message, result.category)
+    except Exception as exc:
+        logger.exception("Blad uruchamiania raportu")
+        flash(f"Blad: {exc}", "error")
     
     return redirect(url_for("price_reports.reports_list"))
 
@@ -324,17 +318,12 @@ def start_manual_report():
 @login_required
 def resume_report(report_id):
     """Wznawia przetwarzanie przerwanego raportu."""
-    from .price_report_scheduler import resume_price_report
-    
     try:
-        resumed_id = resume_price_report(report_id)
-        if resumed_id:
-            flash(f"Wznowiono raport #{resumed_id}", "success")
-        else:
-            flash("Nie znaleziono raportu do wznowienia", "error")
-    except Exception as e:
-        logger.error(f"Blad wznawiania raportu: {e}", exc_info=True)
-        flash(f"Blad: {e}", "error")
+        result = price_report_admin.resume_report(report_id)
+        flash(result.message, result.category)
+    except Exception as exc:
+        logger.exception("Blad wznawiania raportu")
+        flash(f"Blad: {exc}", "error")
     
     return redirect(url_for("price_reports.reports_list"))
 
@@ -348,17 +337,12 @@ def restart_report(report_id):
     - Resetuje status raportu na 'running'
     - Uruchamia kontynuowanie sprawdzania
     """
-    from .price_report_scheduler import restart_price_report
-    
     try:
-        result = restart_price_report(report_id)
-        if result.get("success"):
-            flash(f"Zrestartowano raport #{report_id}: {result.get('removed_errors', 0)} bledow usunieto, {result.get('remaining', 0)} do sprawdzenia", "success")
-        else:
-            flash(result.get("error", "Nieznany blad"), "error")
-    except Exception as e:
-        logger.error(f"Blad restartowania raportu: {e}", exc_info=True)
-        flash(f"Blad: {e}", "error")
+        result = price_report_admin.restart_report(report_id)
+        flash(result.message, result.category)
+    except Exception as exc:
+        logger.exception("Blad restartowania raportu")
+        flash(f"Blad: {exc}", "error")
     
     return redirect(url_for("price_reports.report_detail", report_id=report_id))
 
@@ -369,23 +353,18 @@ def settings():
     """Ustawienia raportow cenowych."""
     if request.method == "POST":
         try:
-            max_discount = request.form.get("max_discount", "5")
-            settings_store.update({
-                "PRICE_MAX_DISCOUNT_PERCENT": max_discount,
-            })
-            flash("Zapisano ustawienia", "success")
-        except Exception as e:
-            flash(f"Blad zapisu: {e}", "error")
+            result = price_report_admin.update_max_discount(
+                request.form.get("max_discount", "5")
+            )
+            flash(result.message, result.category)
+        except Exception as exc:
+            logger.exception("Blad zapisu ustawien raportow cenowych")
+            flash(f"Blad zapisu: {exc}", "error")
         
         return redirect(url_for("price_reports.settings"))
     
     current_max_discount = get_max_discount_percent()
-    
-    # Pobierz liste wykluczonych sprzedawcow
-    with get_session() as session:
-        excluded_sellers = session.query(ExcludedSeller).order_by(
-            ExcludedSeller.excluded_at.desc()
-        ).all()
+    excluded_sellers = price_report_admin.list_excluded_sellers()
     
     return render_template(
         "price_reports/settings.html",
@@ -398,33 +377,15 @@ def settings():
 @login_required
 def exclude_seller():
     """Dodaje sprzedawce do listy wykluczonych."""
-    seller_name = request.form.get("seller_name", "").strip()
-    reason = request.form.get("reason", "").strip() or None
-    
-    if not seller_name:
-        flash("Podaj nazwe sprzedawcy", "error")
-        return redirect(url_for("price_reports.settings"))
-    
     try:
-        with get_session() as session:
-            # Sprawdz czy juz wykluczony
-            existing = session.query(ExcludedSeller).filter(
-                ExcludedSeller.seller_name == seller_name
-            ).first()
-            
-            if existing:
-                flash(f"Sprzedawca '{seller_name}' juz jest wykluczony", "warning")
-            else:
-                excluded = ExcludedSeller(
-                    seller_name=seller_name,
-                    reason=reason
-                )
-                session.add(excluded)
-                session.commit()
-                flash(f"Wykluczono sprzedawce '{seller_name}'", "success")
-    except Exception as e:
-        logger.error(f"Blad wykluczania sprzedawcy: {e}", exc_info=True)
-        flash(f"Blad: {e}", "error")
+        result = price_report_admin.exclude_seller(
+            request.form.get("seller_name", ""),
+            request.form.get("reason", ""),
+        )
+        flash(result.message, result.category)
+    except Exception as exc:
+        logger.exception("Blad wykluczania sprzedawcy")
+        flash(f"Blad: {exc}", "error")
     
     return redirect(url_for("price_reports.settings"))
 
@@ -434,21 +395,11 @@ def exclude_seller():
 def remove_excluded_seller(seller_id):
     """Usuwa sprzedawce z listy wykluczonych."""
     try:
-        with get_session() as session:
-            seller = session.query(ExcludedSeller).filter(
-                ExcludedSeller.id == seller_id
-            ).first()
-            
-            if seller:
-                name = seller.seller_name
-                session.delete(seller)
-                session.commit()
-                flash(f"Usunieto '{name}' z listy wykluczonych", "success")
-            else:
-                flash("Nie znaleziono sprzedawcy", "error")
-    except Exception as e:
-        logger.error(f"Blad usuwania wykluczenia: {e}", exc_info=True)
-        flash(f"Blad: {e}", "error")
+        result = price_report_admin.remove_excluded_seller(seller_id)
+        flash(result.message, result.category)
+    except Exception as exc:
+        logger.exception("Blad usuwania wykluczenia")
+        flash(f"Blad: {exc}", "error")
     
     return redirect(url_for("price_reports.settings"))
 
