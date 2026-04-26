@@ -24,6 +24,8 @@ VIEWPORTS = {
 
 # JS do zamrazania dynamicznej tresci (daty, timestampy, loading spinnery)
 _FREEZE_DYNAMIC_JS = """() => {
+    document.querySelectorAll('[data-e2e-stable-text]')
+        .forEach(el => el.textContent = el.dataset.e2eStableText || '---');
     document.querySelectorAll('input[type="date"], input[type="datetime-local"], time, .loading-spinner')
         .forEach(el => el.style.visibility = 'hidden');
     document.querySelectorAll('[data-testid="timestamp"], .relative-time')

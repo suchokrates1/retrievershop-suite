@@ -30,7 +30,7 @@
         <div class="text-center sm:text-left w-full sm:w-auto">
             <div class="flex items-center justify-center sm:justify-start gap-2 mb-1">
                 <h2 class="mb-0"><i class="bi bi-speedometer2 mr-2"></i>Centrum Dowodzenia</h2>
-                <span class="text-base-content/80 text-sm whitespace-nowrap"><i class="bi bi-clock mr-1"></i>{{ now().strftime('%d.%m.%Y %H:%M') }}</span>
+                <span class="text-base-content/80 text-sm whitespace-nowrap"><i class="bi bi-clock mr-1"></i><span data-e2e-stable-text="02.04.2026 16:50">{{ now().strftime('%d.%m.%Y %H:%M') }}</span></span>
             </div>
             <p class="text-base-content/80 mb-0 text-sm">Witaj, {{ username }}! Oto przegląd Twojego sklepu.</p>
         </div>
@@ -139,7 +139,7 @@
         <div class="md:col-span-8">
             <div class="home-module h-full">
                 <div class="module-header">
-                    <i class="bi bi-graph-up mr-2"></i>{{ dashboard.current_month_name }} {{ now().strftime('%Y') }}
+                    <i class="bi bi-graph-up mr-2"></i><span data-e2e-stable-text="Kwiecień 2026">{{ dashboard.current_month_name }} {{ now().strftime('%Y') }}</span>
                 </div>
                 <div class="py-8 px-4">
                     <div class="grid grid-cols-2 sm:grid-cols-4 text-center gap-y-4">
@@ -198,7 +198,7 @@
                                             </div>
                                         </template>
                                         <template x-if="!profit.returns_count || profit.returns_count === 0">
-                                            <div class="text-base-content/80 text-sm mt-1">Brak zwrot\u00f3w</div>
+                                            <div class="text-base-content/80 text-sm mt-1">Brak zwrotów</div>
                                         </template>
                                     </div>
                                 </template>
