@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column('name', sa.String(length=200), nullable=False),
         sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(), nullable=True, onupdate=sa.func.now()),
         sa.PrimaryKeyConstraint('id')

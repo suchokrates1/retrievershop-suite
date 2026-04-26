@@ -29,7 +29,7 @@ This repository contains the code for the RetrieverShop warehouse application wi
 
 2. **Run with Docker:**
    ```bash
-   docker-compose up -d
+   docker compose up -d --build
    ```
 
 3. **Access the application:**
@@ -80,6 +80,8 @@ This repository contains the code for the RetrieverShop warehouse application wi
 | `API_RETRY_BACKOFF_INITIAL` | Initial delay in seconds before retrying API calls |
 | `API_RETRY_BACKOFF_MAX` | Maximum delay in seconds between API retries |
 | `DB_PATH` | Path to the SQLite database file |
+| `POSTGRES_PASSWORD` | Password for the PostgreSQL service used by Docker Compose |
+| `DATABASE_URL` | Optional SQLAlchemy database URL; Docker Compose derives it from `POSTGRES_PASSWORD` |
 | `SECRET_KEY` | Secret key for Flask sessions |
 | `COMMISSION_ALLEGRO` | Commission percentage charged by Allegro |
 | `ALLEGRO_CLIENT_ID` | Client identifier for Allegro OAuth |
@@ -233,7 +235,7 @@ the referenced product size disappears.
 Start the stack using the `docker-compose.yml` file in the repository root:
 
 ```bash
-docker compose up
+docker compose up -d --build
 ```
 
 The compose configuration mounts the environment files so updates made through
@@ -255,12 +257,10 @@ docker run --env-file=.env retrievershop/magazyn \
   gunicorn magazyn.wsgi:app --bind 0.0.0.0:8000
 ```
 
-The application uses a SQLite database stored in `magazyn/database.db`. This
-file is created automatically on first startup if it does not already exist.
-When running the stack in Docker, this file is mounted inside the container as
-`/app/database.db` and the `DB_PATH` variable in your `.env` file should point
-to that location. The value is read only during startup so any changes require
-restarting the application.
+The Docker Compose stack uses the bundled PostgreSQL service. Set
+`POSTGRES_PASSWORD` in `.env`; compose derives `DATABASE_URL` for the app as
+`postgresql://magazyn:<password>@postgres:5432/magazyn`. SQLite remains useful
+for lightweight local runs outside Docker through `DB_PATH`.
 
 ## Database migration
 

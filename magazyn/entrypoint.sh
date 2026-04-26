@@ -27,7 +27,7 @@ upgrade_excluded(engine)
 upgrade_competitor_details()
 "
 else
-    echo "PostgreSQL detected - skipping legacy SQLite migrations (schema managed by SQLAlchemy)"
+    echo "PostgreSQL detected - skipping legacy SQLite migrations (schema managed by Alembic)"
 fi
 
 echo "Starting Gunicorn..."

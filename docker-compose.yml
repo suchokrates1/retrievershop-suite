@@ -36,9 +36,11 @@ services:
         source: /var/run/cups
         target: /var/run/cups
         bind:
+          create_host_path: true
           propagation: rshared
     env_file: .env
     environment:
+      - DATABASE_URL=postgresql://magazyn:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/magazyn
       - CUPS_SERVER=/var/run/cups/cups.sock
       - CDP_HOST=192.168.31.5
       - CDP_PORT=9223

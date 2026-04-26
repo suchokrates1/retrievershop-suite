@@ -45,15 +45,15 @@ def upgrade() -> None:
                 nullable=False,
             ),
             sa.Column("type", sa.String(), nullable=False),
-            sa.Column("read", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+            sa.Column("read", sa.Boolean(), server_default=sa.false(), nullable=False),
             sa.PrimaryKeyConstraint("id"),
         )
     elif not _has_column(inspector, "threads", "read"):
         op.add_column(
             "threads",
-            sa.Column("read", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+            sa.Column("read", sa.Boolean(), server_default=sa.false(), nullable=False),
         )
-        op.execute(sa.text("UPDATE threads SET read = 0 WHERE read IS NULL"))
+        op.execute(sa.text("UPDATE threads SET read = false WHERE read IS NULL"))
 
     if not _has_table(inspector, "messages"):
         op.create_table(
