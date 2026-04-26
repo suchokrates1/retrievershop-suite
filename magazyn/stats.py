@@ -32,6 +32,12 @@ from .models import (
     Thread,
 )
 from .domain.financial import FinancialCalculator
+from .services.billing_types import (
+    BILLING_CATEGORY_CHOICES,
+    _default_billing_mapping_category,  # noqa: F401 - publiczny helper kompatybilnosci
+    _upsert_billing_types,
+    sync_billing_types_dictionary,
+)
 from .settings_store import settings_store
 
 
@@ -49,49 +55,6 @@ _TELEMETRY: dict[str, dict[str, float]] = defaultdict(
         "total_response_ms": 0.0,
     }
 )
-
-BILLING_CATEGORY_CHOICES = {
-    "commission_organic",
-    "commission_promoted",
-    "shipping",
-    "promo",
-    "ads",
-    "listing",
-    "refund",
-    "bonus",
-    "other",
-}
-
-
-def _default_billing_mapping_category(type_id: str) -> str:
-    from .allegro_api.billing import (
-        ORGANIC_COMMISSION_TYPES,
-        PROMOTED_COMMISSION_TYPES,
-        SHIPPING_TYPES,
-        PROMO_TYPES,
-        LISTING_TYPES,
-        REFUND_TYPES,
-        CAMPAIGN_BONUS_TYPES,
-    )
-
-    if type_id in ORGANIC_COMMISSION_TYPES:
-        return "commission_organic"
-    if type_id in PROMOTED_COMMISSION_TYPES:
-        return "commission_promoted"
-    if type_id in SHIPPING_TYPES:
-        return "shipping"
-    if type_id in PROMO_TYPES:
-        if type_id in {"NSP", "ADS"}:
-            return "ads"
-        return "promo"
-    if type_id in LISTING_TYPES:
-        return "listing"
-    if type_id in REFUND_TYPES:
-        return "refund"
-    if type_id in CAMPAIGN_BONUS_TYPES:
-        return "bonus"
-    return "other"
-
 
 @dataclass
 class StatsFilters:
@@ -285,43 +248,6 @@ def _period_offsets(filters: StatsFilters) -> tuple[int, int, int, int]:
     return current_start, current_end, prev_start, prev_end
 
 
-def _upsert_billing_types(db, billing_types: list[dict]) -> dict[str, str]:
-    """Synchronizuje slownik billing types do bazy i zwraca mapowanie id->nazwa."""
-    now = datetime.now(timezone.utc)
-    existing = {row.type_id: row for row in db.query(AllegroBillingType).all()}
-
-    for item in billing_types:
-        type_id = (item.get("id") or "").strip()
-        if not type_id:
-            continue
-
-        name = (item.get("description") or item.get("name") or type_id).strip()
-        description = (item.get("description") or item.get("name") or "").strip() or None
-
-        inferred_category = _default_billing_mapping_category(type_id)
-        row = existing.get(type_id)
-        if row is None:
-            row = AllegroBillingType(
-                type_id=type_id,
-                name=name,
-                description=description,
-                mapping_category=inferred_category,
-                mapping_version=1,
-                last_seen_at=now,
-            )
-            db.add(row)
-            existing[type_id] = row
-        else:
-            row.name = name
-            row.description = description
-            if not row.mapping_category:
-                row.mapping_category = inferred_category
-            row.last_seen_at = now
-
-    db.flush()
-    return {row.type_id: (row.name or row.type_id) for row in existing.values()}
-
-
 def _build_alerts(*, returns_rate: float | None = None, refund_rate: float | None = None, lead_time_hours: float | None = None) -> list[dict]:
     alerts: list[dict] = []
     if returns_rate is not None and returns_rate > 8.0:
@@ -433,28 +359,6 @@ def _format_filters(filters: StatsFilters) -> dict[str, str]:
         "granularity": filters.granularity,
         "platform": filters.platform,
         "payment_type": filters.payment_type,
-    }
-
-
-def sync_billing_types_dictionary(access_token: str) -> dict[str, int]:
-    """Synchronizuje slownik billing types z Allegro do bazy danych."""
-    from .allegro_api import fetch_billing_types
-
-    types_data = fetch_billing_types(access_token)
-    if isinstance(types_data, dict):
-        types_list = types_data.get("billingTypes", [])
-    else:
-        types_list = types_data or []
-
-    with get_session() as db:
-        before = db.query(AllegroBillingType).count()
-        _upsert_billing_types(db, types_list)
-        after = db.query(AllegroBillingType).count()
-
-    return {
-        "fetched": len(types_list),
-        "known": after,
-        "created": max(after - before, 0),
     }
 
 

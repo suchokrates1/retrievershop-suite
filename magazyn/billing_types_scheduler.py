@@ -6,12 +6,14 @@ import logging
 import threading
 
 from .settings_store import settings_store
-from .stats import sync_billing_types_dictionary
+from .services.billing_types import sync_billing_types_dictionary
+from .services.runtime import BackgroundThreadRuntime
 
 logger = logging.getLogger(__name__)
 
 _sync_thread: threading.Thread | None = None
-_stop_event = threading.Event()
+_runtime = BackgroundThreadRuntime(name="BillingTypesScheduler", logger=logger)
+_stop_event = _runtime.stop_event
 
 SYNC_INTERVAL_SECONDS = 6 * 3600
 
@@ -43,29 +45,20 @@ def _billing_types_worker(app):
 def start_billing_types_scheduler(app):
     global _sync_thread
 
-    if _sync_thread is not None and _sync_thread.is_alive():
-        logger.warning("Billing types scheduler already running")
-        return
-
-    _stop_event.clear()
-    _sync_thread = threading.Thread(
-        target=_billing_types_worker,
-        args=(app,),
-        daemon=True,
-        name="BillingTypesScheduler",
+    _runtime.start(
+        _billing_types_worker,
+        app,
+        already_running_message="Billing types scheduler already running",
+        started_message="Billing types scheduler thread started",
     )
-    _sync_thread.start()
-    logger.info("Billing types scheduler thread started")
+    _sync_thread = _runtime.thread
 
 
 def stop_billing_types_scheduler():
     global _sync_thread
 
-    if _sync_thread is None or not _sync_thread.is_alive():
-        return
-
-    logger.info("Stopping billing types scheduler...")
-    _stop_event.set()
-    _sync_thread.join(timeout=5)
+    _runtime.stop(
+        stopping_message="Stopping billing types scheduler...",
+        stopped_message="Billing types scheduler stopped",
+    )
     _sync_thread = None
-    logger.info("Billing types scheduler stopped")

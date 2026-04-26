@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
 
-# fcntl is Unix-only, provide fallback for Windows
-try:
-    import fcntl
-except ImportError:
-    fcntl = None
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
@@ -40,6 +34,7 @@ from .services.print_agent_shipments import (
 )
 from .services.print_agent_tracking import PrintAgentTrackingService
 from .services.printing import CupsPrinter, PrintCommandError
+from .services.runtime import BackgroundThreadRuntime, HeartbeatFileLock
 from .allegro_token_refresher import token_refresher
 from .allegro_api import (
     fetch_allegro_order_detail,
@@ -83,10 +78,20 @@ class LabelAgent:
         self.settings = settings_obj
         self.logger = logging.getLogger(__name__)
         self.last_order_data: Dict[str, Any] = {}
+        self._thread_runtime = BackgroundThreadRuntime(
+            name="LabelAgent",
+            logger=self.logger,
+        )
         self._agent_thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
+        self._stop_event = self._thread_runtime.stop_event
         self._rate_limit_lock = threading.Lock()
         self._lock_handle = None
+        self._heartbeat_lock = HeartbeatFileLock(
+            lock_file_provider=lambda: self.config.lock_file,
+            poll_interval_provider=lambda: self.config.poll_interval,
+            logger=self.logger,
+            stale_warning="Wyczyszczono porzuconą blokadę agenta drukowania",
+        )
         self._api_calls_total = 0
         self._api_calls_success = 0
         self._last_api_log = datetime.now()
@@ -112,7 +117,7 @@ class LabelAgent:
 
     @property
     def _heartbeat_path(self) -> str:
-        return f"{self.config.lock_file}.heartbeat"
+        return self._heartbeat_lock.heartbeat_path
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -176,59 +181,16 @@ class LabelAgent:
     # Validation and persistence helpers
     # ------------------------------------------------------------------
     def _read_heartbeat(self) -> Optional[datetime]:
-        try:
-            with open(self._heartbeat_path, "r", encoding="utf-8") as handle:
-                raw = handle.read().strip()
-        except OSError:
-            return None
-        if not raw:
-            return None
-        try:
-            return datetime.fromisoformat(raw)
-        except ValueError:
-            return None
+        return self._heartbeat_lock.read_heartbeat()
 
     def _write_heartbeat(self) -> None:
-        try:
-            with open(self._heartbeat_path, "w", encoding="utf-8") as handle:
-                handle.write(datetime.now().isoformat())
-        except OSError as exc:  # pragma: no cover - best effort logging only
-            self.logger.debug("Nie można zapisać heartbeat: %s", exc)
+        self._heartbeat_lock.write_heartbeat()
 
     def _clear_heartbeat(self) -> None:
-        try:
-            os.remove(self._heartbeat_path)
-        except OSError:
-            pass
+        self._heartbeat_lock.clear_heartbeat()
 
     def _cleanup_orphaned_lock(self) -> None:
-        heartbeat = self._read_heartbeat()
-        if heartbeat is None:
-            return
-        grace = max(1, self.config.poll_interval)
-        max_age = timedelta(seconds=grace * 4)
-        if datetime.now() - heartbeat <= max_age:
-            return
-
-        try:
-            with open(self.config.lock_file, "a+", encoding="utf-8") as handle:
-                try:
-                    if fcntl:
-                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    # On Windows without fcntl, skip lock check
-                except OSError:
-                    return
-        except OSError:
-            self._clear_heartbeat()
-            return
-
-        try:
-            os.remove(self.config.lock_file)
-        except OSError:
-            pass
-        else:
-            self.logger.warning("Wyczyszczono porzuconą blokadę agenta drukowania")
-        self._clear_heartbeat()
+        self._heartbeat_lock.cleanup_orphaned_lock()
 
     def _restore_in_progress(self, queue: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         restored = False
@@ -871,23 +833,21 @@ class LabelAgent:
         if self._agent_thread and self._agent_thread.is_alive():
             return False
 
-        self._cleanup_orphaned_lock()
-        if self._lock_handle is None:
-            try:
-                self._lock_handle = open(self.config.lock_file, "w")
-                if fcntl:
-                    fcntl.flock(self._lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                # On Windows, skip file locking
-            except OSError:
-                if self._lock_handle:
-                    self._lock_handle.close()
-                    self._lock_handle = None
-                self.logger.info("Print agent already running, skipping startup")
-                return False
-        self._write_heartbeat()
-        self._stop_event = threading.Event()
-        self._agent_thread = threading.Thread(target=self._agent_loop, daemon=True)
-        self._agent_thread.start()
+        if not self._heartbeat_lock.acquire():
+            self.logger.info("Print agent already running, skipping startup")
+            return False
+
+        self._lock_handle = self._heartbeat_lock.lock_handle
+        self._stop_event = self._thread_runtime.stop_event
+        if not self._thread_runtime.start(
+            self._agent_loop,
+            already_running_message="Print agent already running",
+            started_message="Print agent thread started",
+        ):
+            self._heartbeat_lock.release()
+            self._lock_handle = None
+            return False
+        self._agent_thread = self._thread_runtime.thread
 
         # Uruchom niezalezne workery
         self._workers = [
@@ -912,23 +872,13 @@ class LabelAgent:
             self.logger.info("Zatrzymano worker: %s", worker.name)
         self._workers = []
 
-        if self._agent_thread and self._agent_thread.is_alive():
-            self._stop_event.set()
-            self._agent_thread.join()
-            self._agent_thread = None
-        self._clear_heartbeat()
-        if self._lock_handle:
-            try:
-                if fcntl:
-                    fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
-            except OSError:  # pragma: no cover - defensive
-                pass
-            self._lock_handle.close()
-            self._lock_handle = None
-            try:
-                os.remove(self.config.lock_file)
-            except OSError:
-                pass
+        self._thread_runtime.stop(
+            stopping_message="Stopping print agent thread...",
+            stopped_message="Print agent thread stopped",
+        )
+        self._agent_thread = None
+        self._heartbeat_lock.release()
+        self._lock_handle = None
         token_refresher.stop()
 
 
