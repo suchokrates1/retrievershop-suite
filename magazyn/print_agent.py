@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import logging
 import os
 import threading
@@ -17,11 +16,9 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
-import requests
-
 from .config import load_config, settings
 from .notifications import send_report
-from .parsing import parse_product_info
+from .parsing import parse_product_info  # noqa: F401 - publiczny re-export magazyn.print_agent
 from .services import consume_order_stock, get_sales_summary  # noqa: F401
 from .services.print_agent_config import (
     AgentConfig,
@@ -31,6 +28,10 @@ from .services.print_agent_config import (
     parse_time_str,
 )
 from .services.print_agent_delivery import resolve_delivery_service_id
+from .services.print_agent_notifications import PrintAgentNotifier, notify_messenger
+from .services.print_agent_order_data import apply_package_tracking, build_last_order_data
+from .services.print_agent_queue import PrintQueueProcessor
+from .services.print_agent_status import set_print_error_status
 from .services.print_agent_storage import PrintAgentStorage, SuccessMarker
 from .services.print_agent_shipments import (
     build_additional_services,
@@ -109,8 +110,12 @@ class LabelAgent:
         self._api_calls_success = 0
         self._last_api_log = datetime.now()
         self._api_call_times: Deque[float] = deque()
-        self._label_error_notifications: Dict[str, int] = {}
         self._workers: List = []
+        self.notifier = PrintAgentNotifier(
+            logger=self.logger,
+            config_provider=lambda: self.config,
+        )
+        self._label_error_notifications = self.notifier.error_counts
         self.storage = PrintAgentStorage(
             logger=self.logger,
             now=lambda: datetime.now(),
@@ -887,72 +892,14 @@ class LabelAgent:
 
     def _should_send_error_notification(self, order_id: str) -> bool:
         """Sprawdza czy należy wysłać powiadomienie o błędzie (przy próbie 1 i 10)."""
-        count = self._label_error_notifications.get(order_id, 0)
-        return count == 0 or count == 9  # 0 = pierwsza próba, 9 = dziesiąta próba
+        return self.notifier.should_send_error_notification(order_id)
 
     def _send_label_error_notification(self, order_id: str) -> None:
         """Wysyła krótkie powiadomienie o braku etykiety."""
-        try:
-            message = f"Brak etykiety do zamówienia nr: {order_id}"
-            response = requests.post(
-                "https://graph.facebook.com/v17.0/me/messages",
-                headers={
-                    "Authorization": f"Bearer {self.config.page_access_token}",
-                    "Content-Type": "application/json",
-                },
-                data=json.dumps(
-                    {
-                        "recipient": {"id": self.config.recipient_id},
-                        "message": {"text": message},
-                    }
-                ),
-                timeout=10,
-            )
-            response.raise_for_status()
-            # Inkrementuj licznik
-            self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
-        except Exception as exc:
-            self.logger.error("Błąd wysyłania wiadomości: %s", exc)
+        self.notifier.send_label_error_notification(order_id)
 
     def send_messenger_message(self, data: Dict[str, Any], print_success: bool = True) -> None:
-        try:
-            # Status etykiety
-            if print_success:
-                label_status = "✅ Etykieta gotowa"
-            else:
-                label_status = "❌ Błąd drukowania etykiety"
-
-            message = (
-                f"📦 Nowe zamówienie od: {data.get('customer', '-')}\n"
-                f"🛒 Produkty:\n"
-                + "".join(
-                    f"- {p['name']} (x{p['quantity']})\n"
-                    for p in data.get("products", [])
-                )
-                + f"🚚 Wysyłka: {data.get('shipping', '-')}\n"
-                f"🚛 Kurier: {data.get('courier_code', '-')}\n"
-                f"🌐 Platforma: {data.get('platform', '-')}\n"
-                f"📎 ID: {data.get('order_id', '-')}\n"
-                f"🏷️ {label_status}"
-            )
-
-            response = requests.post(
-                "https://graph.facebook.com/v17.0/me/messages",
-                headers={
-                    "Authorization": f"Bearer {self.config.page_access_token}",
-                    "Content-Type": "application/json",
-                },
-                data=json.dumps(
-                    {
-                        "recipient": {"id": self.config.recipient_id},
-                        "message": {"text": message},
-                    }
-                ),
-                timeout=10,
-            )
-            response.raise_for_status()
-        except Exception as exc:
-            self.logger.error("Błąd wysyłania wiadomości: %s", exc)
+        self.notifier.send_messenger_message(data, print_success=print_success)
 
     # ------------------------------------------------------------------
     # Tracking status updates (Allegro API)
@@ -1209,58 +1156,20 @@ class LabelAgent:
             return None
 
     def _process_queue(self, queue: List[Dict[str, Any]], printed: Dict[str, Any]) -> List[Dict[str, Any]]:
-        MAX_QUEUE_RETRIES = 10  # Maksymalna liczba prób drukowania z kolejki
-        
-        if self.is_quiet_time():
-            return queue
-        grouped: Dict[str, List[Dict[str, Any]]] = {}
-        for item in queue:
-            grouped.setdefault(item["order_id"], []).append(item)
-
-        new_queue: List[Dict[str, Any]] = []
-        for oid, items in grouped.items():
-            # Sprawdź liczbę prób - każdy element ma swój licznik
-            retry_count = items[0].get("retry_count", 0)
-            
-            if retry_count >= MAX_QUEUE_RETRIES:
-                self.logger.error(
-                    "Zamówienie %s przekroczyło limit %d prób drukowania - usuwam z kolejki",
-                    oid, MAX_QUEUE_RETRIES
-                )
-                # Oznacz jako przetworzone żeby nie wracało
-                self.mark_as_printed(oid, items[0].get("last_order_data"))
-                # Wyślij powiadomienie o permanentnym błędzie
-                self._notify_messenger(items[0].get("last_order_data", {}), print_success=False)
-                continue
-            
-            try:
-                for it in items:
-                    it["status"] = "in_progress"
-                self.save_queue(queue)
-                for it in items:
-                    self._retry(
-                        self.print_label,
-                        it["label_data"],
-                        it.get("ext", "pdf"),
-                        it["order_id"],
-                        stage="print",
-                        retry_exceptions=(PrintError,),
-                    )
-                consume_order_stock(items[0].get("last_order_data", {}).get("products", []))
-                self.mark_as_printed(oid, items[0].get("last_order_data"))
-                printed[oid] = datetime.now()
-                # Wysyłamy powiadomienie o sukcesie z kolejki
-                self._notify_messenger(items[0].get("last_order_data", {}), print_success=True)
-            except Exception as exc:
-                self.logger.error("Błąd przetwarzania z kolejki (próba %d/%d): %s", retry_count + 1, MAX_QUEUE_RETRIES, exc)
-                for it in items:
-                    it["status"] = "queued"
-                    it["retry_count"] = retry_count + 1
-                new_queue.extend(items)
-                PRINT_LABEL_ERRORS_TOTAL.labels(stage="queue").inc()
-                # NIE wysyłamy wiadomości - była już wysłana przy pierwszej próbie
-                # Wiadomość zostanie wysłana tylko przy sukcesie lub przekroczeniu limitu
-        return new_queue
+        processor = PrintQueueProcessor(
+            logger=self.logger,
+            is_quiet_time=self.is_quiet_time,
+            save_queue=self.save_queue,
+            mark_as_printed=self.mark_as_printed,
+            notify_messenger=self._notify_messenger,
+            retry=self._retry,
+            print_label=self.print_label,
+            consume_order_stock=consume_order_stock,
+            print_error_type=PrintError,
+            errors_total=PRINT_LABEL_ERRORS_TOTAL,
+            now=lambda: datetime.now(),
+        )
+        return processor.process(queue, printed)
 
     def _check_allegro_discussions(self, access_token: str) -> None:
         """Sprawdza dyskusje Allegro - deleguje do AllegroSyncService."""
@@ -1317,74 +1226,7 @@ class LabelAgent:
                 orders = []
             for order in orders:
                 order_id = str(order["order_id"])
-                prod_name, size, color = parse_product_info(
-                    (order.get("products") or [{}])[0]
-                )
-                self.last_order_data = {
-                    # Basic order info
-                    "order_id": order_id,
-                    "external_order_id": order.get("external_order_id", ""),
-                    "shop_order_id": order.get("shop_order_id"),
-                    "name": prod_name,
-                    "size": size,
-                    "color": color,
-                    # Customer info
-                    "customer": order.get("delivery_fullname", "Nieznany klient"),
-                    "email": order.get("email", ""),
-                    "phone": order.get("phone", ""),
-                    "user_login": order.get("user_login", ""),
-                    # Order source and status
-                    "platform": order.get("order_source", "brak"),
-                    "order_source_id": order.get("order_source_id"),
-                    "order_status_id": order.get("order_status_id"),
-                    "confirmed": order.get("confirmed", False),
-                    # Dates (unix timestamps)
-                    "date_add": order.get("date_add"),
-                    "date_confirmed": order.get("date_confirmed"),
-                    "date_in_status": order.get("date_in_status"),
-                    # Delivery address
-                    "shipping": order.get("delivery_method", "brak"),
-                    "delivery_method_id": order.get("delivery_method_id"),
-                    "delivery_price": order.get("delivery_price", 0),
-                    "delivery_fullname": order.get("delivery_fullname", ""),
-                    "delivery_company": order.get("delivery_company", ""),
-                    "delivery_address": order.get("delivery_address", ""),
-                    "delivery_city": order.get("delivery_city", ""),
-                    "delivery_postcode": order.get("delivery_postcode", ""),
-                    "delivery_country": order.get("delivery_country", ""),
-                    "delivery_country_code": order.get("delivery_country_code", ""),
-                    # Pickup point (paczkomat)
-                    "delivery_point_id": order.get("delivery_point_id", ""),
-                    "delivery_point_name": order.get("delivery_point_name", ""),
-                    "delivery_point_address": order.get("delivery_point_address", ""),
-                    "delivery_point_postcode": order.get("delivery_point_postcode", ""),
-                    "delivery_point_city": order.get("delivery_point_city", ""),
-                    # Invoice address
-                    "invoice_fullname": order.get("invoice_fullname", ""),
-                    "invoice_company": order.get("invoice_company", ""),
-                    "invoice_nip": order.get("invoice_nip", ""),
-                    "invoice_address": order.get("invoice_address", ""),
-                    "invoice_city": order.get("invoice_city", ""),
-                    "invoice_postcode": order.get("invoice_postcode", ""),
-                    "invoice_country": order.get("invoice_country", ""),
-                    "want_invoice": order.get("want_invoice", "0"),
-                    # Payment
-                    "currency": order.get("currency", "PLN"),
-                    "payment_method": order.get("payment_method", ""),
-                    "payment_method_cod": order.get("payment_method_cod", "0"),
-                    "payment_done": order.get("payment_done", 0),
-                    # Comments
-                    "user_comments": order.get("user_comments", ""),
-                    "admin_comments": order.get("admin_comments", ""),
-                    # Products with EAN
-                    "products": order.get("products", []),
-                    # Courier/shipping tracking (filled later)
-                    "courier_code": "",
-                    "delivery_package_module": order.get("delivery_package_module", ""),
-                    "delivery_package_nr": order.get("delivery_package_nr", ""),
-                    "package_ids": [],
-                    "tracking_numbers": [],
-                }
+                self.last_order_data = build_last_order_data(order)
 
                 if order_id in printed:
                     continue
@@ -1422,7 +1264,7 @@ class LabelAgent:
                     if self._should_send_error_notification(order_id):
                         self._send_label_error_notification(order_id)
                     else:
-                        self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
+                        self.notifier.increment_error_notification(order_id)
                     continue
                 labels: List[Tuple[str, str]] = []
                 courier_code = ""
@@ -1474,14 +1316,12 @@ class LabelAgent:
                     if label_data:
                         labels.append((label_data, ext))
 
-                if courier_code:
-                    self.last_order_data["courier_code"] = courier_code
-                if package_ids:
-                    self.last_order_data["package_ids"] = list(dict.fromkeys(package_ids))
-                if tracking_numbers:
-                    self.last_order_data["tracking_numbers"] = list(dict.fromkeys(tracking_numbers))
-                    # delivery_package_nr uzywany przez mark_as_printed
-                    self.last_order_data["delivery_package_nr"] = tracking_numbers[0]
+                apply_package_tracking(
+                    self.last_order_data,
+                    courier_code=courier_code,
+                    package_ids=package_ids,
+                    tracking_numbers=tracking_numbers,
+                )
 
                 if labels:
                     if self.is_quiet_time():
@@ -1538,13 +1378,11 @@ class LabelAgent:
                                 "Błąd drukowania zamówienia %s: %s", order_id, exc
                             )
                             print_success = False
-                            try:
-                                from .services.order_status import add_order_status
-                                from .db import get_session
-                                with get_session() as db:
-                                    add_order_status(db, order_id, "blad_druku", notes=f"Błąd drukowania: {exc}")
-                            except Exception:
-                                self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
+                            set_print_error_status(
+                                order_id,
+                                f"Blad drukowania: {exc}",
+                                self.logger,
+                            )
                             for entry in entries:
                                 entry["status"] = "queued"
                             self.save_queue(queue)
@@ -1559,19 +1397,16 @@ class LabelAgent:
                         order_id,
                     )
                     PRINT_LABEL_ERRORS_TOTAL.labels(stage="label").inc()
-                    try:
-                        from .services.order_status import add_order_status
-                        from .db import get_session
-                        with get_session() as db:
-                            add_order_status(db, order_id, "blad_druku", notes="Brak etykiety - Allegro nie zwróciło danych")
-                    except Exception:
-                        self.logger.warning("Nie udało się ustawić blad_druku dla %s", order_id)
+                    set_print_error_status(
+                        order_id,
+                        "Brak etykiety - Allegro nie zwrocilo danych",
+                        self.logger,
+                    )
                     # Wyślij powiadomienie tylko przy 1 i 10 próbie
                     if self._should_send_error_notification(order_id):
                         self._send_label_error_notification(order_id)
                     else:
-                        # Inkrementuj licznik bez wysyłania
-                        self._label_error_notifications[order_id] = self._label_error_notifications.get(order_id, 0) + 1
+                        self.notifier.increment_error_notification(order_id)
                     self.logger.info("Retry za 60s dla %s", order_id)
                     self._stop_event.wait(60)
         except Exception as exc:
@@ -1619,13 +1454,7 @@ class LabelAgent:
 
     def _notify_messenger(self, data: Dict[str, Any], print_success: bool) -> None:
         """Call ``send_messenger_message`` while tolerating simplified monkeypatches."""
-
-        try:
-            self.send_messenger_message(data, print_success=print_success)
-        except TypeError:
-            # Some tests replace the method with a one-argument stub; fall back gracefully
-            self.send_messenger_message(data)
-
+        notify_messenger(self.send_messenger_message, data, print_success)
 
     def stop_agent_thread(self) -> None:
         # Zatrzymaj workery
