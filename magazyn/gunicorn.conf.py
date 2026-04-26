@@ -23,37 +23,11 @@ def post_worker_init(worker):
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         
         # If we got here, we acquired the lock - this worker starts the scheduler
-        from magazyn.factory import _start_order_sync_scheduler, _start_promo_scheduler, _start_billing_types_scheduler
-        from magazyn.price_report_scheduler import start_price_report_scheduler
         from magazyn.factory import _app_instance
-        
-        _start_order_sync_scheduler()
-        worker.log.info(f"Order sync scheduler started in worker {worker.pid}")
-        
-        # Start price report scheduler
-        if _app_instance:
-            start_price_report_scheduler(_app_instance)
-            worker.log.info(f"Price report scheduler started in worker {worker.pid}")
-        
-        # Start promo scheduler (codzienne sprawdzanie wyrozien)
-        _start_promo_scheduler()
-        worker.log.info(f"Promo scheduler started in worker {worker.pid}")
+        from magazyn.services.app_runtime import start_gunicorn_worker_runtime
 
-        # Start billing types scheduler (okresowa synchronizacja slownika billing)
-        _start_billing_types_scheduler()
-        worker.log.info(f"Billing types scheduler started in worker {worker.pid}")
-        
-        # Auto-resume incomplete price reports (tylko w jednym workerze)
         if _app_instance:
-            with _app_instance.app_context():
-                from magazyn.price_report_scheduler import auto_resume_incomplete_reports
-                auto_resume_incomplete_reports()
-                worker.log.info(f"Auto-resume incomplete reports done in worker {worker.pid}")
-        
-        # Start Allegro token refresher (tylko w jednym workerze)
-        from magazyn.allegro_token_refresher import token_refresher
-        token_refresher.start()
-        worker.log.info(f"Allegro token refresher started in worker {worker.pid}")
+            start_gunicorn_worker_runtime(_app_instance, worker.log, worker.pid)
         
     except (OSError, IOError):
         # Lock already held by another worker - skip scheduler initialization

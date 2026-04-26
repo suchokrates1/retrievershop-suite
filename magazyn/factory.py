@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import atexit
 import sys
 from typing import Optional, Mapping, Any
 
@@ -15,7 +14,10 @@ from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
 from .orders import bp as orders_bp
-from . import print_agent
+from . import print_agent  # noqa: F401 - publiczny import kompatybilnosci
+from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
+from . import promo_scheduler  # noqa: F401 - publiczny import kompatybilnosci
+from . import billing_types_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .discussions import bp as discussions_bp
 from .diagnostics import bp as diagnostics_bp
@@ -27,9 +29,7 @@ from .socketio_extension import socketio
 from .csrf_extension import csrf
 from .db import configure_engine, create_default_user_if_needed
 from .settings_store import settings_store
-from . import order_sync_scheduler
-from . import promo_scheduler
-from . import billing_types_scheduler
+from .services import app_runtime
 
 _shutdown_registered = False
 _app_instance: Optional[Flask] = None
@@ -39,10 +39,7 @@ def _register_shutdown_hook() -> None:
     global _shutdown_registered
     if _shutdown_registered:
         return
-    atexit.register(print_agent.stop_agent_thread)
-    atexit.register(order_sync_scheduler.stop_sync_scheduler)
-    atexit.register(promo_scheduler.stop_promo_scheduler)
-    atexit.register(billing_types_scheduler.stop_billing_types_scheduler)
+    app_runtime.register_shutdown_hooks()
     _shutdown_registered = True
 
 
@@ -50,21 +47,21 @@ def _start_order_sync_scheduler() -> None:
     """Start order sync scheduler - called from gunicorn post_worker_init hook."""
     global _app_instance
     if _app_instance is not None:
-        order_sync_scheduler.start_sync_scheduler(_app_instance)
+        app_runtime.start_order_sync_scheduler(_app_instance)
 
 
 def _start_promo_scheduler() -> None:
     """Start promo scheduler - called from gunicorn post_worker_init hook."""
     global _app_instance
     if _app_instance is not None:
-        promo_scheduler.start_promo_scheduler(_app_instance)
+        app_runtime.start_promo_scheduler(_app_instance)
 
 
 def _start_billing_types_scheduler() -> None:
     """Start billing types scheduler - called from gunicorn post_worker_init hook."""
     global _app_instance
     if _app_instance is not None:
-        billing_types_scheduler.start_billing_types_scheduler(_app_instance)
+        app_runtime.start_billing_types_scheduler(_app_instance)
 
 
 def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
@@ -147,11 +144,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     # In production gunicorn.conf.py starts it in exactly one worker via file lock.
     _is_gunicorn = "gunicorn" in sys.modules
     if not _is_gunicorn:
-        from .allegro_token_refresher import token_refresher
-        try:
-            token_refresher.start()
-        except Exception as exc:
-            app.logger.error("Failed to start Allegro token refresher: %s", exc)
+        app_runtime.start_dev_token_refresher(app)
 
     # Store app instance for scheduler initialization from gunicorn hook
     global _app_instance

@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from .services.order_sync_cycle import OrderSyncCallbacks, OrderSyncCycle
 from .services.runtime import BackgroundThreadRuntime
 
 logger = logging.getLogger(__name__)
@@ -594,130 +595,68 @@ def _cancel_stale_unpaid_orders():
     return stats
 
 
-def _run_allegro_events_sync(app) -> None:
-    logger.info("Starting Allegro Events sync")
-    ev_stats = _sync_from_allegro_events(app)
-    logger.info(
-        f"Allegro Events sync completed: events={ev_stats['events_fetched']}, "
-        f"synced={ev_stats['orders_synced']}, cancelled={ev_stats['orders_cancelled']}, "
-        f"errors={ev_stats['errors']}"
+def _set_last_offer_sync_date(value: str) -> None:
+    global _last_offer_sync_date
+    _last_offer_sync_date = value
+
+
+def _order_sync_cycle() -> OrderSyncCycle:
+    return OrderSyncCycle(
+        logger=logger,
+        callbacks=OrderSyncCallbacks(
+            sync_from_allegro_events=_sync_from_allegro_events,
+            refresh_order_profit_cache=_refresh_order_profit_cache,
+            sync_allegro_fulfillment=_sync_allegro_fulfillment,
+            process_pending_invoices=_process_pending_invoices,
+            cancel_stale_unpaid_orders=_cancel_stale_unpaid_orders,
+            get_last_offer_sync_date=lambda: _last_offer_sync_date,
+            set_last_offer_sync_date=_set_last_offer_sync_date,
+        ),
     )
+
+
+def _run_allegro_events_sync(app) -> None:
+    _order_sync_cycle().run_allegro_events_sync(app)
 
 
 def _run_parcel_tracking_sync() -> None:
-    from .parcel_tracking import sync_parcel_statuses
-
-    logger.info("Starting automatic parcel tracking sync")
-    stats = sync_parcel_statuses()
-    logger.info(
-        f"Parcel tracking sync completed: checked={stats['checked']}, "
-        f"updated={stats['updated']}, errors={stats['errors']}"
-    )
+    _order_sync_cycle().run_parcel_tracking_sync()
 
 
 def _run_profit_cache_refresh(app) -> None:
-    logger.info("Starting real profit cache refresh")
-    profit_stats = _refresh_order_profit_cache(app)
-    logger.info(
-        f"Real profit cache refresh completed: checked={profit_stats['checked']}, "
-        f"updated={profit_stats['updated']}, finalized={profit_stats['finalized']}, "
-        f"pending={profit_stats['pending']}, errors={profit_stats['errors']}"
-    )
+    _order_sync_cycle().run_profit_cache_refresh(app)
 
 
 def _run_allegro_fulfillment_sync(app) -> None:
-    logger.info("Starting Allegro fulfillment sync")
-    f_stats = _sync_allegro_fulfillment(app)
-    logger.info(
-        f"Allegro fulfillment sync completed: checked={f_stats['checked']}, "
-        f"updated={f_stats['updated']}, errors={f_stats['errors']}"
-    )
+    _order_sync_cycle().run_allegro_fulfillment_sync(app)
 
 
 def _run_returns_sync() -> None:
-    from .returns import sync_returns
-
-    logger.info("Starting automatic returns sync")
-    returns_stats = sync_returns()
-    logger.info(f"Returns sync completed: {returns_stats}")
+    _order_sync_cycle().run_returns_sync()
 
 
 def _run_invoice_processing() -> None:
-    try:
-        inv_stats = _process_pending_invoices()
-        if inv_stats["processed"] > 0:
-            logger.info(
-                f"Invoice processing: processed={inv_stats['processed']}, "
-                f"success={inv_stats['success']}, errors={inv_stats['errors']}"
-            )
-    except Exception as inv_err:
-        logger.error(f"Error in invoice processing: {inv_err}", exc_info=True)
+    _order_sync_cycle().run_invoice_processing()
 
 
 def _run_unpaid_auto_cancel() -> None:
-    try:
-        cancel_stats = _cancel_stale_unpaid_orders()
-        if cancel_stats["cancelled"] > 0:
-            logger.info(
-                f"Unpaid auto-cancel: checked={cancel_stats['checked']}, "
-                f"cancelled={cancel_stats['cancelled']}, errors={cancel_stats['errors']}"
-            )
-    except Exception as cancel_err:
-        logger.error(f"Error in unpaid auto-cancel: {cancel_err}", exc_info=True)
+    _order_sync_cycle().run_unpaid_auto_cancel()
 
 
 def _run_daily_allegro_offer_sync() -> None:
-    from .allegro_sync import sync_offers
-
-    logger.info("Starting daily Allegro offer sync")
-    offer_stats = sync_offers()
-    logger.info(f"Daily offer sync completed: {offer_stats}")
+    _order_sync_cycle().run_daily_allegro_offer_sync()
 
 
 def _run_daily_promo_sync() -> None:
-    from .services.allegro_promotions import get_promotions_summary
-
-    logger.info("Starting daily promo sync")
-    promo_summary = get_promotions_summary()
-    if promo_summary.error:
-        logger.warning(f"Promo sync warning: {promo_summary.error}")
-    else:
-        logger.info(
-            f"Promo sync completed: active={promo_summary.active_count}, "
-            f"renewing_tomorrow={len(promo_summary.renewing_tomorrow)}"
-        )
+    _order_sync_cycle().run_daily_promo_sync()
 
 
 def _run_daily_offer_and_promo_sync() -> None:
-    global _last_offer_sync_date
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    if _last_offer_sync_date == today:
-        logger.debug("Offer sync already done today, skipping")
-        return
-
-    try:
-        _run_daily_allegro_offer_sync()
-        _last_offer_sync_date = today
-    except Exception as offer_err:
-        logger.error(f"Error in daily offer sync: {offer_err}", exc_info=True)
-
-    try:
-        _run_daily_promo_sync()
-    except Exception as promo_err:
-        logger.error(f"Error in promo sync: {promo_err}", exc_info=True)
+    _order_sync_cycle().run_daily_offer_and_promo_sync()
 
 
 def _run_order_sync_cycle(app) -> None:
-    with app.app_context():
-        _run_allegro_events_sync(app)
-        _run_parcel_tracking_sync()
-        _run_profit_cache_refresh(app)
-        _run_allegro_fulfillment_sync(app)
-        _run_returns_sync()
-        _run_invoice_processing()
-        _run_unpaid_auto_cancel()
-        _run_daily_offer_and_promo_sync()
+    _order_sync_cycle().run(app)
 
 
 def _sync_worker(app):

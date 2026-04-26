@@ -32,6 +32,10 @@ from .services.price_report_processing import (
     mark_sibling_offers,
     save_report_item,
 )
+from .services.price_report_schedule import (
+    calculate_schedule as _calculate_schedule,
+    is_night_pause_at,
+)
 from .services.runtime import BackgroundThreadRuntime
 
 logger = logging.getLogger(__name__)
@@ -58,8 +62,11 @@ MANUAL_MAX_BATCH_DELAY = MAX_BATCH_DELAY
 
 def is_night_pause() -> bool:
     """Sprawdza czy jest przerwa nocna."""
-    hour = datetime.now().hour
-    return NIGHT_PAUSE_START <= hour < NIGHT_PAUSE_END
+    return is_night_pause_at(
+        datetime.now(),
+        night_start=NIGHT_PAUSE_START,
+        night_end=NIGHT_PAUSE_END,
+    )
 
 
 def calculate_schedule(total_offers: int, start_time: datetime, end_time: datetime) -> List[datetime]:
@@ -69,47 +76,14 @@ def calculate_schedule(total_offers: int, start_time: datetime, end_time: dateti
     Rozklada oferty rownomiernie z losowymi odchyleniami,
     pomijajac przerwy nocne.
     """
-    if total_offers <= 0:
-        return []
-    
-    # Oblicz dostepny czas (pomijajac przerwy nocne)
-    available_slots = []
-    current = start_time
-    
-    while current < end_time:
-        hour = current.hour
-        # Pomin przerwy nocne
-        if not (NIGHT_PAUSE_START <= hour < NIGHT_PAUSE_END):
-            available_slots.append(current)
-        current += timedelta(minutes=15)  # Granulacja 15 min
-    
-    if not available_slots:
-        return []
-    
-    # Ile partii potrzebujemy
-    num_batches = (total_offers + BATCH_SIZE - 1) // BATCH_SIZE
-    
-    if num_batches >= len(available_slots):
-        # Wiecej partii niz slotow - uzyj wszystkich slotow
-        schedule = available_slots[:num_batches]
-    else:
-        # Rozloz rownomiernie z losowoscia
-        step = len(available_slots) / num_batches
-        schedule = []
-        for i in range(num_batches):
-            base_idx = int(i * step)
-            # Dodaj losowe odchylenie (-2 do +2 slotow, czyli +/- 30 min)
-            jitter = random.randint(-2, 2)  # nosec B311
-            idx = max(0, min(len(available_slots) - 1, base_idx + jitter))
-            schedule.append(available_slots[idx])
-    
-    # Dodaj losowe minuty do kazdego slotu
-    final_schedule = []
-    for slot in schedule:
-        jitter_minutes = random.randint(0, 14)  # nosec B311
-        final_schedule.append(slot + timedelta(minutes=jitter_minutes))
-    
-    return sorted(final_schedule)
+    return _calculate_schedule(
+        total_offers,
+        start_time,
+        end_time,
+        batch_size=BATCH_SIZE,
+        night_pause_start=NIGHT_PAUSE_START,
+        night_pause_end=NIGHT_PAUSE_END,
+    )
 
 
 def sync_allegro_offers_before_report():

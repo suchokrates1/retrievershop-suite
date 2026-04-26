@@ -21,6 +21,7 @@ from .services.order_status import (
     add_order_status as _add_order_status_service,
     dispatch_status_email,
 )
+from .services.order_presentation import _get_status_display, _unix_to_datetime
 from .services.tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
@@ -32,25 +33,9 @@ bp = Blueprint("orders", __name__)
 from .status_config import (
     VALID_STATUSES,
     STATUS_FILTER_GROUPS,
-    get_status_display,
 )
 
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
-
-
-def _unix_to_datetime(timestamp: Optional[int]) -> Optional[datetime]:
-    """Convert Unix timestamp to datetime."""
-    if timestamp:
-        try:
-            return datetime.fromtimestamp(timestamp)
-        except (ValueError, OSError):
-            pass
-    return None
-
-
-def _get_status_display(status: str) -> tuple[str, str]:
-    """Return (display text, badge class) for status."""
-    return get_status_display(status)
 
 
 _get_tracking_url = get_tracking_url

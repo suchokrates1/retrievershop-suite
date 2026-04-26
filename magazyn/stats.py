@@ -38,23 +38,22 @@ from .services.billing_types import (
     _upsert_billing_types,
     sync_billing_types_dictionary,
 )
+from .services.stats_runtime import (
+    FAST_CACHE as _FAST_CACHE,  # noqa: F401 - publiczny cache kompatybilnosci testow
+    FAST_CACHE_TTL_SECONDS as _FAST_CACHE_TTL_SECONDS,  # noqa: F401 - publiczny TTL kompatybilnosci
+    TELEMETRY as _TELEMETRY,
+    cache_get as _cache_get,
+    cache_set as _cache_set,
+    endpoint_name as _endpoint_name,
+    record_telemetry as _record_telemetry,
+    telemetry_stats as _telemetry_stats,
+)
 from .settings_store import settings_store
 
 
 bp = Blueprint("stats", __name__, url_prefix="/api/stats")
 
 logger = logging.getLogger(__name__)
-
-_FAST_CACHE: dict[str, tuple[float, dict]] = {}
-_FAST_CACHE_TTL_SECONDS = 60
-_TELEMETRY: dict[str, dict[str, float]] = defaultdict(
-    lambda: {
-        "requests": 0,
-        "cache_hits": 0,
-        "cache_misses": 0,
-        "total_response_ms": 0.0,
-    }
-)
 
 @dataclass
 class StatsFilters:
@@ -155,21 +154,6 @@ def _build_cache_key(filters: StatsFilters) -> str:
             filters.payment_type,
         ]
     )
-
-
-def _cache_get(key: str) -> dict | None:
-    item = _FAST_CACHE.get(key)
-    if not item:
-        return None
-    expires_at, payload = item
-    if time.time() > expires_at:
-        _FAST_CACHE.pop(key, None)
-        return None
-    return payload
-
-
-def _cache_set(key: str, payload: dict) -> None:
-    _FAST_CACHE[key] = (time.time() + _FAST_CACHE_TTL_SECONDS, payload)
 
 
 def _to_ts(dt: datetime) -> int:
@@ -394,34 +378,6 @@ def _export_table(rows: list[dict], filename_prefix: str, export_format: str) ->
         )
 
     return _json_error("INVALID_EXPORT_FORMAT", "Dozwolone formaty eksportu: csv, xlsx")
-
-
-def _endpoint_name(cache_key: str) -> str:
-    return cache_key.split("|", 1)[0] if "|" in cache_key else "overview"
-
-
-def _record_telemetry(endpoint: str, cache_state: str, started_at: float) -> float:
-    elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
-    entry = _TELEMETRY[endpoint]
-    entry["requests"] += 1
-    entry["total_response_ms"] += elapsed_ms
-    if cache_state == "hit":
-        entry["cache_hits"] += 1
-    else:
-        entry["cache_misses"] += 1
-    return elapsed_ms
-
-
-def _telemetry_stats(endpoint: str, response_ms: float) -> dict[str, float]:
-    entry = _TELEMETRY[endpoint]
-    requests_total = entry["requests"] or 1
-    cache_ratio = (entry["cache_hits"] / requests_total) * 100
-    avg_response = entry["total_response_ms"] / requests_total
-    return {
-        "response_ms": response_ms,
-        "avg_response_ms": round(avg_response, 2),
-        "cache_hit_ratio": round(cache_ratio, 2),
-    }
 
 
 @bp.route("/overview")
