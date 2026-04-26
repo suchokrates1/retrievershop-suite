@@ -13,7 +13,6 @@ from magazyn.allegro_api.shipment_management import (
     cancel_shipment,
     get_cancel_command_status,
     invalidate_delivery_services_cache,
-    _CACHE_TTL,
 )
 from magazyn.print_agent import calculate_cod_amount
 
@@ -302,7 +301,7 @@ def test_get_shipment_label_multiple(mock_call):
     mock_call.return_value = _mock_response(content=pdf_bytes)
     mock_call.return_value.content = pdf_bytes
 
-    result = get_shipment_label(["ship-1", "ship-2"])
+    get_shipment_label(["ship-1", "ship-2"])
 
     body = mock_call.call_args.kwargs["json"]
     assert body["shipmentIds"] == ["ship-1", "ship-2"]
