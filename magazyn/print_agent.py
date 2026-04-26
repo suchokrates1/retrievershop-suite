@@ -23,6 +23,10 @@ from .services.print_agent_config import (
 from .services.print_agent_delivery import resolve_delivery_service_id
 from .services.print_agent_errors import ApiError, PrintError, ShipmentExpiredError
 from .services.print_agent_labels import CollectedLabels, PrintLabelService
+from .services.print_agent_lifecycle import (
+    start_agent_thread as _start_agent_thread,
+    stop_agent_thread as _stop_agent_thread,
+)
 from .services.print_agent_notifications import PrintAgentNotifier, notify_messenger
 from .services.print_agent_order_processor import PrintOrderProcessor
 from .services.print_agent_queue import PrintQueueProcessor
@@ -831,56 +835,17 @@ class LabelAgent:
         self._write_heartbeat()
 
     def start_agent_thread(self) -> bool:
-        if self._agent_thread and self._agent_thread.is_alive():
-            return False
-
-        if not self._heartbeat_lock.acquire():
-            self.logger.info("Print agent already running, skipping startup")
-            return False
-
-        self._lock_handle = self._heartbeat_lock.lock_handle
-        self._stop_event = self._thread_runtime.stop_event
-        if not self._thread_runtime.start(
-            self._agent_loop,
-            already_running_message="Print agent already running",
-            started_message="Print agent thread started",
-        ):
-            self._heartbeat_lock.release()
-            self._lock_handle = None
-            return False
-        self._agent_thread = self._thread_runtime.thread
-
-        # Uruchom niezalezne workery
-        self._workers = [
-            TrackingWorker(self),
-            MessagingWorker(self),
-            ReportWorker(self),
-        ]
-        for worker in self._workers:
-            worker.start()
-            self.logger.info("Uruchomiono worker: %s", worker.name)
-
-        return True
+        return _start_agent_thread(
+            self,
+            worker_factories=(TrackingWorker, MessagingWorker, ReportWorker),
+        )
 
     def _notify_messenger(self, data: Dict[str, Any], print_success: bool) -> None:
         """Call ``send_messenger_message`` while tolerating simplified monkeypatches."""
         notify_messenger(self.send_messenger_message, data, print_success)
 
     def stop_agent_thread(self) -> None:
-        # Zatrzymaj workery
-        for worker in self._workers:
-            worker.stop()
-            self.logger.info("Zatrzymano worker: %s", worker.name)
-        self._workers = []
-
-        self._thread_runtime.stop(
-            stopping_message="Stopping print agent thread...",
-            stopped_message="Print agent thread stopped",
-        )
-        self._agent_thread = None
-        self._heartbeat_lock.release()
-        self._lock_handle = None
-        token_refresher.stop()
+        _stop_agent_thread(self, token_refresher=token_refresher)
 
 
 # Instantiate default agent used throughout the application.
