@@ -278,7 +278,7 @@ def check_allegro_customer_returns() -> Dict[str, int]:
                     )
                     
                     # Ustaw status zamowienia na 'zwrot'
-                    from .orders import add_order_status
+                    from .services.order_status import add_order_status
                     add_order_status(
                         db, order.order_id, "zwrot",
                         notes=f"Wykryto zwrot w Allegro Customer Returns (ref: {return_data.get('referenceNumber')})"
@@ -633,7 +633,7 @@ def expire_stale_returns() -> Dict[str, int]:
     Jesli zwrot nadal ma status 'pending' i brak tracking number, uznajemy go za wygasly.
     """
     from datetime import timedelta
-    from .orders import add_order_status
+    from .services.order_status import add_order_status
 
     stats = {"expired": 0, "errors": 0}
     cutoff = datetime.utcnow() - timedelta(days=16)
