@@ -6,7 +6,7 @@ Zakaz używania emojis w komunikacji dotyczącej projektu oraz w kodzie.
 Wszystkie komunikaty, opisy commitów oraz dokumentacja muszą być napisane w języku polskim.
 W przypadku wątpliwości dotyczących wymagań projektowych, zawsze należy odwołać się do istniejącej dokumentacji lub skonsultować się z zespołem projektowym przed podjęciem decyzji.
 W kodzie należy stosować się do ustalonych standardów formatowania i konwencji nazewnictwa obowiązujących w projekcie.
-Dokumentacja infrastruktury znajduje się w C:\Users\sucho\.config\infrastructure (odczytaj przed użyciem).
+Dokumentacja infrastruktury znajduje się w katalogu C:\Users\sucho\.config\infrastructure. Przed operacjami infrastrukturalnymi odczytaj README.md, a następnie właściwe pliki tematyczne: servers.md dla hostów i aliasów SSH, services.md dla usług/deploy/failover, network.md dla sieci. Nie zakładaj istnienia pojedynczego pliku INFRASTRUCTURE.md.
 Zawsze sprawdzaj logi kontenerów po wdrożeniu zmian w infrastrukturze, aby upewnić się, że wszystko działa poprawnie.
 Używaj aliasów do ssh
 Po wykonaniu commitu rób compose up build
