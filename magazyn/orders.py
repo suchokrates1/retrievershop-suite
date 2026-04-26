@@ -1,28 +1,26 @@
 """Orders blueprint - zarzadzanie zamowieniami."""
-import secrets
-import time
 import logging
-from datetime import datetime, timedelta
 from typing import Optional
-from decimal import Decimal
 
 from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file, jsonify
-from sqlalchemy import desc, func, or_
 
 from .auth import login_required
 from .config import settings
 from .db import get_session
-from .models import Order, OrderProduct, OrderStatusLog, Return
+from .models import Order, OrderStatusLog
+from .services.order_allegro_sync import sync_orders_from_allegro_api
+from .services.order_creation import build_manual_order_payload
 from .services.order_detail_builder import (
     build_order_detail_context,
 )
+from .services.order_list import build_orders_list_context
 from .services.order_sync import sync_order_from_data as _sync_order_from_data_service
 from .services.order_status import (
     add_order_status as _add_order_status_service,
     dispatch_status_email,
 )
 from .services.order_labels import reprint_order_labels
-from .services.order_presentation import _get_status_display, _unix_to_datetime
+from .services.order_presentation import _unix_to_datetime
 from .services.tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
@@ -31,10 +29,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("orders", __name__)
 
 
-from .status_config import (
-    VALID_STATUSES,
-    STATUS_FILTER_GROUPS,
-)
+from .status_config import VALID_STATUSES
 
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
 
@@ -46,219 +41,7 @@ _get_tracking_url = get_tracking_url
 @login_required
 def orders_list():
     """Display paginated list of orders with filtering and sorting."""
-    # Note: Automatic sync runs every hour via order_sync_scheduler
-    
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 25, type=int)
-    search = request.args.get("search", "").strip()
-    sort_by = request.args.get("sort", "date")  # date, order_id, status, amount
-    sort_dir = request.args.get("dir", "desc")  # asc, desc
-    status_filter = request.args.get("status", "all")
-    date_from = request.args.get("date_from", "").strip()
-    date_to = request.args.get("date_to", "").strip()
-    
-    # Limit per_page to reasonable values
-    if per_page not in [10, 25, 50, 100]:
-        per_page = 25
-    
-    with get_session() as db:
-        query = db.query(Order)
-        
-        # Apply search filter - szuka rowniez w produktach zamowienia
-        if search:
-            search_pattern = f"%{search}%"
-            # Subquery: zamowienia zawierajace pasujacy produkt
-            product_match_subq = db.query(OrderProduct.order_id).filter(
-                OrderProduct.name.ilike(search_pattern)
-            ).distinct().subquery()
-            
-            query = query.filter(
-                or_(
-                    Order.order_id.ilike(search_pattern),
-                    Order.external_order_id.ilike(search_pattern),
-                    Order.customer_name.ilike(search_pattern),
-                    Order.email.ilike(search_pattern),
-                    Order.phone.ilike(search_pattern),
-                    Order.delivery_method.ilike(search_pattern),
-                    Order.order_id.in_(product_match_subq),
-                )
-            )
-
-        # Date range filter (date_add jest unix timestamp)
-        if date_from:
-            try:
-                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-                query = query.filter(Order.date_add >= int(dt_from.timestamp()))
-            except ValueError:
-                pass
-        if date_to:
-            try:
-                dt_to = datetime.strptime(date_to, "%Y-%m-%d")
-                # Koniec dnia = poczatek nastepnego
-                dt_to_end = dt_to + timedelta(days=1)
-                query = query.filter(Order.date_add < int(dt_to_end.timestamp()))
-            except ValueError:
-                pass
-
-        # Status filter - filtruj po ostatnim statusie
-        if status_filter and status_filter != "all":
-            # Subquery: najnowszy status dla kazdego zamowienia
-            latest_status_subq = (
-                db.query(
-                    OrderStatusLog.order_id,
-                    func.max(OrderStatusLog.timestamp).label("max_ts")
-                )
-                .group_by(OrderStatusLog.order_id)
-                .subquery()
-            )
-            # Dolacz najnowszy status
-            query = query.join(
-                latest_status_subq,
-                Order.order_id == latest_status_subq.c.order_id,
-            ).join(
-                OrderStatusLog,
-                (OrderStatusLog.order_id == latest_status_subq.c.order_id) &
-                (OrderStatusLog.timestamp == latest_status_subq.c.max_ts),
-            )
-            if status_filter in STATUS_FILTER_GROUPS:
-                query = query.filter(OrderStatusLog.status.in_(
-                    STATUS_FILTER_GROUPS[status_filter]
-                ))
-            else:
-                # Bezposredni status
-                query = query.filter(OrderStatusLog.status == status_filter)
-        
-        # Apply sorting
-        if sort_by == "order_id":
-            sort_col = Order.date_add  # LP sortuje chronologicznie
-        elif sort_by == "amount":
-            sort_col = Order.payment_done
-        else:  # default: date
-            sort_col = Order.date_add
-        
-        if sort_dir == "asc":
-            query = query.order_by(sort_col.asc())
-        else:
-            query = query.order_by(sort_col.desc())
-        
-        # Pagination
-        total = query.count()
-        orders = query.offset((page - 1) * per_page).limit(per_page).all()
-        
-        # Oblicz LP chronologiczne dla kazdego zamowienia
-        # LP = numer porzadkowy od najstarszego zamowienia (1 = najstarsze)
-        if search:
-            # Przy wyszukiwaniu: LP wzgledem przefiltrowanego zbioru
-            lp_base_q = db.query(Order.order_id)
-            search_pattern_lp = f"%{search}%"
-            product_match_subq_lp = db.query(OrderProduct.order_id).filter(
-                OrderProduct.name.ilike(search_pattern_lp)
-            ).distinct().subquery()
-            lp_base_q = lp_base_q.filter(
-                or_(
-                    Order.order_id.ilike(search_pattern_lp),
-                    Order.external_order_id.ilike(search_pattern_lp),
-                    Order.customer_name.ilike(search_pattern_lp),
-                    Order.email.ilike(search_pattern_lp),
-                    Order.phone.ilike(search_pattern_lp),
-                    Order.delivery_method.ilike(search_pattern_lp),
-                    Order.order_id.in_(product_match_subq_lp),
-                )
-            )
-            lp_ids = [r.order_id for r in lp_base_q.order_by(Order.date_add.asc()).all()]
-        else:
-            lp_ids = [r.order_id for r in db.query(Order.order_id).order_by(Order.date_add.asc()).all()]
-        lp_map = {oid: idx + 1 for idx, oid in enumerate(lp_ids)}
-        
-        # Convert timestamps and add latest status
-        orders_data = []
-        for order in orders:
-            # Get latest status
-            latest_status = (
-                db.query(OrderStatusLog)
-                .filter(OrderStatusLog.order_id == order.order_id)
-                .order_by(desc(OrderStatusLog.timestamp))
-                .first()
-            )
-            
-            status_text, status_class = _get_status_display(
-                    latest_status.status if latest_status else "pobrano"
-            )
-            
-            # Get product summary - kazdy produkt w osobnej linii
-            products = db.query(OrderProduct).filter(
-                OrderProduct.order_id == order.order_id
-            ).all()
-            product_lines = [
-                f"{p.name or 'Produkt'} x{p.quantity}"
-                for p in products
-            ]
-            
-            # Sprawdz czy zamowienie ma aktywny zwrot
-            active_return = db.query(Return).filter(
-                Return.order_id == order.order_id,
-                Return.status != "cancelled"
-            ).first()
-            return_info = None
-            if active_return:
-                return_info = {
-                    "status": active_return.status,
-                    "refund_processed": active_return.refund_processed,
-                }
-            
-            # Kwota sprzedazy: dla COD liczymy z pozycji + dostawa
-            is_cod = bool(order.payment_method_cod) or (
-                'pobranie' in (order.payment_method or '').lower()
-            )
-            if is_cod:
-                products_total = sum(
-                    Decimal(str(p.price_brutto or 0)) * p.quantity
-                    for p in products
-                )
-                delivery = Decimal(str(order.delivery_price or 0))
-                sale_price = float(products_total + delivery)
-            else:
-                sale_price = float(order.payment_done) if order.payment_done else None
-
-            orders_data.append({
-                "order_id": order.order_id,
-                "lp": lp_map.get(order.order_id, 0),
-                "external_order_id": order.external_order_id,
-                "shop_order_id": order.shop_order_id,
-                "customer_name": order.customer_name,
-                "platform": order.platform,
-                "date_add": _unix_to_datetime(order.date_add),
-                "delivery_method": order.delivery_method,
-                "sale_price": sale_price,
-                "currency": order.currency,
-                "status_text": status_text,
-                "status_class": status_class,
-                "product_summary": product_lines,
-                "tracking_number": order.delivery_package_nr,
-                "return_info": return_info,
-            })
-        
-        # Calculate pagination
-        total_pages = (total + per_page - 1) // per_page
-        has_prev = page > 1
-        has_next = page < total_pages
-        
-        return render_template(
-            "orders_list.html",
-            orders=orders_data,
-            page=page,
-            per_page=per_page,
-            total_pages=total_pages,
-            has_prev=has_prev,
-            has_next=has_next,
-            total=total,
-            search=search,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-            status_filter=status_filter,
-            date_from=date_from,
-            date_to=date_to,
-        )
+    return render_template("orders_list.html", **build_orders_list_context(request.args))
 
 
 @bp.route("/order/<order_id>")
@@ -696,93 +479,15 @@ def add_order():
     if request.method == "GET":
         return render_template("add_order.html")
 
-    # POST - tworzenie zamowienia
-    f = request.form
-    order_id = f"manual_{int(time.time())}_{secrets.token_hex(4)}"
-    now_ts = int(time.time())
-
-    # Prowizja
-    commission_type = f.get("commission_type", "percent")
-    try:
-        commission_value = float(f.get("commission_value") or 0)
-    except (ValueError, TypeError):
-        commission_value = 0.0
-
-    # Zbierz produkty z formularza
-    names = request.form.getlist("prod_name[]")
-    eans = request.form.getlist("prod_ean[]")
-    qtys = request.form.getlist("prod_qty[]")
-    prices = request.form.getlist("prod_price[]")
-
-    products = []
-    for i, name in enumerate(names):
-        if not name.strip():
-            continue
-        price = float(prices[i]) if i < len(prices) and prices[i] else 0
-        # Oblicz prowizje per produkt
-        if commission_type == "percent" and commission_value > 0:
-            comm_fee = round(price * commission_value / 100, 2)
-        elif commission_type == "amount" and commission_value > 0:
-            comm_fee = commission_value
-        else:
-            comm_fee = 0.0
-
-        products.append({
-            "name": name.strip(),
-            "ean": eans[i].strip() if i < len(eans) else "",
-            "quantity": int(qtys[i]) if i < len(qtys) and qtys[i] else 1,
-            "price_brutto": price,
-            "commission_fee": comm_fee,
-        })
-
-    if not products:
-        flash("Dodaj co najmniej jeden produkt.", "danger")
+    payload = build_manual_order_payload(request.form)
+    if payload.error:
+        flash(payload.error, "danger")
         return render_template("add_order.html")
 
-    order_data = {
-        "order_id": order_id,
-        "external_order_id": f.get("external_order_id", "").strip() or None,
-        "platform": f.get("platform", "olx"),
-        "customer": f.get("customer_name", "").strip(),
-        "delivery_fullname": f.get("delivery_fullname", "").strip() or f.get("customer_name", "").strip(),
-        "email": f.get("email", "").strip() or None,
-        "phone": f.get("phone", "").strip() or None,
-        "delivery_company": f.get("delivery_company", "").strip() or None,
-        "delivery_address": f.get("delivery_address", "").strip(),
-        "delivery_postcode": f.get("delivery_postcode", "").strip() or None,
-        "delivery_city": f.get("delivery_city", "").strip(),
-        "delivery_country": "Polska",
-        "delivery_country_code": "PL",
-        "delivery_method": f.get("delivery_method", ""),
-        "delivery_price": float(f.get("delivery_price") or 0),
-        "delivery_package_nr": f.get("delivery_package_nr", "").strip() or None,
-        "delivery_point_id": f.get("delivery_point_id", "").strip() or None,
-        "delivery_point_address": f.get("delivery_point_address", "").strip() or None,
-        "delivery_point_city": f.get("delivery_point_city", "").strip() or None,
-        "payment_method": f.get("payment_method", "przelew"),
-        "payment_method_cod": "1" if f.get("payment_method") == "za_pobraniem" else "0",
-        "payment_done": float(f.get("payment_done") or 0),
-        "want_invoice": "1" if f.get("want_invoice") else "0",
-        "invoice_fullname": f.get("invoice_fullname", "").strip() or None,
-        "invoice_company": f.get("invoice_company", "").strip() or None,
-        "invoice_nip": f.get("invoice_nip", "").strip() or None,
-        "invoice_address": f.get("invoice_address", "").strip() or None,
-        "invoice_postcode": f.get("invoice_postcode", "").strip() or None,
-        "invoice_city": f.get("invoice_city", "").strip() or None,
-        "invoice_country": "Polska",
-        "user_comments": f.get("user_comments", "").strip() or None,
-        "admin_comments": f.get("admin_comments", "").strip() or None,
-        "currency": "PLN",
-        "confirmed": True,
-        "date_add": now_ts,
-        "date_confirmed": now_ts,
-        "products": products,
-    }
-
     with get_session() as db:
-        order = sync_order_from_data(db, order_data)
+        order = sync_order_from_data(db, payload.order_data)
         add_order_status(db, order.order_id, "pobrano",
-                         notes=f"Zamowienie reczne ({order_data['platform']})")
+                         notes=f"Zamowienie reczne ({payload.order_data['platform']})")
         db.commit()
         flash(f"Zamowienie {order.order_id} zostalo utworzone.", "success")
         return redirect(url_for("orders.order_detail", order_id=order.order_id))
@@ -827,93 +532,16 @@ def sync_allegro_orders():
     Uzywa GET /order/checkout-forms.
     """
     try:
-        from .allegro_api.orders import (
-            fetch_all_allegro_orders,
-            parse_allegro_order_to_data,
-            get_allegro_internal_status,
-        )
-
         current_app.logger.info("Rozpoczynam sync zamowien z Allegro API...")
-
-        # Pobierz wszystkie zamowienia z Allegro
-        checkout_forms = fetch_all_allegro_orders()
-
-        synced = 0
-        updated = 0
-        skipped = 0
-
         with get_session() as db:
-            for cf in checkout_forms:
-                try:
-                    order_data = parse_allegro_order_to_data(cf)
-                    cf_id = cf.get("id", "")
-
-                    # Sprawdz czy zamowienie juz istnieje (po external_order_id lub order_id)
-                    existing = db.query(Order).filter(
-                        or_(
-                            Order.external_order_id == cf_id,
-                            Order.order_id == f"allegro_{cf_id}",
-                        )
-                    ).first()
-
-                    if existing:
-                        # Zamowienie juz istnieje - zaktualizuj brakujace pola
-                        if not existing.user_login and order_data.get("user_login"):
-                            existing.user_login = order_data["user_login"]
-                        if not existing.email and order_data.get("email"):
-                            existing.email = order_data["email"]
-                        if not existing.phone and order_data.get("phone"):
-                            existing.phone = order_data["phone"]
-                        if not existing.external_order_id:
-                            existing.external_order_id = cf_id
-
-                        # Zaktualizuj status na podstawie fulfillment z Allegro
-                        internal_status = get_allegro_internal_status(order_data)
-                        allegro_status = order_data.get("_allegro_status", "")
-                        fulfillment = order_data.get("_allegro_fulfillment_status", "")
-                        added = add_order_status(
-                            db,
-                            existing.order_id,
-                            internal_status,
-                            notes=f"Aktualizacja z Allegro API (status: {allegro_status}, fulfillment: {fulfillment})",
-                        )
-                        if added:
-                            current_app.logger.info(
-                                "Zaktualizowano status %s -> %s (fulfillment: %s)",
-                                existing.order_id[:30], internal_status, fulfillment,
-                            )
-                        updated += 1
-                    else:
-                        # Nowe zamowienie - dodaj
-                        sync_order_from_data(db, order_data)
-
-                        # Ustaw status na podstawie danych Allegro
-                        internal_status = get_allegro_internal_status(order_data)
-                        allegro_status = order_data.get("_allegro_status", "")
-                        fulfillment = order_data.get("_allegro_fulfillment_status", "")
-                        add_order_status(
-                            db,
-                            order_data["order_id"],
-                            internal_status,
-                            notes=f"Zsynchronizowano z Allegro API (status: {allegro_status}, fulfillment: {fulfillment})",
-                        )
-                        synced += 1
-
-                except Exception as exc:
-                    current_app.logger.warning(
-                        "Blad przetwarzania zamowienia Allegro %s: %s",
-                        cf.get("id", "?"), exc
-                    )
-                    skipped += 1
-
-            db.commit()
-
-        msg = (
-            f"Allegro API: {synced} nowych, {updated} zaktualizowanych, "
-            f"{skipped} pominieto (laczne: {len(checkout_forms)} z API)"
-        )
-        current_app.logger.info(msg)
-        flash(msg, "success")
+            result = sync_orders_from_allegro_api(
+                db,
+                sync_order_from_data=sync_order_from_data,
+                add_order_status=add_order_status,
+                logger=current_app.logger,
+            )
+        current_app.logger.info(result.message)
+        flash(result.message, "success")
 
     except Exception as exc:
         current_app.logger.error("Blad sync zamowien z Allegro API: %s", exc)
