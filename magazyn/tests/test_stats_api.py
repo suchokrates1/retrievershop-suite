@@ -571,7 +571,7 @@ def test_stats_logistics_funnel_and_error_counts(client, app, login):
     stats_module._FAST_CACHE.clear()
     _seed_order(app, "ord_s6_log", payment_done=100.0)
 
-    now = datetime.now()
+    now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
     _seed_status_log(app, "ord_s6_log", "wydrukowano", now)
     _seed_status_log(app, "ord_s6_log", "spakowano", now + timedelta(minutes=10))
     _seed_status_log(app, "ord_s6_log", "wyslano", now + timedelta(hours=1))
