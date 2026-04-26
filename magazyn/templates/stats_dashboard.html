@@ -93,14 +93,26 @@
                 <p class="text-sm uppercase tracking-wider opacity-80">Analityka operacyjna</p>
                 <h1 class="stats-title text-3xl md:text-4xl font-bold">Centrum Statystyk</h1>
                 <p class="opacity-80 mt-2">Sprzedaż, marża, zwroty, logistyka i konkurencja w jednym widoku.</p>
+                <div class="mt-3 flex flex-wrap gap-2 text-xs md:text-sm opacity-85">
+                    <span class="badge badge-outline">Widok: <span class="ml-1 font-medium" x-text="activePresetLabel"></span></span>
+                    <span class="badge badge-outline">Granulacja: <span class="ml-1 font-medium" x-text="granularityLabel()"></span></span>
+                    <span class="badge badge-outline max-w-full whitespace-normal" x-text="periodSummary"></span>
+                </div>
             </div>
             <div class="flex flex-wrap gap-2 w-full lg:w-auto">
-                <input type="date" class="input input-bordered w-full sm:w-auto" x-model="filters.date_from">
-                <input type="date" class="input input-bordered w-full sm:w-auto" x-model="filters.date_to">
-                <select class="select select-bordered w-full sm:w-auto" x-model="filters.granularity">
-                    <option value="day">Dzień</option>
-                    <option value="week">Tydzień</option>
+                <select class="select select-bordered w-full sm:w-auto" x-model="selectedPreset" @change="applyPreset(selectedPreset)">
+                    <option value="ytd">Od początku roku</option>
+                    <option value="last6">Ostatnie 6 miesięcy</option>
+                    <option value="quarter">Bieżący kwartał</option>
+                    <option value="rolling12">Ostatnie 12 miesięcy</option>
+                    <option value="custom">Niestandardowy</option>
+                </select>
+                <input type="date" class="input input-bordered w-full sm:w-auto" x-model="filters.date_from" @change="onPeriodFieldChanged()">
+                <input type="date" class="input input-bordered w-full sm:w-auto" x-model="filters.date_to" @change="onPeriodFieldChanged()">
+                <select class="select select-bordered w-full sm:w-auto" x-model="filters.granularity" @change="onPeriodFieldChanged()">
                     <option value="month">Miesiąc</option>
+                    <option value="week">Tydzień</option>
+                    <option value="day">Dzień</option>
                 </select>
                 <select class="select select-bordered w-full sm:w-auto" x-model="filters.platform">
                     <option value="all">Wszystkie platformy</option>
@@ -135,7 +147,7 @@
     <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
         <div class="chart-wrap xl:col-span-2 reveal">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="text-lg font-semibold">Trend sprzedaży</h3>
+                <h3 class="text-lg font-semibold" x-text="salesChartTitle"></h3>
                 <span class="badge badge-neutral" x-text="salesMeta"></span>
             </div>
             <div class="chart-canvas-shell relative">
@@ -999,6 +1011,8 @@
 <script>
 function statsDashboard() {
     const now = new Date();
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const toLocalDateInput = (dt) => {
         const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
@@ -1007,10 +1021,13 @@ function statsDashboard() {
 
     return {
         loading: false,
+        selectedPreset: 'ytd',
+        activePresetLabel: 'Od początku roku',
+        periodSummary: '',
         filters: {
-            date_from: toLocalDateInput(monthStart),
+            date_from: toLocalDateInput(yearStart),
             date_to: toLocalDateInput(now),
-            granularity: 'day',
+            granularity: 'month',
             platform: 'all',
             payment_type: 'all'
         },
@@ -1020,8 +1037,9 @@ function statsDashboard() {
             { key: 'net', label: 'Zysk netto', value: '-', sub: '' },
             { key: 'margin', label: 'Marża', value: '-', sub: '' }
         ],
+        salesChartTitle: 'Porównanie miesięcy sprzedaży',
         salesMeta: '-',
-        drillDownText: 'Kliknij punkt wykresu, aby zobaczyć drill-down.',
+        drillDownText: 'Wybierz zakres kilku miesięcy lub własny i kliknij punkt wykresu, aby zobaczyć szczegóły bucketu.',
         returnsLoaded: false,
         returnsLoading: false,
         returnsError: null,
@@ -1090,7 +1108,107 @@ function statsDashboard() {
             return p.toString();
         },
 
+        granularityLabel() {
+            const labels = {
+                day: 'dzienna',
+                week: 'tygodniowa',
+                month: 'miesięczna',
+            };
+            return labels[this.filters.granularity] || this.filters.granularity;
+        },
+
+        getPresetConfig(preset) {
+            const current = new Date();
+            const configMap = {
+                ytd: {
+                    label: 'Od początku roku',
+                    dateFrom: new Date(current.getFullYear(), 0, 1),
+                    dateTo: current,
+                    granularity: 'month',
+                    chartTitle: 'Porównanie miesięcy od początku roku',
+                },
+                last6: {
+                    label: 'Ostatnie 6 miesięcy',
+                    dateFrom: new Date(current.getFullYear(), current.getMonth() - 5, 1),
+                    dateTo: current,
+                    granularity: 'month',
+                    chartTitle: 'Porównanie ostatnich 6 miesięcy',
+                },
+                quarter: {
+                    label: 'Bieżący kwartał',
+                    dateFrom: new Date(current.getFullYear(), Math.floor(current.getMonth() / 3) * 3, 1),
+                    dateTo: current,
+                    granularity: 'month',
+                    chartTitle: 'Porównanie miesięcy w kwartale',
+                },
+                rolling12: {
+                    label: 'Ostatnie 12 miesięcy',
+                    dateFrom: new Date(current.getFullYear(), current.getMonth() - 11, 1),
+                    dateTo: current,
+                    granularity: 'month',
+                    chartTitle: 'Porównanie ostatnich 12 miesięcy',
+                },
+            };
+            return configMap[preset] || null;
+        },
+
+        updatePeriodPresentation() {
+            const preset = this.getPresetConfig(this.selectedPreset);
+            this.activePresetLabel = preset ? preset.label : 'Niestandardowy';
+            this.salesChartTitle = preset ? preset.chartTitle : 'Porównanie sprzedaży w wybranym zakresie';
+            this.periodSummary = `${this.filters.date_from} - ${this.filters.date_to}`;
+
+            if (this.filters.granularity === 'month') {
+                this.drillDownText = 'Wykres pokazuje porównanie kolejnych miesięcy w wybranym zakresie. Kliknij słupek lub linię, aby zobaczyć szczegóły.';
+            } else if (this.filters.granularity === 'week') {
+                this.drillDownText = 'Wykres pokazuje porównanie tygodni. Kliknij punkt, aby sprawdzić przychód, zamówienia i sztuki.';
+            } else {
+                this.drillDownText = 'Wykres pokazuje dzienny przebieg sprzedaży. Kliknij punkt wykresu, aby zobaczyć drill-down.';
+            }
+        },
+
+        onPeriodFieldChanged() {
+            this.selectedPreset = 'custom';
+            this.updatePeriodPresentation();
+        },
+
+        async applyPreset(preset, { refresh = true } = {}) {
+            if (preset === 'custom') {
+                this.updatePeriodPresentation();
+                if (refresh) await this.refreshAll();
+                return;
+            }
+
+            const presetConfig = this.getPresetConfig(preset);
+            if (!presetConfig) {
+                this.selectedPreset = 'custom';
+                this.updatePeriodPresentation();
+                if (refresh) await this.refreshAll();
+                return;
+            }
+
+            this.selectedPreset = preset;
+            this.filters.date_from = toLocalDateInput(presetConfig.dateFrom);
+            this.filters.date_to = toLocalDateInput(presetConfig.dateTo);
+            this.filters.granularity = presetConfig.granularity;
+            this.updatePeriodPresentation();
+            if (refresh) await this.refreshAll();
+        },
+
+        formatBucketLabel(bucket) {
+            if (!bucket) return '';
+            if (this.filters.granularity === 'month' && /^\d{4}-\d{2}$/.test(bucket)) {
+                const [year, month] = bucket.split('-').map(Number);
+                return new Date(year, month - 1, 1).toLocaleDateString('pl-PL', { month: 'short', year: '2-digit' });
+            }
+            if (this.filters.granularity === 'week' && /^\d{4}-W\d{2}$/.test(bucket)) {
+                return bucket.replace('-W', ' / tydz. ');
+            }
+            return bucket;
+        },
+
         async init() {
+            this.updatePeriodPresentation();
             await this.refreshAll();
             this.setupLazyLoading();
         },
@@ -1224,7 +1342,7 @@ function statsDashboard() {
         },
 
         renderSalesChart(sales) {
-            const labels = sales.data.series.map(x => x.bucket);
+            const labels = sales.data.series.map(x => this.formatBucketLabel(x.bucket));
             const revenue = sales.data.series.map(x => x.revenue);
             const orders = sales.data.series.map(x => x.orders);
             if (!labels.length) { this.salesChartHasData = false; return; }
