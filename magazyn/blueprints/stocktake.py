@@ -114,7 +114,7 @@ def stocktake_new():
 def stocktake_scan(stocktake_id):
     """Strona ciąglego skanowania remanentu."""
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st:
             flash("Remanent nie znaleziony.", "danger")
             return redirect(url_for("stocktake.stocktake_list"))
@@ -148,7 +148,7 @@ def stocktake_barcode_scan(stocktake_id):
         return jsonify({"error": "Brak kodu kreskowego"}), 400
 
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st or st.status != "in_progress":
             return jsonify({"error": "Remanent nie jest aktywny"}), 400
 
@@ -249,7 +249,7 @@ def stocktake_barcode_scan(stocktake_id):
 def stocktake_undo(stocktake_id):
     """Cofnij ostatni skan."""
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st or st.status != "in_progress":
             return jsonify({"error": "Remanent nie jest aktywny"}), 400
 
@@ -268,7 +268,7 @@ def stocktake_undo(stocktake_id):
         last_item.scanned_qty -= 1
         db.flush()
 
-        ps = db.query(ProductSize).get(last_item.product_size_id)
+        ps = db.get(ProductSize, last_item.product_size_id)
         product = ps.product if ps else None
         product_name = product.name if product else "Nieznany"
         size = ps.size if ps else ""
@@ -320,7 +320,7 @@ def stocktake_undo(stocktake_id):
 def stocktake_finish(stocktake_id):
     """Zakoncz remanent."""
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st:
             flash("Remanent nie znaleziony.", "danger")
             return redirect(url_for("stocktake.stocktake_list"))
@@ -342,7 +342,7 @@ def stocktake_finish(stocktake_id):
 def stocktake_report(stocktake_id):
     """Raport z remanentu - porownanie oczekiwanego z zeskanowanym."""
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st:
             flash("Remanent nie znaleziony.", "danger")
             return redirect(url_for("stocktake.stocktake_list"))
@@ -395,7 +395,7 @@ def stocktake_report(stocktake_id):
 def stocktake_apply(stocktake_id):
     """Zastosuj wyniki remanentu - zaktualizuj stany magazynowe."""
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st or st.status != "finished":
             flash("Mozna aplikowac tylko zakonczony remanent.", "warning")
             return redirect(url_for("stocktake.stocktake_list"))
@@ -403,7 +403,7 @@ def stocktake_apply(stocktake_id):
         updated = 0
         for item in st.items:
             if item.scanned_qty != item.expected_qty:
-                ps = db.query(ProductSize).get(item.product_size_id)
+                ps = db.get(ProductSize, item.product_size_id)
                 if ps:
                     ps.quantity = item.scanned_qty
                     updated += 1
@@ -419,7 +419,7 @@ def stocktake_apply(stocktake_id):
 def stocktake_pdf(stocktake_id):
     """Eksport raportu remanentu do PDF."""
     with get_session() as db:
-        st = db.query(Stocktake).get(stocktake_id)
+        st = db.get(Stocktake, stocktake_id)
         if not st:
             flash("Remanent nie znaleziony.", "danger")
             return redirect(url_for("stocktake.stocktake_list"))

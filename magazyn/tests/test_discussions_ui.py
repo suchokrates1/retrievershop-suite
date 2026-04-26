@@ -74,10 +74,10 @@ def create_fake_discussions_data():
     ]
 
 
-def test_discussions_page_with_fake_data():
+def build_discussions_page_with_fake_data(output_dir: Path):
     """Generuje stronę HTML z fakeowymi danymi - standalone bez Flask."""
     
-    print("🎨 Generuję standalone HTML z prawdziwymi stylami...")
+    print("Generuję standalone HTML z prawdziwymi stylami...")
     
     from datetime import datetime
     
@@ -208,12 +208,12 @@ def test_discussions_page_with_fake_data():
 '''
     
     # Zapisz HTML do pliku
-    output_file = Path(__file__).parent / "discussions_output.html"
+    output_file = output_dir / "discussions_output.html"
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html_content)
     
-    print(f"💾 Zapisano HTML do: {output_file}")
-    print(f"📏 Rozmiar: {len(html_content)} bajtów")
+    print(f"Zapisano HTML do: {output_file}")
+    print(f"Rozmiar: {len(html_content)} bajtów")
     
     # Sprawdź zawartość
     checks = {
@@ -231,14 +231,27 @@ def test_discussions_page_with_fake_data():
         status = "OK" if result else "FAIL"
         print(f"   {status} {name}")
     
-    return True
+    return html_content, checks
+
+
+def test_discussions_page_with_fake_data(tmp_path):
+    """Generuje stronę HTML z fakeowymi danymi i sprawdza jej zawartość."""
+    html_content, checks = build_discussions_page_with_fake_data(tmp_path)
+
+    output_file = tmp_path / "discussions_output.html"
+    assert output_file.exists()
+    assert output_file.read_text(encoding="utf-8") == html_content
+
+    missing = [name for name, result in checks.items() if not result]
+    assert not missing
 
 
 if __name__ == "__main__":
     print("Test UI strony dyskusji z fakeowymi danymi\n")
     print("=" * 60)
     
-    success = test_discussions_page_with_fake_data()
+    _, checks = build_discussions_page_with_fake_data(Path(__file__).parent)
+    success = all(checks.values())
     
     print("=" * 60)
     if success:
