@@ -26,6 +26,7 @@ from .email_service import (
     send_invoice_correction,
 )
 from .order_status import add_order_status, dispatch_status_email
+from .order_sync import sync_order_from_data
 
 # Re-export z domain dla kompatybilnosci wstecznej
 from ..domain.inventory import consume_order_stock
@@ -55,4 +56,5 @@ __all__ = [
     "send_invoice_correction",
     "add_order_status",
     "dispatch_status_email",
+    "sync_order_from_data",
 ]
