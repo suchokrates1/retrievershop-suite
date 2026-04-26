@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 import time
 from collections import defaultdict
-import io
-import csv
 import logging
 
-import pandas as pd
-from flask import Blueprint, jsonify, request, Response
+from flask import Blueprint, jsonify, request
 from sqlalchemy import case, func, or_
 
 from .auth import login_required
@@ -48,336 +44,38 @@ from .services.stats_runtime import (
     record_telemetry as _record_telemetry,
     telemetry_stats as _telemetry_stats,
 )
+from .services.stats_logistics import (
+    build_alerts as _build_alerts,
+    carrier_label as _carrier_label,
+    delivery_method_label as _delivery_method_label,
+    group_logistics_rows as _group_logistics_rows,
+)
+from .services.stats_orders import (
+    bucket_key as _bucket_key,
+    fetch_orders as _fetch_orders,
+    filter_orders_by_payment as _filter_orders_by_payment,  # noqa: F401 - publiczny helper kompatybilnosci
+    is_cod as _is_cod,
+    order_products_map as _order_products_map,
+    order_revenue as _order_revenue,
+)
+from .services.stats_support import (
+    StatsFilters,  # noqa: F401 - publiczny typ kompatybilnosci testow
+    build_cache_key as _build_cache_key,
+    export_table as _export_table,
+    format_filters as _format_filters,
+    json_error as _json_error,
+    parse_date as _parse_date,  # noqa: F401 - publiczny helper kompatybilnosci
+    parse_filters as _parse_filters,
+    pct_change as _pct_change,
+    period_offsets as _period_offsets,
+    to_ts as _to_ts,
+)
 from .settings_store import settings_store
 
 
 bp = Blueprint("stats", __name__, url_prefix="/api/stats")
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class StatsFilters:
-    date_from: datetime
-    date_to: datetime
-    granularity: str
-    platform: str
-    payment_type: str
-
-
-def _json_error(code: str, message: str, status: int = 400):
-    return (
-        jsonify(
-            {
-                "ok": False,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "data": None,
-                "errors": [{"code": code, "message": message}],
-            }
-        ),
-        status,
-    )
-
-
-def _parse_date(value: str) -> datetime | None:
-    try:
-        return datetime.strptime(value, "%Y-%m-%d")
-    except Exception:
-        return None
-
-
-def _parse_filters() -> tuple[StatsFilters | None, tuple | None]:
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    default_from = today.replace(day=1)
-    default_to = today + timedelta(days=1)
-
-    date_from_raw = (request.args.get("date_from") or "").strip()
-    date_to_raw = (request.args.get("date_to") or "").strip()
-    granularity = (request.args.get("granularity") or "day").strip().lower()
-    platform = (request.args.get("platform") or "all").strip().lower()
-    payment_type = (request.args.get("payment_type") or "all").strip().lower()
-
-    if granularity not in {"day", "week", "month"}:
-        return None, _json_error(
-            "INVALID_GRANULARITY", "Dozwolone granularity: day, week, month"
-        )
-
-    if platform not in {"all", "allegro", "shop", "ebay", "manual"}:
-        return None, _json_error(
-            "INVALID_PLATFORM", "Dozwolone platform: all, allegro, shop, ebay, manual"
-        )
-
-    if payment_type not in {"all", "cod", "online"}:
-        return None, _json_error(
-            "INVALID_PAYMENT_TYPE", "Dozwolone payment_type: all, cod, online"
-        )
-
-    if date_from_raw:
-        date_from = _parse_date(date_from_raw)
-        if not date_from:
-            return None, _json_error("INVALID_DATE_FROM", "date_from musi miec format YYYY-MM-DD")
-    else:
-        date_from = default_from
-
-    if date_to_raw:
-        date_to = _parse_date(date_to_raw)
-        if not date_to:
-            return None, _json_error("INVALID_DATE_TO", "date_to musi miec format YYYY-MM-DD")
-        # date_to jest inkluzywne na poziomie dnia
-        date_to = date_to + timedelta(days=1)
-    else:
-        date_to = default_to
-
-    if date_from >= date_to:
-        return None, _json_error("INVALID_DATE_RANGE", "date_from musi byc mniejsze niz date_to")
-
-    return StatsFilters(
-        date_from=date_from,
-        date_to=date_to,
-        granularity=granularity,
-        platform=platform,
-        payment_type=payment_type,
-    ), None
-
-
-def _is_cod(order: Order) -> bool:
-    method = (order.payment_method or "").lower()
-    return bool(order.payment_method_cod) or ("pobranie" in method)
-
-
-def _build_cache_key(filters: StatsFilters) -> str:
-    return "|".join(
-        [
-            filters.date_from.strftime("%Y-%m-%d"),
-            filters.date_to.strftime("%Y-%m-%d"),
-            filters.granularity,
-            filters.platform,
-            filters.payment_type,
-        ]
-    )
-
-
-def _to_ts(dt: datetime) -> int:
-    return int(dt.timestamp())
-
-
-def _pct_change(current: Decimal, previous: Decimal) -> float | None:
-    if previous == 0:
-        return None
-    return float(((current - previous) / previous) * 100)
-
-
-def _order_products_map(db, order_ids: list[str]) -> dict[str, dict[str, Decimal | int]]:
-    if not order_ids:
-        return {}
-
-    rows = (
-        db.query(
-            OrderProduct.order_id,
-            func.sum(OrderProduct.quantity).label("qty"),
-            func.sum(OrderProduct.price_brutto * OrderProduct.quantity).label("gross"),
-        )
-        .filter(OrderProduct.order_id.in_(order_ids))
-        .group_by(OrderProduct.order_id)
-        .all()
-    )
-    return {
-        row.order_id: {
-            "qty": int(row.qty or 0),
-            "gross": Decimal(str(row.gross or 0)),
-        }
-        for row in rows
-    }
-
-
-def _order_revenue(order: Order, products_map: dict[str, dict[str, Decimal | int]]) -> Decimal:
-    order_products = products_map.get(order.order_id, {"gross": Decimal("0")})
-    gross = Decimal(str(order_products.get("gross", Decimal("0"))))
-    if _is_cod(order):
-        return gross + Decimal(str(order.delivery_price or 0))
-    return Decimal(str(order.payment_done or 0))
-
-
-def _filter_orders_by_payment(orders: list[Order], payment_type: str) -> list[Order]:
-    if payment_type == "all":
-        return orders
-    if payment_type == "cod":
-        return [o for o in orders if _is_cod(o)]
-    return [o for o in orders if not _is_cod(o)]
-
-
-def _fetch_orders(db, filters: StatsFilters, start_ts: int, end_ts: int) -> list[Order]:
-    q = db.query(Order).filter(Order.date_add >= start_ts, Order.date_add < end_ts)
-    if filters.platform != "all":
-        q = q.filter(Order.platform == filters.platform)
-    orders = q.all()
-    return _filter_orders_by_payment(orders, filters.payment_type)
-
-
-def _bucket_key(ts: int, granularity: str) -> str:
-    dt = datetime.fromtimestamp(ts)
-    if granularity == "week":
-        week_start = dt - timedelta(days=dt.weekday())
-        return week_start.strftime("%Y-%m-%d")
-    if granularity == "month":
-        return dt.strftime("%Y-%m")
-    return dt.strftime("%Y-%m-%d")
-
-
-def _period_offsets(filters: StatsFilters) -> tuple[int, int, int, int]:
-    current_start = _to_ts(filters.date_from)
-    current_end = _to_ts(filters.date_to)
-    period_len = filters.date_to - filters.date_from
-    prev_start = _to_ts(filters.date_from - period_len)
-    prev_end = current_start
-    return current_start, current_end, prev_start, prev_end
-
-
-def _build_alerts(*, returns_rate: float | None = None, refund_rate: float | None = None, lead_time_hours: float | None = None) -> list[dict]:
-    alerts: list[dict] = []
-    if returns_rate is not None and returns_rate > 8.0:
-        alerts.append(
-            {
-                "code": "RETURNS_RATE_HIGH",
-                "level": "warning",
-                "message": "Wskaznik zwrotow przekracza prog 8%",
-                "value": returns_rate,
-                "threshold": 8.0,
-            }
-        )
-    if refund_rate is not None and refund_rate < 80.0:
-        alerts.append(
-            {
-                "code": "REFUND_RATE_LOW",
-                "level": "warning",
-                "message": "Skutecznosc refundow jest ponizej progu 80%",
-                "value": refund_rate,
-                "threshold": 80.0,
-            }
-        )
-    if lead_time_hours is not None and lead_time_hours > 48.0:
-        alerts.append(
-            {
-                "code": "LEAD_TIME_HIGH",
-                "level": "critical",
-                "message": "Sredni lead time przekracza 48h",
-                "value": lead_time_hours,
-                "threshold": 48.0,
-            }
-        )
-    return alerts
-
-
-def _carrier_label(order: Order) -> str:
-    raw_values = [
-        (order.courier_code or "").strip(),
-        (order.delivery_package_module or "").strip(),
-        (order.delivery_method or "").strip(),
-    ]
-    combined = " ".join(value.lower() for value in raw_values if value)
-    if "inpost" in combined or "paczkomat" in combined:
-        return "InPost"
-    if "dpd" in combined:
-        return "DPD"
-    if "dhl" in combined:
-        return "DHL"
-    if "poczta" in combined or "pocztex" in combined:
-        return "Poczta Polska"
-    if "gls" in combined:
-        return "GLS"
-    if "ups" in combined:
-        return "UPS"
-    if "fedex" in combined:
-        return "FedEx"
-    if "orlen" in combined:
-        return "Orlen"
-    if "allegro" in combined and "one" in combined:
-        return "Allegro One"
-
-    for value in raw_values:
-        if value:
-            return value
-    return "Nieznany"
-
-
-def _delivery_method_label(order: Order) -> str:
-    return (
-        (order.delivery_method or "").strip()
-        or (order.delivery_package_module or "").strip()
-        or _carrier_label(order)
-    )
-
-
-def _group_logistics_rows(rows: dict[str, dict[str, object]]) -> list[dict[str, object]]:
-    result: list[dict[str, object]] = []
-    for row in rows.values():
-        lead_times = [float(value) for value in row.pop("lead_times", [])]
-        delivered_total = int(row.get("delivered_total", 0) or 0)
-        on_time_rate = (
-            sum(1 for value in lead_times if value <= 48.0) / delivered_total * 100
-            if delivered_total
-            else 0.0
-        )
-        avg_lead = sum(lead_times) / len(lead_times) if lead_times else 0.0
-        result.append(
-            {
-                **row,
-                "avg_lead_time_hours": round(avg_lead, 2),
-                "on_time_rate_48h": round(on_time_rate, 2),
-            }
-        )
-
-    result.sort(
-        key=lambda item: (
-            -int(item.get("shipped_total", 0) or 0),
-            float(item.get("avg_lead_time_hours", 0.0) or 0.0),
-            str(item.get("carrier", item.get("delivery_method", ""))),
-        )
-    )
-    return result
-
-
-def _format_filters(filters: StatsFilters) -> dict[str, str]:
-    return {
-        "date_from": filters.date_from.strftime("%Y-%m-%d"),
-        "date_to": (filters.date_to - timedelta(days=1)).strftime("%Y-%m-%d"),
-        "granularity": filters.granularity,
-        "platform": filters.platform,
-        "payment_type": filters.payment_type,
-    }
-
-
-def _export_table(rows: list[dict], filename_prefix: str, export_format: str) -> Response:
-    if export_format == "csv":
-        output = io.StringIO()
-        fieldnames = list(rows[0].keys()) if rows else ["empty"]
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-        content = output.getvalue()
-        return Response(
-            content,
-            mimetype="text/csv",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename_prefix}.csv",
-            },
-        )
-
-    if export_format == "xlsx":
-        df = pd.DataFrame(rows or [{"empty": "no-data"}])
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="stats")
-        buffer.seek(0)
-        return Response(
-            buffer.read(),
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename_prefix}.xlsx",
-            },
-        )
-
-    return _json_error("INVALID_EXPORT_FORMAT", "Dozwolone formaty eksportu: csv, xlsx")
 
 
 @bp.route("/overview")

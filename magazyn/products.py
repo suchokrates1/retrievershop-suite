@@ -15,6 +15,7 @@ import pandas as pd
 import tempfile
 import os
 import io
+import logging
 
 from .db import get_session, record_purchase
 from .domain.inventory import (
@@ -51,6 +52,8 @@ from sqlalchemy import desc, or_, func
 
 bp = Blueprint("products", __name__)
 
+logger = logging.getLogger(__name__)
+
 
 @bp.route("/add_item", methods=["GET", "POST"])
 @login_required
@@ -83,8 +86,9 @@ def add_item():
 
         try:
             create_product(category, brand, series, color, quantities, barcodes)
-        except Exception as e:
-            flash(f"Błąd podczas dodawania przedmiotu: {e}", "error")
+        except Exception as exc:
+            logger.exception("Blad podczas dodawania produktu")
+            flash(f"Błąd podczas dodawania przedmiotu: {exc}", "error")
         return redirect(url_for("products.items"))
 
     return render_template("add_item.html", form=form)
@@ -96,8 +100,9 @@ def update_quantity(product_id, size):
     action = request.form["action"]
     try:
         inventory_update_quantity(product_id, size, action)
-    except Exception as e:
-        flash(f"B\u0142\u0105d podczas aktualizacji ilo\u015bci: {e}")
+    except Exception as exc:
+        logger.exception("Blad podczas aktualizacji ilosci produktu")
+        flash(f"B\u0142\u0105d podczas aktualizacji ilo\u015bci: {exc}")
     return redirect(url_for("products.items"))
 
 
@@ -106,8 +111,9 @@ def update_quantity(product_id, size):
 def delete_item(item_id):
     try:
         deleted = delete_product(item_id)
-    except Exception as e:
-        flash(f"B\u0142ąd podczas usuwania przedmiotu: {e}")
+    except Exception as exc:
+        logger.exception("Blad podczas usuwania produktu")
+        flash(f"B\u0142ąd podczas usuwania przedmiotu: {exc}")
         return redirect(url_for("products.items"))
     if not deleted:
         flash("Nie znaleziono produktu o podanym identyfikatorze", "error")
@@ -140,8 +146,9 @@ def edit_item(product_id):
             updated = update_product(
                 product_id, category, brand, series, color, quantities, barcodes, purchase_prices
             )
-        except Exception as e:
-            flash(f"Błąd podczas aktualizacji przedmiotu: {e}", "error")
+        except Exception as exc:
+            logger.exception("Blad podczas aktualizacji produktu")
+            flash(f"Błąd podczas aktualizacji przedmiotu: {exc}", "error")
             return redirect(url_for("products.items"))
         if not updated:
             flash("Nie znaleziono produktu o podanym identyfikatorze", "error")
@@ -544,9 +551,10 @@ def import_products():
             try:
                 df = pd.read_excel(file)
                 import_from_dataframe(df)
-            except Exception as e:
+            except Exception as exc:
+                logger.exception("Blad podczas importowania produktow")
                 flash(
-                    f"B\u0142\u0105d podczas importowania produkt\u00f3w: {e}"
+                    f"B\u0142\u0105d podczas importowania produkt\u00f3w: {exc}"
                 )
         return redirect(url_for("products.items"))
     return render_template("import_products.html")
@@ -640,8 +648,9 @@ def import_invoice():
                     ),
                     product_sizes=ps_list,
                 )
-            except Exception as e:
-                flash(f"Błąd podczas importu faktury: {e}", "error")
+            except Exception as exc:
+                logger.exception("Blad podczas importu faktury")
+                flash(f"Błąd podczas importu faktury: {exc}", "error")
                 return redirect(url_for("products.items"))
         return redirect(url_for("products.items"))
     return render_template("import_invoice.html")
@@ -704,8 +713,9 @@ def confirm_invoice():
         try:
             import_invoice_rows(confirmed, invoice_number=invoice_number, supplier=supplier)
             flash("Zaimportowano fakture", "success")
-        except Exception as e:
-            flash(f"Blad podczas importu faktury: {e}", "error")
+        except Exception as exc:
+            logger.exception("Blad podczas potwierdzania faktury")
+            flash(f"Blad podczas importu faktury: {exc}", "error")
     pdf_path = session.pop("invoice_pdf", None)
     if pdf_path:
         try:
@@ -761,8 +771,9 @@ def add_delivery():
                 else:
                     errors.append("Brak EAN lub wyboru produktu/rozmiaru")
                     
-            except Exception as e:
-                errors.append(f"Błąd: {e}")
+            except Exception as exc:
+                logger.exception("Blad podczas dodawania dostawy")
+                errors.append(f"Błąd: {exc}")
         
         if success_count > 0:
             flash(f"Dodano {success_count} pozycji dostawy", "success")

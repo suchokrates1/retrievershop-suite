@@ -35,6 +35,13 @@ from .settings_store import SettingsPersistenceError, settings_store
 from .settings_io import HIDDEN_KEYS
 from .domain.financial import FinancialCalculator
 from .services.app_runtime import start_print_agent_runtime
+from .services.fixed_costs import (
+    add_fixed_cost as add_fixed_cost_record,
+    delete_fixed_cost as delete_fixed_cost_record,
+    edit_fixed_cost as edit_fixed_cost_record,
+    list_fixed_costs,
+    toggle_fixed_cost as toggle_fixed_cost_record,
+)
 
 # Settings with boolean values represented as "1" or "0"
 BOOLEAN_KEYS = {
@@ -430,19 +437,7 @@ def settings_page():
             grouped_settings[gname] = {"icon": item["group_icon"], "entries": []}
         grouped_settings[gname]["entries"].append(item)
     
-    # Pobierz koszty stale
-    from .models import FixedCost
-    with get_session() as db_session:
-        fixed_costs = db_session.query(FixedCost).order_by(FixedCost.name).all()
-        # Konwertuj na liste slownikow zeby uniknac problemow z sesja
-        fixed_costs_list = [{
-            'id': fc.id,
-            'name': fc.name,
-            'amount': float(fc.amount),
-            'description': fc.description,
-            'is_active': fc.is_active,
-        } for fc in fixed_costs]
-        total_fixed_costs = sum(fc['amount'] for fc in fixed_costs_list if fc['is_active'])
+    fixed_costs_list, total_fixed_costs = list_fixed_costs()
     
     return render_template(
         "settings.html",
@@ -459,34 +454,12 @@ def settings_page():
 @login_required
 def add_fixed_cost():
     """Dodaj nowy koszt staly."""
-    from .models import FixedCost
-    from decimal import Decimal, InvalidOperation
-    
-    name = request.form.get("name", "").strip()
-    amount_str = request.form.get("amount", "0").strip().replace(",", ".")
-    description = request.form.get("description", "").strip()
-    
-    if not name:
-        flash("Nazwa kosztu jest wymagana.", "error")
-        return redirect(url_for("settings_page"))
-    
-    try:
-        amount = Decimal(amount_str)
-    except (InvalidOperation, ValueError):
-        flash("Nieprawidlowa kwota.", "error")
-        return redirect(url_for("settings_page"))
-    
-    new_cost = FixedCost(
-        name=name,
-        amount=amount,
-        description=description if description else None,
-        is_active=True,
+    result = add_fixed_cost_record(
+        request.form.get("name", ""),
+        request.form.get("amount", "0"),
+        request.form.get("description", ""),
     )
-    with get_session() as db_session:
-        db_session.add(new_cost)
-        db_session.commit()
-    
-    flash(f"Dodano koszt staly: {name} ({amount} PLN)", "success")
+    flash(result.message, result.category)
     return redirect(url_for("settings_page"))
 
 
@@ -494,18 +467,8 @@ def add_fixed_cost():
 @login_required
 def toggle_fixed_cost(cost_id):
     """Wlacz/wylacz koszt staly."""
-    from .models import FixedCost
-    
-    with get_session() as db_session:
-        cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
-        if cost:
-            cost.is_active = not cost.is_active
-            db_session.commit()
-            status = "aktywny" if cost.is_active else "nieaktywny"
-            flash(f"Koszt '{cost.name}' jest teraz {status}.", "info")
-        else:
-            flash("Nie znaleziono kosztu.", "error")
-    
+    result = toggle_fixed_cost_record(cost_id)
+    flash(result.message, result.category)
     return redirect(url_for("settings_page"))
 
 
@@ -513,18 +476,8 @@ def toggle_fixed_cost(cost_id):
 @login_required
 def delete_fixed_cost(cost_id):
     """Usun koszt staly."""
-    from .models import FixedCost
-    
-    with get_session() as db_session:
-        cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
-        if cost:
-            name = cost.name
-            db_session.delete(cost)
-            db_session.commit()
-            flash(f"Usunieto koszt staly: {name}", "success")
-        else:
-            flash("Nie znaleziono kosztu.", "error")
-    
+    result = delete_fixed_cost_record(cost_id)
+    flash(result.message, result.category)
     return redirect(url_for("settings_page"))
 
 
@@ -532,35 +485,13 @@ def delete_fixed_cost(cost_id):
 @login_required
 def edit_fixed_cost(cost_id):
     """Edytuj koszt staly."""
-    from .models import FixedCost
-    from decimal import Decimal, InvalidOperation
-    
-    with get_session() as db_session:
-        cost = db_session.query(FixedCost).filter_by(id=cost_id).first()
-        if not cost:
-            flash("Nie znaleziono kosztu.", "error")
-            return redirect(url_for("settings_page"))
-        
-        name = request.form.get("name", "").strip()
-        amount_str = request.form.get("amount", "0").strip().replace(",", ".")
-        description = request.form.get("description", "").strip()
-        
-        if not name:
-            flash("Nazwa kosztu jest wymagana.", "error")
-            return redirect(url_for("settings_page"))
-        
-        try:
-            amount = Decimal(amount_str)
-        except (InvalidOperation, ValueError):
-            flash("Nieprawidlowa kwota.", "error")
-            return redirect(url_for("settings_page"))
-        
-        cost.name = name
-        cost.amount = amount
-        cost.description = description if description else None
-        db_session.commit()
-        
-        flash(f"Zaktualizowano koszt staly: {name}", "success")
+    result = edit_fixed_cost_record(
+        cost_id,
+        request.form.get("name", ""),
+        request.form.get("amount", "0"),
+        request.form.get("description", ""),
+    )
+    flash(result.message, result.category)
     return redirect(url_for("settings_page"))
 
 
