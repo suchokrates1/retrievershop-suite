@@ -3,8 +3,7 @@ Testy serwisu email do klienta i strony zamowienia.
 """
 
 import secrets
-from unittest.mock import patch, MagicMock
-from collections import OrderedDict
+from unittest.mock import patch
 
 import pytest
 

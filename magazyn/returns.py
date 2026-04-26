@@ -27,7 +27,7 @@ from .domain.returns import (
     map_allegro_return_status as _map_allegro_return_status,
     map_carrier_to_allegro as _map_carrier_to_allegro,
 )
-from .models import Return, ReturnStatusLog, Order, OrderProduct, ProductSize, AllegroOffer
+from .models import Return, ReturnStatusLog, Order
 from .notifications import send_messenger
 from . import allegro_api
 
@@ -441,92 +441,13 @@ def restore_stock_for_return(return_id: int) -> bool:
     Returns:
         True jesli stan zostal przywrocony, False w przeciwnym razie
     """
-    with get_session() as db:
-        return_record = db.query(Return).filter(Return.id == return_id).first()
-        
-        if not return_record:
-            logger.error(f"Zwrot #{return_id} nie istnieje")
-            return False
-        
-        if return_record.stock_restored:
-            logger.info(f"Stan dla zwrotu #{return_id} juz zostal przywrocony")
-            return True
-        
-        if return_record.status not in [RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]:
-            logger.warning(f"Zwrot #{return_id} nie jest w statusie delivered - nie mozna przywrocic stanu")
-            return False
-        
-        try:
-            items = json.loads(return_record.items_json) if return_record.items_json else []
-            
-            restored_items = []
-            for item in items:
-                ean = item.get("ean")
-                quantity = item.get("quantity", 1)
-                product_size_id = item.get("product_size_id")
-                
-                # Znajdz ProductSize po EAN, ID lub przez auction_id z zamowienia
-                product_size = None
-                
-                # 1. Po product_size_id
-                if product_size_id:
-                    product_size = db.query(ProductSize).filter(ProductSize.id == product_size_id).first()
-                
-                # 2. Po EAN
-                if not product_size and ean:
-                    product_size = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
-                
-                # 3. Przez auction_id z OrderProduct -> AllegroOffer
-                if not product_size and return_record.order_id:
-                    # Znajdz OrderProduct z tym EAN w tym zamowieniu
-                    order_product = db.query(OrderProduct).filter(
-                        OrderProduct.order_id == return_record.order_id,
-                        OrderProduct.ean == ean
-                    ).first()
-                    
-                    if order_product and order_product.auction_id:
-                        allegro_offer = db.query(AllegroOffer).filter(
-                            AllegroOffer.offer_id == order_product.auction_id
-                        ).first()
-                        if allegro_offer and allegro_offer.product_size_id:
-                            product_size = db.query(ProductSize).filter(
-                                ProductSize.id == allegro_offer.product_size_id
-                            ).first()
-                            if product_size:
-                                logger.info(f"Znaleziono ProductSize przez auction_id: {order_product.auction_id} -> {product_size.id}")
-                
-                if product_size:
-                    old_qty = product_size.quantity or 0
-                    product_size.quantity = old_qty + quantity
-                    restored_items.append(f"{item.get('name', 'Produkt')} +{quantity} (bylo: {old_qty})")
-                    logger.info(f"Przywrocono stan: {product_size.barcode} +{quantity} (teraz: {product_size.quantity})")
-                else:
-                    logger.warning(f"Nie znaleziono produktu EAN={ean}, product_size_id={product_size_id}")
-            
-            if restored_items:
-                return_record.stock_restored = True
-                _add_return_status_log(
-                    db,
-                    return_record.id,
-                    return_record.status,
-                    f"Przywrocono stan: {', '.join(restored_items)}"
-                )
-                db.commit()
-                
-                # Wyslij powiadomienie o przywroceniu stanu
-                message = f"[STAN PRZYWROCONY] Zamowienie {return_record.order_id}\nPrzywrocono stan: {', '.join(restored_items)}"
-                send_messenger(message)
-                
-                logger.info(f"Zakonczono obsluge zwrotu #{return_id}")
-                return True
-            else:
-                logger.warning(f"Nie znaleziono produktow do przywrocenia dla zwrotu #{return_id}")
-                return False
-            
-        except Exception as e:
-            logger.error(f"Blad przywracania stanu dla zwrotu #{return_id}: {e}")
-            db.rollback()
-            return False
+    from .services.return_stock import restore_stock_for_return as _restore_stock_for_return_service
+
+    return _restore_stock_for_return_service(
+        return_id,
+        send_message=send_messenger,
+        log=logger,
+    )
 
 
 def process_delivered_returns() -> Dict[str, int]:
@@ -536,25 +457,12 @@ def process_delivered_returns() -> Dict[str, int]:
     Returns:
         Slownik z liczba: processed, skipped, errors
     """
-    stats = {"processed": 0, "skipped": 0, "errors": 0}
-    
-    with get_session() as db:
-        delivered_returns = db.query(Return).filter(
-            Return.status == RETURN_STATUS_DELIVERED,
-            Return.stock_restored == False
-        ).all()
-        
-        for return_record in delivered_returns:
-            try:
-                if restore_stock_for_return(return_record.id):
-                    stats["processed"] += 1
-                else:
-                    stats["skipped"] += 1
-            except Exception as e:
-                logger.error(f"Blad przetwarzania zwrotu #{return_record.id}: {e}")
-                stats["errors"] += 1
-    
-    return stats
+    from .services.return_stock import process_delivered_returns as _process_delivered_returns_service
+
+    return _process_delivered_returns_service(
+        restore_stock=restore_stock_for_return,
+        log=logger,
+    )
 
 
 def expire_stale_returns() -> Dict[str, int]:
