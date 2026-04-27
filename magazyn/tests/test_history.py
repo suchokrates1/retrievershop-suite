@@ -15,9 +15,9 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
         "last_order_data": {"name": "N", "color": "C", "size": "S", "courier_code": "K"},
     }
     monkeypatch.setattr(
-        app_mod.print_agent, "load_printed_orders", lambda: [item]
+        app_mod.label_agent, "load_printed_orders", lambda: [item]
     )
-    monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [])
+    monkeypatch.setattr(app_mod.label_agent, "load_queue", lambda: [])
     resp = client.get("/history")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
@@ -38,14 +38,14 @@ def test_history_page_shows_reprint_form(app_mod, client, login, monkeypatch):
 
 
 def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
-    monkeypatch.setattr(app_mod.print_agent, "load_queue", lambda: [])
+    monkeypatch.setattr(app_mod.label_agent, "load_queue", lambda: [])
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "get_order_packages",
         lambda oid: [{"package_id": "p1", "courier_code": "c1"}],
     )
     monkeypatch.setattr(
-        app_mod.print_agent, "get_label", lambda code, pid: ("data", "pdf")
+        app_mod.label_agent, "get_label", lambda code, pid: ("data", "pdf")
     )
     printed_item = {
         "order_id": "1",
@@ -53,17 +53,17 @@ def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
         "last_order_data": {"name": "P", "color": "C", "size": "S"},
     }
     monkeypatch.setattr(
-        app_mod.print_agent, "load_printed_orders", lambda: [printed_item]
+        app_mod.label_agent, "load_printed_orders", lambda: [printed_item]
     )
     called = {"n": 0}
 
     def fake_print(data, ext, oid):
         called["n"] += 1
 
-    monkeypatch.setattr(app_mod.print_agent, "print_label", fake_print)
+    monkeypatch.setattr(app_mod.label_agent, "print_label", fake_print)
     mprinted = {}
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "mark_as_printed",
         lambda oid, data=None: mprinted.update({"oid": oid, "data": data}),
     )
@@ -75,7 +75,7 @@ def test_reprint_route_uses_api(app_mod, client, login, monkeypatch):
 
 def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "load_queue",
         lambda: [
             {
@@ -88,19 +88,19 @@ def test_reprint_route_uses_queue(app_mod, client, login, monkeypatch):
     )
     called = {"n": 0}
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "print_label",
         lambda d, e, o: called.update(n=called["n"] + 1),
     )
     saved = {"n": 0}
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "save_queue",
         lambda items: saved.update(n=saved["n"] + 1),
     )
     marked = {}
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "mark_as_printed",
         lambda oid, data=None: marked.update({"oid": oid, "data": data}),
     )
@@ -118,7 +118,7 @@ def test_reprint_logs_exception(app_mod, client, login, monkeypatch):
     def raise_error():
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(app_mod.print_agent, "load_queue", raise_error)
+    monkeypatch.setattr(app_mod.label_agent, "load_queue", raise_error)
 
     logged = {}
 
@@ -182,9 +182,9 @@ def test_history_readonly_db(app_mod, client, login, tmp_path, monkeypatch, capl
             kwargs.setdefault("uri", True)
         return db_mod.sqlite_connect(path, **kwargs)
 
-    monkeypatch.setattr(app_mod.print_agent, "sqlite_connect", ro_sqlite_connect)
-    ro_config = app_mod.print_agent.agent.config.with_updates(db_file=ro_path)
-    monkeypatch.setattr(app_mod.print_agent.agent, "config", ro_config)
+    monkeypatch.setattr(app_mod.label_agent, "sqlite_connect", ro_sqlite_connect)
+    ro_config = app_mod.label_agent.config.with_updates(db_file=ro_path)
+    monkeypatch.setattr(app_mod.label_agent, "config", ro_config)
 
     caplog.set_level("WARNING")
     resp = client.get("/history")

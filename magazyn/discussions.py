@@ -20,7 +20,8 @@ from requests.exceptions import HTTPError, RequestException
 from .auth import login_required
 from .config import settings
 from .db import get_session
-from .models import Thread, Message, Order
+from .models.messages import Message, Thread
+from .models.orders import Order
 from . import allegro_api
 
 bp = Blueprint("discussions", __name__)

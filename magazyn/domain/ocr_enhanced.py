@@ -506,7 +506,7 @@ def match_items_to_products(items: List[InvoiceItem], db_session) -> List[Dict]:
     
     Returns list of dicts with matched product info.
     """
-    from ..models import Product, ProductSize
+    from ..models.products import Product, ProductSize
     
     matched = []
     for item in items:

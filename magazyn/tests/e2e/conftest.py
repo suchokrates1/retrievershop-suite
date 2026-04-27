@@ -166,14 +166,23 @@ def _e2e_app(tmp_path_factory):
     settings_io.load_settings = _fake_load
 
     import magazyn.factory as factory
+    import magazyn.app as app_module
+    import magazyn.config as config_module
     _orig_create_user = factory.create_default_user_if_needed
     _orig_start_agent = factory.start_print_agent
+    _orig_factory_settings = factory.settings
+    _orig_app_settings = app_module.settings
+    _orig_config_settings = config_module.settings
     factory.create_default_user_if_needed = lambda *a, **kw: None
     factory.start_print_agent = lambda *a, **kw: None
 
     settings_store._loaded = False
     settings_store._values = OrderedDict()
     settings_store._namespace = None
+    refreshed_settings = settings_store.settings
+    factory.settings = refreshed_settings
+    app_module.settings = refreshed_settings
+    config_module.settings = refreshed_settings
 
     app = factory.create_app({
         "TESTING": True,
@@ -181,12 +190,13 @@ def _e2e_app(tmp_path_factory):
         "LOGIN_DISABLED": True,
     })
 
-    from magazyn.db import reset_db
+    from magazyn.db import configure_engine, reset_db
+    configure_engine(str(db_path))
     with app.app_context():
         reset_db()
         # Tworzymy uzytkownika testowego
         from magazyn.db import get_session
-        from magazyn.models import User
+        from magazyn.models.users import User
         from werkzeug.security import generate_password_hash
         with get_session() as db:
             test_user = User(
@@ -201,6 +211,9 @@ def _e2e_app(tmp_path_factory):
     settings_io.load_settings = _orig_load
     factory.create_default_user_if_needed = _orig_create_user
     factory.start_print_agent = _orig_start_agent
+    factory.settings = _orig_factory_settings
+    app_module.settings = _orig_app_settings
+    config_module.settings = _orig_config_settings
 
 
 @pytest.fixture(scope="session")

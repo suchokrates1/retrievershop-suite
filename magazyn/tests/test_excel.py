@@ -1,7 +1,7 @@
 import pandas as pd
 from io import BytesIO
 from sqlalchemy import text
-from magazyn.models import Product, ProductSize
+from magazyn.models.products import Product, ProductSize
 
 
 def test_export_products_includes_barcode(app_mod, client, login):

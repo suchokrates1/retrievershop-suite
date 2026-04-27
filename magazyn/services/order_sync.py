@@ -12,7 +12,8 @@ from typing import Optional
 
 from sqlalchemy import func
 
-from ..models import Order, OrderProduct, OrderStatusLog, Product, ProductSize
+from ..models.orders import Order, OrderProduct, OrderStatusLog
+from ..models.products import Product, ProductSize
 from .order_status import add_order_status
 
 

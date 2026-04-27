@@ -23,7 +23,7 @@ import logging
 
 from .auth import login_required
 from .db import get_session
-from .models import PriceReportItem
+from .models.price_reports import PriceReportItem
 from .settings_store import settings_store
 from .domain.exceptions import EntityNotFoundError
 from .domain.price_report_profit import calculate_report_item_profit

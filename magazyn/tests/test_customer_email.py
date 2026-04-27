@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from magazyn.models import Order, OrderProduct, OrderStatusLog
 from magazyn.db import get_session
+from magazyn.models.orders import Order, OrderProduct, OrderStatusLog
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +371,7 @@ class TestTokenGeneration:
     def test_new_order_gets_token(self, app):
         """Nowe zamowienie automatycznie otrzymuje customer_token."""
         with app.app_context():
-            from magazyn.orders import sync_order_from_data
+            from magazyn.services.order_sync import sync_order_from_data
 
             order_data = {
                 "order_id": "NEW-ORDER-TOKEN-TEST",
@@ -454,7 +454,7 @@ class TestStatusEmailDispatch:
                     "magazyn.services.email_service._send_html_email"
                 ) as mock_send:
                     mock_send.return_value = True
-                    from magazyn.orders import add_order_status
+                    from magazyn.services.order_status import add_order_status
                     log = add_order_status(
                         db, order.order_id, "wyslano"
                     )
@@ -475,9 +475,9 @@ class TestStatusEmailDispatch:
                 ).first()
 
                 with patch(
-                    "magazyn.orders._dispatch_status_email"
+                    "magazyn.services.order_status.dispatch_status_email"
                 ) as mock_dispatch:
-                    from magazyn.orders import add_order_status
+                    from magazyn.services.order_status import add_order_status
                     log = add_order_status(
                         db, order.order_id, "spakowano",
                         send_email=False,
@@ -490,7 +490,7 @@ class TestStatusEmailDispatch:
         """add_order_status pomija duplikat statusu."""
         with app.app_context():
             with get_session() as db:
-                from magazyn.orders import add_order_status
+                from magazyn.services.order_status import add_order_status
                 # Fixture dodal status "pobrano" - powtorzenie powinno byc pominiete
                 log = add_order_status(
                     db, "TEST-ORDER-001", "pobrano",
@@ -506,7 +506,7 @@ class TestStatusEmailDispatch:
                     Order.customer_token == order_with_token
                 ).first()
 
-                from magazyn.orders import add_order_status
+                from magazyn.services.order_status import add_order_status
                 log = add_order_status(
                     db,
                     order.order_id,
@@ -539,8 +539,8 @@ class TestStatusEmailDispatch:
                 with patch(
                     "magazyn.services.email_service.send_order_confirmation"
                 ) as mock_confirm:
-                    from magazyn.orders import _dispatch_status_email
-                    _dispatch_status_email(db, order.order_id, "pobrano")
+                    from magazyn.services.order_status import dispatch_status_email
+                    dispatch_status_email(db, order.order_id, "pobrano")
                     mock_confirm.assert_not_called()
 
     def test_dispatch_sends_delivery_email(self, app, order_with_token):
@@ -555,8 +555,8 @@ class TestStatusEmailDispatch:
                     "magazyn.services.email_service._send_html_email"
                 ) as mock_send:
                     mock_send.return_value = True
-                    from magazyn.orders import _dispatch_status_email
-                    _dispatch_status_email(db, order.order_id, "dostarczono")
+                    from magazyn.services.order_status import dispatch_status_email
+                    dispatch_status_email(db, order.order_id, "dostarczono")
                     mock_send.assert_called_once()
                     call_kwargs = mock_send.call_args
                     assert "dostarczone" in call_kwargs[1]["html_body"].lower()

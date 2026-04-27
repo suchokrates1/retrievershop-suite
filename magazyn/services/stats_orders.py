@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy import func
 
-from ..models import Order, OrderProduct
+from ..models.orders import Order, OrderProduct
 from .stats_support import StatsFilters, to_ts
 
 

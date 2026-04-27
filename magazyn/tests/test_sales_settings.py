@@ -40,7 +40,7 @@ def test_sales_settings_list_keys(app_mod, client, login):
 def test_sales_settings_post_saves(app_mod, client, login, monkeypatch):
     reloaded = {"called": False}
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "reload_config",
         lambda: reloaded.update(called=True),
     )

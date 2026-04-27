@@ -29,8 +29,9 @@ def _sync_from_allegro_events(app):
     6. Zapisz nowy last_event_id
     """
     from .db import get_session
-    from .models import OrderEvent
-    from .orders import sync_order_from_data, add_order_status
+    from .models.orders import OrderEvent
+    from .services.order_status import add_order_status
+    from .services.order_sync import sync_order_from_data
     from .allegro_api.events import fetch_order_events, fetch_event_stats
     from .allegro_api.orders import (
         fetch_allegro_order_detail,
@@ -252,8 +253,8 @@ def _sync_allegro_fulfillment(app):
     - sa w statusie posrednim (wydrukowano, spakowano, wyslano, w_transporcie, w_punkcie)
     """
     from .db import get_session
-    from .models import Order, OrderStatusLog
-    from .orders import add_order_status
+    from .models.orders import Order, OrderStatusLog
+    from .services.order_status import add_order_status
     from .allegro_api.orders import (
         fetch_allegro_order_detail,
         parse_allegro_order_to_data,
@@ -370,7 +371,7 @@ def _refresh_order_profit_cache(app):
 
     from .db import get_session
     from .domain.financial import FinancialCalculator
-    from .models import Order
+    from .models.orders import Order
     from .settings_store import settings_store
 
     stats = {"checked": 0, "updated": 0, "finalized": 0, "pending": 0, "errors": 0}
@@ -457,7 +458,7 @@ def _process_pending_invoices():
         {"processed": int, "success": int, "errors": int}
     """
     from .db import get_session
-    from .models import Order
+    from .models.orders import Order
     from .services.invoice_service import generate_and_send_invoice
 
     stats = {"processed": 0, "success": 0, "errors": 0}
@@ -527,8 +528,8 @@ def _cancel_stale_unpaid_orders():
         {"checked": int, "cancelled": int, "errors": int}
     """
     from .db import get_session
-    from .models import OrderStatusLog
-    from .orders import add_order_status
+    from .models.orders import OrderStatusLog
+    from .services.order_status import add_order_status
     from sqlalchemy import and_, func
 
     STALE_DAYS = 14

@@ -14,7 +14,7 @@ from magazyn.allegro_api.shipment_management import (
     get_cancel_command_status,
     invalidate_delivery_services_cache,
 )
-from magazyn.print_agent import calculate_cod_amount
+from magazyn.services.print_agent_config import calculate_cod_amount
 
 
 # --------------- helpers ---------------

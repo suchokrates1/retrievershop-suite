@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from ..models import AllegroOffer, PriceReport, PriceReportItem
+from ..models.allegro import AllegroOffer
+from ..models.price_reports import PriceReport, PriceReportItem
 
 
 class PriceReportRepository:

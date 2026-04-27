@@ -1,4 +1,4 @@
-from magazyn.models import ProductSize, Product
+from magazyn.models.products import Product, ProductSize
 from magazyn.domain.products import (
     create_product,
     update_product,

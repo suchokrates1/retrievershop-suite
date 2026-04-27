@@ -1,5 +1,5 @@
 from werkzeug.security import generate_password_hash
-from magazyn.models import User
+from magazyn.models.users import User
 from magazyn.db import get_session
 
 def test_login_route_authenticates_user(client, app):

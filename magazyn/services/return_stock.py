@@ -8,7 +8,10 @@ from typing import Callable, Dict, Optional
 
 from ..db import get_session
 from ..domain.returns import RETURN_STATUS_COMPLETED, RETURN_STATUS_DELIVERED
-from ..models import AllegroOffer, OrderProduct, ProductSize, Return, ReturnStatusLog
+from ..models.allegro import AllegroOffer
+from ..models.orders import OrderProduct
+from ..models.products import ProductSize
+from ..models.returns import Return, ReturnStatusLog
 from ..notifications import send_messenger
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 from sqlalchemy import text
 from werkzeug.datastructures import MultiDict
-from magazyn.models import Product, ProductSize
+from magazyn.models.products import Product, ProductSize
 
 
 def test_record_delivery(app_mod):

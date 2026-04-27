@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..models import Order
+from ..models.orders import Order
 
 
 def build_alerts(

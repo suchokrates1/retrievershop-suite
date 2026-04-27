@@ -14,7 +14,6 @@ from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
 from .orders import bp as orders_bp
-from . import print_agent  # noqa: F401 - publiczny import kompatybilnosci
 from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import promo_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import billing_types_scheduler  # noqa: F401 - publiczny import kompatybilnosci

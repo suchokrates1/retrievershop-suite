@@ -8,8 +8,10 @@ import logging
 from pathlib import Path
 from typing import Iterable, Optional
 
+from magazyn.config import load_config
 from magazyn.db import sqlite_connect
-from magazyn.print_agent import AgentConfig, LabelAgent, load_config
+from magazyn.label_agent import LabelAgent
+from magazyn.services.print_agent_config import AgentConfig
 
 LOGGER = logging.getLogger(__name__)
 

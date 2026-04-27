@@ -9,7 +9,7 @@ import pandas as pd
 
 from ..constants import ALL_SIZES
 from ..db import get_session
-from ..models import Product, ProductSize, PurchaseBatch
+from ..models.products import Product, ProductSize, PurchaseBatch
 
 logger = logging.getLogger(__name__)
 TWOPLACES = Decimal("0.01")

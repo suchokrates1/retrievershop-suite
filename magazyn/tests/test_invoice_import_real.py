@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from sqlalchemy.sql import text
-from magazyn.models import Product, ProductSize
+from magazyn.models.products import Product, ProductSize
 from magazyn.domain.invoice_import import import_invoice_file
 
 

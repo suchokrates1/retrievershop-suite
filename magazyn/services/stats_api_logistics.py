@@ -247,7 +247,7 @@ def stats_order_funnel():
     - transitions: szczegoly czasow przejsc BOUGHT -> FILLED_IN -> READY_FOR_PROCESSING
     - summary: statystyki ogolne (total_orders, avg_time_to_ready, etc.)
     """
-    from ..models import OrderEvent
+    from ..models.orders import OrderEvent
     
     started_at = time.perf_counter()
     filters, err = _parse_filters()
@@ -421,7 +421,7 @@ def stats_shipment_errors():
     - unresolved: Liczba nierozwiązanych błędów
     - unresolved_by_type: Nierozwiązane błędy grouped by type
     """
-    from ..models import ShipmentError
+    from ..models.shipments import ShipmentError
     
     started_at = time.perf_counter()
     filters, err = _parse_filters()

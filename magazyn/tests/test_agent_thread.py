@@ -4,6 +4,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import magazyn.print_agent as pa
+import magazyn.label_agent as label_agent_module
+from magazyn.config import settings
+from magazyn.label_agent import LabelAgent
+from magazyn.metrics import PRINT_AGENT_DOWNTIME_SECONDS, PRINT_AGENT_RETRIES_TOTAL
+from magazyn.services.print_agent_errors import ApiError, PrintError, ShipmentExpiredError
 
 
 def _make_agent(tmp_path):
@@ -13,7 +18,7 @@ def _make_agent(tmp_path):
         log_file=str(tmp_path / "agent.log"),
         poll_interval=1,
     )
-    return pa.LabelAgent(config, pa.settings)
+    return LabelAgent(config, settings)
 
 
 def test_stop_agent_thread_stops(monkeypatch):
@@ -75,19 +80,19 @@ def test_retry_updates_metrics(tmp_path):
 
     agent._stop_event = DummyEvent()
     attempts = []
-    start_retries = pa.PRINT_AGENT_RETRIES_TOTAL._value.get()
-    start_downtime = pa.PRINT_AGENT_DOWNTIME_SECONDS._value.get()
+    start_retries = PRINT_AGENT_RETRIES_TOTAL._value.get()
+    start_downtime = PRINT_AGENT_DOWNTIME_SECONDS._value.get()
 
     def flaky():
         attempts.append(object())
         if len(attempts) < 3:
-            raise pa.PrintError("fail")
+            raise PrintError("fail")
         return "ok"
 
     result = agent._retry(
         flaky,
         stage="test",
-        retry_exceptions=(pa.PrintError,),
+        retry_exceptions=(PrintError,),
         max_attempts=3,
         base_delay=0.5,
     )
@@ -95,8 +100,8 @@ def test_retry_updates_metrics(tmp_path):
     assert result == "ok"
     assert len(attempts) == 3
     assert waits == [0.5, 1.0]
-    assert pa.PRINT_AGENT_RETRIES_TOTAL._value.get() == start_retries + 2
-    assert pa.PRINT_AGENT_DOWNTIME_SECONDS._value.get() == start_downtime + 1.5
+    assert PRINT_AGENT_RETRIES_TOTAL._value.get() == start_retries + 2
+    assert PRINT_AGENT_DOWNTIME_SECONDS._value.get() == start_downtime + 1.5
 
 
 def test_retry_does_not_retry_shipment_expired(tmp_path):
@@ -107,14 +112,14 @@ def test_retry_does_not_retry_shipment_expired(tmp_path):
 
     def always_expired():
         attempts.append(1)
-        raise pa.ShipmentExpiredError("test-shipment-id")
+        raise ShipmentExpiredError("test-shipment-id")
 
     import pytest
-    with pytest.raises(pa.ShipmentExpiredError):
+    with pytest.raises(ShipmentExpiredError):
         agent._retry(
             always_expired,
             stage="label",
-            retry_exceptions=(pa.ApiError,),
+            retry_exceptions=(ApiError,),
             max_attempts=3,
         )
 
@@ -140,7 +145,7 @@ def test_recreate_shipment_and_get_label(tmp_path, monkeypatch):
 
     cancel_called = []
     monkeypatch.setattr(
-        pa, "cancel_shipment",
+        label_agent_module, "cancel_shipment",
         lambda sid: cancel_called.append(sid),
     )
 

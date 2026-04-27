@@ -14,9 +14,10 @@ class PrintAgentStartResult:
 
 
 def register_shutdown_hooks() -> None:
-    from .. import billing_types_scheduler, order_sync_scheduler, print_agent, promo_scheduler
+    from .. import billing_types_scheduler, order_sync_scheduler, promo_scheduler
+    from ..print_agent import agent as label_agent
 
-    atexit.register(print_agent.stop_agent_thread)
+    atexit.register(label_agent.stop_agent_thread)
     atexit.register(order_sync_scheduler.stop_sync_scheduler)
     atexit.register(promo_scheduler.stop_promo_scheduler)
     atexit.register(billing_types_scheduler.stop_billing_types_scheduler)
@@ -66,13 +67,12 @@ def start_dev_token_refresher(app: Any) -> None:
         app.logger.error("Failed to start Allegro token refresher: %s", exc)
 
 
-def start_print_agent_runtime(app_ctx: Any, print_agent_module: Any) -> PrintAgentStartResult:
-    agent = print_agent_module.agent
+def start_print_agent_runtime(app_ctx: Any, agent: Any, config_error_type: type[Exception]) -> PrintAgentStartResult:
     try:
         agent.validate_env()
         agent.ensure_db_init()
         started = agent.start_agent_thread()
-    except print_agent_module.ConfigError as exc:
+    except config_error_type as exc:
         app_ctx.logger.error(f"Failed to start print agent: {exc}")
         return PrintAgentStartResult(started=False, failed=True)
     except Exception as exc:

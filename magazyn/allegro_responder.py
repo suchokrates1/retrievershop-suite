@@ -1,5 +1,5 @@
 from . import allegro_api
-from .models import AllegroRepliedThread, AllegroRepliedDiscussion
+from .models.allegro import AllegroRepliedDiscussion, AllegroRepliedThread
 from .settings_store import settings_store
 from .db import get_session
 import logging

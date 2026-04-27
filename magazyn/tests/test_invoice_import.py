@@ -2,7 +2,7 @@ import pandas as pd
 from pathlib import Path
 from sqlalchemy.sql import text
 from magazyn.domain.invoice_import import import_invoice_rows
-from magazyn.models import Product, ProductSize, PurchaseBatch
+from magazyn.models.products import Product, ProductSize, PurchaseBatch
 
 
 def test_import_invoice_creates_products(app_mod, client, login, tmp_path):

@@ -11,7 +11,7 @@ from sqlalchemy import desc
 from ..allegro_api.fulfillment import update_fulfillment_status
 from ..allegro_api.tracking import fetch_parcel_tracking
 from ..db import get_session
-from ..models import Order, OrderStatusLog
+from ..models.orders import Order, OrderStatusLog
 from ..settings_store import settings_store
 from ..status_config import ALLEGRO_TRACKING_MAP
 from .order_status import add_order_status

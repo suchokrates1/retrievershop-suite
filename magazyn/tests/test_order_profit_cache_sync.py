@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from magazyn.db import get_session
-from magazyn.models import Order
+from magazyn.models.orders import Order
 from magazyn.order_sync_scheduler import _refresh_order_profit_cache
 from magazyn.settings_store import settings_store
 

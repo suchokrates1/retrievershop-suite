@@ -39,7 +39,9 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models import ProductSize, Product, PurchaseBatch, OrderProduct, AllegroOffer
+from .models.allegro import AllegroOffer
+from .models.orders import OrderProduct
+from .models.products import Product, ProductSize, PurchaseBatch
 from .services.product_matching import (
     _extract_category,  # noqa: F401 - publiczny helper kompatybilnosci
     _extract_model_series,  # noqa: F401 - publiczny helper kompatybilnosci

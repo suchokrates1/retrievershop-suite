@@ -18,7 +18,7 @@ def get_active_offers_count() -> int:
     """Pobierz liczbę aktywnych ofert Allegro."""
     try:
         from ..db import get_session
-        from ..models import AllegroOffer
+        from ..models.allegro import AllegroOffer
 
         with get_session() as session:
             return (
@@ -34,7 +34,8 @@ def get_active_offers_count() -> int:
 def create_new_report() -> int:
     """Utwórz nowy raport cenowy w bazie."""
     from ..db import get_session
-    from ..models import AllegroOffer, PriceReport
+    from ..models.allegro import AllegroOffer
+    from ..models.price_reports import PriceReport
 
     with get_session() as session:
         total_offers = (
@@ -57,7 +58,7 @@ def create_new_report() -> int:
 
 def count_checked_offers(session, report_id: int) -> int:
     """Zwróć liczbę unikalnych ofert sprawdzonych w raporcie."""
-    from ..models import PriceReportItem
+    from ..models.price_reports import PriceReportItem
 
     return (
         session.query(func.count(distinct(PriceReportItem.offer_id)))
@@ -69,7 +70,7 @@ def count_checked_offers(session, report_id: int) -> int:
 
 def sync_report_progress(session, report_id: int, status: str = "running") -> None:
     """Zsynchronizuj licznik postępu z faktyczną liczbą unikalnych ofert."""
-    from ..models import PriceReport
+    from ..models.price_reports import PriceReport
 
     session.flush()
     report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
@@ -81,7 +82,7 @@ def sync_report_progress(session, report_id: int, status: str = "running") -> No
 
 def get_or_create_report_item(session, report_id: int, offer_id: str):
     """Zwróć wpis raportu dla oferty i usuń ewentualne duplikaty."""
-    from ..models import PriceReportItem
+    from ..models.price_reports import PriceReportItem
 
     items = (
         session.query(PriceReportItem)
@@ -107,7 +108,8 @@ def get_or_create_report_item(session, report_id: int, offer_id: str):
 def mark_sibling_offers(report_id: int) -> int:
     """Oznacz droższe oferty tego samego wariantu jako niewymagające scrapingu."""
     from ..db import get_session
-    from ..models import AllegroOffer, PriceReportItem
+    from ..models.allegro import AllegroOffer
+    from ..models.price_reports import PriceReportItem
 
     marked = 0
     with get_session() as session:
@@ -185,7 +187,8 @@ def get_unchecked_offers(report_id: int, limit: int = DEFAULT_BATCH_SIZE) -> lis
     """Pobierz oferty do sprawdzenia, aktualizując najpierw ich cenę z Allegro."""
     from ..allegro_api.offers import get_offer_details
     from ..db import get_session
-    from ..models import AllegroOffer, PriceReportItem
+    from ..models.allegro import AllegroOffer
+    from ..models.price_reports import PriceReportItem
 
     with get_session() as session:
         checked_offer_ids = (
@@ -244,7 +247,8 @@ def get_unchecked_offers(report_id: int, limit: int = DEFAULT_BATCH_SIZE) -> lis
 def save_report_item(report_id: int, result: dict) -> None:
     """Zapisz wynik sprawdzenia oferty do raportu."""
     from ..db import get_session
-    from ..models import AllegroOffer, PriceReportItem
+    from ..models.allegro import AllegroOffer
+    from ..models.price_reports import PriceReportItem
 
     with get_session() as session:
         item, created, removed_duplicates = get_or_create_report_item(
@@ -421,7 +425,7 @@ def save_report_item(report_id: int, result: dict) -> None:
 def finalize_report(report_id: int) -> None:
     """Oznacz raport jako zakończony."""
     from ..db import get_session
-    from ..models import PriceReport, PriceReportItem
+    from ..models.price_reports import PriceReport, PriceReportItem
 
     with get_session() as session:
         report = session.query(PriceReport).filter(PriceReport.id == report_id).first()

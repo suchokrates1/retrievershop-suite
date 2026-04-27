@@ -12,7 +12,8 @@ import magazyn.allegro_sync as sync_mod
 import magazyn.config as cfg
 
 from magazyn.db import get_session
-from magazyn.models import AllegroOffer, AllegroPriceHistory, Product, ProductSize
+from magazyn.models.allegro import AllegroOffer, AllegroPriceHistory
+from magazyn.models.products import Product, ProductSize
 from magazyn.allegro_token_refresher import AllegroTokenRefresher
 from magazyn.env_tokens import update_allegro_tokens
 from magazyn.allegro_api import AUTH_URL, refresh_token as api_refresh_token

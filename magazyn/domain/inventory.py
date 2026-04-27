@@ -9,7 +9,7 @@ import pandas as pd
 from ..config import settings
 from ..constants import ALL_SIZES
 from ..db import TWOPLACES, consume_stock, get_session, record_purchase, record_sale
-from ..models import Product, ProductSize
+from ..models.products import Product, ProductSize
 from ..parsing import parse_product_info
 from .products import _clean_barcode, _to_decimal, _to_int
 

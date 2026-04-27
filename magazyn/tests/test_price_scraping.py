@@ -134,7 +134,7 @@ def test_filter_competitor_offers_excludes_bad_condition_and_delivery():
 def test_save_report_item_with_super_seller(app):
     """Sprawdza czy save_report_item poprawnie zapisuje nowe pola."""
     from magazyn.db import get_session
-    from magazyn.models import PriceReport, PriceReportItem
+    from magazyn.models.price_reports import PriceReport, PriceReportItem
     from magazyn.price_report_scheduler import save_report_item
 
     with app.app_context():
@@ -177,7 +177,7 @@ def test_save_report_item_with_super_seller(app):
 
 def test_save_report_item_updates_existing_row_without_duplicate(app):
     from magazyn.db import get_session
-    from magazyn.models import PriceReport, PriceReportItem
+    from magazyn.models.price_reports import PriceReport, PriceReportItem
     from magazyn.price_report_scheduler import save_report_item
 
     with app.app_context():
@@ -280,7 +280,7 @@ def test_check_single_offer_uses_api_price():
 
 def test_price_report_item_new_columns():
     """Sprawdza ze model PriceReportItem ma nowe kolumny."""
-    from magazyn.models import PriceReportItem
+    from magazyn.models.price_reports import PriceReportItem
 
     # Sprawdz ze kolumny istnieja w mapperze
     mapper = PriceReportItem.__table__
@@ -294,7 +294,7 @@ def test_price_report_item_new_columns():
 def test_change_price_uses_product_name():
     """Weryfikacja ze change_price uzywa product_name a nie name."""
     import inspect
-    from magazyn.price_reports import change_price
-    source = inspect.getsource(change_price)
+    from magazyn.services.price_report_mutation import change_report_item_price
+    source = inspect.getsource(change_report_item_price)
     assert "item.product_name" in source
     assert "item.name" not in source

@@ -102,7 +102,7 @@ def sync_allegro_offers_before_report():
 def send_report_notification(report_id: int):
     """Wysyla powiadomienie o gotowym raporcie."""
     from .db import get_session
-    from .models import PriceReport, PriceReportItem
+    from .models.price_reports import PriceReport, PriceReportItem
     from .notifications.messenger import MessengerClient, MessengerConfig
     from .settings_store import settings_store
     
@@ -310,7 +310,7 @@ def _scheduler_main(app):
         if now.weekday() == 4 and now.hour == FRIDAY_START_HOUR:
             # Sprawdz czy nie ma juz uruchomionego raportu
             from .db import get_session
-            from .models import PriceReport
+            from .models.price_reports import PriceReport
             
             with app.app_context():
                 with get_session() as session:
@@ -415,7 +415,8 @@ def resume_price_report(report_id: int = None) -> int:
     """
     from flask import current_app
     from .db import get_session
-    from .models import PriceReport, AllegroOffer
+    from .models.allegro import AllegroOffer
+    from .models.price_reports import PriceReport
     
     with get_session() as session:
         if report_id:
@@ -476,7 +477,8 @@ def restart_price_report(report_id: int) -> dict:
     """
     from flask import current_app
     from .db import get_session
-    from .models import PriceReport, AllegroOffer, PriceReportItem
+    from .models.allegro import AllegroOffer
+    from .models.price_reports import PriceReport, PriceReportItem
     
     with get_session() as session:
         report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
@@ -552,7 +554,7 @@ def auto_resume_incomplete_reports():
     WYMAGA: app context (musi byc wywolane w 'with app.app_context()')
     """
     from .db import get_session
-    from .models import PriceReport
+    from .models.price_reports import PriceReport
     
     try:
         with get_session() as session:

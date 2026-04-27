@@ -175,7 +175,7 @@ def get_excluded_sellers() -> set:
     try:
         ensure_runtime_db_configured()
         from magazyn.db import get_session
-        from magazyn.models import ExcludedSeller
+        from magazyn.models.price_reports import ExcludedSeller
         
         with get_session() as session:
             excluded = session.query(ExcludedSeller.seller_name).all()
@@ -935,7 +935,7 @@ async def check_offers_from_db(cdp_host: str, cdp_port: int, limit: int = 10, ma
     
     try:
         from magazyn.config import settings
-        from magazyn.models import AllegroOffer, AllegroPriceHistory
+        from magazyn.models.allegro import AllegroOffer, AllegroPriceHistory
         from magazyn.db import get_session, configure_engine
         
         # Inicjalizuj polaczenie z baza danych

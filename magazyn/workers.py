@@ -12,7 +12,7 @@ import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .print_agent import LabelAgent
+    from .label_agent import LabelAgent
 
 
 class BaseWorker:

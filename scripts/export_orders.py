@@ -10,7 +10,7 @@ from magazyn.factory import create_app
 app = create_app()
 with app.app_context():
     from magazyn.db import get_session
-    from magazyn.models import Order, OrderProduct
+    from magazyn.models.orders import Order, OrderProduct
 
     with get_session() as db:
         orders = db.query(Order).all()

@@ -1,5 +1,5 @@
 import pytest
-from magazyn.models import User
+from magazyn.models.users import User
 from werkzeug.security import generate_password_hash
 
 

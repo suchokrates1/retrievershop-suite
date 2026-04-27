@@ -7,7 +7,7 @@ import pandas as pd
 from sqlalchemy import func
 
 from ..db import get_session
-from ..models import Product, ProductSize, Sale
+from ..models.products import Product, ProductSize, Sale
 
 
 def get_sales_summary(days: int = 7) -> List[dict]:

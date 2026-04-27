@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
-from ..models import Order, OrderProduct, OrderStatusLog, Return
+from ..models.orders import Order, OrderProduct, OrderStatusLog
+from ..models.returns import Return
 from ..status_config import STATUS_FILTER_GROUPS
 
 

@@ -9,7 +9,7 @@ from typing import Any, Optional
 from sqlalchemy import text
 
 from ..db import db_connect, get_session
-from ..models import PrintedOrder
+from ..models.printing import PrintedOrder
 
 
 logger = logging.getLogger(__name__)

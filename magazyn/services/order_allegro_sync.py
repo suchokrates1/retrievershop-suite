@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import or_
 
-from ..models import Order
+from ..models.orders import Order
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timedelta
 
 from magazyn.db import get_session
-from magazyn.models import Order, OrderProduct
+from magazyn.models.orders import Order, OrderProduct
 
 
 def _seed_orders(app, count: int = 200):

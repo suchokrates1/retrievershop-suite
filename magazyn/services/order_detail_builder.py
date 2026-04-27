@@ -12,14 +12,10 @@ from typing import Optional
 from sqlalchemy import desc
 
 from ..domain.financial import FinancialCalculator
-from ..models import (
-    Order, 
-    OrderStatusLog,
-    ProductSize, 
-    AllegroOffer,
-    Return,
-    ReturnStatusLog,
-)
+from ..models.allegro import AllegroOffer
+from ..models.orders import Order, OrderStatusLog
+from ..models.products import ProductSize
+from ..models.returns import Return, ReturnStatusLog
 from ..settings_store import settings_store
 
 
