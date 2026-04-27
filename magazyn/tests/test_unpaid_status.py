@@ -1,5 +1,5 @@
 from magazyn.db import get_session
-from magazyn.models import OrderProduct, OrderStatusLog
+from magazyn.models.orders import OrderProduct, OrderStatusLog
 
 
 def test_get_allegro_internal_status_returns_unpaid_for_unconfirmed_online_order():
@@ -19,7 +19,7 @@ def test_get_allegro_internal_status_returns_unpaid_for_unconfirmed_online_order
 
 
 def test_sync_order_from_data_sets_unpaid_initial_status(app):
-    from magazyn.orders import sync_order_from_data
+    from magazyn.services.order_sync import sync_order_from_data
 
     order_data = {
         "order_id": "allegro_cf-unpaid-1",
@@ -51,7 +51,7 @@ def test_sync_order_from_data_sets_unpaid_initial_status(app):
 
 
 def test_sync_order_from_data_sets_pobrano_for_cod_order(app):
-    from magazyn.orders import sync_order_from_data
+    from magazyn.services.order_sync import sync_order_from_data
 
     order_data = {
         "order_id": "allegro_cf-cod-1",
@@ -83,7 +83,7 @@ def test_sync_order_from_data_sets_pobrano_for_cod_order(app):
 
 
 def test_sync_order_from_data_merges_duplicate_products(app):
-    from magazyn.orders import sync_order_from_data
+    from magazyn.services.order_sync import sync_order_from_data
 
     order_id = "allegro_cf-dup-products-1"
     order_data = {

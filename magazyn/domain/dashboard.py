@@ -14,10 +14,10 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import (
-    Order, OrderProduct, Product, ProductSize, 
-    PurchaseBatch, AllegroOffer, Return
-)
+from ..models.allegro import AllegroOffer
+from ..models.orders import Order, OrderProduct
+from ..models.products import Product, ProductSize, PurchaseBatch
+from ..models.returns import Return
 from .financial import FinancialCalculator
 
 

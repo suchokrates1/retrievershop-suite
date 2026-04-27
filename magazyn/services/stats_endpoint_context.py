@@ -13,19 +13,11 @@ from flask import jsonify, request
 from sqlalchemy import case, func, or_
 
 from ..db import get_session
-from ..models import (
-    AllegroBillingType,
-    AllegroOffer,
-    AllegroPriceHistory,
-    Message,
-    Order,
-    OrderProduct,
-    OrderStatusLog,
-    PriceReportItem,
-    Return,
-    ReturnStatusLog,
-    Thread,
-)
+from ..models.allegro import AllegroBillingType, AllegroOffer, AllegroPriceHistory
+from ..models.messages import Message, Thread
+from ..models.orders import Order, OrderProduct, OrderStatusLog
+from ..models.price_reports import PriceReportItem
+from ..models.returns import Return, ReturnStatusLog
 from ..domain.financial import FinancialCalculator as _DefaultFinancialCalculator
 from ..services.billing_types import (
     BILLING_CATEGORY_CHOICES,

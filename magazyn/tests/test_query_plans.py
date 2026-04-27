@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import magazyn.config as cfg
 from magazyn.db import sqlite_connect
-from magazyn.models import Product, ProductSize, Sale, AllegroPriceHistory
+from magazyn.models.allegro import AllegroPriceHistory
+from magazyn.models.products import Product, ProductSize, Sale
 
 
 def _explain(sql: str, *params: object) -> list[str]:

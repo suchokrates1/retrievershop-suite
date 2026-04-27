@@ -148,7 +148,7 @@ class FinancialCalculator:
         Returns:
             Koszt zakupu (cena jednostkowa * ilosc)
         """
-        from ..models import PurchaseBatch
+        from ..models.products import PurchaseBatch
         
         latest_batch = (
             self.db.query(PurchaseBatch)
@@ -178,7 +178,8 @@ class FinancialCalculator:
         Returns:
             Suma kosztow zakupu dla wszystkich produktow w zamowieniu
         """
-        from ..models import OrderProduct, AllegroOffer
+        from ..models.allegro import AllegroOffer
+        from ..models.orders import OrderProduct
         
         total_cost = Decimal("0")
         order_products = self.db.query(OrderProduct).filter(
@@ -610,7 +611,9 @@ class FinancialCalculator:
         Returns:
             PeriodSummary z pelnym podsumowaniem
         """
-        from ..models import Order, OrderProduct, Return, FixedCost
+        from ..models.orders import Order, OrderProduct
+        from ..models.returns import Return
+        from ..models.settings import FixedCost
         from sqlalchemy import func, select
 
         total_started_at = time.perf_counter()

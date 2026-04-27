@@ -1,6 +1,6 @@
 import types
 
-from magazyn import print_agent
+from magazyn.metrics import PRINT_QUEUE_SIZE
 
 
 def test_healthz_returns_ok(client, monkeypatch):
@@ -20,7 +20,7 @@ def test_healthz_returns_ok(client, monkeypatch):
 
 
 def test_metrics_endpoint(client):
-    print_agent.PRINT_QUEUE_SIZE.set(3)
+    PRINT_QUEUE_SIZE.set(3)
 
     try:
         response = client.get("/metrics")
@@ -30,4 +30,4 @@ def test_metrics_endpoint(client):
         assert "magazyn_print_queue_size" in body
         assert "3.0" in body
     finally:
-        print_agent.PRINT_QUEUE_SIZE.set(0)
+        PRINT_QUEUE_SIZE.set(0)

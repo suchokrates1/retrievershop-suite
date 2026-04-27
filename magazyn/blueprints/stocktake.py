@@ -26,11 +26,8 @@ from sqlalchemy import func
 
 from ..db import get_session
 from ..auth import login_required
-from ..models import (
-    ProductSize,
-    Stocktake,
-    StocktakeItem,
-)
+from ..models.products import ProductSize
+from ..models.stocktakes import Stocktake, StocktakeItem
 
 logger = logging.getLogger(__name__)
 

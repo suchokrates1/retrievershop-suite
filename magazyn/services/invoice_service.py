@@ -13,7 +13,7 @@ import json
 import logging
 
 from ..db import get_session
-from ..models import Order
+from ..models.orders import Order
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +265,7 @@ def generate_correction_invoice(
     from ..wfirma_api.invoices import (
         create_correction_invoice, download_invoice_pdf, get_invoice,
     )
-    from ..models import Return
+    from ..models.returns import Return
     from .email_service import send_invoice_correction
 
     result = {"success": False, "invoice_number": None, "errors": []}

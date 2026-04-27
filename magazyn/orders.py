@@ -1,24 +1,20 @@
 """Orders blueprint - zarzadzanie zamowieniami."""
 import logging
-from typing import Optional
 
 from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file, jsonify
 
 from .auth import login_required
 from .config import settings
 from .db import get_session
-from .models import Order, OrderStatusLog
+from .models.orders import Order, OrderStatusLog
 from .services.order_allegro_sync import sync_orders_from_allegro_api
 from .services.order_creation import build_manual_order_payload
 from .services.order_detail_builder import (
     build_order_detail_context,
 )
 from .services.order_list import build_orders_list_context
-from .services.order_sync import sync_order_from_data as _sync_order_from_data_service
-from .services.order_status import (
-    add_order_status as _add_order_status_service,
-    dispatch_status_email,
-)
+from .services.order_sync import sync_order_from_data
+from .services.order_status import add_order_status
 from .services.order_labels import reprint_order_labels
 from .services.order_presentation import _unix_to_datetime
 from .services.tracking import get_tracking_url
@@ -238,7 +234,7 @@ def reprint_label(order_id: str):
 def restore_return_stock(order_id: str):
     """Recznie przywroc stan magazynowy dla zwrotu."""
     from .returns import restore_stock_for_return
-    from .models import Return
+    from .models.returns import Return
     
     with get_session() as db:
         return_record = db.query(Return).filter(Return.order_id == order_id).first()
@@ -288,7 +284,7 @@ def process_refund(order_id: str):
     2. Pole allegro_return_id musi zgadzac sie z baza
     """
     from .returns import process_refund as do_refund, check_refund_eligibility as check_eligibility
-    from .models import Return
+    from .models.returns import Return
     
     # Sprawdz czy potwierdzono operacje
     confirm = request.form.get("confirm") == "true" or request.json and request.json.get("confirm") == True
@@ -339,20 +335,20 @@ def process_refund(order_id: str):
 @login_required
 def download_label(order_id: str):
     """Download shipping label PDF for an order."""
-    from . import print_agent
+    from .print_agent import agent as label_agent
     import tempfile
     import os
     
     try:
         # Try to get packages and download first label
-        packages = print_agent.get_order_packages(order_id)
+        packages = label_agent.get_order_packages(order_id)
         
         for pkg in packages:
             pid = pkg.get("shipment_id") or pkg.get("package_id")
             code = pkg.get("courier_code") or pkg.get("carrier_id") or ""
             if not pid:
                 continue
-            label_data, ext = print_agent.get_label(code, pid)
+            label_data, ext = label_agent.get_label(code, pid)
             if label_data:
                 # Save to temporary file and send
                 import base64
@@ -388,47 +384,6 @@ def download_label(order_id: str):
     return redirect(url_for(".order_detail", order_id=order_id))
 
 
-def sync_order_from_data(db, order_data: dict) -> Order:
-    """
-    Tworzy lub aktualizuje zamowienie na podstawie slownika danych.
-    Uzywane przy synchronizacji z Allegro API oraz recznym dodawaniu zamowien.
-    """
-    return _sync_order_from_data_service(db, order_data, add_status=add_order_status)
-
-
-def _dispatch_status_email(db, order_id: str, status: str):
-    """Kompatybilny wrapper dla starego importu z orders.py."""
-    return dispatch_status_email(db, order_id, status)
-
-
-def add_order_status(db, order_id: str, status: str, skip_if_same: bool = True, allow_backwards: bool = False, send_email: bool = True, **kwargs) -> Optional[OrderStatusLog]:
-    """
-    Add a status log entry for an order.
-    
-    Args:
-        db: Database session
-        order_id: ID zamówienia
-        status: Nowy status
-        skip_if_same: Jeśli True, nie dodaje statusu jeśli ostatni status jest taki sam (domyślnie True)
-        allow_backwards: Jeśli True, pozwala na cofanie statusów (domyślnie False)
-        send_email: Jeśli True, wysyła email do klienta przy zmianie statusu (domyślnie True)
-        **kwargs: tracking_number, courier_code, notes
-    
-    Returns:
-        OrderStatusLog lub None jeśli pominięto (duplikat lub cofnięcie)
-    """
-    return _add_order_status_service(
-        db,
-        order_id,
-        status,
-        skip_if_same=skip_if_same,
-        allow_backwards=allow_backwards,
-        send_email=send_email,
-        dispatch_email=_dispatch_status_email,
-        **kwargs,
-    )
-
-
 
 @bp.route("/orders/api/products/search")
 @login_required
@@ -439,7 +394,7 @@ def api_product_search():
         return jsonify([])
 
     with get_session() as db:
-        from .models import Product, ProductSize
+        from .models.products import Product, ProductSize
         query = (
             db.query(ProductSize)
             .join(Product, Product.id == ProductSize.product_id)

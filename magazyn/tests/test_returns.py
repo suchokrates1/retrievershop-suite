@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 #     RETURN_STATUS_DELIVERED,
 #     RETURN_STATUS_COMPLETED,
 # )
-# from magazyn.models import Return, Order, ProductSize
+# Importy modeli sa rozbite po modulach domenowych.
 
 
 class TestReturnsSystem:
@@ -68,7 +68,7 @@ class TestReturnsSystem:
     def test_send_return_notification(self, mock_send_messenger):
         """Test wysylania powiadomienia o zwrocie."""
         from magazyn.returns import _send_return_notification
-        from magazyn.models import Return
+        from magazyn.models.returns import Return
         
         mock_send_messenger.return_value = True
         
@@ -96,7 +96,7 @@ class TestReturnsSystem:
     def test_get_order_products_summary(self, mock_get_session):
         """Test pobierania podsumowania produktow z zamowienia."""
         from magazyn.returns import _get_order_products_summary
-        from magazyn.models import Order, OrderProduct
+        from magazyn.models.orders import Order, OrderProduct
         
         # Mock zamowienia z produktami
         mock_order = MagicMock(spec=Order)
@@ -130,7 +130,7 @@ class TestReturnModel:
     
     def test_return_model_fields(self):
         """Test pol modelu Return."""
-        from magazyn.models import Return
+        from magazyn.models.returns import Return
         
         # Sprawdz czy model ma wymagane pola
         assert hasattr(Return, 'id')
@@ -149,7 +149,7 @@ class TestReturnModel:
     
     def test_return_status_log_model_fields(self):
         """Test pol modelu ReturnStatusLog."""
-        from magazyn.models import ReturnStatusLog
+        from magazyn.models.returns import ReturnStatusLog
         
         assert hasattr(ReturnStatusLog, 'id')
         assert hasattr(ReturnStatusLog, 'return_id')
@@ -196,7 +196,7 @@ class TestReturnNotificationFormat:
     def test_notification_message_format(self):
         """Test formatu wiadomosci powiadomienia."""
         from magazyn.returns import _send_return_notification
-        from magazyn.models import Return
+        from magazyn.models.returns import Return
         
         # Sprawdz format bez wysylania
         return_record = MagicMock(spec=Return)

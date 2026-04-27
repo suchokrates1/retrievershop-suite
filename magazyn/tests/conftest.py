@@ -2,7 +2,7 @@ import pytest
 from magazyn.factory import create_app
 from magazyn.db import reset_db
 from magazyn.settings_store import settings_store
-from magazyn.models import Product
+from magazyn.models.products import Product
 from collections import OrderedDict
 
 

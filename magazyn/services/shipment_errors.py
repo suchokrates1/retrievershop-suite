@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List
 
 from ..db import get_session
-from ..models import ShipmentError
+from ..models.shipments import ShipmentError
 
 logger = logging.getLogger(__name__)
 

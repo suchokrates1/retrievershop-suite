@@ -5,7 +5,9 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
-from ..models import AllegroOffer, PriceReportItem, ProductSize, PurchaseBatch, ShippingThreshold
+from ..models.allegro import AllegroOffer
+from ..models.price_reports import PriceReportItem
+from ..models.products import ProductSize, PurchaseBatch, ShippingThreshold
 
 
 ALLEGRO_FEE_PERCENT = Decimal("0.123")

@@ -11,7 +11,8 @@ from magazyn.settings_store import settings_store
 
 from magazyn.config import settings
 from magazyn.db import get_session
-from magazyn.models import AllegroOffer, Product, ProductSize
+from magazyn.models.allegro import AllegroOffer
+from magazyn.models.products import Product, ProductSize
 from magazyn.allegro_api import fetch_product_listing
 import magazyn.allegro as allegro_views
 

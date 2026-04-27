@@ -1,4 +1,3 @@
-import importlib
 import re
 from collections import OrderedDict
 from urllib.parse import parse_qs, urlparse
@@ -66,7 +65,7 @@ def test_sensitive_tokens_render_as_password(app_mod, client, login):
 def test_settings_post_updates_store(app_mod, client, login, monkeypatch):
     reloaded = {"called": False}
     monkeypatch.setattr(
-        app_mod.print_agent,
+        app_mod.label_agent,
         "reload_config",
         lambda: reloaded.update(called=True),
     )
@@ -114,12 +113,9 @@ def test_settings_reload_updates_print_agent(app_mod, client, login, monkeypatch
     assert settings_store.settings.PAGE_ACCESS_TOKEN == "v0"
 
     settings_store.update({"PAGE_ACCESS_TOKEN": "new0"})
-    app_mod.print_agent.reload_config()
-    assert app_mod.print_agent.PAGE_ACCESS_TOKEN == "new0"
-    cfg.settings = app_mod.print_agent.settings
-
-    pa = importlib.reload(app_mod.print_agent)
-    assert pa.PAGE_ACCESS_TOKEN == "new0"
+    app_mod.label_agent.reload_config()
+    assert app_mod.label_agent.config.page_access_token == "new0"
+    cfg.settings = app_mod.label_agent.settings
 
 
 def test_extra_keys_display_and_save(app_mod, client, login, monkeypatch):

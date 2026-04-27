@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from ..db import get_session
-from ..models import AllegroBillingType
+from ..models.allegro import AllegroBillingType
 
 
 BILLING_CATEGORY_CHOICES = {

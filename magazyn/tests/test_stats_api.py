@@ -4,7 +4,12 @@ import logging
 from types import SimpleNamespace
 
 from magazyn.db import get_session
-from magazyn.models import AllegroBillingType, AllegroPriceHistory, Message, Order, OrderProduct, OrderStatusLog, OrderEvent, ReturnStatusLog, ShipmentError, PriceReport, PriceReportItem, Return, Thread
+from magazyn.models.allegro import AllegroBillingType, AllegroOffer, AllegroPriceHistory
+from magazyn.models.messages import Message, Thread
+from magazyn.models.orders import Order, OrderEvent, OrderProduct, OrderStatusLog
+from magazyn.models.price_reports import PriceReport, PriceReportItem
+from magazyn.models.returns import Return, ReturnStatusLog
+from magazyn.models.shipments import ShipmentError
 
 
 def _seed_order(app, order_id: str, *, payment_done=100.0, cod=False, platform="allegro"):
@@ -229,7 +234,7 @@ def test_stats_allegro_costs_returns_totals(client, app, login, monkeypatch):
     from magazyn import allegro_api as allegro_api_module
     from magazyn import stats as stats_module
     from magazyn.db import get_session
-    from magazyn.models import AllegroBillingType
+    from magazyn.models.allegro import AllegroBillingType
 
     _seed_order(app, "ord_cost_1", payment_done=100.0, cod=False)
 
@@ -422,7 +427,7 @@ def test_stats_competition_merges_report_and_history(client, app, login):
 
 def test_stats_offer_publication_history_returns_daily_changes(client, app, login):
     from magazyn import stats as stats_module
-    from magazyn.models import AllegroOffer
+    from magazyn.models.allegro import AllegroOffer
 
     stats_module._FAST_CACHE.clear()
     now = datetime.now()
@@ -701,7 +706,7 @@ def test_stats_profit_waterfall_structure(client, app, login, monkeypatch):
 def test_stats_order_funnel_creates_and_tracks_events(client, app, login, monkeypatch):
     """Order funnel zwraca funnel z transitions times na podstawie OrderEvent."""
     from magazyn import stats as stats_module
-    from magazyn.models import OrderEvent
+    from magazyn.models.orders import OrderEvent
 
     stats_module._FAST_CACHE.clear()
     
@@ -777,7 +782,7 @@ def test_stats_order_funnel_creates_and_tracks_events(client, app, login, monkey
 def test_stats_order_funnel_multiple_orders(client, app, login):
     """Order funnel aggregates metrics across multiple orders."""
     from magazyn import stats as stats_module
-    from magazyn.models import OrderEvent
+    from magazyn.models.orders import OrderEvent
 
     stats_module._FAST_CACHE.clear()
     
@@ -834,7 +839,7 @@ def test_stats_order_funnel_multiple_orders(client, app, login):
 
 def test_stats_shipment_errors_list_and_aggregation(client, app, login):
     """Shipment errors endpoint correctly groups and aggregates errors."""
-    from magazyn.models import ShipmentError
+    from magazyn.models.shipments import ShipmentError
     from magazyn import stats as stats_module
     
     stats_module._FAST_CACHE.clear()
@@ -907,7 +912,7 @@ def test_stats_shipment_errors_list_and_aggregation(client, app, login):
 
 def test_stats_shipment_errors_filters_by_date(client, app, login):
     """Shipment errors endpoint respects date_from and date_to filters."""
-    from magazyn.models import ShipmentError
+    from magazyn.models.shipments import ShipmentError
     from magazyn import stats as stats_module
     
     stats_module._FAST_CACHE.clear()
@@ -1078,7 +1083,7 @@ def test_stats_invoice_coverage_returns_kpi(client, app, login):
 def test_stats_ads_offer_analytics_returns_kpi(client, app, login, monkeypatch):
     from magazyn import allegro_api as allegro_api_module
     from magazyn import stats as stats_module
-    from magazyn.models import AllegroOffer
+    from magazyn.models.allegro import AllegroOffer
 
     stats_module._FAST_CACHE.clear()
     monkeypatch.setattr(stats_module.settings_store, "get", lambda key, default=None: "token" if key == "ALLEGRO_ACCESS_TOKEN" else default)

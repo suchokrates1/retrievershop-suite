@@ -2,7 +2,8 @@ import json
 
 from magazyn.constants import ALL_SIZES
 from magazyn.domain.products import _to_int, create_product, get_product_details
-from magazyn.models import PrintedOrder, Product, ProductSize
+from magazyn.models.printing import PrintedOrder
+from magazyn.models.products import Product, ProductSize
 from magazyn.tests.conftest import make_product
 
 

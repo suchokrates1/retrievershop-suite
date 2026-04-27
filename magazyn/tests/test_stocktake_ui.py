@@ -48,7 +48,8 @@ def live_server(tmp_path_factory):
     import socket
     from magazyn.factory import create_app
     from magazyn.db import reset_db, get_session
-    from magazyn.models import Product, ProductSize, Stocktake, StocktakeItem
+    from magazyn.models.products import Product, ProductSize
+    from magazyn.models.stocktakes import Stocktake, StocktakeItem
     from magazyn.settings_store import settings_store
 
     tmp_path = tmp_path_factory.mktemp("ui_test")
@@ -182,7 +183,7 @@ def _login(page: Page, port: int, app):
     """Tworzy uzytkownika i loguje sie przez UI."""
     from werkzeug.security import generate_password_hash
     from magazyn.db import get_session
-    from magazyn.models import User
+    from magazyn.models.users import User
 
     with app.app_context():
         with get_session() as db:
@@ -296,7 +297,8 @@ class TestStocktakeScanUI:
 
         # Odczytaj aktualny stan z bazy
         from magazyn.db import get_session
-        from magazyn.models import StocktakeItem, ProductSize
+        from magazyn.models.products import ProductSize
+        from magazyn.models.stocktakes import StocktakeItem
         with app.app_context():
             with get_session() as db:
                 ps = db.query(ProductSize).filter_by(barcode=EAN).first()

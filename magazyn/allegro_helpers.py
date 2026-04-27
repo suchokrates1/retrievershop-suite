@@ -6,7 +6,7 @@ Wyodrebnione z allegro.py dla eliminacji duplikatow i lepszej czytelnosci.
 from decimal import Decimal
 from typing import Optional
 
-from .models import Product, ProductSize
+from .models.products import Product, ProductSize
 
 
 def format_decimal(value: Optional[Decimal]) -> Optional[str]:

@@ -27,7 +27,8 @@ from .domain.returns import (
     map_allegro_return_status as _map_allegro_return_status,
     map_carrier_to_allegro as _map_carrier_to_allegro,
 )
-from .models import Return, ReturnStatusLog, Order
+from .models.orders import Order
+from .models.returns import Return, ReturnStatusLog
 from .notifications import send_messenger
 from . import allegro_api
 

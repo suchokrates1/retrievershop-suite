@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..db import get_session
-from ..models import ExcludedSeller
+from ..models.price_reports import ExcludedSeller
 from ..settings_store import settings_store
 
 

@@ -11,9 +11,10 @@ with app.app_context():
         parse_allegro_order_to_data,
         get_allegro_internal_status,
     )
-    from magazyn.orders import sync_order_from_data, add_order_status
+    from magazyn.services.order_status import add_order_status
+    from magazyn.services.order_sync import sync_order_from_data
     from magazyn.db import get_session
-    from magazyn.models import Order
+    from magazyn.models.orders import Order
     from sqlalchemy import or_
 
     print("Pobieranie zamowien z Allegro API...")

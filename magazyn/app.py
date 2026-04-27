@@ -22,19 +22,21 @@ import os
 from werkzeug.security import check_password_hash
 from collections import OrderedDict
 
-from .models import User, Thread
+from .models.messages import Thread
+from .models.users import User
 from .forms import LoginForm
 
 from .db import get_session
 from .sales import _sales_keys
 from .auth import login_required
-from . import print_agent
+from .print_agent import agent as label_agent
 from .env_info import ENV_INFO
 from .config import settings
 from .settings_store import SettingsPersistenceError, settings_store
 from .settings_io import HIDDEN_KEYS
 from .domain.financial import FinancialCalculator
 from .services.app_runtime import start_print_agent_runtime
+from .services.print_agent_config import ConfigError, parse_time_str
 from .services.fixed_costs import (
     add_fixed_cost as add_fixed_cost_record,
     delete_fixed_cost as delete_fixed_cost_record,
@@ -243,7 +245,7 @@ def start_print_agent(app_obj=None):
         return
     _print_agent_started = True
     app_ctx = app_obj or current_app
-    result = start_print_agent_runtime(app_ctx, print_agent)
+    result = start_print_agent_runtime(app_ctx, label_agent, ConfigError)
     # Token refresher is started via gunicorn hook (single worker only).
     if result.failed:
         _print_agent_started = False
@@ -399,7 +401,7 @@ def settings_page():
             updates[key] = request.form.get(key, values.get(key, ""))
         for tkey in ("QUIET_HOURS_START", "QUIET_HOURS_END"):
             try:
-                print_agent.parse_time_str(updates.get(tkey, values.get(tkey, "")))
+                parse_time_str(updates.get(tkey, values.get(tkey, "")))
             except ValueError:
                 flash("Niepoprawny format godziny (hh:mm)", "error")
                 return redirect(url_for("settings_page"))
@@ -414,7 +416,7 @@ def settings_page():
                 "error",
             )
             return redirect(url_for("settings_page"))
-        print_agent.reload_config()
+        label_agent.reload_config()
         flash("Zapisano ustawienia.", "success")
         return redirect(url_for("settings_page"))
     
@@ -500,7 +502,7 @@ def edit_fixed_cost(cost_id):
 def agent_logs():
     try:
         import html as html_mod
-        with open(print_agent.LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+        with open(label_agent.config.log_file, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()[-200:]
         log_text = "<br>".join(html_mod.escape(line.rstrip()) for line in lines[::-1])
     except Exception as e:
@@ -515,7 +517,7 @@ def test_print():
         return _redirect_disabled_test_route()
     message = None
     if request.method == "POST":
-        success = print_agent.print_test_page()
+        success = label_agent.print_test_page()
         message = (
             "Testowy wydruk wysłany." if success else "Błąd testowego wydruku."
         )
@@ -529,8 +531,8 @@ def test_message():
         return _redirect_disabled_test_route()
     msg = None
     if request.method == "POST":
-        if print_agent.last_order_data:
-            print_agent.send_messenger_message(print_agent.last_order_data)
+        if label_agent.last_order_data:
+            label_agent.send_messenger_message(label_agent.last_order_data)
             msg = "Testowa wiadomosc zostala wyslana."
         else:
             msg = "Brak danych ostatniego zamowienia."

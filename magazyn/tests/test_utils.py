@@ -2,18 +2,25 @@ import json
 import pytest
 
 from magazyn.db import sqlite_connect
+from magazyn.parsing import parse_product_info
+from magazyn.services.print_agent_config import ConfigError, parse_time_str
+from magazyn.services.print_agent_shipments import shorten_product_name
 
 
 def get_bl():
     import importlib
-    import magazyn.print_agent as bl
-    return importlib.reload(bl)
+    import magazyn.label_agent as bl
+    import magazyn.print_agent as print_agent_module
+
+    bl = importlib.reload(bl)
+    print_agent_module = importlib.reload(print_agent_module)
+    bl.agent = print_agent_module.agent
+    return bl
 
 
 def test_shorten_product_name():
-    bl = get_bl()
-    assert bl.shorten_product_name("one two three four") == "one three four"
-    assert bl.shorten_product_name("one two") == "one two"
+    assert shorten_product_name("one two three four") == "one three four"
+    assert shorten_product_name("one two") == "one two"
 
 
 def test_is_quiet_time(monkeypatch):
@@ -33,8 +40,8 @@ def test_is_quiet_time(monkeypatch):
     monkeypatch.setattr(bl, "ZoneInfo", lambda tz: f"zone-{tz}")
     monkeypatch.setattr(bl, "datetime", DummyDateTime)
     agent.config = agent.config.with_updates(
-        quiet_hours_start=bl.parse_time_str("10:00"),
-        quiet_hours_end=bl.parse_time_str("22:00"),
+        quiet_hours_start=parse_time_str("10:00"),
+        quiet_hours_end=parse_time_str("22:00"),
         timezone="Test/Zone",
     )
 
@@ -46,8 +53,8 @@ def test_is_quiet_time(monkeypatch):
     assert agent.is_quiet_time() is False
 
     agent.config = agent.config.with_updates(
-        quiet_hours_start=bl.parse_time_str("22:00"),
-        quiet_hours_end=bl.parse_time_str("08:00"),
+        quiet_hours_start=parse_time_str("22:00"),
+        quiet_hours_end=parse_time_str("08:00"),
     )
 
     DummyDateTime.current = dt.datetime(2023, 1, 1, 23, 0)
@@ -164,7 +171,7 @@ def test_validate_env_missing_page_access_token(monkeypatch):
         page_access_token="",
         recipient_id="x",
     )
-    with pytest.raises(bl.ConfigError):
+    with pytest.raises(ConfigError):
         agent.validate_env()
 
 
@@ -256,37 +263,33 @@ def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
 
 
 def test_parse_product_info_color_only():
-    bl = get_bl()
     item = {"name": "Smycz dla psa czerwony"}
-    name, size, color = bl.parse_product_info(item)
+    name, size, color = parse_product_info(item)
     assert name == "Smycz dla psa"
     assert size == "Uniwersalny"
     assert color.lower() == "czerwony"
 
 
 def test_parse_product_info_color_orange():
-    bl = get_bl()
     item = {"name": "Zabawka dla psa pomarańczowy"}
-    name, size, color = bl.parse_product_info(item)
+    name, size, color = parse_product_info(item)
     assert name == "Zabawka dla psa"
     assert size == "Uniwersalny"
     assert color.lower() == "pomarańczowy"
 
 
 def test_parse_product_info_size_and_color_from_name():
-    bl = get_bl()
     item = {"name": "Szelki dla psa Truelove Front Line Premium XL czarne"}
-    name, size, color = bl.parse_product_info(item)
+    name, size, color = parse_product_info(item)
     assert size == "XL"
     assert color.lower() == "czarny"
 
 
 def test_parse_product_info_alias():
-    bl = get_bl()
     item = {
         "name": "Szelki dla psa Truelove Front Line Premium Tropical L turkusowe"
     }
-    name, size, color = bl.parse_product_info(item)
+    name, size, color = parse_product_info(item)
     assert name == "Szelki dla psa Truelove Tropical"
     assert size == "L"
     assert color.lower() == "turkusowy"

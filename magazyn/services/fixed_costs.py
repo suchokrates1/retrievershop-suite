@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from ..db import get_session
-from ..models import FixedCost
+from ..models.settings import FixedCost
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-from magazyn.models import Product, ProductSize, Sale, ShippingThreshold
+from magazyn.models.products import Product, ProductSize, Sale, ShippingThreshold
 
 from decimal import Decimal
 

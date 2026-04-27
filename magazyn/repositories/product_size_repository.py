@@ -10,7 +10,7 @@ from typing import List, Optional, NamedTuple, Tuple
 
 from sqlalchemy.orm import Session
 
-from ..models import Product, ProductSize
+from ..models.products import Product, ProductSize
 
 
 logger = logging.getLogger(__name__)

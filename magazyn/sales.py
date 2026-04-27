@@ -9,10 +9,10 @@ from flask import (
 )
 from .auth import login_required
 from .env_info import ENV_INFO
-from . import print_agent
+from .print_agent import agent as label_agent
 from .db import get_session
 from .settings_store import SettingsPersistenceError, settings_store
-from .models import Sale, Product, ShippingThreshold
+from .models.products import Product, Sale, ShippingThreshold
 from sqlalchemy import or_
 from decimal import Decimal
 
@@ -188,7 +188,7 @@ def sales_settings():
                 "error",
             )
             return redirect(url_for("sales.sales_settings"))
-        print_agent.reload_config()
+        label_agent.reload_config()
         flash("Zapisano ustawienia.", "success")
         return redirect(url_for("sales.sales_settings"))
 

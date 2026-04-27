@@ -15,7 +15,7 @@ from ..constants import (
     resolve_product_alias,
 )
 from ..db import get_session
-from ..models import Product, ProductSize, PurchaseBatch
+from ..models.products import Product, ProductSize, PurchaseBatch
 from .products import _clean_barcode, _to_decimal, _to_int, validate_ean
 
 logger = logging.getLogger(__name__)

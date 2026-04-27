@@ -13,7 +13,8 @@ Pokryte scenariusze:
 """
 import json
 from magazyn.db import get_session
-from magazyn.models import Product, ProductSize, Stocktake, StocktakeItem
+from magazyn.models.products import Product, ProductSize
+from magazyn.models.stocktakes import Stocktake, StocktakeItem
 
 
 # ---------------------------------------------------------------------------

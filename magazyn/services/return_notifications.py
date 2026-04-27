@@ -6,7 +6,8 @@ import json
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from ..models import Order, Return
+from ..models.orders import Order
+from ..models.returns import Return
 from ..notifications import send_messenger
 
 logger = logging.getLogger(__name__)

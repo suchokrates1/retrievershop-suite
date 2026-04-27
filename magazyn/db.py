@@ -10,20 +10,18 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
-from .models import (
-    Base,
-    User,
-    ProductSize,
-    PurchaseBatch,
-    Sale,
-    Product,
-)
+from .models.base import Base
+from .models.products import Product, ProductSize, PurchaseBatch, Sale
+from .models.registry import import_all_models
+from .models.users import User
 from .config import settings
 from .notifications import send_stock_alert
 
 TWOPLACES = Decimal("0.01")
 
 logger = logging.getLogger(__name__)
+
+import_all_models()
 
 
 def to_decimal(value) -> Decimal:

@@ -8,7 +8,7 @@ from typing import Optional
 
 from sqlalchemy import desc
 
-from ..models import Order, OrderStatusLog
+from ..models.orders import Order, OrderStatusLog
 from ..status_config import STATUS_EMAIL_MAP, STATUS_HIERARCHY
 
 

@@ -12,7 +12,7 @@ def test_agent_loop_stores_courier_code(monkeypatch):
     monkeypatch.setattr(agent, "load_queue", lambda: [])
     monkeypatch.setattr(agent, "save_queue", lambda q: None)
     monkeypatch.setattr(agent, "is_quiet_time", lambda: False)
-    monkeypatch.setattr(mod, "consume_order_stock", lambda p: None)
+    monkeypatch.setattr(agent, "consume_order_stock", lambda p: None)
     monkeypatch.setattr(
         agent,
         "print_label",
@@ -60,7 +60,7 @@ def test_agent_loop_treats_pobranie_as_cod_with_zero_payment(monkeypatch):
     monkeypatch.setattr(agent, "load_queue", lambda: [])
     monkeypatch.setattr(agent, "save_queue", lambda q: None)
     monkeypatch.setattr(agent, "is_quiet_time", lambda: False)
-    monkeypatch.setattr(mod, "consume_order_stock", lambda p: None)
+    monkeypatch.setattr(agent, "consume_order_stock", lambda p: None)
     monkeypatch.setattr(agent, "print_label", lambda d, e, o: None)
 
     captured = {}
@@ -106,7 +106,7 @@ def test_agent_loop_treats_pobranie_as_cod_with_zero_payment(monkeypatch):
 def test_get_orders_includes_blad_druku_under_3_retries(app):
     """get_orders zwraca zamowienia z blad_druku gdy error_count < 3."""
     from magazyn.db import get_session
-    from magazyn.models import Order, OrderStatusLog
+    from magazyn.models.orders import Order, OrderStatusLog
     import time
 
     oid = "allegro_test-retry-blad"

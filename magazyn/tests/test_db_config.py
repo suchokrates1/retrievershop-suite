@@ -2,8 +2,10 @@ from types import SimpleNamespace
 from werkzeug.security import generate_password_hash
 
 import magazyn.db as db
+import magazyn.label_agent as label_agent_module
 import magazyn.print_agent as pa
-from magazyn.models import User
+from magazyn.config import settings
+from magazyn.models.users import User
 from magazyn.db import sqlite_connect
 
 
@@ -16,11 +18,11 @@ def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
         session.add(User(username="u1", password=generate_password_hash("p")))
 
     second = tmp_path / "second.db"
-    new_settings = SimpleNamespace(**vars(pa.settings))
+    new_settings = SimpleNamespace(**vars(settings))
     new_settings.DB_PATH = str(second)
-    monkeypatch.setattr(pa, "load_config", lambda: new_settings)
+    monkeypatch.setattr(label_agent_module, "load_config", lambda: new_settings)
 
-    pa.reload_config()
+    pa.agent.reload_config()
 
     db.init_db()
     with db.get_session() as session:

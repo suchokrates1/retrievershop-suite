@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, render_template, abort, Response
 
 from ..db import get_session
-from ..models import Order, OrderStatusLog
+from ..models.orders import Order, OrderStatusLog
 from ..services.tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)

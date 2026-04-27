@@ -22,10 +22,11 @@ from sqlalchemy import desc
 
 from ..db import get_session
 from ..auth import login_required
-from ..models import OrderProduct, OrderStatusLog, ScanLog
+from ..models.orders import OrderProduct, OrderStatusLog
+from ..models.printing import ScanLog
 from ..domain.products import find_by_barcode
-from ..orders import add_order_status
 from ..parsing import parse_product_info
+from ..services.order_status import add_order_status
 from ..services.scanning import load_order_for_barcode
 
 

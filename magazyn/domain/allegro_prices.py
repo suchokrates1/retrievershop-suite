@@ -9,7 +9,7 @@ from typing import Iterable, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..models import AllegroPriceHistory
+from ..models.allegro import AllegroPriceHistory
 
 TWOPLACES = Decimal("0.01")
 

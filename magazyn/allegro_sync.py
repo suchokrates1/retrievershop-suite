@@ -10,7 +10,8 @@ from requests.exceptions import HTTPError
 from sqlalchemy import or_
 
 from . import allegro_api
-from .models import AllegroOffer, Product, ProductSize
+from .models.allegro import AllegroOffer
+from .models.products import Product, ProductSize
 from .db import get_session
 from .parsing import parse_offer_title, normalize_color
 from .env_tokens import clear_allegro_tokens, empty_allegro_token_values, update_allegro_tokens

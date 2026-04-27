@@ -22,7 +22,8 @@ def test_app_response_without_agent(app_no_agent):
 
 
 def test_discussions_page_loads_without_error(app_no_agent):
-    from magazyn.models import User, Thread, Message
+    from magazyn.models.messages import Message, Thread
+    from magazyn.models.users import User
     from magazyn.db import get_session
     from werkzeug.security import generate_password_hash
 

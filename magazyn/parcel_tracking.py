@@ -15,7 +15,7 @@ from collections import defaultdict
 from sqlalchemy import and_, func
 
 from .db import get_session
-from .models import Order, OrderStatusLog
+from .models.orders import Order, OrderStatusLog
 from .settings_store import settings_store
 from . import allegro_api
 from .services.order_status import add_order_status
