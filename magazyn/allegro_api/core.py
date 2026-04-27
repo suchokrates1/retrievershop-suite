@@ -141,6 +141,7 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
     attempt = 0
     backoff = 1.0
     method_name = getattr(method, "__name__", str(method)).upper()
+    expected_statuses = set(kwargs.pop("expected_statuses", ()) or ())
     # Wstrzyknij User-Agent do kazdego requestu do API Allegro
     headers = kwargs.get("headers") or {}
     headers.setdefault("User-Agent", ALLEGRO_USER_AGENT)
@@ -196,16 +197,26 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
         try:
             response.raise_for_status()
         except HTTPError:
-            ALLEGRO_API_ERRORS_TOTAL.labels(
-                endpoint=endpoint, status=str(status_code)
-            ).inc()
-            logger.warning(
-                "Allegro API error: endpoint=%s method=%s status=%s request_id=%s",
-                endpoint,
-                method_name,
-                status_code,
-                _extract_request_id(response.headers),
-            )
+            request_id = _extract_request_id(response.headers)
+            if status_code in expected_statuses:
+                logger.debug(
+                    "Allegro API expected status: endpoint=%s method=%s status=%s request_id=%s",
+                    endpoint,
+                    method_name,
+                    status_code,
+                    request_id,
+                )
+            else:
+                ALLEGRO_API_ERRORS_TOTAL.labels(
+                    endpoint=endpoint, status=str(status_code)
+                ).inc()
+                logger.warning(
+                    "Allegro API error: endpoint=%s method=%s status=%s request_id=%s",
+                    endpoint,
+                    method_name,
+                    status_code,
+                    request_id,
+                )
             raise
 
         _respect_rate_limits(response, endpoint)
