@@ -20,7 +20,6 @@ import logging
 from .db import get_session, record_purchase
 from .domain.inventory import (
     export_rows,
-    get_product_sizes,
     get_products_for_delivery,
     import_from_dataframe,
     record_delivery,
@@ -38,19 +37,13 @@ from .domain.products import (
 from .forms import AddItemForm
 from .auth import login_required
 from .constants import ALL_SIZES
-from .models.allegro import AllegroOffer
-from .models.orders import OrderProduct
-from .models.products import Product, ProductSize, PurchaseBatch
-from .services.product_matching import (
-    _extract_category,  # noqa: F401 - publiczny helper kompatybilnosci
-    _extract_model_series,  # noqa: F401 - publiczny helper kompatybilnosci
-    _fuzzy_match_product,
-    _match_by_tiptop_sku,
-    _normalize_name,  # noqa: F401 - publiczny helper kompatybilnosci
-    _parse_tiptop_sku,  # noqa: F401 - publiczny helper kompatybilnosci
+from .models.products import ProductSize
+from .services.invoice_matching import match_invoice_rows
+from .services.product_detail import (
+    build_product_detail_context,
+    build_product_history_payload,
 )
 from .services.product_listing import build_items_context
-from sqlalchemy import desc, or_, func
 
 bp = Blueprint("products", __name__)
 
@@ -174,295 +167,23 @@ def product_history_api(product_id):
     history_type = request.args.get("type", "orders")  # orders | deliveries
     offset = request.args.get("offset", 0, type=int)
     limit = request.args.get("limit", 50, type=int)
-    if limit > 200:
-        limit = 200
-
-    with get_session() as db:
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            return jsonify({"error": "not_found"}), 404
-
-        if history_type == "deliveries":
-            total = db.query(func.count(PurchaseBatch.id)).filter(PurchaseBatch.product_id == product_id).scalar()
-            batches = (
-                db.query(PurchaseBatch)
-                .filter(PurchaseBatch.product_id == product_id)
-                .order_by(desc(PurchaseBatch.purchase_date))
-                .offset(offset)
-                .limit(limit)
-                .all()
-            )
-            items = [
-                {
-                    "size": pb.size,
-                    "quantity": pb.quantity,
-                    "remaining": pb.remaining_quantity if pb.remaining_quantity is not None else pb.quantity,
-                    "price": float(pb.price),
-                    "total_value": float(pb.quantity * pb.price),
-                    "date": pb.purchase_date.strftime("%Y-%m-%d") if pb.purchase_date else None,
-                    "invoice_number": pb.invoice_number,
-                    "supplier": pb.supplier,
-                }
-                for pb in batches
-            ]
-            return jsonify({"items": items, "total": total, "offset": offset, "has_more": offset + limit < total})
-
-        else:  # orders
-            sorted_sizes = product.sizes
-            size_ids = [ps.id for ps in sorted_sizes]
-            all_eans = [ps.barcode for ps in sorted_sizes if ps.barcode]
-            size_map_by_id = {ps.id: ps.size for ps in sorted_sizes}
-            size_map_by_ean = {ps.barcode: ps.size for ps in sorted_sizes if ps.barcode}
-
-            filters = []
-            if size_ids:
-                filters.append(OrderProduct.product_size_id.in_(size_ids))
-            if all_eans:
-                filters.append(OrderProduct.ean.in_(all_eans))
-
-            if not filters:
-                return jsonify({"items": [], "total": 0, "offset": offset, "has_more": False})
-
-            total = db.query(func.count(OrderProduct.id)).filter(or_(*filters)).scalar()
-            order_products = (
-                db.query(OrderProduct)
-                .filter(or_(*filters))
-                .order_by(desc(OrderProduct.id))
-                .offset(offset)
-                .limit(limit)
-                .all()
-            )
-
-            items = []
-            for op in order_products:
-                if op.order:
-                    size = None
-                    if op.product_size_id and op.product_size_id in size_map_by_id:
-                        size = size_map_by_id[op.product_size_id]
-                    elif op.ean and op.ean in size_map_by_ean:
-                        size = size_map_by_ean[op.ean]
-                    items.append({
-                        "order_id": op.order_id,
-                        "lp": op.order.lp if hasattr(op.order, 'lp') and op.order.lp else op.order_id,
-                        "date": op.order.date_add,
-                        "customer": op.order.customer_name,
-                        "quantity": op.quantity,
-                        "price": float(op.price_brutto) if op.price_brutto else None,
-                        "size": size,
-                    })
-
-            return jsonify({"items": items, "total": total, "offset": offset, "has_more": offset + limit < total})
+    payload, status_code = build_product_history_payload(
+        product_id,
+        history_type=history_type,
+        offset=offset,
+        limit=limit,
+    )
+    return jsonify(payload), status_code
 
 
 @bp.route("/product/<int:product_id>")
 @login_required
 def product_detail(product_id):
     """Readonly product detail view with order and delivery history."""
-    
-    with get_session() as db:
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            abort(404)
-        
-        # Get product sizes with their barcodes (EANs), purchase prices and stock info
-        # Sort sizes: S, M, L, XL, 2XL
-        size_order = {"S": 1, "M": 2, "L": 3, "XL": 4, "2XL": 5}
-        sorted_sizes = sorted(product.sizes, key=lambda ps: size_order.get(ps.size, 99))
-        
-        sizes_data = []
-        all_eans = []
-        for ps in sorted_sizes:
-            # Get latest purchase price for this size
-            latest_batch = (
-                db.query(PurchaseBatch)
-                .filter(
-                    PurchaseBatch.product_id == product_id,
-                    PurchaseBatch.size == ps.size
-                )
-                .order_by(desc(PurchaseBatch.purchase_date))
-                .first()
-            )
-            latest_price = latest_batch.price if latest_batch else None
-            
-            # Calculate weighted average purchase price for this size
-            batches_for_size = (
-                db.query(PurchaseBatch)
-                .filter(
-                    PurchaseBatch.product_id == product_id,
-                    PurchaseBatch.size == ps.size,
-                )
-                .all()
-            )
-            total_qty = sum(b.quantity for b in batches_for_size)
-            total_value = sum(b.quantity * b.price for b in batches_for_size)
-            avg_price = (total_value / total_qty) if total_qty > 0 else None
-            
-            # Get remaining stock from FIFO batches
-            remaining_batches = (
-                db.query(PurchaseBatch)
-                .filter(
-                    PurchaseBatch.product_id == product_id,
-                    PurchaseBatch.size == ps.size,
-                    PurchaseBatch.remaining_quantity > 0,
-                )
-                .order_by(PurchaseBatch.purchase_date.asc())
-                .all()
-            )
-            fifo_remaining = sum(b.remaining_quantity or 0 for b in remaining_batches)
-            
-            sizes_data.append({
-                "id": ps.id,
-                "size": ps.size,
-                "quantity": ps.quantity,
-                "fifo_remaining": fifo_remaining,
-                "barcode": ps.barcode,
-                "purchase_price": latest_price,  # Latest price
-                "avg_purchase_price": avg_price,  # Weighted average
-            })
-            if ps.barcode:
-                all_eans.append(ps.barcode)
-        
-        # Get order history for all sizes (via product_size_id + EAN fallback)
-        order_history = []
-        size_ids = [ps.id for ps in sorted_sizes]
-        
-        # Buduj slownik rozmiarow do szybkiego mapowania
-        size_map_by_id = {ps.id: ps.size for ps in sorted_sizes}
-        size_map_by_ean = {ps.barcode: ps.size for ps in sorted_sizes if ps.barcode}
-        
-        # Oblicz total_sold bez limitu
-        filters = []
-        if size_ids:
-            filters.append(OrderProduct.product_size_id.in_(size_ids))
-        if all_eans:
-            filters.append(OrderProduct.ean.in_(all_eans))
-        
-        total_sold = 0
-        if filters:
-            total_sold = (
-                db.query(func.coalesce(func.sum(OrderProduct.quantity), 0))
-                .filter(or_(*filters))
-                .scalar()
-            ) or 0
-            
-            order_products = (
-                db.query(OrderProduct)
-                .filter(or_(*filters))
-                .order_by(desc(OrderProduct.id))
-                .limit(50)
-                .all()
-            )
-            
-            for op in order_products:
-                if op.order:
-                    # Ustal rozmiar - najpierw po product_size_id, potem po EAN
-                    size = None
-                    if op.product_size_id and op.product_size_id in size_map_by_id:
-                        size = size_map_by_id[op.product_size_id]
-                    elif op.ean and op.ean in size_map_by_ean:
-                        size = size_map_by_ean[op.ean]
-                    
-                    # Numer LP zamowienia
-                    lp = op.order.lp if hasattr(op.order, 'lp') and op.order.lp else op.order_id
-                    
-                    order_history.append({
-                        "order_id": op.order_id,
-                        "lp": lp,
-                        "external_order_id": op.order.external_order_id,
-                        "date": op.order.date_add,
-                        "customer": op.order.customer_name,
-                        "platform": op.order.platform,
-                        "quantity": op.quantity,
-                        "price": op.price_brutto,
-                        "ean": op.ean,
-                        "size": size,
-                    })
-        
-        # Get delivery history (purchase batches) with full details
-        delivery_history = (
-            db.query(PurchaseBatch)
-            .filter(PurchaseBatch.product_id == product_id)
-            .order_by(desc(PurchaseBatch.purchase_date))
-            .limit(100)
-            .all()
-        )
-        
-        deliveries = [
-            {
-                "id": pb.id,
-                "size": pb.size,
-                "quantity": pb.quantity,
-                "remaining": pb.remaining_quantity if pb.remaining_quantity is not None else pb.quantity,
-                "price": pb.price,
-                "total_value": pb.quantity * pb.price,
-                "date": pb.purchase_date,
-                "barcode": pb.barcode,
-                "invoice_number": pb.invoice_number,
-                "supplier": pb.supplier,
-            }
-            for pb in delivery_history
-        ]
-        
-        # Calculate totals
-        total_in_stock = sum(s["quantity"] for s in sizes_data)
-        # total_sold juz obliczone wyzej przez SQL (bez limitu 50)
-        total_delivered = sum(d["quantity"] for d in deliveries)
-        
-        # Calculate overall average purchase price
-        all_batches = (
-            db.query(PurchaseBatch)
-            .filter(PurchaseBatch.product_id == product_id)
-            .all()
-        )
-        total_purchased_qty = sum(b.quantity for b in all_batches)
-        total_purchased_value = sum(b.quantity * b.price for b in all_batches)
-        avg_purchase_price = (
-            (total_purchased_value / total_purchased_qty) 
-            if total_purchased_qty > 0 else None
-        )
-        
-        # Get Allegro offers linked to this product or its sizes
-        size_ids = [s["id"] for s in sizes_data]
-        allegro_offers = (
-            db.query(AllegroOffer)
-            .filter(
-                (AllegroOffer.product_id == product_id) |
-                (AllegroOffer.product_size_id.in_(size_ids))
-            )
-            .order_by(AllegroOffer.title)
-            .all()
-        )
-        
-        allegro_data = []
-        for offer in allegro_offers:
-            # Find matching size
-            matched_size = None
-            if offer.product_size_id:
-                matched_size = next(
-                    (s["size"] for s in sizes_data if s["id"] == offer.product_size_id),
-                    None
-                )
-            allegro_data.append({
-                "offer_id": offer.offer_id,
-                "title": offer.title,
-                "price": offer.price,
-                "ean": offer.ean,
-                "matched_size": matched_size,
-                "publication_status": offer.publication_status,
-            })
-        
-        return render_template(
-            "product_detail.html",
-            product=product,
-            sizes=sizes_data,
-            order_history=order_history,
-            delivery_history=deliveries,
-            total_in_stock=total_in_stock,
-            total_sold=total_sold,
-            total_delivered=total_delivered,
-            avg_purchase_price=avg_purchase_price,
-            allegro_offers=allegro_data,
-        )
+    context = build_product_detail_context(product_id)
+    if context is None:
+        abort(404)
+    return render_template("product_detail.html", **context)
 
 
 @bp.route("/items")
@@ -555,49 +276,7 @@ def import_invoice():
                 else:
                     raise ValueError("Nieobsługiwany format pliku")
 
-                rows = df.to_dict(orient="records")
-                
-                # Match products by EAN/barcode first, then TipTop SKU parsing, then fuzzy matching
-                ps_list = get_product_sizes()
-                barcode_map = {ps.barcode: ps for ps in ps_list if ps.barcode}
-                
-                for row in rows:
-                    barcode = row.get("Barcode") or row.get("EAN") or ""
-                    barcode = str(barcode).strip() if barcode else ""
-                    sku = row.get("SKU") or ""
-                    sku = str(sku).strip() if sku else ""
-                    row["matched_ps_id"] = None
-                    row["matched_name"] = None
-                    row["match_type"] = None  # 'ean', 'sku', or 'fuzzy'
-                    
-                    # Priority 1: EAN match (most reliable)
-                    if barcode and barcode in barcode_map:
-                        ps = barcode_map[barcode]
-                        row["matched_ps_id"] = ps.ps_id
-                        row["matched_name"] = f"{ps.name} ({ps.color}) {ps.size}"
-                        row["match_type"] = "ean"
-                    # Priority 2: Parse TipTop SKU and match by series+size+color
-                    elif sku:
-                        ps_id, match_name, match_type = _match_by_tiptop_sku(
-                            sku, ps_list, row.get("Nazwa", "")
-                        )
-                        if ps_id:
-                            row["matched_ps_id"] = ps_id
-                            row["matched_name"] = match_name
-                            row["match_type"] = match_type
-                    
-                    # Priority 3: Fuzzy name matching (if not already matched)
-                    if not row["matched_ps_id"]:
-                        ps_id, match_name, match_type = _fuzzy_match_product(
-                            row.get("Nazwa", ""),
-                            row.get("Kolor", ""),
-                            row.get("Rozmiar", ""),
-                            ps_list
-                        )
-                        if ps_id:
-                            row["matched_ps_id"] = ps_id
-                            row["matched_name"] = match_name
-                            row["match_type"] = match_type
+                rows, ps_list = match_invoice_rows(df.to_dict(orient="records"))
                 
                 session["invoice_rows"] = rows
                 session["invoice_number"] = invoice_number

@@ -16,7 +16,7 @@ def test_sync_events_init_cursor(app):
         settings_store.update({"ALLEGRO_LAST_EVENT_ID": None})
 
         with patch(
-            "magazyn.allegro_api.events.fetch_event_stats",
+            "magazyn.services.order_events_sync.fetch_event_stats",
             return_value={"latestEvent": {"id": "evt-init-999"}},
         ):
             stats = _sync_from_allegro_events(app)
@@ -32,7 +32,7 @@ def test_sync_events_init_cursor_error(app):
         settings_store.update({"ALLEGRO_LAST_EVENT_ID": None})
 
         with patch(
-            "magazyn.allegro_api.events.fetch_event_stats",
+            "magazyn.services.order_events_sync.fetch_event_stats",
             side_effect=RuntimeError("Token error"),
         ):
             stats = _sync_from_allegro_events(app)
@@ -50,7 +50,7 @@ def test_sync_events_no_new_events(app):
         settings_store.update({"ALLEGRO_LAST_EVENT_ID": "evt-100"})
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": []},
         ):
             stats = _sync_from_allegro_events(app)
@@ -80,21 +80,21 @@ def test_sync_events_ready_for_processing(app):
         events = [_make_event("evt-101", "READY_FOR_PROCESSING", "cf-uuid-1")]
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": events},
         ), patch(
-            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            "magazyn.services.order_events_sync.fetch_allegro_order_detail",
             return_value={"id": "cf-uuid-1", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
         ) as mock_detail, patch(
-            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            "magazyn.services.order_events_sync.parse_allegro_order_to_data",
             return_value={"order_id": "allegro_cf-uuid-1", "external_order_id": "cf-uuid-1"},
         ) as mock_parse, patch(
-            "magazyn.services.order_sync.sync_order_from_data",
+            "magazyn.services.order_events_sync.sync_order_from_data",
         ) as mock_sync, patch(
-            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            "magazyn.services.order_events_sync.get_allegro_internal_status",
             return_value="pobrano",
         ) as mock_status, patch(
-            "magazyn.services.order_status.add_order_status",
+            "magazyn.services.order_events_sync.add_order_status",
         ) as mock_add_status:
             stats = _sync_from_allegro_events(app)
 
@@ -116,21 +116,21 @@ def test_sync_events_bought_imports_unpaid_order(app):
         events = [_make_event("evt-151", "BOUGHT", "cf-uuid-unpaid")]
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": events},
         ), patch(
-            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            "magazyn.services.order_events_sync.fetch_allegro_order_detail",
             return_value={"id": "cf-uuid-unpaid", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
         ), patch(
-            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            "magazyn.services.order_events_sync.parse_allegro_order_to_data",
             return_value={"order_id": "allegro_cf-uuid-unpaid", "external_order_id": "cf-uuid-unpaid"},
         ), patch(
-            "magazyn.services.order_sync.sync_order_from_data",
+            "magazyn.services.order_events_sync.sync_order_from_data",
         ) as mock_sync, patch(
-            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            "magazyn.services.order_events_sync.get_allegro_internal_status",
             return_value="nieoplacone",
         ), patch(
-            "magazyn.services.order_status.add_order_status",
+            "magazyn.services.order_events_sync.add_order_status",
         ) as mock_add_status:
             stats = _sync_from_allegro_events(app)
 
@@ -147,10 +147,10 @@ def test_sync_events_cancelled(app):
         events = [_make_event("evt-201", "BUYER_CANCELLED", "cf-uuid-2")]
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": events},
         ), patch(
-            "magazyn.services.order_status.add_order_status",
+            "magazyn.services.order_events_sync.add_order_status",
         ) as mock_add_status:
             stats = _sync_from_allegro_events(app)
 
@@ -173,21 +173,21 @@ def test_sync_events_dedup_same_checkout_form(app):
         ]
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": events},
         ), patch(
-            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            "magazyn.services.order_events_sync.fetch_allegro_order_detail",
             return_value={"id": "cf-uuid-3", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
         ), patch(
-            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            "magazyn.services.order_events_sync.parse_allegro_order_to_data",
             return_value={"order_id": "allegro_cf-uuid-3", "external_order_id": "cf-uuid-3"},
         ), patch(
-            "magazyn.services.order_sync.sync_order_from_data",
+            "magazyn.services.order_events_sync.sync_order_from_data",
         ) as mock_sync, patch(
-            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            "magazyn.services.order_events_sync.get_allegro_internal_status",
             return_value="pobrano",
         ), patch(
-            "magazyn.services.order_status.add_order_status",
+            "magazyn.services.order_events_sync.add_order_status",
         ):
             stats = _sync_from_allegro_events(app)
 
@@ -208,21 +208,21 @@ def test_sync_events_dedup_import_types_for_same_checkout_form(app):
         ]
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": events},
         ), patch(
-            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            "magazyn.services.order_events_sync.fetch_allegro_order_detail",
             return_value={"id": "cf-uuid-35", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
         ), patch(
-            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            "magazyn.services.order_events_sync.parse_allegro_order_to_data",
             return_value={"order_id": "allegro_cf-uuid-35", "external_order_id": "cf-uuid-35"},
         ), patch(
-            "magazyn.services.order_sync.sync_order_from_data",
+            "magazyn.services.order_events_sync.sync_order_from_data",
         ) as mock_sync, patch(
-            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            "magazyn.services.order_events_sync.get_allegro_internal_status",
             return_value="pobrano",
         ), patch(
-            "magazyn.services.order_status.add_order_status",
+            "magazyn.services.order_events_sync.add_order_status",
         ):
             stats = _sync_from_allegro_events(app)
 
@@ -244,21 +244,21 @@ def test_sync_events_mixed_types(app):
         ]
 
         with patch(
-            "magazyn.allegro_api.events.fetch_order_events",
+            "magazyn.services.order_events_sync.fetch_order_events",
             return_value={"events": events},
         ), patch(
-            "magazyn.allegro_api.orders.fetch_allegro_order_detail",
+            "magazyn.services.order_events_sync.fetch_allegro_order_detail",
             return_value={"id": "cf-uuid-4", "lineItems": [], "buyer": {}, "payment": {}, "delivery": {}},
         ), patch(
-            "magazyn.allegro_api.orders.parse_allegro_order_to_data",
+            "magazyn.services.order_events_sync.parse_allegro_order_to_data",
             return_value={"order_id": "allegro_cf-uuid-4", "external_order_id": "cf-uuid-4"},
         ), patch(
-            "magazyn.services.order_sync.sync_order_from_data",
+            "magazyn.services.order_events_sync.sync_order_from_data",
         ), patch(
-            "magazyn.allegro_api.orders.get_allegro_internal_status",
+            "magazyn.services.order_events_sync.get_allegro_internal_status",
             return_value="pobrano",
         ), patch(
-            "magazyn.services.order_status.add_order_status",
+            "magazyn.services.order_events_sync.add_order_status",
         ):
             stats = _sync_from_allegro_events(app)
 
