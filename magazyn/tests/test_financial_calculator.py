@@ -6,9 +6,8 @@ Pokrywaja:
 - get_purchase_cost_for_order() - koszt zakupu zamowienia
 - calculate_order_profit() - pelen rozklad zysku
 """
-import pytest
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from magazyn.domain.financial import FinancialCalculator, ProfitBreakdown
 

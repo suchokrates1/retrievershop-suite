@@ -17,12 +17,10 @@ from ..models.orders import Order, OrderStatusLog
 from ..models.products import ProductSize
 from ..models.returns import Return, ReturnStatusLog
 from ..settings_store import settings_store
+from ..status_config import get_status_display
 
 
 logger = logging.getLogger(__name__)
-
-
-from ..status_config import get_status_display
 
 
 # Statusy wysylki z ikonami i opisami

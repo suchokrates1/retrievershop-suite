@@ -5,9 +5,8 @@ Pokrywaja:
 - build_offer_label() - budowanie etykiet ofert
 - build_inventory_list() - budowanie listy inventory
 """
-import pytest
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from magazyn.allegro_helpers import format_decimal, build_offer_label, build_inventory_list
 

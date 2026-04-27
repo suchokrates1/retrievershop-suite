@@ -1,7 +1,5 @@
 from collections import OrderedDict
 
-from magazyn.config import settings
-from magazyn import db as db_mod
 from magazyn import factory
 
 

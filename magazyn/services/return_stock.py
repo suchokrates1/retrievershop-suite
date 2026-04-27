@@ -154,7 +154,7 @@ def process_delivered_returns(
     with get_session() as db:
         delivered_returns = db.query(Return).filter(
             Return.status == RETURN_STATUS_DELIVERED,
-            Return.stock_restored == False,
+            Return.stock_restored.is_(False),
         ).all()
 
         for return_record in delivered_returns:

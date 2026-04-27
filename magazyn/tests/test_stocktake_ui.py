@@ -12,18 +12,22 @@ Uruchomienie:
     pytest magazyn/tests/test_stocktake_ui.py -v --headed   # z oknem
     pytest magazyn/tests/test_stocktake_ui.py -v            # headless
 """
+from __future__ import annotations
+
 import threading
 import time
 import os
 import pytest
 from collections import OrderedDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 try:
-    from playwright.sync_api import Page, expect
     import pytest_playwright  # noqa: F401 - need pytest-playwright for 'page' fixture
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
-    Page = None
     _PLAYWRIGHT_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(

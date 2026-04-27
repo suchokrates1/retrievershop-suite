@@ -241,6 +241,12 @@ def _sync_from_allegro_events(app):
     return stats
 
 
+def _is_http_status(exc: Exception, status_code: int) -> bool:
+    """Sprawdz kod odpowiedzi HTTP przenoszony przez wyjatek klienta API."""
+    response = getattr(exc, "response", None)
+    return getattr(response, "status_code", None) == status_code
+
+
 def _sync_allegro_fulfillment(app):
     """Synchronizuj statusy realizacji zamowien z Allegro API (fulfillment.status).
     
@@ -263,7 +269,7 @@ def _sync_allegro_fulfillment(app):
     )
     from sqlalchemy import and_, desc, func
     
-    stats = {"checked": 0, "updated": 0, "errors": 0, "skipped": 0}
+    stats = {"checked": 0, "updated": 0, "errors": 0, "skipped": 0, "missing": 0}
     
     try:
         with get_session() as db:
@@ -351,6 +357,15 @@ def _sync_allegro_fulfillment(app):
                         stats["updated"] += 1
                     
                 except Exception as exc:
+                    if _is_http_status(exc, 404):
+                        logger.debug(
+                            "Allegro fulfillment: checkout-form %s nie istnieje juz w API, pomijam zamowienie %s",
+                            order.external_order_id,
+                            order.order_id,
+                        )
+                        stats["missing"] += 1
+                        continue
+
                     logger.warning(
                         f"Blad sprawdzania fulfillment dla {order.order_id}: {exc}"
                     )
@@ -392,7 +407,7 @@ def _refresh_order_profit_cache(app):
                 .filter(
                     db_or(
                         Order.payment_done > 0,
-                        Order.payment_method_cod == True,
+                        Order.payment_method_cod.is_(True),
                     )
                 )
                 .all()

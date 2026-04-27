@@ -4,12 +4,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKED_ROOTS = (REPO_ROOT / "magazyn", REPO_ROOT / "scripts", REPO_ROOT / "migrations")
+PRODUCTION_ROOTS = (REPO_ROOT / "magazyn", REPO_ROOT / "scripts")
 
 FORBIDDEN_IMPORTS = {
     "magazyn.models": None,
     "magazyn.agent": None,
     "magazyn.orders": {"sync_order_from_data", "add_order_status", "_dispatch_status_email"},
     "magazyn.price_reports": {"change_price", "recheck_item"},
+    "magazyn.returns": {"restore_stock_for_return", "check_refund_eligibility", "process_refund"},
     "magazyn.print_agent": {
         "AgentConfig",
         "ApiError",
@@ -29,16 +31,48 @@ FORBIDDEN_IMPORTS = {
 }
 
 FORBIDDEN_MODULE_IMPORTS = {"magazyn.agent"}
+ROUTE_MODULES = {
+    "magazyn.app",
+    "magazyn.discussions",
+    "magazyn.orders",
+    "magazyn.price_reports",
+    "magazyn.products",
+}
+ROUTE_IMPORT_ALLOWLIST = {
+    Path("magazyn/factory.py"),
+}
 FORBIDDEN_PRINT_AGENT_ATTRIBUTES = FORBIDDEN_IMPORTS["magazyn.print_agent"] | {
     "LabelAgent",
     "load_config",
     "settings",
+}
+ROOT_MODULE_LINE_LIMIT = 450
+LEGACY_ROOT_MODULE_BUDGETS = {
+    Path("magazyn/app.py"): 620,
+    Path("magazyn/allegro.py"): 620,
+    Path("magazyn/db.py"): 490,
+    Path("magazyn/discussions.py"): 600,
+    Path("magazyn/label_agent.py"): 750,
+    Path("magazyn/order_sync_scheduler.py"): 720,
+    Path("magazyn/orders.py"): 520,
+    Path("magazyn/price_report_scheduler.py"): 590,
+    Path("magazyn/products.py"): 760,
+    Path("magazyn/settings_store.py"): 600,
 }
 
 
 def _iter_python_files():
     ignored_parts = {".git", ".venv", ".ci-venv", "__pycache__"}
     for root in CHECKED_ROOTS:
+        for path in root.rglob("*.py"):
+            if ignored_parts.intersection(path.parts):
+                continue
+            yield path
+
+
+def _iter_production_python_files():
+    ignored_parts = {".git", ".venv", ".ci-venv", "__pycache__", "tests"}
+    for root in PRODUCTION_ROOTS:
         for path in root.rglob("*.py"):
             if ignored_parts.intersection(path.parts):
                 continue
@@ -114,3 +148,64 @@ def test_no_legacy_facade_imports():
             )
 
     assert not violations, "Stare importy fasad:\n" + "\n".join(violations)
+
+
+def test_route_modules_are_not_used_as_service_dependencies():
+    violations = []
+    for path in _iter_production_python_files():
+        relative_path = path.relative_to(REPO_ROOT)
+        if relative_path in ROUTE_IMPORT_ALLOWLIST:
+            continue
+
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_modules = {alias.name for alias in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                module = _resolve_import_from(path, node)
+                imported_modules = {module} if module else set()
+            else:
+                continue
+
+            matched = imported_modules.intersection(ROUTE_MODULES)
+            if matched:
+                modules = ", ".join(sorted(matched))
+                violations.append(f"{relative_path}:{node.lineno} -> {modules}")
+
+    assert not violations, "Moduly route uzyte jako zaleznosci serwisowe:\n" + "\n".join(violations)
+
+
+def test_print_agent_stays_a_thin_bootstrap():
+    path = REPO_ROOT / "magazyn" / "print_agent.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    defined_blocks = [
+        node.name for node in ast.iter_child_nodes(tree)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+
+    exported_names = None
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
+            continue
+        if isinstance(node.value, ast.List):
+            exported_names = [
+                item.value for item in node.value.elts
+                if isinstance(item, ast.Constant)
+            ]
+
+    assert defined_blocks == []
+    assert exported_names == ["agent", "logger"]
+
+
+def test_root_modules_stay_within_size_budget():
+    violations = []
+    for path in (REPO_ROOT / "magazyn").glob("*.py"):
+        relative_path = path.relative_to(REPO_ROOT)
+        budget = LEGACY_ROOT_MODULE_BUDGETS.get(relative_path, ROOT_MODULE_LINE_LIMIT)
+        line_count = len(path.read_text(encoding="utf-8").splitlines())
+        if line_count > budget:
+            violations.append(f"{relative_path}: {line_count} linii > budzet {budget}")
+
+    assert not violations, "Moduly glowne przekroczyly budzet rozmiaru:\n" + "\n".join(violations)

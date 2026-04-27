@@ -1,5 +1,5 @@
 """Testy modulu wfirma_api - klient, faktury, kontrahenci."""
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 import pytest
 
 from magazyn.wfirma_api.client import WFirmaClient, WFirmaError

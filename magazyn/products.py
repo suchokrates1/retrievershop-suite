@@ -33,7 +33,6 @@ from .domain.products import (
     create_product,
     delete_product,
     get_product_details,
-    list_products,
     update_product,
 )
 from .forms import AddItemForm
@@ -50,6 +49,7 @@ from .services.product_matching import (
     _normalize_name,  # noqa: F401 - publiczny helper kompatybilnosci
     _parse_tiptop_sku,  # noqa: F401 - publiczny helper kompatybilnosci
 )
+from .services.product_listing import build_items_context
 from sqlalchemy import desc, or_, func
 
 bp = Blueprint("products", __name__)
@@ -471,42 +471,8 @@ def items():
     search = request.args.get("search", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
-    if per_page not in [25, 50, 100, 200]:
-        per_page = 50
-    
-    result = list_products()
-    
-    # Filtrowanie po nazwie/kolorze/serii/kategorii
-    if search:
-        s = search.lower()
-        result = [
-            p for p in result
-            if s in (p.get("category") or "").lower()
-            or s in (p.get("series") or "").lower()
-            or s in (p.get("color") or "").lower()
-            or s in (p.get("brand") or "").lower()
-            or s in (p.get("name") or "").lower()
-        ]
-    
-    total = len(result)
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    if page > total_pages:
-        page = total_pages
-    
-    start = (page - 1) * per_page
-    paginated = result[start:start + per_page]
-    
-    return render_template(
-        "items.html",
-        products=paginated,
-        search=search,
-        page=page,
-        per_page=per_page,
-        total=total,
-        total_pages=total_pages,
-        has_prev=page > 1,
-        has_next=page < total_pages,
-    )
+    context = build_items_context(search=search, page=page, per_page=per_page)
+    return render_template("items.html", **context)
 
 
 # Kod skanowania przeniesiony do blueprints/scanning.py

@@ -118,7 +118,7 @@ def send_report_notification(report_id: int):
             
             cheapest = session.query(func.count(distinct(PriceReportItem.offer_id))).filter(
                 PriceReportItem.report_id == report_id,
-                PriceReportItem.is_cheapest == True
+                PriceReportItem.is_cheapest.is_(True)
             ).scalar() or 0
             
             not_cheapest = total - cheapest
@@ -489,7 +489,7 @@ def restart_price_report(report_id: int) -> dict:
         # Usun wpisy z bledami - beda sprawdzone ponownie
         error_items = session.query(PriceReportItem).filter(
             PriceReportItem.report_id == report_id,
-            PriceReportItem.error != None
+            PriceReportItem.error.isnot(None)
         ).all()
         
         removed_errors = len(error_items)

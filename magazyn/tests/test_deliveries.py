@@ -92,7 +92,7 @@ def test_record_multiple_deliveries(app_mod):
             ),
             {"pid": pid},
         ).fetchone()
-        l = db.execute(
+        size_l = db.execute(
             text(
                 "SELECT quantity, price FROM purchase_batches WHERE product_id=:pid AND size='L'"
             ),
@@ -111,7 +111,7 @@ def test_record_multiple_deliveries(app_mod):
             {"pid": pid},
         ).scalar()
     assert m[0] == 2 and abs(float(m[1]) - 1.5) < 0.001
-    assert l[0] == 1 and abs(float(l[1]) - 2.0) < 0.001
+    assert size_l[0] == 1 and abs(float(size_l[1]) - 2.0) < 0.001
     assert qty_m == 2
     assert qty_l == 1
 

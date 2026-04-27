@@ -18,14 +18,12 @@ from .services.order_status import add_order_status
 from .services.order_labels import reprint_order_labels
 from .services.order_presentation import _unix_to_datetime
 from .services.tracking import get_tracking_url
+from .status_config import VALID_STATUSES
 
 logger = logging.getLogger(__name__)
 
 
 bp = Blueprint("orders", __name__)
-
-
-from .status_config import VALID_STATUSES
 
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
 
@@ -233,8 +231,8 @@ def reprint_label(order_id: str):
 @login_required
 def restore_return_stock(order_id: str):
     """Recznie przywroc stan magazynowy dla zwrotu."""
-    from .returns import restore_stock_for_return
     from .models.returns import Return
+    from .services.return_stock import restore_stock_for_return
     
     with get_session() as db:
         return_record = db.query(Return).filter(Return.order_id == order_id).first()
@@ -260,7 +258,7 @@ def check_refund_eligibility(order_id: str):
     
     Zwraca JSON z informacjami o kwocie i statusie.
     """
-    from .returns import check_refund_eligibility as check_eligibility
+    from .services.return_refunds import check_refund_eligibility as check_eligibility
     
     eligible, message, details = check_eligibility(order_id)
     
@@ -283,11 +281,11 @@ def process_refund(order_id: str):
     1. Pole confirm=true w POST
     2. Pole allegro_return_id musi zgadzac sie z baza
     """
-    from .returns import process_refund as do_refund, check_refund_eligibility as check_eligibility
     from .models.returns import Return
+    from .services.return_refunds import process_refund as do_refund, check_refund_eligibility as check_eligibility
     
     # Sprawdz czy potwierdzono operacje
-    confirm = request.form.get("confirm") == "true" or request.json and request.json.get("confirm") == True
+    confirm = request.form.get("confirm") == "true" or request.json and request.json.get("confirm") is True
     if not confirm:
         flash("Operacja wymaga potwierdzenia", "error")
         return redirect(url_for(".order_detail", order_id=order_id))

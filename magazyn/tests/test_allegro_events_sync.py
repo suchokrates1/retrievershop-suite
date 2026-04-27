@@ -1,7 +1,6 @@
 """Testy _sync_from_allegro_events() z order_sync_scheduler."""
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 
 from magazyn.order_sync_scheduler import _sync_from_allegro_events
 from magazyn.settings_store import settings_store

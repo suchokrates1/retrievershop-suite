@@ -23,6 +23,8 @@ scripts/debug/
 *.html
 !magazyn/templates/**/*.html
 *.png
+!magazyn/tests/e2e/snapshots/*.png
+magazyn/tests/e2e/snapshots/*.actual.png
 *.txt
 !requirements.txt
 allegro_cookies*.json

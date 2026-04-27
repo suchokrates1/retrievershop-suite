@@ -451,8 +451,10 @@ def stocktake_pdf(stocktake_id):
     )
 
     try:
-        from weasyprint import HTML
-        pdf_bytes = HTML(string=html_content).write_pdf()
+        from importlib import import_module
+
+        html_renderer = import_module("weasyprint").HTML
+        pdf_bytes = html_renderer(string=html_content).write_pdf()
     except ImportError:
         # Fallback: zwroc HTML do wydruku
         response = make_response(html_content)

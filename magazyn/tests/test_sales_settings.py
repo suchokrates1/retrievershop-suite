@@ -1,7 +1,6 @@
 import re
 
 
-import re
 
 from magazyn.settings_store import settings_store
 

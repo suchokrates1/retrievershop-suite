@@ -1,7 +1,7 @@
 """Testy dla magazyn.services.label_service."""
 
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch
 
 from magazyn.services.label_service import (
     AllegroLabelService,
