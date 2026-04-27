@@ -53,10 +53,9 @@ LEGACY_ROOT_MODULE_BUDGETS = {
     Path("magazyn/db.py"): 490,
     Path("magazyn/discussions.py"): 600,
     Path("magazyn/label_agent.py"): 750,
-    Path("magazyn/order_sync_scheduler.py"): 720,
+    Path("magazyn/order_sync_scheduler.py"): 520,
     Path("magazyn/orders.py"): 520,
     Path("magazyn/price_report_scheduler.py"): 590,
-    Path("magazyn/products.py"): 760,
     Path("magazyn/settings_store.py"): 600,
 }
 

@@ -129,3 +129,9 @@ DISK_FREE=$(df -h / | awk 'NR==2{print $4}')
 log "Wolne miejsce: $DISK_FREE"
 
 log "=== Nocny build VPS koniec ($OLD_COMMIT -> $NEW_COMMIT, ${BUILD_TIME}s) ==="
+send_messenger "VPS build OK
+Commit: $OLD_COMMIT -> $NEW_COMMIT
+Czas: ${BUILD_TIME}s
+Image: $IMAGE_SIZE
+Wolne miejsce: $DISK_FREE
+$(date '+%Y-%m-%d %H:%M')" || log_warn "Nie udalo sie wyslac powiadomienia o sukcesie buildu"
