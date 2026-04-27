@@ -94,7 +94,7 @@ def get_unresolved_errors(
     """
     try:
         with get_session() as db:
-            query = db.query(ShipmentError).filter(ShipmentError.resolved == False)
+            query = db.query(ShipmentError).filter(ShipmentError.resolved.is_(False))
             
             if order_id:
                 query = query.filter(ShipmentError.order_id == order_id)

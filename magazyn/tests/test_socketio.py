@@ -1,5 +1,4 @@
 """Test WebSocket functionality for discussions."""
-import pytest
 from magazyn.socketio_extension import socketio
 
 

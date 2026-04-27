@@ -13,17 +13,15 @@ from flask import Blueprint, render_template, abort, Response
 from ..db import get_session
 from ..models.orders import Order, OrderStatusLog
 from ..services.tracking import get_tracking_url
-
-logger = logging.getLogger(__name__)
-
-bp = Blueprint("customer_order", __name__)
-
-
 from ..status_config import (
     CUSTOMER_STATUS_DISPLAY as CUSTOMER_STATUS_MAP_CONFIG,
     CUSTOMER_STAGES,
     CUSTOMER_STAGE_MAP,
 )
+
+logger = logging.getLogger(__name__)
+
+bp = Blueprint("customer_order", __name__)
 
 
 # Mapowanie statusow na czytelne opisy dla klienta

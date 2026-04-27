@@ -8,6 +8,7 @@ Uses multiple strategies:
 from __future__ import annotations
 
 import io
+import importlib
 import logging
 import re
 from dataclasses import dataclass
@@ -29,16 +30,18 @@ except ImportError:
     logger.warning("Pillow not available - image preprocessing disabled")
 
 try:
-    import pytesseract
+    pytesseract = importlib.import_module("pytesseract")
     TESSERACT_AVAILABLE = True
 except ImportError:
+    pytesseract = None
     TESSERACT_AVAILABLE = False
     logger.warning("pytesseract not available - OCR fallback disabled")
 
 try:
-    import pdf2image
+    pdf2image = importlib.import_module("pdf2image")
     PDF2IMAGE_AVAILABLE = True
 except ImportError:
+    pdf2image = None
     PDF2IMAGE_AVAILABLE = False
     logger.warning("pdf2image not available - scanned PDF support disabled")
 
@@ -150,7 +153,7 @@ def _preprocess_image(image: "Image.Image") -> "Image.Image":
 
 def _extract_text_from_pdf_ocr(pdf_data: bytes, dpi: int = 300) -> str:
     """Extract text from PDF using OCR (for scanned documents)."""
-    if not PDF2IMAGE_AVAILABLE or not TESSERACT_AVAILABLE:
+    if not PDF2IMAGE_AVAILABLE or not TESSERACT_AVAILABLE or pdf2image is None or pytesseract is None:
         logger.warning("OCR dependencies not available")
         return ""
     

@@ -12,7 +12,6 @@ Uzycie:
 
 import asyncio
 import json
-import sys
 import argparse
 import urllib.request
 import time
@@ -337,7 +336,7 @@ class E2ETest:
         """Loguje sie do aplikacji."""
         print(f"\n--- Logowanie jako {self.username} ---")
         url = f"{self.base_url}/login"
-        load_ms = await navigate_and_wait(self.ws, url)
+        await navigate_and_wait(self.ws, url)
         await asyncio.sleep(1)
 
         current = await get_current_url(self.ws)
@@ -346,7 +345,7 @@ class E2ETest:
             return True
 
         # Pobierz CSRF token
-        csrf = await cdp_call(self.ws, "Runtime.evaluate", {
+        await cdp_call(self.ws, "Runtime.evaluate", {
             "expression": """
             (function() {
                 var el = document.querySelector('input[name="csrf_token"]');
@@ -354,8 +353,6 @@ class E2ETest:
             })()
             """
         })
-        csrf_token = csrf.get("result", {}).get("value")
-
         # Wypelnij formularz
         await fill_input(self.ws, 'input[name="username"]', self.username)
         await fill_input(self.ws, 'input[name="password"]', self.password)
@@ -407,7 +404,7 @@ class E2ETest:
                 notes="Przekierowanie na login - sesja wygasla?"
             )
             self.results.append(result)
-            print(f"  REDIRECT (login)")
+            print("  REDIRECT (login)")
             return result
 
         status = "ok" if not errors and not exceptions else "error"
@@ -485,7 +482,7 @@ class E2ETest:
         dropdown_count = await get_element_count(self.ws, ".nav-item.dropdown .dropdown-toggle")
         if dropdown_count > 0:
             for i in range(dropdown_count):
-                clicked = await cdp_call(self.ws, "Runtime.evaluate", {
+                await cdp_call(self.ws, "Runtime.evaluate", {
                     "expression": f"""
                     (function() {{
                         var items = document.querySelectorAll('.nav-item.dropdown .dropdown-toggle');
@@ -676,7 +673,7 @@ class E2ETest:
         # Trasy z bledami
         error_routes = [r for r in self.results if r.status == "error"]
         if error_routes:
-            print(f"\n--- Trasy z bledami ---")
+            print("\n--- Trasy z bledami ---")
             for r in error_routes:
                 err_texts = [e.text[:80] for e in r.console_errors + r.js_exceptions]
                 print(f"  {r.route}: {', '.join(err_texts)}")

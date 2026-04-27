@@ -19,10 +19,9 @@ from .models.orders import Order, OrderStatusLog
 from .settings_store import settings_store
 from . import allegro_api
 from .services.order_status import add_order_status
+from .status_config import ALLEGRO_TRACKING_MAP
 
 logger = logging.getLogger(__name__)
-
-from .status_config import ALLEGRO_TRACKING_MAP
 
 # Przewoźnicy - mapowanie nazw na ID API Allegro
 CARRIER_ID_MAP = {

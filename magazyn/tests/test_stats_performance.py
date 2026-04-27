@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from magazyn.db import get_session
 from magazyn.models.orders import Order, OrderProduct

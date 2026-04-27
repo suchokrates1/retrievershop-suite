@@ -1,9 +1,7 @@
 """Testy dla poprawek systemu scrapingu i raportow cenowych."""
 
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
-from decimal import Decimal
+from unittest.mock import patch
 from datetime import date
 
 
@@ -238,7 +236,6 @@ def test_check_single_offer_uses_api_price():
     Dialog moze zawierac inna nasza oferte tego samego produktu z inna cena.
     Dlatego uzywamy ceny z bazy (API) a nie z dialogu.
     """
-    import asyncio
     from magazyn.scripts.price_checker_ws import PriceCheckResult, CompetitorOffer
 
     mock_result = PriceCheckResult(

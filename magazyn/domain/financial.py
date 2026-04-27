@@ -640,7 +640,7 @@ class FinancialCalculator:
             # Zamowienia z platnoscia LUB za pobraniem (payment_done=0 ale COD)
             db_or(
                 Order.payment_done > 0,
-                Order.payment_method_cod == True,
+                Order.payment_method_cod.is_(True),
             )
         ).all()
         orders_query_ms = (time.perf_counter() - orders_query_started_at) * 1000
@@ -655,7 +655,7 @@ class FinancialCalculator:
         ).filter(
             db_or(
                 Order.payment_done > 0,
-                Order.payment_method_cod == True,
+                Order.payment_method_cod.is_(True),
             )
         ).scalar() or 0
         products_query_ms = (time.perf_counter() - products_query_started_at) * 1000
@@ -768,7 +768,7 @@ class FinancialCalculator:
         
         if include_fixed_costs:
             fixed_costs_started_at = time.perf_counter()
-            fc_query = self.db.query(FixedCost).filter(FixedCost.is_active == True).all()
+            fc_query = self.db.query(FixedCost).filter(FixedCost.is_active.is_(True)).all()
             for fc in fc_query:
                 fixed_costs += Decimal(str(fc.amount))
                 fixed_costs_list.append({

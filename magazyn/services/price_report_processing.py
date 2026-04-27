@@ -124,7 +124,7 @@ def mark_sibling_offers(report_id: int) -> int:
             session.query(AllegroOffer)
             .filter(
                 AllegroOffer.publication_status == "ACTIVE",
-                AllegroOffer.product_size_id != None,
+                AllegroOffer.product_size_id.isnot(None),
             )
             .all()
         )
@@ -434,7 +434,7 @@ def finalize_report(report_id: int) -> None:
                 session.query(PriceReportItem)
                 .filter(
                     PriceReportItem.report_id == report_id,
-                    PriceReportItem.error != None,
+                    PriceReportItem.error.isnot(None),
                 )
                 .count()
             )

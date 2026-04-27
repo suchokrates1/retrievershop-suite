@@ -21,10 +21,9 @@ from .core import (
     _request_with_retry,
 )
 from .tokens import get_allegro_token, refresh_allegro_token
+from ..status_config import ALLEGRO_ORDER_STATUS_MAP, ALLEGRO_FULFILLMENT_MAP
 
 logger = logging.getLogger(__name__)
-
-from ..status_config import ALLEGRO_ORDER_STATUS_MAP, ALLEGRO_FULFILLMENT_MAP
 
 
 _get_allegro_token = get_allegro_token

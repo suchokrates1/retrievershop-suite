@@ -6,9 +6,8 @@ Pokrywaja:
 - Wykrywanie sprzedazy promowanych (FSF/BRG)
 - Szacowanie kosztu wysylki
 """
-import pytest
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from magazyn.allegro_api.billing import (
     ORGANIC_COMMISSION_TYPES,
@@ -16,8 +15,6 @@ from magazyn.allegro_api.billing import (
     COMMISSION_TYPES,
     SHIPPING_TYPES,
     PROMO_TYPES,
-    REFUND_TYPES,
-    LISTING_TYPES,
     get_order_billing_summary,
 )
 

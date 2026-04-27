@@ -56,6 +56,7 @@ def test_update_fulfillment_with_shipment_summary(mock_call):
         "abc-123", "SENT", shipment_summary=summary
     )
 
+    assert result == {"status": "SENT"}
     body = mock_call.call_args.kwargs["json"]
     assert body["status"] == "SENT"
     assert body["shipmentSummary"] == {"lineItemsSent": "ALL"}

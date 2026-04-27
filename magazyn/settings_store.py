@@ -75,6 +75,24 @@ class SettingsStore:
             LOGGER.warning("Failed to create temporary settings engine: %s", exc)
             return None, False
 
+    def _engine_matches_db_path(self, eng, db_path: Optional[Path]) -> bool:
+        """Sprawdz, czy SQLite engine wskazuje te sama baze co zrodlo ustawien."""
+        if db_path is None:
+            return True
+
+        url = getattr(eng, "url", None)
+        if url is None or not str(url.drivername).startswith("sqlite"):
+            return True
+
+        engine_db = getattr(url, "database", None)
+        if not engine_db or engine_db == ":memory:":
+            return True
+
+        try:
+            return Path(engine_db).resolve() == Path(db_path).resolve()
+        except OSError:
+            return Path(engine_db) == Path(db_path)
+
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
@@ -154,7 +172,7 @@ class SettingsStore:
         self, db_path: Path
     ) -> Optional[tuple["OrderedDict[str, str]", Optional[str]]]:
         runtime_engine, should_dispose = self._get_runtime_engine()
-        if runtime_engine is not None:
+        if runtime_engine is not None and self._engine_matches_db_path(runtime_engine, db_path):
             try:
                 return self._load_via_engine(runtime_engine)
             finally:
@@ -210,6 +228,11 @@ class SettingsStore:
     def _fetch_last_updated_at(self, db_path: Optional[Path] = None) -> Optional[str]:
         runtime_engine, should_dispose = self._get_runtime_engine()
         if runtime_engine is None:
+            return None
+        expected_db_path = db_path or self._db_path
+        if not self._engine_matches_db_path(runtime_engine, expected_db_path):
+            if should_dispose:
+                runtime_engine.dispose()
             return None
         try:
             with runtime_engine.connect() as conn:

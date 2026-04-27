@@ -72,7 +72,7 @@ class OrderSyncCycle:
         )
 
     def run_returns_sync(self) -> None:
-        from ..returns import sync_returns
+        from .return_sync import sync_returns
 
         self.logger.info("Starting automatic returns sync")
         returns_stats = sync_returns()

@@ -1,9 +1,6 @@
 """Testy modulu allegro_api/events.py - polling dziennika zdarzen Allegro."""
-import json
-from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
-import pytest
 from requests.exceptions import HTTPError
 
 from magazyn.allegro_api.events import (

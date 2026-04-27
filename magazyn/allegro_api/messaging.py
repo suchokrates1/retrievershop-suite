@@ -8,6 +8,8 @@ import requests
 
 from .core import API_BASE_URL, _request_with_retry
 
+logger = logging.getLogger(__name__)
+
 
 def fetch_discussions(access_token: str) -> dict:
     """Pobierz wszystkie dyskusje z Allegro używając access tokenu."""
@@ -125,9 +127,11 @@ def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) ->
         requests.get, url, endpoint="discussion_chat", headers=headers, params=params
     )
     data = response.json()
-    logging.info(
-        f"[DEBUG] fetch_discussion_chat({issue_id}): keys={list(data.keys())}, "
-        f"message_count={len(data.get('chat', []))}"
+    logger.debug(
+        "fetch_discussion_chat(%s): keys=%s, message_count=%s",
+        issue_id,
+        list(data.keys()),
+        len(data.get("chat", [])),
     )
     return data
 
@@ -148,9 +152,11 @@ def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 20) ->
         requests.get, url, endpoint="thread_messages", headers=headers, params=params
     )
     data = response.json()
-    logging.info(
-        f"[DEBUG] fetch_thread_messages({thread_id}): keys={list(data.keys())}, "
-        f"message_count={len(data.get('messages', []))}"
+    logger.debug(
+        "fetch_thread_messages(%s): keys=%s, message_count=%s",
+        thread_id,
+        list(data.keys()),
+        len(data.get("messages", [])),
     )
     return data
 

@@ -75,6 +75,7 @@ def test_upload_invoice_custom_filename(mock_request, mock_token):
         file_name="mojafaktura.pdf",
     )
 
+    assert result["invoice_id"] == "inv-002"
     call1 = mock_request.call_args_list[0]
     assert call1[1]["json"]["file"]["name"] == "mojafaktura.pdf"
 

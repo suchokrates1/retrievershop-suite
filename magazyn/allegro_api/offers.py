@@ -379,11 +379,7 @@ def get_offer_price(offer_id: str) -> dict:
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-import logging as _logging
-
-_offers_logger = _logging.getLogger(__name__)
+_offers_logger = logger
 
 
 def get_offer_badge_price(offer_id: str) -> Optional[Decimal]:

@@ -36,19 +36,19 @@ class PriceReportRepository:
 
         if filter_mode == "not_cheapest":
             query = query.filter(
-                PriceReportItem.is_cheapest == False,
-                PriceReportItem.competitor_price != None,
+                PriceReportItem.is_cheapest.is_(False),
+                PriceReportItem.competitor_price.isnot(None),
             )
         elif filter_mode == "cheapest":
-            query = query.filter(PriceReportItem.is_cheapest == True)
+            query = query.filter(PriceReportItem.is_cheapest.is_(True))
         elif filter_mode == "inna_aukcja_ok":
             query = query.filter(
-                PriceReportItem.is_cheapest == False,
-                PriceReportItem.competitor_price == None,
-                PriceReportItem.error == None,
+                PriceReportItem.is_cheapest.is_(False),
+                PriceReportItem.competitor_price.is_(None),
+                PriceReportItem.error.is_(None),
             )
         elif filter_mode == "errors":
-            query = query.filter(PriceReportItem.error != None)
+            query = query.filter(PriceReportItem.error.isnot(None))
 
         return query.all()
 
@@ -58,7 +58,7 @@ class PriceReportRepository:
     def count_cheapest_items(self, report_id: int) -> int:
         return (
             self.db.query(PriceReportItem)
-            .filter(PriceReportItem.report_id == report_id, PriceReportItem.is_cheapest == True)
+            .filter(PriceReportItem.report_id == report_id, PriceReportItem.is_cheapest.is_(True))
             .count()
         )
 

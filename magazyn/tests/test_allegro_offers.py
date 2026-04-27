@@ -6,10 +6,8 @@ import json
 import pytest
 import requests
 
-import magazyn.allegro_api as allegro_api
 from magazyn.settings_store import settings_store
 
-from magazyn.config import settings
 from magazyn.db import get_session
 from magazyn.models.allegro import AllegroOffer
 from magazyn.models.products import Product, ProductSize

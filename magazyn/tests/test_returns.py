@@ -185,7 +185,7 @@ class TestReturnIntegration:
     
     def test_restore_stock_for_return_structure(self):
         """Test struktury restore_stock_for_return."""
-        from magazyn.returns import restore_stock_for_return
+        from magazyn.services.return_stock import restore_stock_for_return
         
         assert callable(restore_stock_for_return)
 

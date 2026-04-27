@@ -15,6 +15,19 @@ def _extract_input(html, name):
     return match.group(0)
 
 
+def test_settings_store_rejects_unrelated_sqlite_engine(tmp_path):
+    from sqlalchemy import create_engine
+    from magazyn.settings_store import SettingsStore
+
+    first_db = tmp_path / "first.db"
+    second_db = tmp_path / "second.db"
+    engine = create_engine(f"sqlite:///{first_db}", future=True)
+    store = SettingsStore()
+
+    assert store._engine_matches_db_path(engine, first_db) is True
+    assert store._engine_matches_db_path(engine, second_db) is False
+
+
 def test_settings_list_all_keys(app_mod, client, login):
     settings_store.reload()
     resp = client.get("/settings")

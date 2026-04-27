@@ -375,7 +375,6 @@ class TestBrowserInteractions:
             document.querySelectorAll('.nav-item.dropdown .dropdown-toggle')
                 .forEach(el => el.click())
         """))
-        import asyncio as _aio
         errors = _run(_collect_events(cdp_session.ws, 1.5))
         js_errors = _extract_console_errors(errors)
         assert not js_errors, f"Bledy JS po kliknieciu dropdownow: {js_errors}"
@@ -393,7 +392,6 @@ class TestBrowserInteractions:
             }
         })()
         """))
-        import asyncio as _aio
         errors = _run(_collect_events(cdp_session.ws, 1))
         js_errors = _extract_console_errors(errors)
         assert not js_errors, f"Bledy JS po zmianie koloru: {js_errors}"
@@ -407,7 +405,6 @@ class TestBrowserInteractions:
             toggles.forEach(function(t) { t.click(); });
         })()
         """))
-        import asyncio as _aio
         errors = _run(_collect_events(cdp_session.ws, 1))
         js_errors = _extract_console_errors(errors)
         assert not js_errors, f"Bledy JS po toggle hasla: {js_errors}"

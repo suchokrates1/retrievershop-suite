@@ -2,10 +2,9 @@
 Moduł obsługujący dyskusje i wiadomości Allegro.
 Wydzielony z app.py dla lepszej czytelności.
 """
-from datetime import datetime, timezone
+from datetime import datetime
 import html as html_mod
 import uuid
-from typing import Optional
 
 from flask import (
     Blueprint,
@@ -20,140 +19,21 @@ from requests.exceptions import HTTPError, RequestException
 from .auth import login_required
 from .config import settings
 from .db import get_session
+from .domain.discussions import (
+    get_issue_title as _get_issue_title,
+    get_issue_type_pl as _get_issue_type_pl,
+    get_thread_author as _get_thread_author,
+    get_thread_title as _get_thread_title,
+    message_preview as _message_preview,
+    parse_iso_timestamp as _parse_iso_timestamp,
+    serialize_dt as _serialize_dt,
+    thread_payload as _thread_payload,
+)
 from .models.messages import Message, Thread
 from .models.orders import Order
 from . import allegro_api
 
 bp = Blueprint("discussions", __name__)
-
-
-# =============================================================================
-# Helper functions
-# =============================================================================
-
-def _serialize_dt(value) -> Optional[str]:
-    """Serialize datetime to ISO format string."""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.isoformat()
-    try:
-        return str(value)
-    except Exception:
-        return None
-
-
-def _parse_iso_timestamp(raw_value) -> datetime:
-    """Parse ISO timestamp string to datetime."""
-    if isinstance(raw_value, datetime):
-        return raw_value
-    if not raw_value:
-        return datetime.utcnow()
-    value = str(raw_value).strip()
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return datetime.utcnow()
-    if parsed.tzinfo is not None:
-        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
-    return parsed
-
-
-def _message_preview(text: Optional[str], limit: int = 160) -> str:
-    """Return truncated message preview."""
-    if not text:
-        return ""
-    condensed = " ".join(str(text).strip().split())
-    if len(condensed) <= limit:
-        return condensed
-    return condensed[: max(limit - 3, 0)].rstrip() + "..."
-
-
-def _latest_message(thread: Thread) -> Optional[Message]:
-    """Return the most recent message in a thread."""
-    messages = getattr(thread, "messages", None) or []
-    if not messages:
-        return None
-    return max(messages, key=lambda msg: msg.created_at or datetime.min)
-
-
-def _thread_payload(thread: Thread, last_message: Optional[Message] = None) -> dict:
-    """Build thread payload for API response."""
-    last_message = last_message or _latest_message(thread)
-    return {
-        "id": thread.id,
-        "title": thread.title,
-        "author": thread.author,
-        "type": thread.type,
-        "read": bool(thread.read),
-        "last_message_at": _serialize_dt(thread.last_message_at),
-        "last_message_iso": _serialize_dt(thread.last_message_at),
-        "last_message_preview": _message_preview(
-            getattr(last_message, "content", None)
-        ),
-        "last_message_author": getattr(last_message, "author", thread.author),
-    }
-
-
-def _get_thread_title(thread: dict) -> str:
-    """Generate thread title from Messaging API response."""
-    interlocutor = thread.get("interlocutor", {})
-    login = interlocutor.get("login", "Nieznany")
-    return f"Rozmowa z {login}"
-
-
-def _get_thread_author(thread: dict) -> str:
-    """Get thread author from Messaging API response."""
-    interlocutor = thread.get("interlocutor", {})
-    return interlocutor.get("login", "Nieznany")
-
-
-def _get_message_author(message: dict) -> str:
-    """Get message author with role context."""
-    author = message.get("author", {})
-    role = author.get("role", "")
-    login = author.get("login", "")
-    if role == "BUYER":
-        return login or "Kupujący"
-    elif role == "SELLER":
-        return login or "Ty"
-    return login or "System"
-
-
-def _get_issue_title(issue: dict) -> str:
-    """Generate title for dispute/claim."""
-    issue_type = issue.get("type")
-    subject = issue.get("subject") or ""
-    buyer_login = issue.get("buyer", {}).get("login", "Nieznany")
-    
-    if issue_type == "DISPUTE":
-        prefix = "Dyskusja"
-    elif issue_type == "CLAIM":
-        prefix = "Reklamacja"
-    else:
-        prefix = "Problem"
-    
-    subject_map = {
-        "NO_REFUND_AFTER_RETURNING_PRODUCT": "brak zwrotu po odesłaniu",
-        "DEFECTIVE_PRODUCT": "wadliwy produkt",
-        "DIFFERENT_PRODUCT": "inny produkt",
-        "DAMAGED_PRODUCT": "uszkodzony produkt",
-        "NOT_DELIVERED": "nie dostarczono",
-    }
-    subject_pl = subject_map.get(subject, subject.lower().replace("_", " "))
-    
-    return f"{prefix}: {buyer_login} - {subject_pl}" if subject_pl else f"{prefix}: {buyer_login}"
-
-
-def _get_issue_type_pl(issue_type: str) -> str:
-    """Convert issue type to Polish."""
-    type_map = {
-        "DISPUTE": "dyskusja",
-        "CLAIM": "reklamacja",
-    }
-    return type_map.get(issue_type, issue_type.lower())
 
 
 # =============================================================================

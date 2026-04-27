@@ -1,6 +1,5 @@
 """Testy dla magazyn.allegro_api.carriers."""
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from magazyn.allegro_api.carriers import (
