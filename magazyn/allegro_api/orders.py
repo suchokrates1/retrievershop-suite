@@ -153,6 +153,7 @@ def fetch_allegro_order_detail(order_id: str) -> dict:
                 url,
                 endpoint="checkout-form-detail",
                 headers=headers,
+                expected_statuses={404},
             )
             return response.json()
         except Exception as exc:

@@ -9,6 +9,7 @@ from magazyn.metrics import (
     ALLEGRO_API_RATE_LIMIT_SLEEP_SECONDS,
     ALLEGRO_API_RETRIES_TOTAL,
 )
+from magazyn.allegro_api.core import _request_with_retry
 
 
 class DummyResponse:
@@ -99,3 +100,24 @@ def test_fetch_product_listing_retries_and_preserves_headers(
     assert len(calls) == 2
     assert sleeps == [pytest.approx(1.0)]
     assert retry_metric._value.get() == before_retry + 1
+
+
+def test_request_with_retry_expected_status_does_not_count_error():
+    def fake_get(url, **kwargs):
+        return DummyResponse(404, headers={"X-Request-Id": "req-404"})
+
+    error_metric = ALLEGRO_API_ERRORS_TOTAL.labels(
+        endpoint="checkout-form-detail",
+        status="404",
+    )
+    before_error = error_metric._value.get()
+
+    with pytest.raises(HTTPError):
+        _request_with_retry(
+            fake_get,
+            "https://api.allegro.pl/order/checkout-forms/missing",
+            endpoint="checkout-form-detail",
+            expected_statuses={404},
+        )
+
+    assert error_metric._value.get() == before_error
