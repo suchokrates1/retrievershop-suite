@@ -1,4 +1,3 @@
-import datetime
 import os
 from contextlib import contextmanager
 import logging
@@ -11,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 
 from .models.base import Base
-from .models.products import Product, ProductSize, PurchaseBatch, Sale
 from .models.registry import import_all_models
 from .models.users import User
 from .config import settings
@@ -277,30 +275,21 @@ def record_purchase(
         supplier: Supplier name
         notes: Additional notes
     """
-    purchase_date = purchase_date or datetime.datetime.now().strftime('%Y-%m-%d')
-    with get_session() as session:
-        price = to_decimal(price)
-        session.add(
-            PurchaseBatch(
-                product_id=product_id,
-                size=size,
-                quantity=quantity,
-                remaining_quantity=quantity,  # FIFO: initially all available
-                price=price,
-                purchase_date=purchase_date,
-                barcode=barcode,
-                invoice_number=invoice_number,
-                supplier=supplier,
-                notes=notes,
-            )
-        )
-        ps = (
-            session.query(ProductSize)
-            .filter_by(product_id=product_id, size=size)
-            .first()
-        )
-        if ps:
-            ps.quantity += quantity
+    from .services.stock_records import record_purchase as _record_purchase
+
+    return _record_purchase(
+        product_id,
+        size,
+        quantity,
+        price,
+        session_factory=get_session,
+        decimal_converter=to_decimal,
+        purchase_date=purchase_date,
+        barcode=barcode,
+        invoice_number=invoice_number,
+        supplier=supplier,
+        notes=notes,
+    )
 
 
 def record_sale(
@@ -315,22 +304,19 @@ def record_sale(
     sale_date=None,
 ):
     """Record a sale inside an existing session."""
-    sale_date = sale_date or datetime.datetime.now().isoformat()
-    purchase_cost = to_decimal(purchase_cost)
-    sale_price = to_decimal(sale_price)
-    shipping_cost = to_decimal(shipping_cost)
-    commission_fee = to_decimal(commission_fee)
-    session.add(
-        Sale(
-            product_id=product_id,
-            size=size,
-            quantity=quantity,
-            sale_date=sale_date,
-            purchase_cost=purchase_cost,
-            sale_price=sale_price,
-            shipping_cost=shipping_cost,
-            commission_fee=commission_fee,
-        )
+    from .services.stock_records import record_sale as _record_sale
+
+    return _record_sale(
+        session,
+        product_id,
+        size,
+        quantity,
+        decimal_converter=to_decimal,
+        purchase_cost=purchase_cost,
+        sale_price=sale_price,
+        shipping_cost=shipping_cost,
+        commission_fee=commission_fee,
+        sale_date=sale_date,
     )
 
 
@@ -347,141 +333,19 @@ def consume_stock(
     Uses remaining_quantity field to track how much is left from each batch.
     Records sale with actual purchase cost for profit calculation.
     """
-    with get_session() as session:
-        sale_price = to_decimal(sale_price)
-        shipping_cost = to_decimal(shipping_cost)
-        commission_fee = to_decimal(commission_fee)
-        ps = (
-            session.query(ProductSize)
-            .filter_by(product_id=product_id, size=size)
-            .first()
-        )
-        if not ps:
-            logger.warning(
-                "Missing stock entry for product_id=%s size=%s",
-                product_id,
-                size,
-            )
-        available = ps.quantity if ps else 0
-        to_consume = min(available, quantity)
+    from .services.stock_records import consume_stock as _consume_stock
 
-        # FIFO: Get batches ordered by purchase date (oldest first)
-        # Use remaining_quantity if available, otherwise fall back to quantity
-        batches = (
-            session.query(PurchaseBatch)
-            .filter(
-                PurchaseBatch.product_id == product_id,
-                PurchaseBatch.size == size,
-            )
-            .order_by(
-                PurchaseBatch.purchase_date.asc(),
-                PurchaseBatch.id.asc(),  # Secondary sort for same date
-            )
-            .all()
-        )
-
-        # Fallback: jesli nie znaleziono partii po size, szukaj po barcode
-        # (obsluguje przypadek gdy purchase_batch ma size="" a product_size "Uniwersalny")
-        if not any(b.remaining_quantity and b.remaining_quantity > 0 for b in batches):
-            if ps and ps.barcode:
-                fallback_batches = (
-                    session.query(PurchaseBatch)
-                    .filter(
-                        PurchaseBatch.product_id == product_id,
-                        PurchaseBatch.barcode == ps.barcode,
-                        PurchaseBatch.size != size,
-                    )
-                    .order_by(
-                        PurchaseBatch.purchase_date.asc(),
-                        PurchaseBatch.id.asc(),
-                    )
-                    .all()
-                )
-                if fallback_batches:
-                    logger.info(
-                        "FIFO fallback: dopasowanie po barcode %s dla product_id=%s size=%s",
-                        ps.barcode, product_id, size,
-                    )
-                    batches = fallback_batches
-
-        remaining = to_consume
-        purchase_cost = Decimal("0.00")
-        for batch in batches:
-            if remaining <= 0:
-                break
-            
-            # Use remaining_quantity if set, otherwise use quantity (for old records)
-            batch_available = batch.remaining_quantity if batch.remaining_quantity is not None else batch.quantity
-            
-            if batch_available <= 0:
-                continue
-                
-            use = min(remaining, batch_available)
-            
-            # Update remaining_quantity for FIFO
-            if batch.remaining_quantity is not None:
-                batch.remaining_quantity -= use
-            else:
-                batch.remaining_quantity = batch.quantity - use
-            
-            # Also update quantity for backward compatibility
-            batch.quantity = max(0, batch.quantity - use)
-            
-            purchase_cost += use * batch.price
-            remaining -= use
-            
-            # Don't delete batch - keep for history, remaining_quantity=0 marks it as depleted
-
-        consumed = to_consume - remaining
-        if consumed == 0 and to_consume > 0 and ps and not batches:
-            # Adjust quantity even when no purchase batches exist
-            ps.quantity -= to_consume
-            consumed = to_consume
-        elif consumed > 0 and ps:
-            ps.quantity -= consumed
-            if ps.quantity < settings.LOW_STOCK_THRESHOLD:
-                try:
-                    product = (
-                        session.query(Product)
-                        .filter_by(id=product_id)
-                        .first()
-                    )
-                    name = product.name if product else str(product_id)
-                    send_stock_alert(name, size, ps.quantity)
-                except Exception as exc:
-                    logger.error("Low stock alert failed: %s", exc)
-
-        if consumed < quantity:
-            logger.warning(
-                "Insufficient stock for product_id=%s size=%s:"
-                " requested=%s consumed=%s",
-                product_id,
-                size,
-                quantity,
-                consumed,
-            )
-
-        record_sale(
-            session,
-            product_id,
-            size,
-            quantity,
-            purchase_cost=purchase_cost.quantize(TWOPLACES, rounding=ROUND_HALF_UP),
-            sale_price=sale_price,
-            shipping_cost=shipping_cost,
-            commission_fee=commission_fee,
-        )
-
-        if consumed > 0:
-            product = (
-                session.query(Product).filter_by(id=product_id).first()
-            )
-            name = product.name if product else str(product_id)
-            logger.info(
-                "Pobrano z magazynu: %s %s x%s",
-                name,
-                size,
-                consumed,
-            )
-
-    return consumed
+    return _consume_stock(
+        product_id,
+        size,
+        quantity,
+        session_factory=get_session,
+        decimal_converter=to_decimal,
+        twoplaces=TWOPLACES,
+        low_stock_threshold=settings.LOW_STOCK_THRESHOLD,
+        stock_alert_sender=send_stock_alert,
+        log=logger,
+        sale_price=sale_price,
+        shipping_cost=shipping_cost,
+        commission_fee=commission_fee,
+    )
