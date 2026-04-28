@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 
-from collections import deque
 from datetime import datetime, timedelta
-from typing import Any, Callable, Deque, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
 from .config import load_config
@@ -16,8 +14,7 @@ from .services.print_agent_config import (
     AgentConfig,
     ConfigError,
 )
-from .services.print_agent_delivery import resolve_delivery_service_id
-from .services.print_agent_errors import ApiError, PrintError, ShipmentExpiredError
+from .services.print_agent_errors import ApiError, PrintError
 from .services.print_agent_labels import CollectedLabels, PrintLabelService
 from .services.print_agent_lifecycle import (
     start_agent_thread as _start_agent_thread,
@@ -27,6 +24,11 @@ from .services.print_agent_notifications import PrintAgentNotifier, notify_messe
 from .services.print_agent_order_processor import PrintOrderProcessor
 from .services.print_agent_queue import PrintQueueProcessor
 from .services.print_agent_reports import PrintAgentReportService
+from .services.print_agent_retry import enforce_rate_limit, new_call_window, retry_call
+from .services.print_agent_runtime_shipments import (
+    get_order_packages_from_shipment_management,
+    resolve_delivery_service_from_api,
+)
 from .services.print_agent_shipment_creation import PrintShipmentCreator
 from .services.print_agent_storage import PrintAgentStorage, SuccessMarker
 from .services.print_agent_shipments import resolve_carrier_id
@@ -91,7 +93,7 @@ class LabelAgent:
         self._api_calls_total = 0
         self._api_calls_success = 0
         self._last_api_log = datetime.now()
-        self._api_call_times: Deque[float] = deque()
+        self._api_call_times = new_call_window()
         self._workers: List = []
         self.notifier = PrintAgentNotifier(
             logger=self.logger,
@@ -208,29 +210,19 @@ class LabelAgent:
         base_delay: float = 1.0,
         **kwargs: Any,
     ) -> T:
-        attempts = 0
-        while True:
-            try:
-                return func(*args, **kwargs)
-            except ShipmentExpiredError:
-                raise
-            except retry_exceptions as exc:
-                attempts += 1
-                if attempts >= max_attempts or self._stop_event.is_set():
-                    raise
-                delay = base_delay * (2 ** (attempts - 1))
-                self.logger.warning(
-                    "%s failed (%s). Retrying in %.1fs (attempt %s/%s)",
-                    stage,
-                    exc,
-                    delay,
-                    attempts + 1,
-                    max_attempts,
-                )
-                PRINT_AGENT_RETRIES_TOTAL.inc()
-                PRINT_AGENT_DOWNTIME_SECONDS.inc(delay)
-                if self._stop_event.wait(delay):
-                    raise
+        return retry_call(
+            func,
+            *args,
+            stage=stage,
+            stop_event=self._stop_event,
+            retry_metric=PRINT_AGENT_RETRIES_TOTAL,
+            downtime_metric=PRINT_AGENT_DOWNTIME_SECONDS,
+            logger=self.logger,
+            retry_exceptions=retry_exceptions,
+            max_attempts=max_attempts,
+            base_delay=base_delay,
+            **kwargs,
+        )
 
     def validate_env(self) -> None:
         required = {
@@ -303,29 +295,15 @@ class LabelAgent:
             self._last_api_log = now
 
     def _enforce_rate_limit(self) -> None:
-        max_calls = max(0, self.config.api_rate_limit_calls)
-        window = self.config.api_rate_limit_period
-        if max_calls <= 0 or window <= 0:
-            return
-        with self._rate_limit_lock:
-            now = time.monotonic()
-            while self._api_call_times and now - self._api_call_times[0] >= window:
-                self._api_call_times.popleft()
-            if len(self._api_call_times) >= max_calls:
-                wait_until = self._api_call_times[0] + window
-                wait_time = wait_until - now
-                if wait_time > 0:
-                    self.logger.debug(
-                        "Rate limit reached, waiting %.2fs before next API call",
-                        wait_time,
-                    )
-                    PRINT_AGENT_DOWNTIME_SECONDS.inc(wait_time)
-                    if self._stop_event.wait(wait_time):
-                        raise ApiError("Rate limit wait interrupted")
-                now = time.monotonic()
-                while self._api_call_times and now - self._api_call_times[0] >= window:
-                    self._api_call_times.popleft()
-            self._api_call_times.append(time.monotonic())
+        enforce_rate_limit(
+            max_calls=max(0, self.config.api_rate_limit_calls),
+            window=self.config.api_rate_limit_period,
+            call_times=self._api_call_times,
+            lock=self._rate_limit_lock,
+            stop_event=self._stop_event,
+            downtime_metric=PRINT_AGENT_DOWNTIME_SECONDS,
+            logger=self.logger,
+        )
 
     def get_orders(self) -> List[Dict[str, Any]]:
         """Pobierz zamowienia gotowe do druku z lokalnej bazy danych.
@@ -348,48 +326,14 @@ class LabelAgent:
         checkout-forms/shipments zwraca ID base64 (nieprzydatne do etykiet).
         Shipment-management wymaga UUID - zapisujemy go w agent_state.
         """
-        # Wyciagnij checkout_form_id z order_id (format: allegro_{uuid})
-        checkout_form_id = order_id
-        if order_id.startswith("allegro_"):
-            checkout_form_id = order_id[len("allegro_"):]
-
-        # 1. Sprawdz zapisany shipment_management UUID
-        stored_sm_id = self._load_state_value(f"sm_shipment:{order_id}")
-        if stored_sm_id:
-            try:
-                details = get_shipment_details(stored_sm_id)
-                carrier = details.get("carrier", "")
-                waybill = ""
-                for pkg in details.get("packages", []):
-                    waybill = pkg.get("waybill", "")
-                    if waybill:
-                        break
-                self.logger.info(
-                    "Uzyto zapisany shipment_management_id=%s dla %s",
-                    stored_sm_id, order_id,
-                )
-                return [{
-                    "shipment_id": stored_sm_id,
-                    "waybill": waybill,
-                    "carrier_id": carrier,
-                    "courier_code": carrier,
-                    "courier_package_nr": waybill,
-                }]
-            except Exception as exc:
-                self.logger.warning(
-                    "Blad pobierania przesylki SM %s: %s. Usuwam mapping.",
-                    stored_sm_id, exc,
-                )
-                self._save_state_value(f"sm_shipment:{order_id}", None)
-
-        # 2. Brak SM UUID - utworz nowa przesylke przez Shipment Management
-        #    (checkout-forms moze miec przesylki, ale ich ID base64
-        #     nie nadaja sie do pobierania etykiet)
-            self.logger.info(
-                "Brak zapisanego shipment_management_id dla %s - tworze nowa przesylke",
-                order_id,
-            )
-        return self._create_allegro_shipment(order_id, checkout_form_id)
+        return get_order_packages_from_shipment_management(
+            order_id,
+            load_state_value=self._load_state_value,
+            save_state_value=self._save_state_value,
+            get_shipment_details=get_shipment_details,
+            create_allegro_shipment=self._create_allegro_shipment,
+            logger=self.logger,
+        )
 
     def _create_allegro_shipment(
         self, order_id: str, checkout_form_id: str,
@@ -425,15 +369,11 @@ class LabelAgent:
         umowami wlasnymi, aby przesylki tworzone byly w ramach SMART
         zamiast ze srodkow wlasnego konta przewoznika.
         """
-        if not delivery_method:
-            return None
-
-        try:
-            services = get_delivery_services()
-        except Exception as exc:
-            self.logger.error("Blad pobierania delivery services: %s", exc)
-            return None
-        return resolve_delivery_service_id(delivery_method, services, self.logger)
+        return resolve_delivery_service_from_api(
+            delivery_method,
+            get_delivery_services=get_delivery_services,
+            logger=self.logger,
+        )
 
     def _resolve_carrier_id(self, delivery_method: str) -> Optional[str]:
         """Mapuj nazwe metody dostawy na carrier_id Allegro."""
