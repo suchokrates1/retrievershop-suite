@@ -1,6 +1,6 @@
 import json
-import requests
 import secrets
+from time import time
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -16,7 +16,6 @@ from flask import (
     session,
 )
 
-from sqlalchemy import case, or_
 from .db import get_session
 from .models.allegro import AllegroOffer
 from .models.products import Product, ProductSize
@@ -25,7 +24,12 @@ from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
 from .print_agent import agent
 from .auth import login_required
-from .allegro_helpers import build_inventory_list
+from .services.allegro_offer_views import (
+    build_offers_and_prices_context,
+    build_offers_context,
+    get_ean_for_offer,
+    new_request_id,
+)
 from . import allegro_api
 from requests.exceptions import HTTPError, RequestException
 
@@ -267,129 +271,19 @@ def allegro_oauth_debug():
 
 def _get_ean_for_offer(offer_id: str) -> str:
     """Get EAN for an offer from Allegro API."""
-    try:
-        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
-        if not access_token:
-            return ""
-        
-        from .allegro_api.core import ALLEGRO_USER_AGENT
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/vnd.allegro.public.v1+json",
-            "User-Agent": ALLEGRO_USER_AGENT,
-        }
-        
-        url1 = f"https://api.allegro.pl/sale/product-offers/{offer_id}"
-        response1 = requests.get(url1, headers=headers, timeout=10)
-        if response1.status_code != 200:
-            return ""
-        
-        data1 = response1.json()
-        product_set = data1.get("productSet", [])
-        if not product_set:
-            return ""
-        
-        product_id = product_set[0]["product"]["id"]
-        
-        url2 = f"https://api.allegro.pl/sale/products/{product_id}"
-        response2 = requests.get(url2, headers=headers, timeout=10)
-        if response2.status_code != 200:
-            return ""
-        
-        data2 = response2.json()
-        parameters = data2.get("parameters", [])
-        for param in parameters:
-            if param.get("name") == "EAN (GTIN)":
-                values = param.get("values", [])
-                if values:
-                    return values[0]
-        return ""
-    except Exception as e:
-        current_app.logger.warning(f"Error getting EAN for offer {offer_id}: {e}")
-        return ""
+    return get_ean_for_offer(offer_id, log=current_app.logger)
 
 
 @bp.route("/allegro/offers")
 @login_required
 def offers():
-    with get_session() as db:
-        rows = (
-            db.query(AllegroOffer, ProductSize, Product)
-            .filter(AllegroOffer.publication_status == 'ACTIVE')
-            .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
-            .outerjoin(Product, AllegroOffer.product_id == Product.id)
-            .order_by(
-                case((AllegroOffer.product_size_id.is_(None), 0), else_=1),
-                AllegroOffer.title,
-            )
-            .all()
-        )
-        linked_offers: list[dict] = []
-        unlinked_offers: list[dict] = []
-        for offer, size, product in rows:
-            label = None
-            product_for_label = product or (size.product if size else None)
-            if product_for_label and size:
-                parts = [product_for_label.name]
-                if product_for_label.color:
-                    parts.append(product_for_label.color)
-                label = " – ".join([" ".join(parts), size.size])
-            elif product_for_label:
-                parts = [product_for_label.name]
-                if product_for_label.color:
-                    parts.append(product_for_label.color)
-                label = " ".join(parts)
-            
-            # Fetch EAN only for unlinked offers (where it's actually needed for linking)
-            # Linked offers don't need EAN since they're already connected to products
-            ean = offer.ean or ""
-            if not ean and not (offer.product_size_id or offer.product_id):
-                try:
-                    ean = _get_ean_for_offer(offer.offer_id)
-                    if ean:
-                        offer.ean = ean
-                        db.commit()
-                except Exception:
-                    ean = ""
-            
-            # Try to link by EAN if we have EAN but no product_size_id
-            if ean and not offer.product_size_id:
-                ps = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
-                if ps:
-                    offer.product_size_id = ps.id
-                    offer.product_id = ps.product_id
-                    db.commit()
-                    current_app.logger.info(f"Linked offer {offer.offer_id} to product_size {ps.id} by EAN {ean}")
-                    # Update local vars for response
-                    size = ps
-                    product_for_label = ps.product
-                    if product_for_label:
-                        parts = [product_for_label.name]
-                        if product_for_label.color:
-                            parts.append(product_for_label.color)
-                        label = " – ".join([" ".join(parts), ps.size])
-            
-            offer_data = {
-                "offer_id": offer.offer_id,
-                "title": offer.title,
-                "price": offer.price,
-                "product_size_id": offer.product_size_id,
-                "product_id": offer.product_id,
-                "selected_label": label,
-                "barcode": size.barcode if size else None,
-                "ean": ean,
-            }
-            if offer.product_size_id or offer.product_id:
-                linked_offers.append(offer_data)
-            else:
-                unlinked_offers.append(offer_data)
-
-        inventory = build_inventory_list(db)
+    context = build_offers_context(
+        fetch_ean_for_offer=_get_ean_for_offer,
+        log=current_app.logger,
+    )
     response = make_response(render_template(
         "allegro/offers.html",
-        unlinked_offers=unlinked_offers,
-        linked_offers=linked_offers,
-        inventory=inventory,
+        **context,
     ))
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -400,150 +294,25 @@ def offers():
 @bp.route("/offers-and-prices")
 @login_required
 def offers_and_prices():
-    import time
-    start_time = time.time()
-    request_id = f"{int(start_time * 1000)}"
+    start_time, request_id = new_request_id()
     current_app.logger.info(f"REQUEST START [{request_id}] /offers-and-prices")
+    context = build_offers_and_prices_context(
+        request.args,
+        fetch_ean_for_offer=_get_ean_for_offer,
+        log=current_app.logger,
+    )
 
-    search = request.args.get("search", "").strip()
-    status_filter = request.args.get("status", "all")
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 50, type=int)
-    if per_page not in (25, 50, 100):
-        per_page = 50
-    if page < 1:
-        page = 1
-
-    with get_session() as db:
-        # Count statistics (always on full set)
-        total_offers = db.query(AllegroOffer).filter(AllegroOffer.publication_status == 'ACTIVE').count()
-        matched_offers = db.query(AllegroOffer).filter(
-            AllegroOffer.publication_status == 'ACTIVE',
-            (AllegroOffer.product_size_id.isnot(None)) | (AllegroOffer.product_id.isnot(None))
-        ).count()
-
-        # Base query
-        query = (
-            db.query(AllegroOffer, ProductSize, Product)
-            .filter(AllegroOffer.publication_status == 'ACTIVE')
-            .outerjoin(ProductSize, AllegroOffer.product_size_id == ProductSize.id)
-            .outerjoin(Product, AllegroOffer.product_id == Product.id)
-        )
-
-        # Status filter
-        if status_filter == "linked":
-            query = query.filter(
-                (AllegroOffer.product_size_id.isnot(None)) | (AllegroOffer.product_id.isnot(None))
-            )
-        elif status_filter == "unlinked":
-            query = query.filter(
-                AllegroOffer.product_size_id.is_(None),
-                AllegroOffer.product_id.is_(None),
-            )
-
-        # Search filter
-        if search:
-            search_lower = f"%{search.lower()}%"
-            query = query.filter(
-                or_(
-                    AllegroOffer.title.ilike(search_lower),
-                    AllegroOffer.offer_id.ilike(search_lower),
-                    AllegroOffer.ean.ilike(search_lower),
-                    Product.name.ilike(search_lower),
-                )
-            )
-
-        total_filtered = query.count()
-        total_pages = max(1, (total_filtered + per_page - 1) // per_page)
-        if page > total_pages:
-            page = total_pages
-
-        rows = (
-            query.order_by(
-                case((AllegroOffer.product_size_id.is_(None), 0), else_=1),
-                AllegroOffer.title,
-            )
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-            .all()
-        )
-
-        offers_data = []
-        for offer, size, product in rows:
-            # Create label for linked product
-            label = None
-            product_for_label = product or (size.product if size else None)
-            if product_for_label and size:
-                parts = [product_for_label.name]
-                if product_for_label.color:
-                    parts.append(product_for_label.color)
-                label = " – ".join([" ".join(parts), size.size])
-            elif product_for_label:
-                parts = [product_for_label.name]
-                if product_for_label.color:
-                    parts.append(product_for_label.color)
-                label = " ".join(parts)
-
-            offer_data = {
-                "offer_id": offer.offer_id,
-                "title": offer.title,
-                "price": offer.price,
-                "product_size_id": offer.product_size_id,
-                "product_id": offer.product_id,
-                "selected_label": label,
-                "barcode": size.barcode if size else None,
-                "ean": "",
-                "is_linked": bool(offer.product_size_id or offer.product_id),
-            }
-
-            # Fetch EAN only for unlinked offers (where it's actually needed)
-            ean_value = offer.ean or ""
-            if not ean_value and not (offer.product_size_id or offer.product_id):
-                try:
-                    ean_value = _get_ean_for_offer(offer.offer_id)
-                    if ean_value:
-                        offer.ean = ean_value
-                        db.commit()
-                except Exception as exc:
-                    current_app.logger.debug(
-                        "Nie udało się pobrać EAN dla oferty %s: %s",
-                        offer.offer_id,
-                        exc,
-                    )
-
-            if ean_value and not offer.product_size_id:
-                ps = db.query(ProductSize).filter(ProductSize.barcode == ean_value).first()
-                if ps:
-                    offer.product_size_id = ps.id
-                    offer.product_id = ps.product_id
-                    db.commit()
-                    current_app.logger.info(
-                        f"Linked offer {offer.offer_id} to product_size {ps.id} by EAN {ean_value} on offers-and-prices"
-                    )
-
-            offer_data["ean"] = ean_value
-            offers_data.append(offer_data)
-
-        # Build inventory for dropdown
-        inventory = build_inventory_list(db)
-
-    elapsed = time.time() - start_time
-    current_app.logger.info(f"REQUEST END [{request_id}] /offers-and-prices - took {elapsed:.2f}s, {len(offers_data)} offers")
+    elapsed = time() - start_time
+    current_app.logger.info(
+        "REQUEST END [%s] /offers-and-prices - took %.2fs, %s offers",
+        request_id,
+        elapsed,
+        context.pop("offers_count"),
+    )
 
     response = make_response(render_template(
         "allegro/offers_and_prices.html",
-        offers=offers_data,
-        inventory=inventory,
-        total_offers=total_offers,
-        matched_offers=matched_offers,
-        search=search,
-        status_filter=status_filter,
-        page=page,
-        per_page=per_page,
-        total_filtered=total_filtered,
-        total_pages=total_pages,
-        has_prev=page > 1,
-        has_next=page < total_pages,
+        **context,
     ))
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
