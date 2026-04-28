@@ -48,7 +48,6 @@ FORBIDDEN_PRINT_AGENT_ATTRIBUTES = FORBIDDEN_IMPORTS["magazyn.print_agent"] | {
 }
 ROOT_MODULE_LINE_LIMIT = 450
 LEGACY_ROOT_MODULE_BUDGETS = {
-    Path("magazyn/app.py"): 620,
     Path("magazyn/label_agent.py"): 750,
     Path("magazyn/settings_store.py"): 600,
 }
