@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 from zoneinfo import ZoneInfo
 
@@ -14,31 +14,19 @@ from .services.print_agent_config import (
     AgentConfig,
     ConfigError,
 )
-from .services.print_agent_errors import ApiError, PrintError
-from .services.print_agent_labels import CollectedLabels, PrintLabelService
+from .services import label_agent_integrations as integrations
+from .services import label_agent_loop as loop_services
 from .services.print_agent_lifecycle import (
     start_agent_thread as _start_agent_thread,
     stop_agent_thread as _stop_agent_thread,
 )
 from .services.print_agent_notifications import PrintAgentNotifier, notify_messenger
-from .services.print_agent_order_processor import PrintOrderProcessor
-from .services.print_agent_queue import PrintQueueProcessor
-from .services.print_agent_reports import PrintAgentReportService
 from .services.print_agent_retry import enforce_rate_limit, new_call_window, retry_call
-from .services.print_agent_runtime_shipments import (
-    get_order_packages_from_shipment_management,
-    resolve_delivery_service_from_api,
-)
-from .services.print_agent_shipment_creation import PrintShipmentCreator
 from .services.print_agent_storage import PrintAgentStorage, SuccessMarker
-from .services.print_agent_shipments import resolve_carrier_id
 from .services.print_agent_tracking import PrintAgentTrackingService
-from .services.printing import CupsPrinter, PrintCommandError
+from .services.printing import CupsPrinter
 from .services.runtime import BackgroundThreadRuntime, HeartbeatFileLock
 from .allegro_token_refresher import token_refresher
-from .allegro_api import (
-    fetch_allegro_order_detail,
-)
 from .allegro_api.shipment_management import (
     cancel_shipment,
     create_shipment,
@@ -51,11 +39,9 @@ from .allegro_api.fulfillment import (
     add_shipment_tracking,
     update_fulfillment_status,
 )
-from .agent.allegro_sync import AllegroSyncService
 from .workers import TrackingWorker, MessagingWorker, ReportWorker
 from .metrics import (
     PRINT_AGENT_DOWNTIME_SECONDS,
-    PRINT_AGENT_ITERATION_SECONDS,
     PRINT_AGENT_RETRIES_TOTAL,
     PRINT_LABEL_ERRORS_TOTAL,
     PRINT_LABELS_TOTAL,
@@ -283,16 +269,7 @@ class LabelAgent:
     # External integrations
     # ------------------------------------------------------------------
     def _maybe_log_api_summary(self) -> None:
-        now = datetime.now()
-        if now - self._last_api_log >= timedelta(hours=1) and self._api_calls_total:
-            self.logger.info(
-                "Udane połączenia: [%s/%s]",
-                self._api_calls_success,
-                self._api_calls_total,
-            )
-            self._api_calls_total = 0
-            self._api_calls_success = 0
-            self._last_api_log = now
+        integrations.maybe_log_api_summary(self)
 
     def _enforce_rate_limit(self) -> None:
         enforce_rate_limit(
@@ -306,112 +283,56 @@ class LabelAgent:
         )
 
     def get_orders(self) -> List[Dict[str, Any]]:
-        """Pobierz zamowienia gotowe do druku z lokalnej bazy danych.
-
-        Szuka zamowien w statusie 'pobrano' (nowe z Allegro Events API),
-        ktore nie zostaly jeszcze wydrukowane.
-        """
-        from .services.print_agent_orders import collect_printable_orders
-
-        try:
-            return collect_printable_orders(log=self.logger)
-        except Exception as exc:
-            self.logger.error("Blad pobierania zamowien z bazy: %s", exc)
-            raise ApiError(str(exc)) from exc
+        return integrations.get_orders(self)
 
     def get_order_packages(self, order_id: str) -> List[Dict[str, Any]]:
-        """Pobierz przesylki dla zamowienia z Allegro Shipment Management API.
-
-        Jezeli przesylka SM nie istnieje, tworzy ja automatycznie.
-        checkout-forms/shipments zwraca ID base64 (nieprzydatne do etykiet).
-        Shipment-management wymaga UUID - zapisujemy go w agent_state.
-        """
-        return get_order_packages_from_shipment_management(
+        return integrations.get_order_packages(
+            self,
             order_id,
-            load_state_value=self._load_state_value,
-            save_state_value=self._save_state_value,
             get_shipment_details=get_shipment_details,
             create_allegro_shipment=self._create_allegro_shipment,
-            logger=self.logger,
         )
 
     def _create_allegro_shipment(
         self, order_id: str, checkout_form_id: str,
     ) -> List[Dict[str, Any]]:
-        """Utworz przesylke w Allegro Shipment Management i zwroc dane."""
-        return self._shipment_creator().create(
-            order_id,
-            checkout_form_id,
-            self.last_order_data,
-        )
+        return integrations.create_allegro_shipment(self, order_id, checkout_form_id)
 
-    def _shipment_creator(self) -> PrintShipmentCreator:
-        from .settings_store import settings_store
-
-        return PrintShipmentCreator(
-            logger=self.logger,
-            settings_store=settings_store,
-            fetch_order_detail=fetch_allegro_order_detail,
-            resolve_delivery_service_id=self._resolve_delivery_service_id,
-            resolve_carrier_id=self._resolve_carrier_id,
+    def _shipment_creator(self):
+        return integrations.shipment_creator(
+            self,
             create_shipment=create_shipment,
             wait_for_shipment_creation=wait_for_shipment_creation,
             get_shipment_details=get_shipment_details,
             add_shipment_tracking=add_shipment_tracking,
             update_fulfillment_status=update_fulfillment_status,
-            save_state_value=self._save_state_value,
         )
 
     def _resolve_delivery_service_id(self, delivery_method: str) -> Optional[str]:
-        """Mapuj nazwe metody dostawy Allegro na deliveryMethodId.
-
-        Preferuje uslugi Allegro Standard (SMART, bez credentialsId) nad
-        umowami wlasnymi, aby przesylki tworzone byly w ramach SMART
-        zamiast ze srodkow wlasnego konta przewoznika.
-        """
-        return resolve_delivery_service_from_api(
+        return integrations.resolve_delivery_service_id(
+            self,
             delivery_method,
             get_delivery_services=get_delivery_services,
-            logger=self.logger,
         )
 
     def _resolve_carrier_id(self, delivery_method: str) -> Optional[str]:
-        """Mapuj nazwe metody dostawy na carrier_id Allegro."""
-        return resolve_carrier_id(delivery_method)
+        return integrations.resolve_carrier_id(delivery_method)
 
-    def _label_service(self) -> PrintLabelService:
-        return PrintLabelService(
-            logger=self.logger,
+    def _label_service(self):
+        return integrations.label_service(
+            self,
             get_shipment_label=get_shipment_label,
             cancel_shipment=cancel_shipment,
-            create_shipment=lambda order_id, checkout_form_id: self._create_allegro_shipment(
-                order_id,
-                checkout_form_id,
-            ),
-            fetch_label=lambda courier_code, package_id: self.get_label(
-                courier_code,
-                package_id,
-            ),
-            recreate_shipment_and_get_label=(
-                lambda order_id, old_shipment_id, courier_code, package_ids, tracking_numbers:
-                self._recreate_shipment_and_get_label(
-                    order_id,
-                    old_shipment_id,
-                    courier_code,
-                    package_ids,
-                    tracking_numbers,
-                )
-            ),
-            retry=self._retry,
-            errors_total=PRINT_LABEL_ERRORS_TOTAL,
+            create_shipment=self._create_allegro_shipment,
+            label_errors_total=PRINT_LABEL_ERRORS_TOTAL,
         )
 
     def _collect_order_labels(
         self,
         order_id: str,
         packages: List[Dict[str, Any]],
-    ) -> CollectedLabels:
-        return self._label_service().collect_order_labels(order_id, packages)
+    ):
+        return integrations.collect_order_labels(self, order_id, packages)
 
     def _recreate_shipment_and_get_label(
         self,
@@ -421,14 +342,8 @@ class LabelAgent:
         package_ids: List[str],
         tracking_numbers: List[str],
     ) -> Tuple[str, str]:
-        """Anuluj wygasla przesylke, stworz nowa i pobierz etykiete.
-
-        Aktualizuje package_ids i tracking_numbers in-place.
-
-        Returns:
-            Tuple (base64_label_data, extension) lub ("", "") przy bledzie.
-        """
-        return self._label_service().recreate_shipment_and_get_label(
+        return integrations.recreate_shipment_and_get_label(
+            self,
             order_id,
             old_shipment_id,
             courier_code,
@@ -437,43 +352,20 @@ class LabelAgent:
         )
 
     def get_label(self, courier_code: str, package_id: str) -> Tuple[str, str]:
-        """Pobierz etykiete przesylki z Allegro Shipment Management API.
-
-        Args:
-            courier_code: Nieuzywane (kompatybilnosc wsteczna).
-            package_id: ID przesylki (shipment_id) z Allegro.
-
-        Returns:
-            Tuple (base64_label_data, extension).
-
-        Raises:
-            ShipmentExpiredError: Przesylka wygasla (403) - wymaga recreate.
-        """
-        return self._label_service().get_label(courier_code, package_id)
+        return integrations.get_label(self, courier_code, package_id)
 
     def print_label(self, base64_data: str, extension: str, order_id: str) -> None:
-        try:
-            self.printer.print_label_base64(base64_data, extension)
-            self.logger.info("Label printed")
-            PRINT_LABELS_TOTAL.inc()
-        except PrintCommandError as exc:
-            PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
-            raise PrintError(str(exc)) from exc
-        except PrintError:
-            raise
-        except Exception as exc:
-            self.logger.error("Błąd drukowania: %s", exc)
-            PRINT_LABEL_ERRORS_TOTAL.labels(stage="print").inc()
-            raise PrintError(str(exc)) from exc
+        integrations.print_label(
+            self,
+            base64_data,
+            extension,
+            order_id,
+            labels_total=PRINT_LABELS_TOTAL,
+            errors_total=PRINT_LABEL_ERRORS_TOTAL,
+        )
 
     def print_test_page(self) -> bool:
-        try:
-            self.printer.print_text("=== TEST PRINT ===\n")
-            self.logger.info("Testowa strona została wysłana do drukarki.")
-            return True
-        except Exception as exc:
-            self.logger.error("Błąd testowego druku: %s", exc)
-            return False
+        return integrations.print_test_page(self)
 
     def _should_send_error_notification(self, order_id: str) -> bool:
         """Sprawdza czy należy wysłać powiadomienie o błędzie (przy próbie 1 i 10)."""
@@ -512,154 +404,32 @@ class LabelAgent:
             return start <= now < end
         return now >= start or now < end
 
-    def _report_service(self) -> PrintAgentReportService:
-        return PrintAgentReportService(
-            logger=self.logger,
-            config_provider=lambda: self.config,
-            send_report=self.send_report,
-            summary_provider=self._get_period_summary,
-            get_last_weekly_report=lambda: getattr(self, "_last_weekly_report", None),
-            set_last_weekly_report=lambda value: setattr(self, "_last_weekly_report", value),
-            get_last_monthly_report_month=lambda: getattr(
-                self,
-                "_last_monthly_report_month",
-                None,
-            ),
-            set_last_monthly_report_month=lambda value: setattr(
-                self,
-                "_last_monthly_report_month",
-                value,
-            ),
-        )
+    def _report_service(self):
+        return loop_services.report_service(self)
 
     def _send_periodic_reports(self) -> None:
-        """Wysyła raporty tygodniowe i miesięczne przez Messenger.
-        
-        Format raportu:
-        - Tygodniowy: "W tym tygodniu sprzedałaś [ilość] produktów za [suma] zł co dało [zysk] zł zysku"
-        - Miesięczny: "W miesiącu [nazwa] sprzedałaś [ilość] produktów za [suma] zł co dało [zysk] zł zysku"
-        """
-        self._report_service().send_periodic_reports()
+        loop_services.send_periodic_reports(self)
     
     def _get_period_summary(self, days: int, end_date: datetime = None, include_fixed_costs: bool = False) -> dict:
-        """Pobiera podsumowanie sprzedazy za okres z obliczeniem realnego zysku.
-        
-        Args:
-            days: Liczba dni wstecz od end_date
-            end_date: Data koncowa (domyslnie teraz)
-            include_fixed_costs: Czy odejmowac koszty stale (dla raportow miesiecznych)
-            
-        Returns:
-            Dict z kluczami: products_sold, total_revenue, real_profit, fixed_costs (opcjonalnie)
-        """
-        return self._report_service().get_period_summary(
-            days,
-            end_date=end_date,
-            include_fixed_costs=include_fixed_costs,
-        )
+        return loop_services.get_period_summary(self, days, end_date, include_fixed_costs)
 
     def _process_queue(self, queue: List[Dict[str, Any]], printed: Dict[str, Any]) -> List[Dict[str, Any]]:
-        processor = PrintQueueProcessor(
-            logger=self.logger,
-            is_quiet_time=self.is_quiet_time,
-            save_queue=self.save_queue,
-            mark_as_printed=self.mark_as_printed,
-            notify_messenger=self._notify_messenger,
-            retry=self._retry,
-            print_label=self.print_label,
-            consume_order_stock=self.consume_order_stock,
-            print_error_type=PrintError,
-            errors_total=PRINT_LABEL_ERRORS_TOTAL,
-            now=lambda: datetime.now(),
-        )
-        return processor.process(queue, printed)
+        return loop_services.process_queue(self, queue, printed)
 
-    def _order_processor(self) -> PrintOrderProcessor:
-        return PrintOrderProcessor(
-            logger=self.logger,
-            set_last_order_data=lambda data: setattr(self, "last_order_data", data),
-            retry=self._retry,
-            get_order_packages=self.get_order_packages,
-            collect_order_labels=self._collect_order_labels,
-            is_quiet_time=self.is_quiet_time,
-            save_queue=self.save_queue,
-            print_label=self.print_label,
-            mark_as_printed=self.mark_as_printed,
-            notify_messenger=self._notify_messenger,
-            consume_order_stock=self.consume_order_stock,
-            should_send_error_notification=self._should_send_error_notification,
-            send_label_error_notification=self._send_label_error_notification,
-            increment_error_notification=self.notifier.increment_error_notification,
-            wait=self._stop_event.wait,
-            errors_total=PRINT_LABEL_ERRORS_TOTAL,
-            print_error_type=PrintError,
-            now=lambda: datetime.now(),
-        )
+    def _order_processor(self):
+        return loop_services.order_processor(self)
 
     def _check_allegro_discussions(self, access_token: str) -> None:
-        """Sprawdza dyskusje Allegro - deleguje do AllegroSyncService."""
-        service = AllegroSyncService(
-            db_file=self.config.db_file,
-            settings=self.settings,
-            save_state_callback=self._save_state_value
-        )
-        service.check_discussions(access_token)
+        loop_services.check_allegro_discussions(self, access_token)
 
     def _check_allegro_messages(self, access_token: str) -> None:
-        """Sprawdza wiadomosci Allegro - deleguje do AllegroSyncService."""
-        service = AllegroSyncService(
-            db_file=self.config.db_file,
-            settings=self.settings,
-            save_state_callback=self._save_state_value
-        )
-        service.check_messages(access_token)
+        loop_services.check_allegro_messages(self, access_token)
 
     def _agent_loop(self) -> None:
-        while not self._stop_event.is_set():
-            try:
-                self._run_print_iteration()
-            except Exception as exc:
-                self.logger.error("[BLAD ITERACJI GLOWNEJ] %s", exc, exc_info=True)
-                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
-            self._stop_event.wait(self.config.poll_interval)
+        loop_services.agent_loop(self)
 
     def _run_print_iteration(self) -> None:
-        """Pojedyncza iteracja petli drukowania - izolowana od bledow."""
-        loop_start = datetime.now()
-        self._write_heartbeat()
-
-        self.clean_old_printed_orders()
-        printed_entries = self.load_printed_orders()
-        printed = {entry["order_id"]: entry["printed_at"] for entry in printed_entries}
-        queue = self.load_queue()
-
-        queue = self._restore_in_progress(queue)
-
-        queue = self._process_queue(queue, printed)
-        self.save_queue(queue)
-
-        try:
-            try:
-                orders = self._retry(
-                    self.get_orders,
-                    stage="orders",
-                    retry_exceptions=(ApiError,),
-                )
-            except ApiError as exc:
-                self.logger.error("Blad pobierania zamowien: %s", exc)
-                PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
-                orders = []
-            order_processor = self._order_processor()
-            for order in orders:
-                order_processor.process(order, queue, printed)
-        except Exception as exc:
-            self.logger.error("[BLAD PETLI ZAMOWIEN] %s", exc)
-            PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
-
-        self.save_queue(queue)
-        duration = (datetime.now() - loop_start).total_seconds()
-        PRINT_AGENT_ITERATION_SECONDS.observe(duration)
-        self._write_heartbeat()
+        loop_services.run_print_iteration(self)
 
     def start_agent_thread(self) -> bool:
         return _start_agent_thread(
