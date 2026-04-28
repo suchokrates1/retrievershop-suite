@@ -1,5 +1,6 @@
 """Orders blueprint - zarzadzanie zamowieniami."""
 import logging
+import os
 
 from flask import Blueprint, render_template, abort, request, flash, redirect, url_for, current_app, after_this_request, send_file, jsonify
 
@@ -9,15 +10,12 @@ from .db import get_session
 from .models.orders import Order, OrderStatusLog
 from .services.order_allegro_sync import sync_orders_from_allegro_api
 from .services.order_creation import build_manual_order_payload
-from .services.order_detail_builder import (
-    build_order_detail_context,
-)
+from .services.order_detail_view import build_order_detail_view_context
+from .services.order_label_download import prepare_order_label_download
 from .services.order_list import build_orders_list_context
 from .services.order_sync import sync_order_from_data
 from .services.order_status import add_order_status
 from .services.order_labels import reprint_order_labels
-from .services.order_presentation import _unix_to_datetime
-from .services.tracking import get_tracking_url
 from .status_config import VALID_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -26,9 +24,6 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("orders", __name__)
 
 # SHIPPING_STAGES i RETURN_STAGES przeniesione do services/order_detail_builder.py
-
-
-_get_tracking_url = get_tracking_url
 
 
 @bp.route("/orders")
@@ -47,62 +42,11 @@ def order_detail(order_id: str):
         if not order:
             abort(404)
         
-        # Uzyj nowego serwisu do budowania kontekstu
-        context = build_order_detail_context(db, order)
-        
-        # Dodaj dodatkowe dane potrzebne w szablonie
-        context["date_add"] = _unix_to_datetime(order.date_add)
-        context["date_confirmed"] = _unix_to_datetime(order.date_confirmed)
-        context["tracking_url"] = get_tracking_url(
-            order.courier_code, 
-            order.delivery_package_module, 
-            order.delivery_package_nr, 
-            order.delivery_method
+        context = build_order_detail_view_context(
+            db,
+            order,
+            app_base_url=getattr(settings, "APP_BASE_URL", "") or "",
         )
-
-        # Komunikacja z klientem - log emaili
-        import json as _json
-        emails_sent = {}
-        if order.emails_sent:
-            try:
-                emails_sent = _json.loads(order.emails_sent)
-            except (ValueError, TypeError):
-                pass
-
-        email_types_map = {
-            "confirmation": "Potwierdzenie zamowienia",
-            "shipment": "Nadanie przesylki",
-            "invoice": "Faktura",
-            "delivery": "Potwierdzenie dostawy",
-            "correction": "Korekta faktury",
-        }
-        email_log = [
-            {"type": k, "label": email_types_map.get(k, k), "sent": True}
-            for k in email_types_map
-            if emails_sent.get(k)
-        ]
-        all_email_types = [
-            {"type": k, "label": v, "sent": bool(emails_sent.get(k))}
-            for k, v in email_types_map.items()
-        ]
-        context["email_log"] = email_log
-        context["all_email_types"] = all_email_types
-        context["emails_sent"] = emails_sent
-
-        # Faktura wFirma
-        context["wfirma_invoice_id"] = order.wfirma_invoice_id
-        context["wfirma_invoice_number"] = order.wfirma_invoice_number
-        context["wfirma_correction_id"] = order.wfirma_correction_id
-        context["wfirma_correction_number"] = order.wfirma_correction_number
-
-        # Link do strony zamowienia klienta
-        customer_page_url = ""
-        if order.customer_token:
-            base = getattr(settings, "APP_BASE_URL", "") or ""
-            base = base.rstrip("/")
-            if base:
-                customer_page_url = f"{base}/zamowienie/{order.customer_token}"
-        context["customer_page_url"] = customer_page_url
         
         rendered = render_template("order_detail.html", **context)
         
@@ -334,45 +278,28 @@ def process_refund(order_id: str):
 def download_label(order_id: str):
     """Download shipping label PDF for an order."""
     from .print_agent import agent as label_agent
-    import tempfile
-    import os
     
     try:
-        # Try to get packages and download first label
-        packages = label_agent.get_order_packages(order_id)
-        
-        for pkg in packages:
-            pid = pkg.get("shipment_id") or pkg.get("package_id")
-            code = pkg.get("courier_code") or pkg.get("carrier_id") or ""
-            if not pid:
-                continue
-            label_data, ext = label_agent.get_label(code, pid)
-            if label_data:
-                # Save to temporary file and send
-                import base64
-                pdf_bytes = base64.b64decode(label_data)
-                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
-                tmp.write(pdf_bytes)
-                tmp.close()
-                
-                @after_this_request
-                def remove_file(response):
-                    try:
-                        os.remove(tmp.name)
-                    except OSError as exc:
-                        current_app.logger.debug(
-                            "Nie udało się usunąć tymczasowej etykiety %s: %s",
-                            tmp.name,
-                            exc,
-                        )
-                    return response
-                
-                return send_file(
-                    tmp.name,
-                    as_attachment=True,
-                    download_name=f"etykieta_{order_id}.{ext}",
-                    mimetype="application/pdf" if ext == "pdf" else "application/octet-stream"
-                )
+        prepared_label = prepare_order_label_download(order_id, label_agent)
+        if prepared_label:
+            @after_this_request
+            def remove_file(response):
+                try:
+                    os.remove(prepared_label.path)
+                except OSError as exc:
+                    current_app.logger.debug(
+                        "Nie udało się usunąć tymczasowej etykiety %s: %s",
+                        prepared_label.path,
+                        exc,
+                    )
+                return response
+
+            return send_file(
+                prepared_label.path,
+                as_attachment=True,
+                download_name=prepared_label.filename,
+                mimetype=prepared_label.mimetype,
+            )
         
         flash("Nie znaleziono etykiety do pobrania", "warning")
             
