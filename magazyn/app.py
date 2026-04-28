@@ -20,101 +20,25 @@ from flask import (
 from datetime import datetime
 import os
 from werkzeug.security import check_password_hash
-from collections import OrderedDict
 
 from .models.messages import Thread
 from .models.users import User
 from .forms import LoginForm
 
 from .db import get_session
-from .sales import _sales_keys
 from .auth import login_required
 from .print_agent import agent as label_agent
-from .env_info import ENV_INFO
 from .config import settings
-from .settings_store import SettingsPersistenceError, settings_store
-from .settings_io import HIDDEN_KEYS
-from .domain.financial import FinancialCalculator
+from .settings_store import settings_store
 from .services.app_runtime import start_print_agent_runtime
-from .services.print_agent_config import ConfigError, parse_time_str
+from .services.print_agent_config import ConfigError
+from .services.settings_page import build_settings_context, update_settings_from_form
 from .services.fixed_costs import (
     add_fixed_cost as add_fixed_cost_record,
     delete_fixed_cost as delete_fixed_cost_record,
     edit_fixed_cost as edit_fixed_cost_record,
-    list_fixed_costs,
     toggle_fixed_cost as toggle_fixed_cost_record,
 )
-
-# Settings with boolean values represented as "1" or "0"
-BOOLEAN_KEYS = {
-    "ENABLE_MONTHLY_REPORTS",
-    "ENABLE_WEEKLY_REPORTS",
-    "ALLEGRO_AUTORESPONDER_ENABLED",
-}
-
-# Grupowanie ustawien w sekcje (klucz -> (nazwa_grupy, ikona))
-SETTINGS_GROUPS = {
-    # -- Allegro: integracja, prowizje, autoresponder --
-    "ALLEGRO_CLIENT_ID": ("Allegro", "bi-shop"),
-    "ALLEGRO_CLIENT_SECRET": ("Allegro", "bi-shop"),
-    "ALLEGRO_REDIRECT_URI": ("Allegro", "bi-shop"),
-    "ALLEGRO_ACCESS_TOKEN": ("Allegro", "bi-shop"),
-    "ALLEGRO_REFRESH_TOKEN": ("Allegro", "bi-shop"),
-    "COMMISSION_ALLEGRO": ("Allegro", "bi-shop"),
-    "PRICE_MAX_DISCOUNT_PERCENT": ("Allegro", "bi-shop"),
-    "ALLEGRO_AUTORESPONDER_ENABLED": ("Allegro", "bi-shop"),
-    "ALLEGRO_AUTORESPONDER_MESSAGE": ("Allegro", "bi-shop"),
-    # -- wFirma: fakturowanie --
-    "WFIRMA_ACCESS_KEY": ("wFirma", "bi-receipt"),
-    "WFIRMA_SECRET_KEY": ("wFirma", "bi-receipt"),
-    "WFIRMA_APP_KEY": ("wFirma", "bi-receipt"),
-    "WFIRMA_COMPANY_ID": ("wFirma", "bi-receipt"),
-    # -- Drukowanie: drukarka, agent, harmonogram --
-    "PRINTER_NAME": ("Drukowanie", "bi-printer"),
-    "CUPS_SERVER": ("Drukowanie", "bi-printer"),
-    "CUPS_PORT": ("Drukowanie", "bi-printer"),
-    "POLL_INTERVAL": ("Drukowanie", "bi-printer"),
-    "QUIET_HOURS_START": ("Drukowanie", "bi-printer"),
-    "QUIET_HOURS_END": ("Drukowanie", "bi-printer"),
-    "PRINTED_EXPIRY_DAYS": ("Drukowanie", "bi-printer"),
-    # -- Przesylki: dane nadawcy --
-    "SENDER_NAME": ("Nadawca przesylek", "bi-box-seam"),
-    "SENDER_COMPANY": ("Nadawca przesylek", "bi-box-seam"),
-    "SENDER_STREET": ("Nadawca przesylek", "bi-box-seam"),
-    "SENDER_CITY": ("Nadawca przesylek", "bi-box-seam"),
-    "SENDER_ZIPCODE": ("Nadawca przesylek", "bi-box-seam"),
-    "SENDER_EMAIL": ("Nadawca przesylek", "bi-box-seam"),
-    "SENDER_PHONE": ("Nadawca przesylek", "bi-box-seam"),
-    # -- Sprzedaz: koszty --
-    "PACKAGING_COST": ("Sprzedaz", "bi-cash"),
-    # -- Powiadomienia: Messenger --
-    "PAGE_ACCESS_TOKEN": ("Powiadomienia", "bi-bell"),
-    "RECIPIENT_ID": ("Powiadomienia", "bi-bell"),
-    "LOW_STOCK_THRESHOLD": ("Powiadomienia", "bi-bell"),
-    "ALERT_EMAIL": ("Powiadomienia", "bi-bell"),
-    # -- E-mail: SMTP, raporty --
-    "SMTP_SERVER": ("E-mail", "bi-envelope"),
-    "SMTP_PORT": ("E-mail", "bi-envelope"),
-    "SMTP_USERNAME": ("E-mail", "bi-envelope"),
-    "SMTP_PASSWORD": ("E-mail", "bi-envelope"),
-    "EMAIL_FROM_NAME": ("E-mail", "bi-envelope"),
-    "APP_BASE_URL": ("E-mail", "bi-envelope"),
-    "ENABLE_WEEKLY_REPORTS": ("E-mail", "bi-envelope"),
-    "ENABLE_MONTHLY_REPORTS": ("E-mail", "bi-envelope"),
-    # -- API: rate limiting, retry --
-    "API_RATE_LIMIT_CALLS": ("API", "bi-speedometer"),
-    "API_RATE_LIMIT_PERIOD": ("API", "bi-speedometer"),
-    "API_RETRY_ATTEMPTS": ("API", "bi-speedometer"),
-    "API_RETRY_BACKOFF_INITIAL": ("API", "bi-speedometer"),
-    "API_RETRY_BACKOFF_MAX": ("API", "bi-speedometer"),
-    # -- System: aplikacja, logi, baza --
-    "SECRET_KEY": ("System", "bi-gear"),
-    "TIMEZONE": ("System", "bi-gear"),
-    "LOG_LEVEL": ("System", "bi-gear"),
-    "LOG_FILE": ("System", "bi-gear"),
-    "DB_PATH": ("System", "bi-gear"),
-    "DATABASE_URL": ("System", "bi-gear"),
-}
 
 
 bp = Blueprint("main", __name__)
@@ -382,73 +306,16 @@ def logout():
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings_page():
-    all_values = settings_store.as_ordered_dict(
-        include_hidden=True,
-        logger=_make_logger(),
-        on_error=_make_error_notifier(),
-    )
-    values = OrderedDict(
-        (key, val) for key, val in all_values.items() if key not in HIDDEN_KEYS
-    )
-    sales_keys = _sales_keys(values)
-    db_path_notice = bool(all_values.get("DB_PATH"))
-    
     if request.method == "POST":
-        updates = {}
-        for key in list(values.keys()):
-            if key in sales_keys:
-                continue
-            updates[key] = request.form.get(key, values.get(key, ""))
-        for tkey in ("QUIET_HOURS_START", "QUIET_HOURS_END"):
-            try:
-                parse_time_str(updates.get(tkey, values.get(tkey, "")))
-            except ValueError:
-                flash("Niepoprawny format godziny (hh:mm)", "error")
-                return redirect(url_for("settings_page"))
-        try:
-            settings_store.update(updates)
-        except SettingsPersistenceError as exc:
-            current_app.logger.error(
-                "Failed to persist settings submitted via the admin panel", exc_info=exc
-            )
-            flash(
-                "Nie można zapisać ustawień, ponieważ baza konfiguracji jest w trybie tylko do odczytu.",
-                "error",
-            )
-            return redirect(url_for("settings_page"))
-        label_agent.reload_config()
-        flash("Zapisano ustawienia.", "success")
+        result = update_settings_from_form(request.form, current_app.logger)
+        if result.should_reload_agent:
+            label_agent.reload_config()
+        flash(result.message, result.category)
         return redirect(url_for("settings_page"))
-    
-    settings_list = []
-    for key, val in values.items():
-        if key in sales_keys:
-            continue
-        label, desc = ENV_INFO.get(key, (key, None))
-        group_name, group_icon = SETTINGS_GROUPS.get(key, ("Inne", "bi-three-dots"))
-        settings_list.append(
-            {"key": key, "label": label, "desc": desc, "value": val, "group": group_name, "group_icon": group_icon}
-        )
-    
-    # Grupuj ustawienia w sekcje (zachowuj kolejnosc)
-    from collections import OrderedDict as OD
-    grouped_settings = OD()
-    for item in settings_list:
-        gname = item["group"]
-        if gname not in grouped_settings:
-            grouped_settings[gname] = {"icon": item["group_icon"], "entries": []}
-        grouped_settings[gname]["entries"].append(item)
-    
-    fixed_costs_list, total_fixed_costs = list_fixed_costs()
-    
+    context = build_settings_context(logger=_make_logger(), on_error=_make_error_notifier())
     return render_template(
         "settings.html",
-        settings=settings_list,
-        grouped_settings=grouped_settings,
-        db_path_notice=db_path_notice,
-        boolean_keys=BOOLEAN_KEYS,
-        fixed_costs=fixed_costs_list,
-        total_fixed_costs=total_fixed_costs,
+        **context,
     )
 
 
@@ -545,50 +412,19 @@ def test_monthly_report():
     """Wyslij testowy raport miesiczny przez Messenger."""
     if not _test_routes_enabled():
         return _redirect_disabled_test_route()
-    from datetime import datetime
     from .notifications import send_report
-    
+    from .services.test_reports import send_current_month_test_report
+
     msg = None
     summary = None
-    
     if request.method == "POST":
-        # Oblicz podsumowanie dla biezacego miesiaca (od 1.)
-        now = datetime.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        month_start_ts = int(month_start.timestamp())
-        now_ts = int(now.timestamp())
-        
-        MONTH_NAMES = ['Styczen', 'Luty', 'Marzec', 'Kwiecien', 'Maj', 'Czerwiec',
-                       'Lipiec', 'Sierpien', 'Wrzesien', 'Pazdziernik', 'Listopad', 'Grudzien']
-        month_name = MONTH_NAMES[now.month - 1]
-        
-        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
-        
-        with get_session() as db:
-            # Uzyj centralnego kalkulatora finansowego
-            calculator = FinancialCalculator(db, settings_store)
-            period_summary = calculator.get_period_summary(
-                month_start_ts, 
-                now_ts,
-                include_fixed_costs=False,  # Raport testowy bez kosztow stalych
-                access_token=access_token
-            )
-        
-        summary = {
-            "month_name": month_name,
-            "products_sold": period_summary.products_sold,
-            "total_revenue": float(period_summary.total_revenue),
-            "real_profit": float(period_summary.gross_profit),
-        }
-        
-        # Wyslij raport
-        message = (
-            f"W miesiącu {month_name} sprzedałaś {period_summary.products_sold} produktów "
-            f"za {period_summary.total_revenue:.2f} zł co dało {period_summary.gross_profit:.2f} zł zysku"
+        payload = send_current_month_test_report(
+            get_session,
+            settings_store,
+            send_report,
         )
-        send_report("Testowy raport miesieczny", [message])
-        msg = f"Raport wyslany! Tresc: {message}"
-    
+        msg = payload.message
+        summary = payload.summary
     return render_template("test_report.html", message=msg, summary=summary)
 
 
