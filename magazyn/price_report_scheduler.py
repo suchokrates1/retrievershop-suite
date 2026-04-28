@@ -15,14 +15,12 @@ Logika:
 """
 
 import threading
-import time
-import random
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import func, distinct
 
 from .services.price_report_checker import check_single_offer
+from .services.price_report_notifications import send_price_report_notification
 from .services.price_report_processing import (
     count_checked_offers as _count_checked_offers,
     create_new_report,
@@ -36,6 +34,7 @@ from .services.price_report_schedule import (
     calculate_schedule as _calculate_schedule,
     is_night_pause_at,
 )
+from .services.price_report_worker import run_report_worker
 from .services.runtime import BackgroundThreadRuntime
 
 logger = logging.getLogger(__name__)
@@ -101,56 +100,7 @@ def sync_allegro_offers_before_report():
 
 def send_report_notification(report_id: int):
     """Wysyla powiadomienie o gotowym raporcie."""
-    from .db import get_session
-    from .models.price_reports import PriceReport, PriceReportItem
-    from .notifications.messenger import MessengerClient, MessengerConfig
-    from .settings_store import settings_store
-    
-    try:
-        with get_session() as session:
-            report = session.query(PriceReport).filter(PriceReport.id == report_id).first()
-            if not report:
-                return
-            
-            total = session.query(func.count(distinct(PriceReportItem.offer_id))).filter(
-                PriceReportItem.report_id == report_id
-            ).scalar() or 0
-            
-            cheapest = session.query(func.count(distinct(PriceReportItem.offer_id))).filter(
-                PriceReportItem.report_id == report_id,
-                PriceReportItem.is_cheapest.is_(True)
-            ).scalar() or 0
-            
-            not_cheapest = total - cheapest
-        
-        access_token = settings_store.get("PAGE_ACCESS_TOKEN", "")
-        recipient_id = settings_store.get("RECIPIENT_ID", "")
-        
-        if not access_token or not recipient_id:
-            logger.warning("Brak konfiguracji Messenger - pomijam powiadomienie")
-            return
-        
-        config = MessengerConfig(
-            access_token=access_token,
-            recipient_id=recipient_id,
-        )
-        client = MessengerClient(config)
-        
-        message = (
-            f"Raport cenowy #{report_id} gotowy!\n\n"
-            f"Sprawdzono: {total} ofert\n"
-            f"Najtansi: {cheapest}\n"
-            f"Drozsi od konkurencji: {not_cheapest}\n\n"
-            f"Sprawdz szczegoly w aplikacji."
-        )
-        
-        if client.send_text(message):
-            logger.info(f"Wyslano powiadomienie o raporcie #{report_id}")
-        else:
-            logger.error("Nie udalo sie wyslac powiadomienia")
-            
-    except Exception as e:
-        logger.error(f"Blad wysylania powiadomienia: {e}", exc_info=True)
+    send_price_report_notification(report_id, log=logger)
 
 
 def _start_worker(app, report_id: int, schedule: List[datetime], fast_mode: bool = True) -> bool:
@@ -178,125 +128,28 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
     fast_mode=True: tryb reczny - pomija pauze nocna i czeka losowo
     MANUAL_MIN_BATCH_DELAY..MANUAL_MAX_BATCH_DELAY minut miedzy partiami.
     """
-    import asyncio
     from .scripts.price_checker_ws import CDP_HOST, CDP_PORT
-    
-    mode_label = "reczny" if fast_mode else "wolny"
-    logger.info(f"Rozpoczynam przetwarzanie raportu #{report_id}, {len(schedule)} partii (tryb: {mode_label})")
-    
-    # Przed scrapingiem oznacz drozsze siostry jako "Inna OK"
-    try:
-        with app.app_context():
-            sibling_count = mark_sibling_offers(report_id)
-            if sibling_count > 0:
-                logger.info(f"Pominiento {sibling_count} ofert (Inna OK) - zostaly drozsze siostry")
-    except Exception as e:
-        logger.warning(f"Blad oznaczania siostrzanych ofert: {e}")
-    
-    batch_idx = 0
-    
-    while not _stop_event.is_set() and batch_idx < len(schedule):
-        if not fast_mode:
-            # Czekaj na zaplanowany czas (tylko tryb automatyczny)
-            target_time = schedule[batch_idx]
-            now = datetime.now()
-            
-            if now < target_time:
-                wait_seconds = (target_time - now).total_seconds()
-                logger.info(f"Czekam {wait_seconds/60:.1f} min do partii {batch_idx + 1}")
-                
-                if _stop_event.wait(wait_seconds):
-                    logger.info("Przerwano oczekiwanie")
-                    break
-            
-            # Sprawdz czy nie jest przerwa nocna (tylko tryb automatyczny)
-            if is_night_pause():
-                logger.info("Przerwa nocna - czekam do 06:00")
-                now = datetime.now()
-                wake_time = now.replace(hour=NIGHT_PAUSE_END, minute=0, second=0)
-                if now.hour >= NIGHT_PAUSE_END:
-                    wake_time += timedelta(days=1)
-                wait_seconds = (wake_time - now).total_seconds()
-                _stop_event.wait(wait_seconds)
-                continue
-        
-        try:
-            with app.app_context():
-                # Pobierz oferty do sprawdzenia
-                offers = get_unchecked_offers(report_id, BATCH_SIZE)
-                
-                if not offers:
-                    logger.info("Brak wiecej ofert do sprawdzenia")
-                    break
-                
-                logger.info(f"Partia {batch_idx + 1}: sprawdzam {len(offers)} ofert")
-                
-                # Sprawdz kazda oferte
-                for offer in offers:
-                    if _stop_event.is_set():
-                        break
-                    
-                    try:
-                        # Uruchom async check
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        result = loop.run_until_complete(
-                            check_single_offer(offer, CDP_HOST, CDP_PORT)
-                        )
-                        loop.close()
-                        
-                        # Zapisz wynik
-                        save_report_item(report_id, result)
-                        logger.info(f"Sprawdzono: {offer['offer_id']} - {'OK' if result['success'] else result['error']}")
-                        
-                        # Losowe opoznienie miedzy ofertami w partii (2-5 sek)
-                        time.sleep(random.uniform(2, 5))  # nosec B311
-                        
-                    except Exception as e:
-                        logger.error(f"Blad sprawdzania oferty {offer['offer_id']}: {e}")
-                        # Zapisz blad
-                        save_report_item(report_id, {
-                            **offer,
-                            "success": False,
-                            "error": str(e),
-                            "my_position": 0,
-                            "competitors_count": 0,
-                            "cheapest": None,
-                        })
-                
-        except Exception as e:
-            logger.error(f"Blad partii {batch_idx + 1}: {e}", exc_info=True)
-        
-        batch_idx += 1
-        
-        # Tryb reczny: losowe opoznienie miedzy partiami (3-6 min)
-        # Zapobiega wykryciu przez Allegro, celuje w ~8h dla calego raportu
-        if fast_mode and not _stop_event.is_set() and batch_idx < len(schedule):
-            delay = random.uniform(MANUAL_MIN_BATCH_DELAY, MANUAL_MAX_BATCH_DELAY)  # nosec B311
-            logger.info(f"Tryb reczny: czekam {delay/60:.1f} min do nastepnej partii")
-            _stop_event.wait(delay)
-    
-    # Finalizuj raport
-    with app.app_context():
-        finalize_report(report_id)
-        
-        # Wyslij powiadomienie po 16:00 w niedziele
-        now = datetime.now()
-        if now.weekday() == 6:  # Niedziela
-            if now.hour >= 16:
-                send_report_notification(report_id)
-            else:
-                # Zaplanuj powiadomienie na 16:00
-                wait_until_16 = (now.replace(hour=16, minute=0, second=0) - now).total_seconds()
-                if wait_until_16 > 0:
-                    logger.info(f"Czekam {wait_until_16/60:.1f} min na wyslanie powiadomienia")
-                    time.sleep(wait_until_16)
-                send_report_notification(report_id)
-        else:
-            # Jesli nie niedziela, wyslij od razu
-            send_report_notification(report_id)
-    
-    logger.info(f"Zakonczono przetwarzanie raportu #{report_id}")
+    run_report_worker(
+        app,
+        report_id,
+        schedule,
+        fast_mode=fast_mode,
+        stop_event=_stop_event,
+        log=logger,
+        batch_size=BATCH_SIZE,
+        manual_min_batch_delay=MANUAL_MIN_BATCH_DELAY,
+        manual_max_batch_delay=MANUAL_MAX_BATCH_DELAY,
+        night_pause_end=NIGHT_PAUSE_END,
+        is_night_pause=is_night_pause,
+        mark_sibling_offers=mark_sibling_offers,
+        get_unchecked_offers=get_unchecked_offers,
+        check_single_offer=check_single_offer,
+        save_report_item=save_report_item,
+        finalize_report=finalize_report,
+        send_report_notification=send_report_notification,
+        cdp_host=CDP_HOST,
+        cdp_port=CDP_PORT,
+    )
 
 
 def _scheduler_main(app):
