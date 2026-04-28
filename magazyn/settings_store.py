@@ -5,15 +5,15 @@ from __future__ import annotations
 import logging
 import os
 from collections import OrderedDict
-from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from types import SimpleNamespace
 from typing import Iterable, Mapping, Optional
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
 from . import settings_io
+from .domain.settings_persistence import APP_SETTINGS_SCHEMA, SettingsDatabaseGateway
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,14 +21,8 @@ LOGGER = logging.getLogger(__name__)
 class SettingsPersistenceError(RuntimeError):
     """Raised when settings cannot be persisted to any backing store."""
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS app_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-)
-"""
 
+SCHEMA = APP_SETTINGS_SCHEMA
 
 def _default_db_path() -> Path:
     return Path(os.path.join(os.path.dirname(__file__), "database.db"))
@@ -44,6 +38,10 @@ class SettingsStore:
         self._db_path: Path = _default_db_path()
         self._loaded = False
         self._db_last_updated_at: Optional[str] = None
+        self._db_gateway = SettingsDatabaseGateway(
+            logger=LOGGER,
+            engine_factory=create_engine,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -55,43 +53,10 @@ class SettingsStore:
         return Path(db_path)
 
     def _get_runtime_engine(self):
-        """Zwróć skonfigurowany engine lub tymczasowy engine z DATABASE_URL."""
-        from .db import engine as configured_engine
-
-        if configured_engine is not None:
-            return configured_engine, False
-
-        database_url = os.environ.get("DATABASE_URL", "")
-        if not database_url.startswith("postgresql"):
-            return None, False
-
-        try:
-            return create_engine(
-                database_url,
-                future=True,
-                pool_pre_ping=True,
-            ), True
-        except Exception as exc:
-            LOGGER.warning("Failed to create temporary settings engine: %s", exc)
-            return None, False
+        return self._db_gateway.get_runtime_engine()
 
     def _engine_matches_db_path(self, eng, db_path: Optional[Path]) -> bool:
-        """Sprawdz, czy SQLite engine wskazuje te sama baze co zrodlo ustawien."""
-        if db_path is None:
-            return True
-
-        url = getattr(eng, "url", None)
-        if url is None or not str(url.drivername).startswith("sqlite"):
-            return True
-
-        engine_db = getattr(url, "database", None)
-        if not engine_db or engine_db == ":memory:":
-            return True
-
-        try:
-            return Path(engine_db).resolve() == Path(db_path).resolve()
-        except OSError:
-            return Path(engine_db) == Path(db_path)
+        return self._db_gateway.engine_matches_db_path(eng, db_path)
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
@@ -127,282 +92,27 @@ class SettingsStore:
             self._db_last_updated_at = db_updated_at
 
     def _load_via_engine(self, eng):
-        """Laduje ustawienia z bazy przez SQLAlchemy engine."""
-        try:
-            with eng.connect() as conn:
-                try:
-                    rows = conn.execute(
-                        text("SELECT key, value, updated_at FROM app_settings ORDER BY key")
-                    ).fetchall()
-                    has_updated_at = True
-                except Exception as exc:
-                    conn.rollback()
-                    err = str(exc).lower()
-                    if "no such table" in err or "does not exist" in err:
-                        return OrderedDict(), None
-                    if "no such column" in err:
-                        try:
-                            rows = conn.execute(
-                                text("SELECT key, value FROM app_settings ORDER BY key")
-                            ).fetchall()
-                            has_updated_at = False
-                        except Exception:
-                            conn.rollback()
-                            return OrderedDict(), None
-                    else:
-                        LOGGER.warning("Failed to query app_settings: %s", exc)
-                        return None
-
-                data: "OrderedDict[str, str]" = OrderedDict()
-                latest: Optional[str] = None
-                for row in rows:
-                    data[row[0]] = row[1] if row[1] is not None else ""
-                    if has_updated_at:
-                        val = row[2]
-                        if val is not None:
-                            val_str = val if isinstance(val, str) else str(val)
-                            if latest is None or val_str > latest:
-                                latest = val_str
-                return data, latest
-        except Exception as exc:
-            LOGGER.warning("Failed to read settings from engine: %s", exc)
-            return None
+        return self._db_gateway.load_via_engine(eng)
 
     def _load_from_db(
         self, db_path: Path
     ) -> Optional[tuple["OrderedDict[str, str]", Optional[str]]]:
-        runtime_engine, should_dispose = self._get_runtime_engine()
-        if runtime_engine is not None and self._engine_matches_db_path(runtime_engine, db_path):
-            try:
-                return self._load_via_engine(runtime_engine)
-            finally:
-                if should_dispose:
-                    runtime_engine.dispose()
-
-        # Engine nie skonfigurowany - bezposredni fallback SQLite
-        if not db_path.exists():
-            return None
-        try:
-            import sqlite3 as _sqlite3
-            conn = _sqlite3.connect(str(db_path))
-        except Exception as exc:
-            LOGGER.warning("Failed to read settings from %s: %s", db_path, exc)
-            return None
-        try:
-            conn.row_factory = _sqlite3.Row
-            cursor = conn.cursor()
-            try:
-                cursor.execute(
-                    "SELECT key, value, updated_at FROM app_settings ORDER BY key"
-                )
-            except Exception as exc:
-                if "no such column" in str(exc).lower():
-                    cursor.execute("SELECT key, value FROM app_settings ORDER BY key")
-                    rows = cursor.fetchall()
-                    data = OrderedDict(
-                        (row["key"], row["value"] if row["value"] is not None else "")
-                        for row in rows
-                    )
-                    return data, None
-                raise
-            rows = cursor.fetchall()
-        except Exception as exc:
-            if "no such table" in str(exc).lower():
-                return OrderedDict(), None
-            LOGGER.warning("Failed to query app_settings: %s", exc)
-            return None
-        finally:
-            conn.close()
-
-        data: "OrderedDict[str, str]" = OrderedDict()
-        latest: Optional[str] = None
-        for row in rows:
-            data[row["key"]] = row["value"] if row["value"] is not None else ""
-            if "updated_at" in row.keys():
-                row_updated_at = row["updated_at"]
-                if isinstance(row_updated_at, str):
-                    if latest is None or row_updated_at > latest:
-                        latest = row_updated_at
-        return data, latest
+        return self._db_gateway.load_from_db(db_path)
 
     def _fetch_last_updated_at(self, db_path: Optional[Path] = None) -> Optional[str]:
-        runtime_engine, should_dispose = self._get_runtime_engine()
-        if runtime_engine is None:
-            return None
-        expected_db_path = db_path or self._db_path
-        if not self._engine_matches_db_path(runtime_engine, expected_db_path):
-            if should_dispose:
-                runtime_engine.dispose()
-            return None
-        try:
-            with runtime_engine.connect() as conn:
-                row = conn.execute(
-                    text("SELECT MAX(updated_at) FROM app_settings")
-                ).fetchone()
-                if not row:
-                    return None
-                value = row[0]
-                if value is None:
-                    return None
-                return value if isinstance(value, str) else str(value)
-        except Exception as exc:
-            err = str(exc).lower()
-            if "no such column" in err or "does not exist" in err or "no such table" in err:
-                return None
-            LOGGER.debug("Failed to read app_settings.updated_at: %s", exc)
-            return None
-        finally:
-            if should_dispose:
-                runtime_engine.dispose()
+        return self._db_gateway.fetch_last_updated_at(db_path or self._db_path)
 
     def _persist_many(self, values: Mapping[str, str], db_path: Optional[Path] = None) -> bool:
-        if not values:
-            return True
-
-        from .db import engine as configured_engine
-        from .db import db_connect as _db_connect
-
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
-        rows = [
-            {"key": key, "value": "" if value is None else str(value), "now": now}
-            for key, value in values.items()
-        ]
-
-        runtime_engine, should_dispose = self._get_runtime_engine()
-
-        if configured_engine is None and runtime_engine is not None:
-            try:
-                with runtime_engine.connect() as conn:
-                    conn.execute(text(SCHEMA))
-                    conn.execute(
-                        text("""
-                            INSERT INTO app_settings(key, value, updated_at)
-                            VALUES (:key, :value, :now)
-                            ON CONFLICT(key) DO UPDATE SET
-                                value = excluded.value,
-                                updated_at = excluded.updated_at
-                        """),
-                        rows,
-                    )
-                    conn.commit()
-                    row = conn.execute(
-                        text("SELECT MAX(updated_at) FROM app_settings")
-                    ).fetchone()
-                    if row:
-                        latest = row[0]
-                        if latest is not None:
-                            self._db_last_updated_at = (
-                                latest if isinstance(latest, str) else str(latest)
-                            )
-                    return True
-            except Exception as exc:
-                LOGGER.exception("Failed to persist settings to database: %s", exc)
-                raise SettingsPersistenceError(
-                    "Failed to persist settings to the database"
-                ) from exc
-            finally:
-                if should_dispose:
-                    runtime_engine.dispose()
-
-        try:
-            with _db_connect() as conn:
-                conn.execute(text(SCHEMA))
-                conn.execute(
-                    text("""
-                        INSERT INTO app_settings(key, value, updated_at)
-                        VALUES (:key, :value, :now)
-                        ON CONFLICT(key) DO UPDATE SET
-                            value = excluded.value,
-                            updated_at = excluded.updated_at
-                    """),
-                    rows,
-                )
-                conn.commit()
-                try:
-                    row = conn.execute(
-                        text("SELECT MAX(updated_at) FROM app_settings")
-                    ).fetchone()
-                except Exception:
-                    conn.rollback()
-                    row = None
-                if row:
-                    latest = row[0]
-                    if isinstance(latest, str):
-                        self._db_last_updated_at = latest
-                return True
-        except SettingsPersistenceError:
-            raise
-        except Exception as exc:
-            LOGGER.exception("Failed to persist settings to database: %s", exc)
-            raise SettingsPersistenceError(
-                "Failed to persist settings to the database"
-            ) from exc
+        latest = self._db_gateway.persist_many(values)
+        if latest is not None:
+            self._db_last_updated_at = latest
+        return True
 
     def _delete_keys(self, keys: Iterable[str], db_path: Optional[Path] = None) -> bool:
-        keys = list(keys)
-        if not keys:
-            return True
-
-        from .db import engine as configured_engine
-        from .db import db_connect as _db_connect
-
-        runtime_engine, should_dispose = self._get_runtime_engine()
-
-        if configured_engine is None and runtime_engine is not None:
-            try:
-                with runtime_engine.connect() as conn:
-                    conn.execute(text(SCHEMA))
-                    conn.execute(
-                        text("DELETE FROM app_settings WHERE key = :key"),
-                        [{"key": k} for k in keys],
-                    )
-                    conn.commit()
-                    row = conn.execute(
-                        text("SELECT MAX(updated_at) FROM app_settings")
-                    ).fetchone()
-                    if row:
-                        latest = row[0]
-                        if latest is not None:
-                            self._db_last_updated_at = (
-                                latest if isinstance(latest, str) else str(latest)
-                            )
-                    return True
-            except Exception as exc:
-                LOGGER.exception("Failed to delete settings from database: %s", exc)
-                raise SettingsPersistenceError(
-                    "Failed to delete settings from the database"
-                ) from exc
-            finally:
-                if should_dispose:
-                    runtime_engine.dispose()
-
-        try:
-            with _db_connect() as conn:
-                conn.execute(text(SCHEMA))
-                conn.execute(
-                    text("DELETE FROM app_settings WHERE key = :key"),
-                    [{"key": k} for k in keys],
-                )
-                conn.commit()
-                try:
-                    row = conn.execute(
-                        text("SELECT MAX(updated_at) FROM app_settings")
-                    ).fetchone()
-                except Exception:
-                    conn.rollback()
-                    row = None
-                if row:
-                    latest = row[0]
-                    if isinstance(latest, str):
-                        self._db_last_updated_at = latest
-                return True
-        except SettingsPersistenceError:
-            raise
-        except Exception as exc:
-            LOGGER.exception("Failed to delete settings from database: %s", exc)
-            raise SettingsPersistenceError(
-                "Failed to delete settings from the database"
-            ) from exc
+        latest = self._db_gateway.delete_keys(keys)
+        if latest is not None:
+            self._db_last_updated_at = latest
+        return True
 
     def _build_namespace(self, values: Mapping[str, str]) -> SimpleNamespace:
         processed_values = {}
