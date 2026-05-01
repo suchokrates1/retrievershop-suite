@@ -15,7 +15,6 @@ Usage:
 
 import csv
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from core import search, DATA_DIR
@@ -403,8 +402,8 @@ def format_markdown(design_system: dict) -> str:
 
     # Colors section
     lines.append("### Colors")
-    lines.append(f"| Role | Hex |")
-    lines.append(f"|------|-----|")
+    lines.append("| Role | Hex |")
+    lines.append("|------|-----|")
     lines.append(f"| Primary | {colors.get('primary', '')} |")
     lines.append(f"| Secondary | {colors.get('secondary', '')} |")
     lines.append(f"| CTA | {colors.get('cta', '')} |")
@@ -425,10 +424,10 @@ def format_markdown(design_system: dict) -> str:
     if typography.get("google_fonts_url"):
         lines.append(f"- **Google Fonts:** {typography.get('google_fonts_url', '')}")
     if typography.get("css_import"):
-        lines.append(f"- **CSS Import:**")
-        lines.append(f"```css")
+        lines.append("- **CSS Import:**")
+        lines.append("```css")
         lines.append(f"{typography.get('css_import', '')}")
-        lines.append(f"```")
+        lines.append("```")
     lines.append("")
 
     # Key Effects section
@@ -658,7 +657,7 @@ def format_master_md(design_system: dict) -> str:
     lines.append("")
     lines.append("/* Secondary Button */")
     lines.append(".btn-secondary {")
-    lines.append(f"  background: transparent;")
+    lines.append("  background: transparent;")
     lines.append(f"  color: {colors.get('primary', '#2563EB')};")
     lines.append(f"  border: 2px solid {colors.get('primary', '#2563EB')};")
     lines.append("  padding: 12px 24px;")
@@ -768,16 +767,16 @@ def format_master_md(design_system: dict) -> str:
         anti_list = [a.strip() for a in anti_patterns.split("+")]
         for anti in anti_list:
             if anti:
-                lines.append(f"- ❌ {anti}")
+                lines.append(f"- Do not use: {anti}")
     lines.append("")
     lines.append("### Additional Forbidden Patterns")
     lines.append("")
-    lines.append("- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)")
-    lines.append("- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer")
-    lines.append("- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout")
-    lines.append("- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio")
-    lines.append("- ❌ **Instant state changes** — Always use transitions (150-300ms)")
-    lines.append("- ❌ **Invisible focus states** — Focus states must be visible for a11y")
+    lines.append("- **Emojis as icons** - Use SVG icons (Heroicons, Lucide, Simple Icons)")
+    lines.append("- **Missing cursor:pointer** - All clickable elements must have cursor:pointer")
+    lines.append("- **Layout-shifting hovers** - Avoid scale transforms that shift layout")
+    lines.append("- **Low contrast text** - Maintain 4.5:1 minimum contrast ratio")
+    lines.append("- **Instant state changes** - Always use transitions (150-300ms)")
+    lines.append("- **Invisible focus states** - Focus states must be visible for a11y")
     lines.append("")
     
     # Pre-Delivery Checklist
@@ -819,7 +818,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
     lines.append(f"> **Generated:** {timestamp}")
     lines.append(f"> **Page Type:** {page_overrides.get('page_type', 'General')}")
     lines.append("")
-    lines.append("> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).")
+    lines.append("> **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).")
     lines.append("> Only deviations from the Master are documented here. For all other rules, refer to the Master.")
     lines.append("")
     lines.append("---")
@@ -837,7 +836,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
         for key, value in layout.items():
             lines.append(f"- **{key}:** {value}")
     else:
-        lines.append("- No overrides — use Master layout")
+        lines.append("- No overrides - use Master layout")
     lines.append("")
     
     # Spacing Overrides
@@ -848,7 +847,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
         for key, value in spacing.items():
             lines.append(f"- **{key}:** {value}")
     else:
-        lines.append("- No overrides — use Master spacing")
+        lines.append("- No overrides - use Master spacing")
     lines.append("")
     
     # Typography Overrides
@@ -859,7 +858,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
         for key, value in typography.items():
             lines.append(f"- **{key}:** {value}")
     else:
-        lines.append("- No overrides — use Master typography")
+        lines.append("- No overrides - use Master typography")
     lines.append("")
     
     # Color Overrides
@@ -870,7 +869,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
         for key, value in colors.items():
             lines.append(f"- **{key}:** {value}")
     else:
-        lines.append("- No overrides — use Master colors")
+        lines.append("- No overrides - use Master colors")
     lines.append("")
     
     # Component Overrides
@@ -881,7 +880,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
         for comp in components:
             lines.append(f"- {comp}")
     else:
-        lines.append("- No overrides — use Master component specs")
+        lines.append("- No overrides - use Master component specs")
     lines.append("")
     
     # Page-Specific Components
@@ -949,20 +948,18 @@ def _generate_intelligent_overrides(page_name: str, page_query: str, design_syst
     # Extract style-based overrides
     if style_results:
         style = style_results[0]
-        style_name = style.get("Style Category", "")
         keywords = style.get("Keywords", "")
-        best_for = style.get("Best For", "")
         effects = style.get("Effects & Animation", "")
         
         # Infer layout from style keywords
         if any(kw in keywords.lower() for kw in ["data", "dense", "dashboard", "grid"]):
             layout["Max Width"] = "1400px or full-width"
             layout["Grid"] = "12-column grid for data flexibility"
-            spacing["Content Density"] = "High — optimize for information display"
+            spacing["Content Density"] = "High - optimize for information display"
         elif any(kw in keywords.lower() for kw in ["minimal", "simple", "clean", "single"]):
             layout["Max Width"] = "800px (narrow, focused)"
             layout["Layout"] = "Single column, centered"
-            spacing["Content Density"] = "Low — focus on clarity"
+            spacing["Content Density"] = "Low - focus on clarity"
         else:
             layout["Max Width"] = "1200px (standard)"
             layout["Layout"] = "Full-width sections, centered content"
@@ -1041,7 +1038,6 @@ def _detect_page_type(context: str, style_results: list) -> str:
     
     # Fallback: try to infer from style results
     if style_results:
-        style_name = style_results[0].get("Style Category", "").lower()
         best_for = style_results[0].get("Best For", "").lower()
         
         if "dashboard" in best_for or "data" in best_for:

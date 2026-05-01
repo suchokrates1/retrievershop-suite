@@ -179,7 +179,7 @@ def remove_excluded_seller(seller_id):
 
 @bp.route("/recheck-item/<int:item_id>", methods=["POST"])
 @login_required
-def recheck_item(item_id):
+def recheck_report_item_route(item_id):
     """Ponownie sprawdza cene produktu (natychmiast, bez kolejki).
     
     Dodatkowo:
@@ -191,7 +191,7 @@ def recheck_item(item_id):
 
 @bp.route("/change-price/<int:item_id>", methods=["POST"])
 @login_required
-def change_price(item_id):
+def change_report_item_price_route(item_id):
     """Zmienia cene oferty na Allegro z weryfikacja przez API.
 
     Serwis mutacji pobiera nazwe oferty z ``item.product_name``.
