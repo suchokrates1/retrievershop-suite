@@ -184,7 +184,11 @@ def get_excluded_sellers() -> set:
         
         with get_session() as session:
             excluded = session.query(ExcludedSeller.seller_name).all()
-            _excluded_sellers_cache = {e.seller_name for e in excluded}
+            _excluded_sellers_cache = {
+                normalized
+                for entry in excluded
+                if (normalized := _normalize_seller_name(entry.seller_name))
+            }
             _excluded_sellers_loaded = True
             if _excluded_sellers_cache:
                 logger.info(f"Zaladowano {len(_excluded_sellers_cache)} wykluczonych sprzedawcow")
@@ -244,7 +248,24 @@ class PriceCheckResult:
 
 def parse_price(price_str: str) -> float:
     """Parsuje cene z formatu '206,00' do float."""
-    return float(price_str.replace(",", ".").replace(" ", ""))
+    if price_str is None:
+        raise ValueError("Brak ceny")
+
+    normalized = str(price_str).strip()
+    normalized = re.sub(r"(?i)\b(?:zł|zl|pln)\b", "", normalized)
+    normalized = re.sub(r"[\s\u00a0\u202f]", "", normalized)
+    normalized = re.sub(r"[^0-9,.\-]", "", normalized)
+    if not normalized:
+        raise ValueError(f"Nieprawidlowa cena: {price_str!r}")
+
+    if "," in normalized:
+        normalized = normalized.replace(".", "").replace(",", ".")
+    return float(normalized)
+
+
+def _normalize_seller_name(seller_name: str) -> str:
+    """Normalizuje login sprzedawcy do porownan i filtrowania."""
+    return str(seller_name or "").strip().casefold()
 
 
 def parse_delivery_days(text: str) -> Optional[int]:
@@ -429,12 +450,23 @@ def parse_competitor_articles(articles: List[Dict[str, Any]], product_title: str
         condition = detect_offer_condition(text)
 
         if price_match_value:
-            price = parse_price(price_match_value)
+            try:
+                price = parse_price(price_match_value)
+                total = parse_price(delivery_price_str) if delivery_price_str else price
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    "Pominiety article %s: nieprawidlowa cena (%r / %r): %s",
+                    art.get("index"),
+                    price_match_value,
+                    delivery_price_str,
+                    exc,
+                )
+                continue
+
             if price < 1.0:
                 logger.warning(f"Pominiety article {art.get('index')}: cena {price} zl < 1 zl (prawdopodobny blad parsowania)")
                 continue
 
-            total = parse_price(delivery_price_str) if delivery_price_str else price
             delivery_text = delivery_text_match.group(1) if delivery_text_match else ""
             delivery_days = parse_delivery_days(delivery_text)
 
@@ -486,13 +518,18 @@ def filter_competitor_offers(
 ) -> Tuple[List[CompetitorOffer], Dict[str, int]]:
     """Filtruje konkurencje po dostawie, liscie wykluczen i stanie oferty."""
     stats = {"delivery": 0, "excluded_sellers": 0, "condition": 0}
+    normalized_excluded_sellers = {
+        normalized
+        for seller in excluded_sellers
+        if (normalized := _normalize_seller_name(seller))
+    }
     filtered = []
 
     for offer in offers:
         if offer.delivery_days is not None and offer.delivery_days >= max_delivery_days:
             stats["delivery"] += 1
             continue
-        if offer.seller in excluded_sellers:
+        if _normalize_seller_name(offer.seller) in normalized_excluded_sellers:
             stats["excluded_sellers"] += 1
             continue
         if is_excluded_offer_condition(offer.condition):
@@ -629,7 +666,7 @@ async def extract_page_price(ws) -> Optional[float]:
     return None
 
 
-async def fetch_competitor_offer_payload(ws) -> Dict[str, Any]:
+async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> Dict[str, Any]:
     """Pobiera surowe artykuly ofert z aktywnego dialogu produktowego."""
     js_code = r'''
     (function() {
@@ -786,7 +823,7 @@ async def fetch_competitor_offer_payload(ws) -> Dict[str, Any]:
 
     result = await cdp_call(ws, "Runtime.evaluate", 
                             {"expression": js_code, "returnByValue": True}, 
-                            msg_id=200,
+                            msg_id=msg_id,
                             timeout=CDP_EVALUATE_TIMEOUT_SECONDS)
 
     return result.get("result", {}).get("result", {}).get("value", {}) or {
@@ -877,15 +914,29 @@ async def check_offer_price(
                 return result
             
             payload = {"articleCount": 0, "articles": [], "containerSource": None}
+            all_offers = []
+            fetch_msg_id = 200
             for _ in range(CDP_ARTICLE_POLL_ATTEMPTS):
-                payload = await fetch_competitor_offer_payload(ws)
+                payload = await fetch_competitor_offer_payload(ws, msg_id=fetch_msg_id)
+                fetch_msg_id += 1
                 count = payload.get("articleCount", 0)
-                if count > 0:
-                    logger.debug(f"Znaleziono {count} artykulow w dialogu ({payload.get('containerSource')})")
+                all_offers = parse_competitor_articles(payload.get("articles", []), title)
+                if all_offers:
+                    logger.debug(
+                        "Znaleziono %s artykulow i %s parsowalnych ofert w dialogu (%s)",
+                        count,
+                        len(all_offers),
+                        payload.get("containerSource"),
+                    )
                     break
+                if count > 0:
+                    logger.debug(
+                        "Kontener %s ma %s artykulow, ale jeszcze brak parsowalnych ofert",
+                        payload.get("containerSource") or "brak",
+                        count,
+                    )
                 await asyncio.sleep(CDP_ARTICLE_POLL_INTERVAL_SECONDS)
             
-            all_offers = parse_competitor_articles(payload.get("articles", []), title)
             logger.info(
                 "Oferta %s: container=%s, raw_articles=%s, parsed_offers=%s",
                 offer_id,

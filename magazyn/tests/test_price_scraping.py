@@ -71,6 +71,14 @@ def test_parse_delivery_days_dzisiaj():
         assert parse_delivery_days("dostawa dzisiaj") == 0
 
 
+def test_parse_price_handles_thousands_and_nbsp():
+    from magazyn.scripts.price_checker_ws import parse_price
+
+    assert parse_price("1 299,00") == 1299.0
+    assert parse_price("1\u00a0299,00 zł") == 1299.0
+    assert parse_price("1299.50") == 1299.5
+
+
 # --- Testy CompetitorOffer nowe pola ---
 
 def test_competitor_offer_super_seller():
@@ -147,6 +155,19 @@ def test_filter_competitor_offers_excludes_bad_condition_and_delivery():
     assert stats == {"delivery": 1, "excluded_sellers": 1, "condition": 1}
 
 
+def test_filter_competitor_offers_excludes_sellers_case_insensitive():
+    from magazyn.scripts.price_checker_ws import CompetitorOffer, filter_competitor_offers
+
+    filtered, stats = filter_competitor_offers(
+        [CompetitorOffer(seller="PetSet_PL", price=100.0, price_with_delivery=100.0)],
+        {" petset_pl "},
+        3,
+    )
+
+    assert filtered == []
+    assert stats == {"delivery": 0, "excluded_sellers": 1, "condition": 0}
+
+
 def test_cdp_call_ignores_events_and_returns_matching_response():
     from magazyn.scripts.price_checker_ws import cdp_call
 
@@ -180,6 +201,22 @@ def test_cdp_call_times_out_without_matching_response():
         websocket = _FakeWebSocket()
         with pytest.raises(TimeoutError, match="Runtime.evaluate"):
             await cdp_call(websocket, "Runtime.evaluate", msg_id=9, timeout=0.01)
+
+    asyncio.run(_run())
+
+
+def test_fetch_competitor_offer_payload_uses_custom_msg_id():
+    from magazyn.scripts.price_checker_ws import fetch_competitor_offer_payload
+
+    async def _run():
+        websocket = _FakeWebSocket({
+            "id": 321,
+            "result": {"result": {"value": {"articleCount": 0, "articles": [], "containerSource": None}}},
+        })
+        payload = await fetch_competitor_offer_payload(websocket, msg_id=321)
+
+        assert payload["articleCount"] == 0
+        assert json.loads(websocket.sent[0])["id"] == 321
 
     asyncio.run(_run())
 
