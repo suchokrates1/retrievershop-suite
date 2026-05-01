@@ -170,28 +170,8 @@ def test_route_modules_are_not_used_as_service_dependencies():
     assert not violations, "Moduly route uzyte jako zaleznosci serwisowe:\n" + "\n".join(violations)
 
 
-def test_print_agent_stays_a_thin_bootstrap():
-    path = REPO_ROOT / "magazyn" / "print_agent.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    defined_blocks = [
-        node.name for node in ast.iter_child_nodes(tree)
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
-
-    exported_names = None
-    for node in ast.iter_child_nodes(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
-            continue
-        if isinstance(node.value, ast.List):
-            exported_names = [
-                item.value for item in node.value.elts
-                if isinstance(item, ast.Constant)
-            ]
-
-    assert defined_blocks == []
-    assert exported_names == ["agent", "logger"]
+def test_legacy_print_agent_facade_is_removed():
+    assert not (REPO_ROOT / "magazyn" / "print_agent.py").exists()
 
 
 def test_models_package_init_stays_empty_marker():
