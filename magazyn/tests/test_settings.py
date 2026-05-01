@@ -72,7 +72,10 @@ def test_sensitive_tokens_render_as_password(app_mod, client, login):
         "ALLEGRO_REFRESH_TOKEN",
     ]:
         field_html = _extract_input(html, key)
-        assert "type=\"password\"" in field_html.lower() or ":type=\"show" in field_html.lower()
+        assert (
+            'type="password"' in field_html.lower()
+            or ':type="show' in field_html.lower()
+        )
 
 
 def test_settings_post_updates_store(app_mod, client, login, monkeypatch):
@@ -142,7 +145,9 @@ def test_extra_keys_display_and_save(app_mod, client, login, monkeypatch):
     label = ENV_INFO.get("EXTRA_KEY", ("EXTRA_KEY", None))[0]
     assert label in html
     extra_field = _extract_input(html, "EXTRA_KEY")
-    assert "type=\"password\"" in extra_field.lower() or ":type=\"show" in extra_field.lower()
+    assert (
+        'type="password"' in extra_field.lower() or ':type="show' in extra_field.lower()
+    )
 
     values = app_mod.load_settings(include_hidden=True)
     values["EXTRA_KEY"] = "bar"
@@ -179,7 +184,47 @@ def test_settings_page_shows_allegro_authorize_button(app_mod, client, login):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert "Połącz z Allegro" in html
-    assert "action=\"/allegro/authorize\"" in html
+    assert 'action="/allegro/authorize"' in html
+
+
+def test_fixed_cost_forms_create_and_edit_record(app_mod, client, login):
+    from magazyn.models.settings import FixedCost
+
+    resp = client.post(
+        "/fixed-costs/add",
+        data={"name": "Ksiegowosc", "amount": "199.99", "description": "Miesiecznie"},
+    )
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        cost = db.query(FixedCost).filter_by(name="Ksiegowosc").first()
+        assert cost is not None
+        cost_id = cost.id
+        assert str(cost.amount) == "199.99"
+        assert cost.description == "Miesiecznie"
+
+    resp = client.post(
+        f"/fixed-costs/{cost_id}/edit",
+        data={"name": "Biuro", "amount": "249.50", "description": "Najem"},
+    )
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        cost = db.get(FixedCost, cost_id)
+        assert cost.name == "Biuro"
+        assert str(cost.amount) == "249.50"
+        assert cost.description == "Najem"
+
+    resp = client.post(
+        "/fixed-costs/add",
+        data={"name": "Korekta", "amount": "0", "description": ""},
+    )
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        zero_cost = db.query(FixedCost).filter_by(name="Korekta").first()
+        assert zero_cost is not None
+        assert str(zero_cost.amount) == "0.00"
 
 
 def test_allegro_authorize_redirects_to_provider(app_mod, client, login):
@@ -229,7 +274,11 @@ def test_settings_store_reads_tokens_from_database_url_before_engine(monkeypatch
             return DummyRows(
                 [
                     ("ALLEGRO_ACCESS_TOKEN", "db-access-token", "2026-04-03 10:00:00"),
-                    ("ALLEGRO_REFRESH_TOKEN", "db-refresh-token", "2026-04-03 10:00:00"),
+                    (
+                        "ALLEGRO_REFRESH_TOKEN",
+                        "db-refresh-token",
+                        "2026-04-03 10:00:00",
+                    ),
                 ]
             )
 
@@ -262,7 +311,9 @@ def test_settings_store_reads_tokens_from_database_url_before_engine(monkeypatch
             ]
         ),
     )
-    monkeypatch.setattr(store_mod, "create_engine", lambda *args, **kwargs: dummy_engine)
+    monkeypatch.setattr(
+        store_mod, "create_engine", lambda *args, **kwargs: dummy_engine
+    )
 
     store = store_mod.SettingsStore()
 

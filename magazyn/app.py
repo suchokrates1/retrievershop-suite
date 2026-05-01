@@ -33,13 +33,6 @@ from .services.app_runtime import start_print_agent_runtime
 from .services.print_agent_config import ConfigError
 from .services.print_agent_runtime import agent as label_agent
 from .services.settings_page import build_settings_context, update_settings_from_form
-from .services.fixed_costs import (
-    add_fixed_cost as add_fixed_cost_record,
-    delete_fixed_cost as delete_fixed_cost_record,
-    edit_fixed_cost as edit_fixed_cost_record,
-    toggle_fixed_cost as toggle_fixed_cost_record,
-)
-
 
 bp = Blueprint("main", __name__)
 
@@ -132,7 +125,10 @@ def _make_error_notifier():
     if has_request_context():
         def notifier(message):
             if "Settings template missing" in message:
-                flash("Plik .env.example nie istnieje, brak ustawień do wyświetlenia.", "warning")
+                flash(
+                    "Plik .env.example nie istnieje, brak ustawień do wyświetlenia.",
+                    "warning",
+                )
             else:
                 flash(message, "warning")
         return notifier
@@ -149,7 +145,7 @@ def inject_current_year():
     with get_session() as db:
         unread_count = db.query(Thread).filter_by(read=False).count()
     return {
-        "current_year": datetime.now().year, 
+        "current_year": datetime.now().year,
         "unread_count": unread_count,
         "now": datetime.now,  # Function to get current time in templates
         "PRODUCT_CATEGORIES": PRODUCT_CATEGORIES,
@@ -312,56 +308,13 @@ def settings_page():
             label_agent.reload_config()
         flash(result.message, result.category)
         return redirect(url_for("settings_page"))
-    context = build_settings_context(logger=_make_logger(), on_error=_make_error_notifier())
+    context = build_settings_context(
+        logger=_make_logger(), on_error=_make_error_notifier()
+    )
     return render_template(
         "settings.html",
         **context,
     )
-
-
-@bp.route("/fixed-costs/add", methods=["POST"])
-@login_required
-def add_fixed_cost():
-    """Dodaj nowy koszt staly."""
-    result = add_fixed_cost_record(
-        request.form.get("name", ""),
-        request.form.get("amount", "0"),
-        request.form.get("description", ""),
-    )
-    flash(result.message, result.category)
-    return redirect(url_for("settings_page"))
-
-
-@bp.route("/fixed-costs/<int:cost_id>/toggle", methods=["POST"])
-@login_required
-def toggle_fixed_cost(cost_id):
-    """Wlacz/wylacz koszt staly."""
-    result = toggle_fixed_cost_record(cost_id)
-    flash(result.message, result.category)
-    return redirect(url_for("settings_page"))
-
-
-@bp.route("/fixed-costs/<int:cost_id>/delete", methods=["POST"])
-@login_required
-def delete_fixed_cost(cost_id):
-    """Usun koszt staly."""
-    result = delete_fixed_cost_record(cost_id)
-    flash(result.message, result.category)
-    return redirect(url_for("settings_page"))
-
-
-@bp.route("/fixed-costs/<int:cost_id>/edit", methods=["POST"])
-@login_required
-def edit_fixed_cost(cost_id):
-    """Edytuj koszt staly."""
-    result = edit_fixed_cost_record(
-        cost_id,
-        request.form.get("name", ""),
-        request.form.get("amount", "0"),
-        request.form.get("description", ""),
-    )
-    flash(result.message, result.category)
-    return redirect(url_for("settings_page"))
 
 
 @bp.route("/logs")
