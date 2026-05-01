@@ -1,13 +1,13 @@
 # Plan migracji fasad i importow
 
-Stan na teraz: plan jest wykonany w pelnym zakresie dla migracji fasad i importow. Najwazniejszy hard-cut starych importow do `magazyn.orders`, `magazyn.price_reports`, `magazyn.print_agent`, `magazyn.returns` oraz zbiorczego `magazyn.models` zostal wdrozony w kodzie produkcyjnym i utwardzony testem architektonicznym. Po rundzie 2026-05-01 wewnetrzne uzycia agenta drukowania ida przez jawny runtime `magazyn.services.print_agent_runtime`, `magazyn.models.__init__` jest pustym markerem pakietu bez eksportow agregujacych, a kompatybilnosciowa fasada `magazyn.returns` zostala usunieta.
+Stan na teraz: plan jest wykonany w pelnym zakresie dla migracji fasad i importow. Najwazniejszy hard-cut starych importow do `magazyn.orders`, `magazyn.price_reports`, `magazyn.print_agent`, `magazyn.returns` oraz zbiorczego `magazyn.models` zostal wdrozony w kodzie produkcyjnym i utwardzony testem architektonicznym. Po rundzie 2026-05-01 wewnetrzne uzycia agenta drukowania ida przez jawny runtime `magazyn.services.print_agent_runtime`, `magazyn.models.__init__` jest pustym markerem pakietu bez eksportow agregujacych, a kompatybilnosciowe fasady `magazyn.print_agent` i `magazyn.returns` zostaly usuniete.
 
 ## Postep rundy 2026-05-01
 
 - [x] Dodano jawny runtime `magazyn.services.print_agent_runtime` dla singletona agenta drukowania.
 - [x] Przepieto produkcyjne importy `agent` ze starej fasady `magazyn.print_agent` na `magazyn.services.print_agent_runtime`.
 - [x] Przepieto testy agenta z `import magazyn.print_agent as pa` na jawny runtime serwisowy.
-- [x] Zostawiono `magazyn.print_agent` tylko jako cienki shim kompatybilnosciowy `agent/logger`.
+- [x] Usunieto shim kompatybilnosciowy `magazyn.print_agent`; jawny runtime pozostaje w `magazyn.services.print_agent_runtime`.
 - [x] Wzmocniono guard architektoniczny tak, aby blokowal dowolny powrot importow z `magazyn.print_agent` w kodzie repo.
 - [x] Zamieniono `magazyn.models.__init__` w pusty marker pakietu bez eksportow `Base` i `import_all_models`.
 - [x] Dodano guard pilnujacy, zeby `magazyn.models.__init__` nie zaczal ponownie eksportowac agregatu modeli.
@@ -35,11 +35,11 @@ Podsumowanie biezace:
 | --- | --- | --- |
 | Hard-cut importow `magazyn.orders.*` | wykonane | Stare funkcje nie sa juz importowane, a `orders.py` korzysta bezposrednio z serwisow. |
 | Hard-cut importow `magazyn.price_reports.*` | wykonane | Kod nie importuje juz starego API, a funkcje route zostaly nazwane wedlug warstwy serwisowej. |
-| Hard-cut importow `magazyn.print_agent.*` | wykonane | Wewnetrzne importy ida przez `magazyn.services.print_agent_runtime`; `magazyn.print_agent` zostal tylko jako shim kompatybilnosciowy. |
+| Hard-cut importow `magazyn.print_agent.*` | wykonane | Wewnetrzne importy ida przez `magazyn.services.print_agent_runtime`; plik fasady `magazyn/print_agent.py` zostal usuniety. |
 | Hard-cut `magazyn.returns` | wykonane | Kompatybilnosciowa fasada zostala usunieta, a testy wskazuja bezposrednio na domain/services. |
 | Migracja z `magazyn.models` na jawne podmoduly | wykonane | Importy ida przez `magazyn.models.<domena>` lub `.models.<domena>`, a `magazyn.models.__init__` nie eksportuje juz agregatu. |
 | Przepiecie testow blokujacych hard-cut | wykonane | Testy nie korzystaja juz z bootstrapu `magazyn.print_agent as pa`. |
-| Twarda blokada regresji | wykonane i rozszerzone | Guard blokuje powrot do starych importow, wewnetrzne uzycie `magazyn.print_agent` oraz eksporty z `magazyn.models.__init__`. |
+| Twarda blokada regresji | wykonane i rozszerzone | Guard blokuje powrot do starych importow, brak plikow `magazyn/print_agent.py` i `magazyn/returns.py` oraz eksporty z `magazyn.models.__init__`. |
 
 Bilans roboczy dla tego planu:
 
@@ -74,15 +74,15 @@ Wnioski:
 - Funkcje route nazywaja sie `recheck_report_item_route` i `change_report_item_price_route`, wiec nie udaja juz serwisowego API mutacji.
 - Test `magazyn/tests/test_price_scraping.py` sprawdza juz bezposrednio `change_report_item_price` z serwisu.
 
-### 3. `magazyn.print_agent` zostal sciety do bootstrapu runtime
+### 3. `magazyn.print_agent` zostal usuniety jako fasada runtime
 
 Status: wykonane.
 
 Wnioski:
 
-- `magazyn/print_agent.py` eksportuje tylko `agent` oraz `logger` jako shim kompatybilnosciowy.
+- `magazyn/print_agent.py` zostal usuniety.
 - Wewnetrzny runtime singletona znajduje sie w `magazyn.services.print_agent_runtime`.
-- Nie ma tam klas, funkcji pomocniczych, `__getattr__` ani re-eksportu dawnych narzedzi.
+- Nie ma juz rootowej fasady z klasami, funkcjami pomocniczymi, `__getattr__` ani re-eksportem dawnych narzedzi.
 - Stare symbole typu `AgentConfig`, `calculate_cod_amount`, `start_agent_thread`, `stop_agent_thread`, `settings`, `LabelAgent`, a takze sam import starej fasady w repo, sa blokowane przez guard architektoniczny.
 - `magazyn/__init__.py` nie robi juz lazy-fasady dla agenta drukowania.
 - `magazyn/agent/migrate.py` korzysta bezposrednio z `magazyn.label_agent.LabelAgent` i `magazyn.services.print_agent_config.AgentConfig`.
@@ -90,7 +90,7 @@ Wnioski:
 Efekt rundy 2026-05-01:
 
 - Testy `magazyn/tests/test_agent_thread.py`, `magazyn/tests/test_logging.py`, `magazyn/tests/test_weekly_reports.py`, `magazyn/tests/test_db_config.py`, `magazyn/tests/test_courier_code.py` i `magazyn/tests/test_utils.py` korzystaja juz z `magazyn.services.print_agent_runtime`.
-- Stary modul `magazyn.print_agent` zostal zdegradowany do kompatybilnosci z zewnetrznymi importami, nie do wewnetrznego API aplikacji.
+- Stary modul `magazyn.print_agent` nie jest juz dostepny; jawny punkt wejscia to `magazyn.services.print_agent_runtime`.
 
 ### 4. Zbiorczy agregat `magazyn.models` przestal byc uzywany jako publiczne API
 
@@ -119,9 +119,9 @@ Najwazniejsze efekty:
   - `magazyn.price_reports`
   - `magazyn.returns`
   - `magazyn.print_agent`
-- Guard pilnuje, zeby `magazyn.print_agent` pozostawal cienkim bootstrapem.
 - Guard pilnuje, zeby kod repo nie importowal juz `magazyn.print_agent` jako wewnetrznego runtime.
 - Guard pilnuje, zeby `magazyn.models.__init__` pozostal pustym markerem bez eksportow.
+- Guard pilnuje, zeby `magazyn/print_agent.py` nie wrocil jako kompatybilnosciowa fasada.
 - Guard pilnuje, zeby `magazyn/returns.py` nie wrocil jako kompatybilnosciowa fasada.
 - `LEGACY_ROOT_MODULE_BUDGETS = {}` potwierdza, ze wyjatki rozmiarowe dla root-modulow zostaly zdjete.
 
@@ -162,7 +162,7 @@ Status: wykonane.
 Komentarz:
 
 - Wewnetrzne uzycia przeszly na `magazyn.services.print_agent_runtime`.
-- `magazyn.print_agent` zostal tylko jako shim kompatybilnosciowy i jest blokowany jako zaleznosc wewnetrzna.
+- `magazyn.print_agent` zostal usuniety, a `magazyn.services.print_agent_runtime` jest jedynym runtime singletona agenta.
 
 ### Punkt 4. Jawne importy modeli w kodzie produkcyjnym
 
@@ -202,7 +202,7 @@ Status: wykonane.
 Stan:
 
 - Jawny punkt wejscia to `magazyn.services.print_agent_runtime`.
-- `magazyn.print_agent` zostaje tylko shimem kompatybilnosciowym i nie jest uzywany wewnatrz repo.
+- `magazyn.print_agent` zostal usuniety; jedyny jawny punkt wejscia to `magazyn.services.print_agent_runtime`.
 
 ### Punkt 2. Domknac los `magazyn.models.__init__`
 
@@ -219,7 +219,7 @@ Status: wykonane.
 
 Stan:
 
-- Guard blokuje legacy importy, import samego `magazyn.print_agent` w kodzie repo oraz eksporty agregatu `magazyn.models`.
+- Guard blokuje legacy importy, import samego `magazyn.print_agent` w kodzie repo, brak pliku `magazyn/print_agent.py` oraz eksporty agregatu `magazyn.models`.
 
 ### Punkt 4. Cleanup po migracji
 
@@ -242,8 +242,8 @@ Docelowy kierunek jest juz w praktyce wdrozony:
 | `magazyn.price_reports.recheck_item` | `magazyn.services.price_report_mutation.recheck_report_item` | wykonane |
 | `magazyn.print_agent.AgentConfig` | `magazyn.services.print_agent_config.AgentConfig` | wykonane |
 | `magazyn.print_agent.calculate_cod_amount` | `magazyn.services.print_agent_config.calculate_cod_amount` | wykonane |
-| `magazyn.print_agent.agent` | `magazyn.services.print_agent_runtime.agent` | wykonane wewnatrz repo |
-| `magazyn.print_agent.logger` | `magazyn.services.print_agent_runtime.logger` | wykonane wewnatrz repo |
+| `magazyn.print_agent.agent` | `magazyn.services.print_agent_runtime.agent` | wykonane, fasada usunieta |
+| `magazyn.print_agent.logger` | `magazyn.services.print_agent_runtime.logger` | wykonane, fasada usunieta |
 | `magazyn.models` | `magazyn.models.<domena>` albo `.models.<domena>` | wykonane w produkcji |
 | `magazyn.returns` | `magazyn.domain.returns` oraz `magazyn.services.return_*` | wykonane, fasada usunieta |
 
@@ -251,7 +251,7 @@ Docelowy kierunek jest juz w praktyce wdrozony:
 
 Najrozsadniejsza kolejnosc od tego miejsca:
 
-1. [x] Podjac jawna decyzje, czy `magazyn.print_agent` zostaje jako oficjalny bootstrap `agent` i `logger`.
+1. [x] Podjac jawna decyzje, ze `magazyn.print_agent` nie zostaje jako oficjalny bootstrap `agent` i `logger`.
 2. [x] Jezeli nie, przepiac `test_agent_thread.py`, `test_logging.py` i `test_weekly_reports.py` na nowy, jawny punkt wejscia.
 3. [x] Zdecydowac, czy `magazyn/models/__init__.py` zostaje jako minimalny bootstrap dla infrastruktury, czy ma zostac usuniety po dodatkowej walidacji.
 4. [x] Dopisac kolejny guard zabraniajacy importu samego `magazyn.print_agent` w kodzie repo.
@@ -268,11 +268,11 @@ Ocena wobec definicji ukonczenia:
 | --- | --- | --- |
 | `rg` nie znajduje starych importow z `magazyn.orders` | spelnione | Potwierdzone analizą i guardem. |
 | `rg` nie znajduje starych importow z `magazyn.price_reports` | spelnione | Potwierdzone analizą i guardem. |
-| `rg` nie znajduje legacy symboli z `magazyn.print_agent` | spelnione | Wewnetrzne uzycia `agent/logger` tez przeszly na `magazyn.services.print_agent_runtime`. |
+| `rg` nie znajduje legacy symboli z `magazyn.print_agent` | spelnione | Wewnetrzne uzycia `agent/logger` tez przeszly na `magazyn.services.print_agent_runtime`, a plik fasady zostal usuniety. |
 | Kod produkcyjny nie korzysta ze zbiorczego `magazyn.models` | spelnione | Importy ida przez podmoduly, a `magazyn.models.__init__` jest pustym markerem. |
-| `orders.py`, `price_reports.py`, `print_agent.py` nie sa juz API biznesowym | spelnione | Pozostaly role HTTP/bootstrap, nie warstwa serwisowa. |
+| `orders.py` i `price_reports.py` nie sa juz API biznesowym, a `print_agent.py` nie istnieje | spelnione | Pozostaly role HTTP route, nie warstwa serwisowa; runtime agenta jest w `services`. |
 | `magazyn.returns` nie istnieje jako fasada kompatybilnosciowa | spelnione | Testy i kod ida przez `domain` oraz `services.return_*`. |
-| Guard blokuje regresje | spelnione | Obejmuje legacy importy, import `magazyn.print_agent`, import `magazyn.returns`, brak pliku `magazyn/returns.py` i pusty marker `magazyn.models.__init__`. |
+| Guard blokuje regresje | spelnione | Obejmuje legacy importy, import `magazyn.print_agent`, import `magazyn.returns`, brak plikow `magazyn/print_agent.py` i `magazyn/returns.py` oraz pusty marker `magazyn.models.__init__`. |
 | Root-moduly mieszcza sie w budzecie 450 linii | spelnione | `magazyn.orders` po wydzieleniu akcji zwrotow ma 342 linie. |
 
 ## Otwarte punkty
