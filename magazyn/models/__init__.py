@@ -1,4 +1,3 @@
-from .base import Base
-from .registry import import_all_models
+"""Pakiet modeli SQLAlchemy; importuj modele z jawnych podmodulow."""
 
-__all__ = ["Base", "import_all_models"]
+__all__ = []

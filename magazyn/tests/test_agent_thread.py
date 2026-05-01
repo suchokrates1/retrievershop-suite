@@ -3,16 +3,16 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import magazyn.print_agent as pa
 import magazyn.label_agent as label_agent_module
 from magazyn.config import settings
 from magazyn.label_agent import LabelAgent
 from magazyn.metrics import PRINT_AGENT_DOWNTIME_SECONDS, PRINT_AGENT_RETRIES_TOTAL
 from magazyn.services.print_agent_errors import ApiError, PrintError, ShipmentExpiredError
+import magazyn.services.print_agent_runtime as print_agent_runtime
 
 
 def _make_agent(tmp_path):
-    config = pa.agent.config.with_updates(
+    config = print_agent_runtime.agent.config.with_updates(
         db_file=str(tmp_path / "agent.db"),
         lock_file=str(tmp_path / "agent.lock"),
         log_file=str(tmp_path / "agent.log"),
@@ -22,7 +22,7 @@ def _make_agent(tmp_path):
 
 
 def test_stop_agent_thread_stops(monkeypatch):
-    agent = pa.agent
+    agent = print_agent_runtime.agent
     started = threading.Event()
 
     def loop():

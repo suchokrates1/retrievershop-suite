@@ -1,6 +1,6 @@
 from .auth import login_required
 from flask import Blueprint, render_template, redirect, url_for, flash
-from .print_agent import agent as label_agent
+from .services.print_agent_runtime import agent as label_agent
 
 logger = label_agent.logger
 

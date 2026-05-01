@@ -3,7 +3,7 @@ from werkzeug.security import generate_password_hash
 
 import magazyn.db as db
 import magazyn.label_agent as label_agent_module
-import magazyn.print_agent as pa
+import magazyn.services.print_agent_runtime as print_agent_runtime
 from magazyn.config import settings
 from magazyn.models.users import User
 from magazyn.db import sqlite_connect
@@ -22,7 +22,7 @@ def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
     new_settings.DB_PATH = str(second)
     monkeypatch.setattr(label_agent_module, "load_config", lambda: new_settings)
 
-    pa.agent.reload_config()
+    print_agent_runtime.agent.reload_config()
 
     db.init_db()
     with db.get_session() as session:

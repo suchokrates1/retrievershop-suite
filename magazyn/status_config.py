@@ -10,7 +10,7 @@ Nie definiuj mapowania statusow nigdzie indziej.
 # pobrano(0) → nieoplacone(0) → wydrukowano(2) → spakowano(3) → wyslano(4)
 #   → w_transporcie(5) → w_punkcie(6) → dostarczono(7)
 #
-# Problemy (999): blad_druku, problem_z_dostawa, zwrot, anulowano
+# Problemy (999): blad_druku, problem_z_dostawa, zwrot, nieodebrano, anulowano
 # ────────────────────────────────────────────────────────────────────
 
 VALID_STATUSES = [
@@ -32,6 +32,7 @@ VALID_STATUSES = [
     "blad_druku",        # Blad tworzenia/drukowania etykiety
     "problem_z_dostawa", # Niedostarczono / zagubiono / blad dostawy
     "zwrot",             # Zwrot od klienta
+    "nieodebrano",       # Nie odebrano w punkcie - paczka wrócila do nadawcy
     "anulowano",         # Anulowano
 ]
 
@@ -48,6 +49,7 @@ STATUS_HIERARCHY = {
     "blad_druku": 999,
     "problem_z_dostawa": 999,
     "zwrot": 999,
+    "nieodebrano": 999,
     "anulowano": 999,
 }
 
@@ -144,6 +146,7 @@ STATUS_DISPLAY = {
     "dostarczono": ("Dostarczono", "badge-success"),
     "problem_z_dostawa": ("Problem z dostawą", "badge-error"),
     "zwrot": ("Zwrot", "badge-error"),
+    "nieodebrano": ("Nie odebrano", "badge-warning"),
     "anulowano": ("Anulowano", "badge-neutral"),
 }
 
@@ -175,6 +178,7 @@ CUSTOMER_STATUS_DISPLAY = {
     "w_punkcie": ("Gotowe do odbioru", "success", "bi-geo-alt"),
     "dostarczono": ("Dostarczone", "success", "bi-check2-circle"),
     "problem_z_dostawa": ("Problem z dostawą", "danger", "bi-exclamation-triangle"),
+    "nieodebrano": ("Nieodebrane - wróciło do nadawcy", "danger", "bi-arrow-counterclockwise"),
     "anulowano": ("Anulowane", "danger", "bi-x-circle"),
     "zwrot": ("Zwrot", "danger", "bi-arrow-return-left"),
 }
@@ -206,5 +210,5 @@ STATUS_FILTER_GROUPS = {
     "w_realizacji": ["pobrano", "nieoplacone", "wydrukowano", "blad_druku", "spakowano"],
     "w_transporcie": ["wyslano", "w_transporcie", "w_punkcie"],
     "zakonczone": ["dostarczono"],
-    "problem": ["problem_z_dostawa", "zwrot", "anulowano"],
+    "problem": ["problem_z_dostawa", "zwrot", "nieodebrano", "anulowano"],
 }

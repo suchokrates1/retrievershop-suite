@@ -13,6 +13,7 @@ from ..db import get_session
 from ..domain.returns import (
     RETURN_STATUS_CANCELLED,
     RETURN_STATUS_DELIVERED,
+    RETURN_STATUS_NOT_COLLECTED,
     RETURN_STATUS_PENDING,
 )
 from ..models.orders import Order
@@ -31,6 +32,9 @@ def create_return_from_order(
     order: Order,
     tracking_number: str = None,
     allegro_return_id: str = None,
+    return_carrier: str = None,
+    status: str = RETURN_STATUS_PENDING,
+    notes: str = None,
     *,
     log: Optional[logging.Logger] = None,
 ) -> Optional[Return]:
@@ -40,6 +44,30 @@ def create_return_from_order(
     with get_session() as db:
         existing = db.query(Return).filter(Return.order_id == order.order_id).first()
         if existing:
+            updated = False
+            if tracking_number and existing.return_tracking_number != tracking_number:
+                existing.return_tracking_number = tracking_number
+                updated = True
+            if return_carrier and existing.return_carrier != return_carrier:
+                existing.return_carrier = return_carrier
+                updated = True
+            if allegro_return_id and existing.allegro_return_id != allegro_return_id:
+                existing.allegro_return_id = allegro_return_id
+                updated = True
+            if status and existing.status != status:
+                existing.status = status
+                add_return_status_log(
+                    db,
+                    existing.id,
+                    status,
+                    notes or f"Aktualizacja zwrotu dla zamowienia {order.order_id}",
+                )
+                updated = True
+            if notes and existing.notes != notes:
+                existing.notes = notes
+                updated = True
+            if updated:
+                db.commit()
             active_logger.info(
                 "Zwrot dla zamowienia %s juz istnieje (ID: %s)",
                 order.order_id,
@@ -50,11 +78,13 @@ def create_return_from_order(
         items = get_order_products_summary(order)
         return_record = Return(
             order_id=order.order_id,
-            status=RETURN_STATUS_PENDING,
+            status=status,
             customer_name=order.customer_name,
             items_json=json.dumps(items, ensure_ascii=False),
             return_tracking_number=tracking_number,
+            return_carrier=return_carrier,
             allegro_return_id=allegro_return_id,
+            notes=notes,
         )
         db.add(return_record)
         db.flush()
@@ -62,8 +92,8 @@ def create_return_from_order(
         add_return_status_log(
             db,
             return_record.id,
-            RETURN_STATUS_PENDING,
-            f"Utworzono zwrot dla zamowienia {order.order_id}",
+            status,
+            notes or f"Utworzono zwrot dla zamowienia {order.order_id}",
         )
 
         db.commit()
@@ -160,11 +190,42 @@ def mark_return_as_delivered(
         return True
 
 
+def mark_return_as_not_collected(
+    return_id: int,
+    *,
+    notes: str = "Oznaczono jako nieodebrany zwrot",
+    log: Optional[logging.Logger] = None,
+) -> bool:
+    """Recznie oznacz zwrot jako nieodebrany przez klienta."""
+    active_logger = log or logger
+
+    with get_session() as db:
+        return_record = db.query(Return).filter(Return.id == return_id).first()
+        if not return_record:
+            return False
+
+        if return_record.status == RETURN_STATUS_NOT_COLLECTED:
+            return True
+
+        return_record.status = RETURN_STATUS_NOT_COLLECTED
+        add_return_status_log(
+            db,
+            return_record.id,
+            RETURN_STATUS_NOT_COLLECTED,
+            notes,
+        )
+        db.commit()
+
+        active_logger.info("Zwrot #%s oznaczony jako nieodebrany", return_id)
+        return True
+
+
 __all__ = [
     "add_return_status_log",
     "create_return_from_order",
     "expire_stale_returns",
     "get_return_by_order_id",
     "get_returns_list",
+    "mark_return_as_not_collected",
     "mark_return_as_delivered",
 ]

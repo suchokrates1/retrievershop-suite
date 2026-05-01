@@ -22,7 +22,6 @@ from .models.products import Product, ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
-from .print_agent import agent
 from .auth import login_required
 from .services.allegro_offer_views import (
     build_offers_and_prices_context,
@@ -30,6 +29,7 @@ from .services.allegro_offer_views import (
     get_ean_for_offer,
     new_request_id,
 )
+from .services.print_agent_runtime import agent
 from . import allegro_api
 from requests.exceptions import HTTPError, RequestException
 

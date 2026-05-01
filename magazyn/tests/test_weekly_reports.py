@@ -1,8 +1,8 @@
-import magazyn.print_agent as pa
+import magazyn.services.print_agent_runtime as print_agent_runtime
 
 
 def test_weekly_report_not_sent_when_disabled(monkeypatch):
-    agent = pa.agent
+    agent = print_agent_runtime.agent
     agent.config = agent.config.with_updates(
         enable_weekly_reports=False,
         enable_monthly_reports=False,

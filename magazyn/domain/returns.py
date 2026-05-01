@@ -8,6 +8,7 @@ from typing import Optional
 RETURN_STATUS_PENDING = "pending"
 RETURN_STATUS_IN_TRANSIT = "in_transit"
 RETURN_STATUS_DELIVERED = "delivered"
+RETURN_STATUS_NOT_COLLECTED = "not_collected"
 RETURN_STATUS_COMPLETED = "completed"
 RETURN_STATUS_CANCELLED = "cancelled"
 
@@ -61,6 +62,7 @@ __all__ = [
     "RETURN_STATUS_PENDING",
     "RETURN_STATUS_IN_TRANSIT",
     "RETURN_STATUS_DELIVERED",
+    "RETURN_STATUS_NOT_COLLECTED",
     "RETURN_STATUS_COMPLETED",
     "RETURN_STATUS_CANCELLED",
     "map_allegro_return_status",

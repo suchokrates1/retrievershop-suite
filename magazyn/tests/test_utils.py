@@ -10,11 +10,11 @@ from magazyn.services.print_agent_shipments import shorten_product_name
 def get_bl():
     import importlib
     import magazyn.label_agent as bl
-    import magazyn.print_agent as print_agent_module
+    import magazyn.services.print_agent_runtime as print_agent_runtime
 
     bl = importlib.reload(bl)
-    print_agent_module = importlib.reload(print_agent_module)
-    bl.agent = print_agent_module.agent
+    print_agent_runtime = importlib.reload(print_agent_runtime)
+    bl.agent = print_agent_runtime.agent
     return bl
 
 

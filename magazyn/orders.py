@@ -16,6 +16,13 @@ from .services.order_list import build_orders_list_context
 from .services.order_sync import sync_order_from_data
 from .services.order_status import add_order_status
 from .services.order_labels import reprint_order_labels
+from .services.order_return_actions import (
+    create_manual_return_for_order,
+    mark_return_delivered_for_order,
+    process_refund_for_order,
+    refund_eligibility_for_order,
+    restore_return_stock_for_order,
+)
 from .status_config import VALID_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -175,22 +182,28 @@ def reprint_label(order_id: str):
 @login_required
 def restore_return_stock(order_id: str):
     """Recznie przywroc stan magazynowy dla zwrotu."""
-    from .models.returns import Return
-    from .services.return_stock import restore_stock_for_return
-    
-    with get_session() as db:
-        return_record = db.query(Return).filter(Return.order_id == order_id).first()
-        
-        if not return_record:
-            flash(f"Nie znaleziono zwrotu dla zamowienia {order_id}", "error")
-        elif return_record.stock_restored:
-            flash("Stan juz zostal przywrocony", "warning")
-        else:
-            if restore_stock_for_return(return_record.id):
-                flash("Stan magazynowy zostal przywrocony", "success")
-            else:
-                flash("Nie udalo sie przywrocic stanu - sprawdz czy produkty sa powiazane z magazynem", "error")
-    
+    result = restore_return_stock_for_order(order_id)
+    flash(result.message, result.category)
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
+@bp.route("/order/<order_id>/create_manual_return", methods=["POST"])
+@login_required
+def create_manual_return(order_id: str):
+    """Ręcznie utwórz zwrot poza Allegro z karty zamówienia."""
+    result = create_manual_return_for_order(order_id, request.form)
+    if result.not_found:
+        abort(404)
+    flash(result.message, result.category)
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
+@bp.route("/order/<order_id>/mark_return_delivered", methods=["POST"])
+@login_required
+def mark_return_delivered(order_id: str):
+    """Ręcznie oznacz zwrot jako odebrany."""
+    result = mark_return_delivered_for_order(order_id)
+    flash(result.message, result.category)
     return redirect(url_for(".order_detail", order_id=order_id))
 
 
@@ -202,15 +215,7 @@ def check_refund_eligibility(order_id: str):
     
     Zwraca JSON z informacjami o kwocie i statusie.
     """
-    from .services.return_refunds import check_refund_eligibility as check_eligibility
-    
-    eligible, message, details = check_eligibility(order_id)
-    
-    return jsonify({
-        "eligible": eligible,
-        "message": message,
-        "details": details
-    })
+    return jsonify(refund_eligibility_for_order(order_id))
 
 
 @bp.route("/order/<order_id>/process_refund", methods=["POST"])
@@ -225,51 +230,8 @@ def process_refund(order_id: str):
     1. Pole confirm=true w POST
     2. Pole allegro_return_id musi zgadzac sie z baza
     """
-    from .models.returns import Return
-    from .services.return_refunds import process_refund as do_refund, check_refund_eligibility as check_eligibility
-    
-    # Sprawdz czy potwierdzono operacje
-    confirm = request.form.get("confirm") == "true" or request.json and request.json.get("confirm") is True
-    if not confirm:
-        flash("Operacja wymaga potwierdzenia", "error")
-        return redirect(url_for(".order_detail", order_id=order_id))
-    
-    # Dodatkowa walidacja - sprawdz allegro_return_id
-    expected_return_id = request.form.get("allegro_return_id") or (request.json and request.json.get("allegro_return_id"))
-    
-    with get_session() as db:
-        return_record = db.query(Return).filter(Return.order_id == order_id).first()
-        
-        if not return_record:
-            flash("Nie znaleziono zwrotu dla tego zamowienia", "error")
-            return redirect(url_for(".order_detail", order_id=order_id))
-        
-        if return_record.allegro_return_id != expected_return_id:
-            flash("Blad walidacji - ID zwrotu Allegro nie zgadza sie", "error")
-            return redirect(url_for(".order_detail", order_id=order_id))
-    
-    # Sprawdz jeszcze raz kwalifikowalnosc
-    eligible, check_message, _ = check_eligibility(order_id)
-    if not eligible:
-        flash(f"Zwrot nie kwalifikuje sie: {check_message}", "error")
-        return redirect(url_for(".order_detail", order_id=order_id))
-    
-    # Opcjonalne parametry
-    delivery_cost_covered = request.form.get("delivery_cost_covered", "true") == "true"
-    reason = request.form.get("reason", "")
-    
-    # Wykonaj zwrot
-    success, message = do_refund(
-        order_id=order_id,
-        delivery_cost_covered=delivery_cost_covered,
-        reason=reason
-    )
-    
-    if success:
-        flash(f"Zwrot pieniedzy zainicjowany pomyslnie! {message}", "success")
-    else:
-        flash(f"Blad zwrotu pieniedzy: {message}", "error")
-    
+    result = process_refund_for_order(order_id, request.form, request.get_json(silent=True))
+    flash(result.message, result.category)
     return redirect(url_for(".order_detail", order_id=order_id))
 
 
@@ -277,7 +239,7 @@ def process_refund(order_id: str):
 @login_required
 def download_label(order_id: str):
     """Download shipping label PDF for an order."""
-    from .print_agent import agent as label_agent
+    from .services.print_agent_runtime import agent as label_agent
     
     try:
         prepared_label = prepare_order_label_download(order_id, label_agent)

@@ -16,11 +16,11 @@ class LabelActionResult:
     printed: bool = False
 
 
-def reprint_order_labels(order_id: str, print_agent_module: Any | None = None) -> LabelActionResult:
-    if print_agent_module is None:
-        from .. import print_agent as print_agent_module
+def reprint_order_labels(order_id: str, label_agent: Any | None = None) -> LabelActionResult:
+    if label_agent is None:
+        from .print_agent_runtime import agent as label_agent
 
-    packages = print_agent_module.get_order_packages(order_id)
+    packages = label_agent.get_order_packages(order_id)
     printed_any = False
 
     for package in packages:
@@ -28,9 +28,9 @@ def reprint_order_labels(order_id: str, print_agent_module: Any | None = None) -
         courier_code = package.get("courier_code") or package.get("carrier_id") or ""
         if not package_id:
             continue
-        label_data, extension = print_agent_module.get_label(courier_code, package_id)
+        label_data, extension = label_agent.get_label(courier_code, package_id)
         if label_data:
-            print_agent_module.print_label(label_data, extension, order_id)
+            label_agent.print_label(label_data, extension, order_id)
             printed_any = True
 
     if not printed_any:

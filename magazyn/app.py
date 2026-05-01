@@ -27,11 +27,11 @@ from .forms import LoginForm
 
 from .db import get_session
 from .auth import login_required
-from .print_agent import agent as label_agent
 from .config import settings
 from .settings_store import settings_store
 from .services.app_runtime import start_print_agent_runtime
 from .services.print_agent_config import ConfigError
+from .services.print_agent_runtime import agent as label_agent
 from .services.settings_page import build_settings_context, update_settings_from_form
 from .services.fixed_costs import (
     add_fixed_cost as add_fixed_cost_record,
