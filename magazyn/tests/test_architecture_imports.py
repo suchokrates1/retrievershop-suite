@@ -28,11 +28,11 @@ FORBIDDEN_IMPORTS = {
     "magazyn.agent": None,
     "magazyn.orders": {"sync_order_from_data", "add_order_status", "_dispatch_status_email"},
     "magazyn.price_reports": {"change_price", "recheck_item"},
-    "magazyn.returns": {"restore_stock_for_return", "check_refund_eligibility", "process_refund"},
+    "magazyn.returns": None,
     "magazyn.print_agent": None,
 }
 
-FORBIDDEN_MODULE_IMPORTS = {"magazyn.agent", "magazyn.print_agent"}
+FORBIDDEN_MODULE_IMPORTS = {"magazyn.agent", "magazyn.print_agent", "magazyn.returns"}
 ROUTE_MODULES = {
     "magazyn.app",
     "magazyn.discussions",
@@ -220,6 +220,10 @@ def test_models_package_init_stays_empty_marker():
     assert public_imports == []
     assert defined_blocks == []
     assert exported_names == []
+
+
+def test_legacy_returns_facade_is_removed():
+    assert not (REPO_ROOT / "magazyn" / "returns.py").exists()
 
 
 def test_root_modules_stay_within_size_budget():

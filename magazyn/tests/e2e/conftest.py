@@ -9,6 +9,7 @@ import pathlib
 import pytest
 import threading
 from collections import OrderedDict
+from flask.sessions import SecureCookieSessionInterface
 from werkzeug.serving import make_server
 
 from PIL import Image
@@ -237,11 +238,20 @@ def browser_context_args():
 
 
 @pytest.fixture
-def logged_in_page(page, live_url):
+def logged_in_page(page, live_url, _e2e_app):
     """Strona z zalogowanym uzytkownikiem."""
-    page.goto(f"{live_url}/login")
-    page.fill("input[name='username']", "testuser")
-    page.fill("input[name='password']", "testpass123")
-    page.click("button[type='submit']")
+    serializer = SecureCookieSessionInterface().get_signing_serializer(_e2e_app)
+    session_cookie = serializer.dumps({"username": "testuser"})
+    page.context.add_cookies([
+        {
+            "name": _e2e_app.config.get("SESSION_COOKIE_NAME", "session"),
+            "value": session_cookie,
+            "domain": "127.0.0.1",
+            "path": "/",
+            "httpOnly": True,
+            "sameSite": "Lax",
+        }
+    ])
+    page.goto(f"{live_url}/")
     page.wait_for_load_state("networkidle")
     return page

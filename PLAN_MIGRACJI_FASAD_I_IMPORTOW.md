@@ -1,6 +1,6 @@
 # Plan migracji fasad i importow
 
-Stan na teraz: plan jest wykonany w glownym zakresie. Najwazniejszy hard-cut starych importow do `magazyn.orders`, `magazyn.price_reports`, `magazyn.print_agent` oraz zbiorczego `magazyn.models` zostal wdrozony w kodzie produkcyjnym i utwardzony testem architektonicznym. Po rundzie 2026-05-01 wewnetrzne uzycia agenta drukowania ida przez jawny runtime `magazyn.services.print_agent_runtime`, a `magazyn.models.__init__` jest pustym markerem pakietu bez eksportow agregujacych.
+Stan na teraz: plan jest wykonany w pelnym zakresie dla migracji fasad i importow. Najwazniejszy hard-cut starych importow do `magazyn.orders`, `magazyn.price_reports`, `magazyn.print_agent`, `magazyn.returns` oraz zbiorczego `magazyn.models` zostal wdrozony w kodzie produkcyjnym i utwardzony testem architektonicznym. Po rundzie 2026-05-01 wewnetrzne uzycia agenta drukowania ida przez jawny runtime `magazyn.services.print_agent_runtime`, `magazyn.models.__init__` jest pustym markerem pakietu bez eksportow agregujacych, a kompatybilnosciowa fasada `magazyn.returns` zostala usunieta.
 
 ## Postep rundy 2026-05-01
 
@@ -17,13 +17,15 @@ Stan na teraz: plan jest wykonany w glownym zakresie. Najwazniejszy hard-cut sta
 - [x] Backend bez wizualnych snapshotow: 598 passed, 32 skipped, 1 xfailed.
 - [x] E2E bez snapshotow wizualnych: `test_mobile_menu.py` 10 passed.
 - [x] `ruff check magazyn scripts migrations`, `compileall magazyn` oraz `git diff --check` przeszly dla zakresu aplikacji.
-- [ ] Opcjonalnie: zdecydowac, czy endpointy HTTP `recheck_item` i `change_price` w `price_reports.py` maja zostac przemianowane.
-- [ ] Opcjonalnie: osobnym etapem przejrzec pozostale fasady kompatybilnosci, przede wszystkim `magazyn.returns`.
+- [x] Przemianowano endpointowe funkcje `recheck_item` i `change_price` w `price_reports.py` na nazwy route zgodne z warstwa serwisowa.
+- [x] Usunieto kompatybilnosciowa fasade `magazyn.returns` i przepieto testy na `magazyn.domain.returns` oraz `magazyn.services.return_*`.
+- [x] Pelne `ruff check .` przechodzi dla calego repo.
+- [x] Pelne snapshoty wizualne E2E przechodza: 24 passed.
 
 Uwagi walidacyjne:
 
-- Pelne `ruff check .` nadal blokuje niezalezny katalog `.github/prompts/ui-ux-pro-max/scripts`, ktory ma istniejace bledy F401/F541/F841 poza zakresem tej migracji.
-- Pelne `pytest` z wizualnymi snapshotami blokuje `magazyn/tests/e2e/test_visual_snapshots.py` przez roznice obrazow po przekierowaniu na `/login`; niewizualne E2E przechodzi.
+- Pelne `ruff check .` jest zielone.
+- Pelne `pytest magazyn/tests/e2e/test_visual_snapshots.py` jest zielone po ustabilizowaniu fixture logowania E2E przez podpisane cookie sesji Flask.
 
 ## Status ogolny
 
@@ -32,15 +34,16 @@ Podsumowanie biezace:
 | Obszar | Status | Ocena |
 | --- | --- | --- |
 | Hard-cut importow `magazyn.orders.*` | wykonane | Stare funkcje nie sa juz importowane, a `orders.py` korzysta bezposrednio z serwisow. |
-| Hard-cut importow `magazyn.price_reports.*` | wykonane w praktyce | Kod nie importuje juz starego API, ale w module route pozostaly endpointy HTTP `recheck_item` i `change_price`. |
+| Hard-cut importow `magazyn.price_reports.*` | wykonane | Kod nie importuje juz starego API, a funkcje route zostaly nazwane wedlug warstwy serwisowej. |
 | Hard-cut importow `magazyn.print_agent.*` | wykonane | Wewnetrzne importy ida przez `magazyn.services.print_agent_runtime`; `magazyn.print_agent` zostal tylko jako shim kompatybilnosciowy. |
+| Hard-cut `magazyn.returns` | wykonane | Kompatybilnosciowa fasada zostala usunieta, a testy wskazuja bezposrednio na domain/services. |
 | Migracja z `magazyn.models` na jawne podmoduly | wykonane | Importy ida przez `magazyn.models.<domena>` lub `.models.<domena>`, a `magazyn.models.__init__` nie eksportuje juz agregatu. |
 | Przepiecie testow blokujacych hard-cut | wykonane | Testy nie korzystaja juz z bootstrapu `magazyn.print_agent as pa`. |
 | Twarda blokada regresji | wykonane i rozszerzone | Guard blokuje powrot do starych importow, wewnetrzne uzycie `magazyn.print_agent` oraz eksporty z `magazyn.models.__init__`. |
 
 Bilans roboczy dla tego planu:
 
-- wykonane: 6 glownych obszarow,
+- wykonane: 7 glownych obszarow,
 - wykonane czesciowo lub wymagajace doprecyzowania: 0 obszarow krytycznych,
 - krytyczne blokery: 0.
 
@@ -62,17 +65,14 @@ Znaczenie:
 
 ### 2. `magazyn.price_reports` przestal byc API mutacji raportu
 
-Status: wykonane w praktyce.
+Status: wykonane.
 
 Wnioski:
 
 - Nie znaleziono importow starych symboli `magazyn.price_reports.recheck_item` ani `magazyn.price_reports.change_price`.
 - Endpointy w `magazyn/price_reports.py` deleguja bezposrednio do `magazyn.services.price_report_mutation`.
+- Funkcje route nazywaja sie `recheck_report_item_route` i `change_report_item_price_route`, wiec nie udaja juz serwisowego API mutacji.
 - Test `magazyn/tests/test_price_scraping.py` sprawdza juz bezposrednio `change_report_item_price` z serwisu.
-
-Niuans:
-
-- Funkcje `recheck_item` i `change_price` nadal istnieja w module route jako endpointy HTTP. To nie jest juz stare API serwisowe, ale nazwy pozostaly i warto swiadomie zdecydowac, czy maja zostac jako warstwa HTTP, czy chcesz je dodatkowo uproscic lub przemianowac.
 
 ### 3. `magazyn.print_agent` zostal sciety do bootstrapu runtime
 
@@ -117,11 +117,24 @@ Najwazniejsze efekty:
   - `magazyn.models`
   - `magazyn.orders`
   - `magazyn.price_reports`
+  - `magazyn.returns`
   - `magazyn.print_agent`
 - Guard pilnuje, zeby `magazyn.print_agent` pozostawal cienkim bootstrapem.
 - Guard pilnuje, zeby kod repo nie importowal juz `magazyn.print_agent` jako wewnetrznego runtime.
 - Guard pilnuje, zeby `magazyn.models.__init__` pozostal pustym markerem bez eksportow.
+- Guard pilnuje, zeby `magazyn/returns.py` nie wrocil jako kompatybilnosciowa fasada.
 - `LEGACY_ROOT_MODULE_BUDGETS = {}` potwierdza, ze wyjatki rozmiarowe dla root-modulow zostaly zdjete.
+
+### 6. `magazyn.returns` przestal byc kompatybilnosciowa fasada
+
+Status: wykonane.
+
+Wnioski:
+
+- Produkcyjny kod juz nie uzywal `magazyn.returns` jako zaleznosci.
+- Testy zostaly przepiete na `magazyn.domain.returns`, `magazyn.services.return_notifications`, `magazyn.services.return_sync`, `magazyn.services.return_allegro` i `magazyn.services.return_stock`.
+- Plik `magazyn/returns.py` zostal usuniety.
+- Guard architektoniczny blokuje powrot importow `magazyn.returns` i sprawdza, ze plik fasady nie istnieje.
 
 Znaczenie:
 
@@ -135,12 +148,12 @@ Status: wykonane.
 
 ### Punkt 2. Hard-cut dla `magazyn.price_reports.*`
 
-Status: wykonane funkcjonalnie.
+Status: wykonane.
 
 Komentarz:
 
 - Importy i call-site'y starego API zniknely.
-- Zostala tylko cienka warstwa endpointow HTTP.
+- Zostala tylko cienka warstwa endpointow HTTP, z nazwami funkcji route zgodnymi z serwisami.
 
 ### Punkt 3. Hard-cut dla `magazyn.print_agent.*`
 
@@ -171,10 +184,14 @@ Komentarz:
 
 Status: wykonane.
 
+### Punkt 7. Usuniecie pozostalej fasady kompatybilnosci `magazyn.returns`
+
+Status: wykonane.
+
 Wniosek dla calego planu na dzis:
 
-- Plan na dzis jest w praktyce dowieziony.
-- Obszary krytyczne sa domkniete. Zostaly tylko opcjonalne porzadki nazw endpointow i przeglad innych fasad kompatybilnosci.
+- Plan na dzis jest dowieziony w pelnym zakresie.
+- Obszary krytyczne i opcjonalne follow-upy z tej listy sa domkniete.
 
 ## Ocena planu na jutro
 
@@ -206,12 +223,12 @@ Stan:
 
 ### Punkt 4. Cleanup po migracji
 
-Status: otwarte tylko opcjonalne porzadki, brak blokera.
+Status: wykonane.
 
 Stan:
 
 - Kod jest juz po stronie nowej architektury.
-- Zostaly nazwy endpointow HTTP i ewentualny przeglad innych fasad kompatybilnosci poza tym planem.
+- Nazwy endpointow HTTP zostaly doprecyzowane, a fasada `magazyn.returns` zostala usunieta.
 
 ## Mapa docelowa importow
 
@@ -228,6 +245,7 @@ Docelowy kierunek jest juz w praktyce wdrozony:
 | `magazyn.print_agent.agent` | `magazyn.services.print_agent_runtime.agent` | wykonane wewnatrz repo |
 | `magazyn.print_agent.logger` | `magazyn.services.print_agent_runtime.logger` | wykonane wewnatrz repo |
 | `magazyn.models` | `magazyn.models.<domena>` albo `.models.<domena>` | wykonane w produkcji |
+| `magazyn.returns` | `magazyn.domain.returns` oraz `magazyn.services.return_*` | wykonane, fasada usunieta |
 
 ## Kolejnosc dalszych prac
 
@@ -237,7 +255,10 @@ Najrozsadniejsza kolejnosc od tego miejsca:
 2. [x] Jezeli nie, przepiac `test_agent_thread.py`, `test_logging.py` i `test_weekly_reports.py` na nowy, jawny punkt wejscia.
 3. [x] Zdecydowac, czy `magazyn/models/__init__.py` zostaje jako minimalny bootstrap dla infrastruktury, czy ma zostac usuniety po dodatkowej walidacji.
 4. [x] Dopisac kolejny guard zabraniajacy importu samego `magazyn.print_agent` w kodzie repo.
-5. [ ] Opcjonalnie doprecyzowac, czy endpointowe funkcje `recheck_item` i `change_price` zostawiaja stare nazwy jako element HTTP API, czy chcesz je nazwac bardziej jednoznacznie.
+5. [x] Doprecyzowac nazwy endpointowych funkcji `recheck_item` i `change_price` jako elementow HTTP route.
+6. [x] Usunac kompatybilnosciowa fasade `magazyn.returns` i przepiac testy na domain/services.
+7. [x] Doprowadzic pelne `ruff check .` do zielonego stanu.
+8. [x] Doprowadzic visual snapshoty E2E do zielonego stanu.
 
 ## Definition of Done - stan faktyczny
 
@@ -249,17 +270,17 @@ Ocena wobec definicji ukonczenia:
 | `rg` nie znajduje starych importow z `magazyn.price_reports` | spelnione | Potwierdzone analizą i guardem. |
 | `rg` nie znajduje legacy symboli z `magazyn.print_agent` | spelnione | Wewnetrzne uzycia `agent/logger` tez przeszly na `magazyn.services.print_agent_runtime`. |
 | Kod produkcyjny nie korzysta ze zbiorczego `magazyn.models` | spelnione | Importy ida przez podmoduly, a `magazyn.models.__init__` jest pustym markerem. |
-| `orders.py`, `price_reports.py`, `print_agent.py` nie sa juz API biznesowym | spelnione w praktyce | Pozostaly role HTTP/bootstrap, nie warstwa serwisowa. |
-| Guard blokuje regresje | spelnione | Obejmuje legacy importy, import `magazyn.print_agent` i pusty marker `magazyn.models.__init__`. |
+| `orders.py`, `price_reports.py`, `print_agent.py` nie sa juz API biznesowym | spelnione | Pozostaly role HTTP/bootstrap, nie warstwa serwisowa. |
+| `magazyn.returns` nie istnieje jako fasada kompatybilnosciowa | spelnione | Testy i kod ida przez `domain` oraz `services.return_*`. |
+| Guard blokuje regresje | spelnione | Obejmuje legacy importy, import `magazyn.print_agent`, import `magazyn.returns`, brak pliku `magazyn/returns.py` i pusty marker `magazyn.models.__init__`. |
 | Root-moduly mieszcza sie w budzecie 450 linii | spelnione | `magazyn.orders` po wydzieleniu akcji zwrotow ma 342 linie. |
 
 ## Otwarte punkty
 
-To nie sa blokery dla obecnego stanu architektury, ale sensowne follow-upy:
+Brak otwartych punktow dla migracji fasad i importow opisanej w tym dokumencie.
 
-1. Czy endpointy `recheck_item` i `change_price` maja zostac przemianowane, mimo ze sa juz tylko warstwa HTTP.
-2. Czy chcesz ruszac pozostale fasady kompatybilnosci poza tym planem, np. `magazyn.returns`, ktory nadal jest opisany jako warstwa kompatybilnosci dla starszych importow.
+Dalsze prace powinny byc juz nowymi etapami, np. kolejne guardy dla nowych modulow lub audyt innych obszarow architektury poza fasadami wymienionymi tutaj.
 
 ## Rekomendacja
 
-Rekomendacja operacyjna po rundzie 2026-05-01: uznac migracje fasad i importow za domknieta w glownym zakresie. Nastepne prace prowadzic jako osobne, mniejsze etapy: nazewnictwo endpointow HTTP oraz ewentualny przeglad innych fasad kompatybilnosci.
+Rekomendacja operacyjna po rundzie 2026-05-01: uznac migracje fasad i importow za domknieta. Nastepne prace prowadzic jako osobne, mniejsze etapy poza tym planem.
