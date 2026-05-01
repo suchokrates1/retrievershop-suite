@@ -216,3 +216,23 @@ def test_root_modules_stay_within_size_budget():
             violations.append(f"{relative_path}: {line_count} linii > budzet {budget}")
 
     assert not violations, "Moduly glowne przekroczyly budzet rozmiaru:\n" + "\n".join(violations)
+
+
+def test_allegro_price_scraper_stays_modular():
+    facade = REPO_ROOT / "magazyn" / "scripts" / "price_checker_ws.py"
+    service_package = REPO_ROOT / "magazyn" / "services" / "allegro_price_scraper"
+
+    expected_modules = {
+        "checker.py",
+        "cdp.py",
+        "cli.py",
+        "config.py",
+        "db.py",
+        "delivery.py",
+        "models.py",
+        "parser.py",
+    }
+
+    assert service_package.is_dir()
+    assert expected_modules.issubset({path.name for path in service_package.glob("*.py")})
+    assert len(facade.read_text(encoding="utf-8").splitlines()) <= 130

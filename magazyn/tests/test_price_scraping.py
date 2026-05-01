@@ -34,41 +34,50 @@ class _FakeWebSocket:
 # --- Testy parse_delivery_days ---
 
 def test_parse_delivery_days_jutro():
-    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+    with patch("magazyn.services.allegro_price_scraper.delivery.date", _FixedDate):
         from magazyn.scripts.price_checker_ws import parse_delivery_days
         assert parse_delivery_days("dostawa jutro") == 1
 
 
 def test_parse_delivery_days_pojutrze():
-    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+    with patch("magazyn.services.allegro_price_scraper.delivery.date", _FixedDate):
         from magazyn.scripts.price_checker_ws import parse_delivery_days
         assert parse_delivery_days("dostawa pojutrze") == 2
 
 
 def test_parse_delivery_days_za_dni():
-    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+    with patch("magazyn.services.allegro_price_scraper.delivery.date", _FixedDate):
         from magazyn.scripts.price_checker_ws import parse_delivery_days
         assert parse_delivery_days("dostawa za 2-3 dni") == 2
 
 
 def test_parse_delivery_days_od_chinczyk():
-    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+    with patch("magazyn.services.allegro_price_scraper.delivery.date", _FixedDate):
         from magazyn.scripts.price_checker_ws import parse_delivery_days
         result = parse_delivery_days("dostawa od 14 dni")
         assert result == 99  # Wysoka wartosc = odfiltruj
 
 
 def test_parse_delivery_days_none():
-    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+    with patch("magazyn.services.allegro_price_scraper.delivery.date", _FixedDate):
         from magazyn.scripts.price_checker_ws import parse_delivery_days
         assert parse_delivery_days(None) is None
         assert parse_delivery_days("") is None
 
 
 def test_parse_delivery_days_dzisiaj():
-    with patch("magazyn.scripts.price_checker_ws.date", _FixedDate):
+    with patch("magazyn.services.allegro_price_scraper.delivery.date", _FixedDate):
         from magazyn.scripts.price_checker_ws import parse_delivery_days
         assert parse_delivery_days("dostawa dzisiaj") == 0
+
+
+def test_price_checker_ws_keeps_legacy_exports():
+    from magazyn.scripts import price_checker_ws
+
+    assert price_checker_ws.check_offer_price is not None
+    assert price_checker_ws.cdp_call is not None
+    assert price_checker_ws.CompetitorOffer.__name__ == "CompetitorOffer"
+    assert price_checker_ws.PriceCheckResult.__name__ == "PriceCheckResult"
 
 
 def test_parse_price_handles_thousands_and_nbsp():
