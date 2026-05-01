@@ -165,10 +165,13 @@ def _check_offer(report_id: int, offer: dict, log, check_single_offer, save_repo
             report_id,
             {
                 **offer,
+                "our_price": offer.get("price"),
                 "success": False,
                 "error": str(exc),
                 "my_position": 0,
                 "competitors_count": 0,
+                "competitors_all_count": 0,
+                "our_siblings": [],
                 "cheapest": None,
             },
         )

@@ -1,14 +1,34 @@
 """Testy dla poprawek systemu scrapingu i raportow cenowych."""
 
 import asyncio
+import json
+import logging
 from unittest.mock import patch
 from datetime import date
+
+import pytest
 
 
 class _FixedDate(date):
     @classmethod
     def today(cls):
         return cls(2026, 4, 20)
+
+
+class _FakeWebSocket:
+    def __init__(self, *messages):
+        self.messages = list(messages)
+        self.sent = []
+
+    async def send(self, payload):
+        self.sent.append(payload)
+
+    async def recv(self):
+        if not self.messages:
+            await asyncio.sleep(1)
+            return "{}"
+        message = self.messages.pop(0)
+        return json.dumps(message)
 
 
 # --- Testy parse_delivery_days ---
@@ -125,6 +145,43 @@ def test_filter_competitor_offers_excludes_bad_condition_and_delivery():
 
     assert [offer.seller for offer in filtered] == ["A"]
     assert stats == {"delivery": 1, "excluded_sellers": 1, "condition": 1}
+
+
+def test_cdp_call_ignores_events_and_returns_matching_response():
+    from magazyn.scripts.price_checker_ws import cdp_call
+
+    async def _run():
+        websocket = _FakeWebSocket(
+            {"method": "Page.loadEventFired"},
+            {"id": 7, "result": {"ok": True}},
+        )
+        result = await cdp_call(websocket, "Runtime.evaluate", msg_id=7, timeout=1)
+        assert result["result"] == {"ok": True}
+        assert json.loads(websocket.sent[0])["method"] == "Runtime.evaluate"
+
+    asyncio.run(_run())
+
+
+def test_cdp_call_raises_protocol_error():
+    from magazyn.scripts.price_checker_ws import cdp_call
+
+    async def _run():
+        websocket = _FakeWebSocket({"id": 5, "error": {"message": "boom"}})
+        with pytest.raises(RuntimeError, match="boom"):
+            await cdp_call(websocket, "Runtime.evaluate", msg_id=5, timeout=1)
+
+    asyncio.run(_run())
+
+
+def test_cdp_call_times_out_without_matching_response():
+    from magazyn.scripts.price_checker_ws import cdp_call
+
+    async def _run():
+        websocket = _FakeWebSocket()
+        with pytest.raises(TimeoutError, match="Runtime.evaluate"):
+            await cdp_call(websocket, "Runtime.evaluate", msg_id=9, timeout=0.01)
+
+    asyncio.run(_run())
 
 
 # --- Testy save_report_item z nowymi polami i deduplikacja ---
@@ -271,6 +328,39 @@ def test_check_single_offer_uses_api_price():
             assert result["cheapest"]["is_super_seller"] is False
 
     asyncio.run(_run())
+
+
+def test_price_report_worker_error_payload_keeps_offer_price():
+    from magazyn.services.price_report_worker import _check_offer
+
+    async def failing_check_single_offer(offer, cdp_host, cdp_port):
+        raise RuntimeError("CDP padl")
+
+    saved = []
+
+    def save_report_item(report_id, result):
+        saved.append((report_id, result))
+
+    _check_offer(
+        12,
+        {
+            "offer_id": "ERR-1",
+            "title": "Oferta z błędem",
+            "price": 123.45,
+            "product_size_id": 9,
+        },
+        logging.getLogger("test-price-worker"),
+        failing_check_single_offer,
+        save_report_item,
+        "127.0.0.1",
+        9223,
+    )
+
+    assert saved[0][0] == 12
+    assert saved[0][1]["offer_id"] == "ERR-1"
+    assert saved[0][1]["our_price"] == 123.45
+    assert saved[0][1]["competitors_all_count"] == 0
+    assert saved[0][1]["our_siblings"] == []
 
 
 # --- Test modelu PriceReportItem nowe pola ---

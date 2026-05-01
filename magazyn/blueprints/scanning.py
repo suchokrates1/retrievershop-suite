@@ -22,12 +22,14 @@ from sqlalchemy import desc
 
 from ..db import get_session
 from ..auth import login_required
-from ..models.orders import OrderProduct, OrderStatusLog
 from ..models.printing import ScanLog
 from ..domain.products import find_by_barcode
 from ..parsing import parse_product_info
-from ..services.order_status import add_order_status
-from ..services.scanning import load_order_for_barcode
+from ..services.scanning import (
+    check_and_auto_pack,
+    load_order_for_barcode,
+    record_scan_event,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,133 +39,29 @@ bp = Blueprint("scanning", __name__)
 
 
 def _log_scan(scan_type: str, barcode: str, success: bool, result_data=None, error_message=None):
-    """Log a scan event to the database for debugging and audit."""
-    try:
-        user_id = getattr(g, 'user', {}).get('id') if hasattr(g, 'user') else None
-        if user_id is None and 'user_id' in session:
-            user_id = session.get('user_id')
-        
-        with get_session() as db:
-            log = ScanLog(
-                scan_type=scan_type,
-                barcode=barcode,
-                success=success,
-                result_data=json.dumps(result_data) if result_data else None,
-                error_message=error_message,
-                user_id=user_id,
-            )
-            db.add(log)
-    except Exception as e:
-        current_app.logger.warning(f"Failed to log scan: {e}")
+    """Zapisz zdarzenie skanu do bazy na potrzeby diagnostyki i audytu."""
+    user_id = getattr(g, 'user', {}).get('id') if hasattr(g, 'user') else None
+    if user_id is None and 'user_id' in session:
+        user_id = session.get('user_id')
+
+    record_scan_event(
+        scan_type,
+        barcode,
+        success,
+        result_data=result_data,
+        error_message=error_message,
+        user_id=user_id,
+        log=current_app.logger,
+    )
 
 
 def _check_and_auto_pack():
-    """Check if we can auto-pack: label + matching product scanned within 120 seconds."""
-    last_product = session.get('last_product_scan')
-    last_label = session.get('last_label_scan')
-    
-    if not last_product or not last_label:
-        current_app.logger.info(f"Auto-pack check: product={bool(last_product)}, label={bool(last_label)}")
-        return
-    
-    # Check if scans are within 120 seconds of each other
-    current_time = time.time()
-    product_age = current_time - last_product['timestamp']
-    label_age = current_time - last_label['timestamp']
-    
-    current_app.logger.info(f"Auto-pack check: product_age={product_age:.1f}s, label_age={label_age:.1f}s")
-    
-    if product_age > 120 or label_age > 120:
-        current_app.logger.info("Auto-pack: Timeout - scans too old")
-        session.pop('last_product_scan', None)
-        session.pop('last_label_scan', None)
-        session.pop('scanned_products_for_order', None)
-        return
-    
-    order_id = last_label['order_id']
-    product_size_id = last_product['product_size_id']
-    
-    if not order_id or not product_size_id:
-        return
-    
-    with get_session() as db:
-        # Get current order status
-        latest_status = (
-            db.query(OrderStatusLog)
-            .filter(OrderStatusLog.order_id == order_id)
-            .order_by(desc(OrderStatusLog.timestamp))
-            .first()
-        )
-        
-        current_status = latest_status.status if latest_status else 'nieznany'
-        current_app.logger.info(f"Auto-pack: order_id={order_id}, current_status={current_status}")
-        
-        # Only auto-pack if current status is "wydrukowano" (after label printed)
-        if not latest_status or latest_status.status != "wydrukowano":
-            current_app.logger.info("Auto-pack: Status nie jest 'wydrukowano' - pomijam")
-            return
-        
-        # Check if product belongs to this order
-        order_product = (
-            db.query(OrderProduct)
-            .filter(
-                OrderProduct.order_id == order_id,
-                OrderProduct.product_size_id == product_size_id
-            )
-            .first()
-        )
-        
-        if not order_product:
-            current_app.logger.warning(f"Auto-pack: Produkt {product_size_id} NIE należy do zamówienia {order_id}")
-            flash('Zeskanowany produkt nie należy do tej paczki!', 'warning')
-            return
-        
-        current_app.logger.info(f"Auto-pack: Produkt {product_size_id} należy do zamówienia {order_id}")
-        
-        # Track scanned products for this order in session
-        scanned_tracking = session.get('scanned_products_for_order', {})
-        order_id_str = str(order_id)
-        
-        if order_id_str not in scanned_tracking:
-            scanned_tracking[order_id_str] = []
-        
-        if product_size_id not in scanned_tracking[order_id_str]:
-            scanned_tracking[order_id_str].append(product_size_id)
-        
-        session['scanned_products_for_order'] = scanned_tracking
-        
-        # Get all products that should be in this order
-        all_order_products = (
-            db.query(OrderProduct)
-            .filter(OrderProduct.order_id == order_id)
-            .all()
-        )
-        
-        required_product_ids = {op.product_size_id for op in all_order_products}
-        scanned_product_ids = set(scanned_tracking[order_id_str])
-        missing_products = required_product_ids - scanned_product_ids
-        
-        if missing_products:
-            current_app.logger.info(f"Auto-pack: Brakuje produktów: {missing_products}")
-            flash(f'Zeskanowano {len(scanned_product_ids)}/{len(required_product_ids)} produktów', 'info')
-            return
-        
-        current_app.logger.info(f"Auto-pack: Wszystkie produkty zeskanowane ({len(required_product_ids)} szt.)")
-        
-        # All conditions met - change status to "spakowano"
-        add_order_status(db, order_id, "spakowano", notes="Automatycznie spakowano po zeskanowaniu etykiety i produktu")
-        
-        current_app.logger.info(f"AUTO-PACK SUCCESS: Zamówienie {order_id} -> spakowano")
-        
-        # Clear session data to prevent duplicate packing
-        session.pop('last_product_scan', None)
-        session.pop('last_label_scan', None)
-        
-        if 'scanned_products_for_order' in session and order_id_str in session['scanned_products_for_order']:
-            session['scanned_products_for_order'].pop(order_id_str, None)
-            session.modified = True
-        
-        flash(f'Spakowano zamówienie {order_id}!', 'success')
+    """Sprawdź, czy ostatnie skany pozwalają automatycznie spakować zamówienie."""
+    result = check_and_auto_pack(session, log=current_app.logger)
+    if result.state_modified:
+        session.modified = True
+    if result.flash_message:
+        flash(result.flash_message, result.flash_category or 'info')
 
 
 # ============================================================================
@@ -173,7 +71,7 @@ def _check_and_auto_pack():
 @bp.route("/barcode_scan", methods=["POST"])
 @login_required
 def barcode_scan():
-    """Scan product barcode (EAN)."""
+    """Obsłuż skan kodu EAN produktu."""
     data = request.get_json(silent=True) or {}
     barcode = (data.get("barcode") or "").strip()
     if not barcode:
@@ -185,11 +83,13 @@ def barcode_scan():
         
         _log_scan('product', barcode, True, result)
         
-        # Store last product scan in session for auto-packing
+        # Zapamiętaj ostatni skan produktu do automatycznego pakowania.
+        scan_timestamp = time.time()
         session['last_product_scan'] = {
             'barcode': barcode,
             'product_size_id': result.get('product_size_id'),
-            'timestamp': time.time()
+            'timestamp': scan_timestamp,
+            'scan_key': f"{barcode}:{scan_timestamp:.6f}",
         }
         
         _check_and_auto_pack()
@@ -205,7 +105,7 @@ def barcode_scan():
 @bp.route("/scan_barcode")
 @login_required
 def barcode_scan_page():
-    """Page for scanning product barcodes."""
+    """Wyświetl stronę skanowania kodów produktów."""
     next_url = request.args.get("next", url_for("products.items"))
     return render_template("scan_barcode.html", next=next_url)
 
@@ -213,7 +113,7 @@ def barcode_scan_page():
 @bp.route("/label_scan", methods=["POST"])
 @login_required
 def label_barcode_scan():
-    """Scan shipping label barcode."""
+    """Obsłuż skan kodu z etykiety wysyłkowej."""
     payload = request.get_json(silent=True) or {}
     barcode = (payload.get("barcode") or "").strip()
     if not barcode:
@@ -236,7 +136,7 @@ def label_barcode_scan():
             }
         )
 
-    # Store last label scan in session for auto-packing
+    # Zapamiętaj ostatni skan etykiety do automatycznego pakowania.
     session['last_label_scan'] = {
         'order_id': order_id,
         'timestamp': time.time()
@@ -263,7 +163,7 @@ def label_barcode_scan():
 @bp.route("/scan_label")
 @login_required
 def label_scan_page():
-    """Page for scanning shipping labels."""
+    """Wyświetl stronę skanowania etykiet wysyłkowych."""
     next_url = request.args.get("next", url_for("products.items"))
     return render_template(
         "scan_label.html",
@@ -277,9 +177,9 @@ def label_scan_page():
 @bp.route("/scan_logs")
 @login_required
 def scan_logs():
-    """Display recent scan logs for debugging."""
+    """Wyświetl ostatnie logi skanowania do diagnostyki."""
     limit = request.args.get("limit", 20, type=int)
-    scan_type = request.args.get("type")  # 'product', 'label', or None for all
+    scan_type = request.args.get("type")  # product, label albo wszystkie
     
     with get_session() as db:
         query = db.query(ScanLog).order_by(desc(ScanLog.created_at))
