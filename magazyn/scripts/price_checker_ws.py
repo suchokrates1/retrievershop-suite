@@ -49,6 +49,11 @@ CDP_HOST = os.environ.get("CDP_HOST", "192.168.31.5")  # minipc
 CDP_PORT = int(os.environ.get("CDP_PORT", "9223"))
 MY_SELLER = "Retriever_Shop"
 MAX_DELIVERY_DAYS = 3  # Filtruj sprzedawcow z dluga dostawa w dniach roboczych (chinczycy)
+CDP_HTTP_TIMEOUT_SECONDS = 10
+CDP_WS_TIMEOUT_SECONDS = 20
+CDP_EVALUATE_TIMEOUT_SECONDS = 8
+CDP_ARTICLE_POLL_ATTEMPTS = 20
+CDP_ARTICLE_POLL_INTERVAL_SECONDS = 0.5
 
 # Polskie miesiace do parsowania daty dostawy
 POLISH_MONTHS = {
@@ -142,7 +147,7 @@ def _cdp_json_request(host: str, port: int, path: str, method: str = "GET") -> D
         raise ValueError("Nieprawidlowa sciezka CDP")
     url = f"http://{host}:{port}{path}"
     request = urllib.request.Request(url, method=method)
-    with urllib.request.urlopen(request, timeout=10) as resp:  # nosec B310
+    with urllib.request.urlopen(request, timeout=CDP_HTTP_TIMEOUT_SECONDS) as resp:  # nosec B310
         payload = resp.read()
     return json.loads(payload) if payload else {}
 
@@ -498,18 +503,30 @@ def filter_competitor_offers(
     return filtered, stats
 
 
-async def cdp_call(ws, method: str, params: dict = None, msg_id: int = 1) -> dict:
+async def cdp_call(ws, method: str, params: dict = None, msg_id: int = 1, timeout: float = CDP_WS_TIMEOUT_SECONDS) -> dict:
     """Wykonuje wywolanie CDP i zwraca wynik."""
     request = {"id": msg_id, "method": method}
     if params:
         request["params"] = params
     
     await ws.send(json.dumps(request))
-    
+
+    deadline = asyncio.get_event_loop().time() + timeout
     while True:
-        resp = await ws.recv()
+        remaining = deadline - asyncio.get_event_loop().time()
+        if remaining <= 0:
+            raise TimeoutError(f"Timeout CDP dla {method} po {timeout}s")
+
+        try:
+            resp = await asyncio.wait_for(ws.recv(), timeout=remaining)
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(f"Timeout CDP dla {method} po {timeout}s") from exc
         data = json.loads(resp)
         if data.get("id") == msg_id:
+            if data.get("error"):
+                error = data["error"]
+                message = error.get("message") if isinstance(error, dict) else str(error)
+                raise RuntimeError(f"CDP {method}: {message}")
             return data
         # Ignoruj eventy
 
@@ -560,7 +577,8 @@ async def wait_for_dialog(ws, timeout: int = 15) -> bool:
     while asyncio.get_event_loop().time() - start < timeout:
         result = await cdp_call(ws, "Runtime.evaluate", 
                                 {"expression": js_check, "returnByValue": True}, 
-                                msg_id=msg_id)
+                                msg_id=msg_id,
+                                timeout=CDP_EVALUATE_TIMEOUT_SECONDS)
         msg_id += 1
         
         if result.get("result", {}).get("result", {}).get("value"):
@@ -600,7 +618,8 @@ async def extract_page_price(ws) -> Optional[float]:
     '''
     result = await cdp_call(ws, "Runtime.evaluate",
                             {"expression": js_code, "returnByValue": True},
-                            msg_id=50)
+                            msg_id=50,
+                            timeout=CDP_EVALUATE_TIMEOUT_SECONDS)
     value = result.get("result", {}).get("result", {}).get("value")
     if value:
         try:
@@ -617,25 +636,62 @@ async def fetch_competitor_offer_payload(ws) -> Dict[str, Any]:
         let container = null;
         let containerSource = null;
 
+        const containerSelectors = [
+            '[data-box-name="ProductOffersListingContainer"]',
+            '[data-role="opbox-offers-list"]',
+            '[data-testid*="offer"]',
+            '[data-testid*="Offer"]',
+            '[class*="offers-list"]',
+            '[class*="offer-list"]',
+            '[class*="ProductOffers"]'
+        ];
+
+        const hasOfferText = (candidate) => /zł|zl/i.test(candidate.innerText || '');
+        const candidateKey = (candidate) => candidate.dataset?.boxName
+            || candidate.dataset?.role
+            || candidate.dataset?.testid
+            || candidate.className
+            || candidate.tagName;
+
+        function pickContainer(root) {
+            const seen = new Set();
+            const candidates = [];
+
+            function addCandidate(candidate, source) {
+                if (!candidate || seen.has(candidate)) return;
+                seen.add(candidate);
+                const articleCount = candidate.querySelectorAll('article').length;
+                if (articleCount > 0 && hasOfferText(candidate)) {
+                    candidates.push({ candidate, source, articleCount });
+                }
+            }
+
+            addCandidate(root, 'root');
+            for (const selector of containerSelectors) {
+                root.querySelectorAll(selector).forEach((candidate) => addCandidate(candidate, selector));
+            }
+            root.querySelectorAll('article').forEach((article) => addCandidate(article.parentElement, 'article-parent'));
+
+            candidates.sort((left, right) => right.articleCount - left.articleCount);
+            return candidates[0] || null;
+        }
+
         const dialogs = Array.from(document.querySelectorAll("[role='dialog']"));
         const activeDialog = dialogs.find((dialog) => dialog.innerText?.includes("Inne oferty produktu"));
 
         if (activeDialog) {
-            container = activeDialog.querySelector('[data-box-name="ProductOffersListingContainer"]')
-                || activeDialog.querySelector('[data-role="opbox-offers-list"]');
-            if (container) {
-                containerSource = 'dialog';
+            const picked = pickContainer(activeDialog);
+            if (picked) {
+                container = picked.candidate;
+                containerSource = `dialog:${picked.source}:${candidateKey(container)}`;
             }
         }
 
         if (!container) {
-            const visibleContainers = Array.from(
-                document.querySelectorAll('[data-box-name="ProductOffersListingContainer"], [data-role="opbox-offers-list"]')
-            ).filter((candidate) => candidate.querySelectorAll('article').length > 0);
-
-            if (visibleContainers.length === 1) {
-                container = visibleContainers[0];
-                containerSource = 'visible-fallback';
+            const picked = pickContainer(document.body);
+            if (picked) {
+                container = picked.candidate;
+                containerSource = `visible-fallback:${picked.source}:${candidateKey(container)}`;
             }
         }
 
@@ -730,7 +786,8 @@ async def fetch_competitor_offer_payload(ws) -> Dict[str, Any]:
 
     result = await cdp_call(ws, "Runtime.evaluate", 
                             {"expression": js_code, "returnByValue": True}, 
-                            msg_id=200)
+                            msg_id=200,
+                            timeout=CDP_EVALUATE_TIMEOUT_SECONDS)
 
     return result.get("result", {}).get("result", {}).get("value", {}) or {
         "containerSource": None,
@@ -796,7 +853,13 @@ async def check_offer_price(
             raise RuntimeError("Chrome nie zwrocil webSocketDebuggerUrl dla nowej karty")
         logger.debug(f"CDP WebSocket: {ws_url}")
         
-        async with websockets.connect(ws_url, max_size=10*1024*1024) as ws:
+        async with websockets.connect(
+            ws_url,
+            max_size=10*1024*1024,
+            open_timeout=CDP_HTTP_TIMEOUT_SECONDS,
+            ping_timeout=CDP_HTTP_TIMEOUT_SECONDS,
+            close_timeout=5,
+        ) as ws:
             # Emuluj aktywna strone - w Chrome/KasmVNC (Wayland) strona jest
             # traktowana jako nieaktywna, co wstrzymuje requestAnimationFrame.
             # Bez rAF nie dzialaja CSS transitions ani IntersectionObserver,
@@ -814,13 +877,13 @@ async def check_offer_price(
                 return result
             
             payload = {"articleCount": 0, "articles": [], "containerSource": None}
-            for _ in range(20):
+            for _ in range(CDP_ARTICLE_POLL_ATTEMPTS):
                 payload = await fetch_competitor_offer_payload(ws)
                 count = payload.get("articleCount", 0)
                 if count > 0:
                     logger.debug(f"Znaleziono {count} artykulow w dialogu ({payload.get('containerSource')})")
                     break
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(CDP_ARTICLE_POLL_INTERVAL_SECONDS)
             
             all_offers = parse_competitor_articles(payload.get("articles", []), title)
             logger.info(
@@ -832,7 +895,11 @@ async def check_offer_price(
             )
             
             if not all_offers:
-                result.error = "Brak ofert w dialogu"
+                result.error = (
+                    "Brak ofert w dialogu "
+                    f"(container={payload.get('containerSource') or 'brak'}, "
+                    f"raw_articles={payload.get('articleCount', 0)})"
+                )
                 return result
             
             # Sprawdzana oferta NIE pojawia sie w dialogu (to jest jej strona)
