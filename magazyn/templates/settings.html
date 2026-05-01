@@ -229,7 +229,7 @@
             </p>
 
             <!-- Formularz dodawania -->
-            <form method="post" action="{{ url_for('add_fixed_cost') }}" class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-4 items-end">
+            <form method="post" action="{{ url_for('fixed_costs.add_fixed_cost') }}" class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-4 items-end">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="md:col-span-4">
                     <label for="new_cost_name" class="block mb-1 text-sm font-medium">Nazwa kosztu</label>
@@ -291,14 +291,14 @@
                                         title="Edytuj" style="cursor: pointer;">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <form method="post" action="{{ url_for('toggle_fixed_cost', cost_id=cost.id) }}" class="inline">
+                                <form method="post" action="{{ url_for('fixed_costs.toggle_fixed_cost', cost_id=cost.id) }}" class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-outline border-0"
                                             title="{{ 'Dezaktywuj' if cost.is_active else 'Aktywuj' }}" style="cursor: pointer;">
                                         <i class="bi bi-{{ 'pause-circle' if cost.is_active else 'play-circle' }}"></i>
                                     </button>
                                 </form>
-                                <form method="post" action="{{ url_for('delete_fixed_cost', cost_id=cost.id) }}" class="inline"
+                                <form method="post" action="{{ url_for('fixed_costs.delete_fixed_cost', cost_id=cost.id) }}" class="inline"
                                       onsubmit="return confirm('Na pewno usunac koszt {{ cost.name }}?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-outline btn-error border-0"
@@ -312,7 +312,7 @@
                         <!-- Modal edycji -->
                         <dialog id="editModal{{ cost.id }}" class="modal">
                             <div class="modal-box">
-                                    <form method="post" action="{{ url_for('edit_fixed_cost', cost_id=cost.id) }}">
+                                    <form method="post" action="{{ url_for('fixed_costs.edit_fixed_cost', cost_id=cost.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <h3 class="font-bold text-lg border-b border-base-300 pb-3">
                                             Edytuj koszt: {{ cost.name }}

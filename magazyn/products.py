@@ -34,7 +34,7 @@ from .domain.products import (
     get_product_details,
     update_product,
 )
-from .forms import AddItemForm
+from .forms import AddItemForm, ProductEditForm
 from .auth import login_required
 from .constants import ALL_SIZES
 from .models.products import ProductSize
@@ -121,25 +121,36 @@ def delete_item(item_id):
 @login_required
 def edit_item(product_id):
     if request.method == "POST":
-        category = request.form["category"]
-        brand = request.form.get("brand") or "Truelove"
-        series = request.form.get("series") or None
-        color = request.form["color"]
+        form = ProductEditForm()
+        if not form.validate_on_submit():
+            flash("Nieprawidlowe dane formularza produktu.", "error")
+            return redirect(url_for("products.edit_item", product_id=product_id))
+
+        category = form.category.data
+        brand = form.brand.data or "Truelove"
+        series = form.series.data or None
+        color = form.color.data.strip()
         sizes = ALL_SIZES
         quantities = {
-            size: _to_int(request.form.get(f"quantity_{size}", 0))
-            for size in sizes
+            size: _to_int(getattr(form, f"quantity_{size}").data or 0) for size in sizes
         }
         barcodes = {
-            size: request.form.get(f"barcode_{size}") or None for size in sizes
+            size: (getattr(form, f"barcode_{size}").data or "").strip() or None
+            for size in sizes
         }
         purchase_prices = {
-            size: _to_decimal(request.form.get(f"purchase_price_{size}")) if request.form.get(f"purchase_price_{size}") else None
-            for size in sizes
+            size: getattr(form, f"purchase_price_{size}").data for size in sizes
         }
         try:
             updated = update_product(
-                product_id, category, brand, series, color, quantities, barcodes, purchase_prices
+                product_id,
+                category,
+                brand,
+                series,
+                color,
+                quantities,
+                barcodes,
+                purchase_prices,
             )
         except Exception as exc:
             logger.exception("Blad podczas aktualizacji produktu")
@@ -421,7 +432,7 @@ def add_delivery():
             except Exception as exc:
                 logger.exception("Blad podczas dodawania dostawy")
                 errors.append(f"Błąd: {exc}")
-        
+
         if success_count > 0:
             flash(f"Dodano {success_count} pozycji dostawy", "success")
         for err in errors:

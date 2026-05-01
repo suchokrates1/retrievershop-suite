@@ -22,7 +22,7 @@ from .discussions import bp as discussions_bp
 from .diagnostics import bp as diagnostics_bp
 from .stats import bp as stats_bp
 from .integration_proxy import bp as integration_proxy_bp
-from .blueprints import scanning_bp, stocktake_bp, customer_order_bp
+from .blueprints import scanning_bp, stocktake_bp, customer_order_bp, fixed_costs_bp
 from .price_reports import bp as price_reports_bp
 from .socketio_extension import socketio
 from .csrf_extension import csrf
@@ -119,6 +119,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(discussions_bp)
     app.register_blueprint(scanning_bp)
     app.register_blueprint(stocktake_bp)
+    app.register_blueprint(fixed_costs_bp)
     app.register_blueprint(price_reports_bp)
     app.register_blueprint(customer_order_bp)
 
