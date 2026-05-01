@@ -6,31 +6,33 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKED_ROOTS = (REPO_ROOT / "magazyn", REPO_ROOT / "scripts", REPO_ROOT / "migrations")
 PRODUCTION_ROOTS = (REPO_ROOT / "magazyn", REPO_ROOT / "scripts")
 
+LEGACY_PRINT_AGENT_ATTRIBUTES = {
+    "AgentConfig",
+    "ApiError",
+    "ConfigError",
+    "PrintError",
+    "ShipmentExpiredError",
+    "PRINT_QUEUE_OLDEST_AGE_SECONDS",
+    "PRINT_QUEUE_SIZE",
+    "calculate_cod_amount",
+    "parse_time_str",
+    "parse_product_info",
+    "consume_order_stock",
+    "get_sales_summary",
+    "send_report",
+    "shorten_product_name",
+}
+
 FORBIDDEN_IMPORTS = {
     "magazyn.models": None,
     "magazyn.agent": None,
     "magazyn.orders": {"sync_order_from_data", "add_order_status", "_dispatch_status_email"},
     "magazyn.price_reports": {"change_price", "recheck_item"},
     "magazyn.returns": {"restore_stock_for_return", "check_refund_eligibility", "process_refund"},
-    "magazyn.print_agent": {
-        "AgentConfig",
-        "ApiError",
-        "ConfigError",
-        "PrintError",
-        "ShipmentExpiredError",
-        "PRINT_QUEUE_OLDEST_AGE_SECONDS",
-        "PRINT_QUEUE_SIZE",
-        "calculate_cod_amount",
-        "parse_time_str",
-        "parse_product_info",
-        "consume_order_stock",
-        "get_sales_summary",
-        "send_report",
-        "shorten_product_name",
-    },
+    "magazyn.print_agent": None,
 }
 
-FORBIDDEN_MODULE_IMPORTS = {"magazyn.agent"}
+FORBIDDEN_MODULE_IMPORTS = {"magazyn.agent", "magazyn.print_agent"}
 ROUTE_MODULES = {
     "magazyn.app",
     "magazyn.discussions",
@@ -41,7 +43,9 @@ ROUTE_MODULES = {
 ROUTE_IMPORT_ALLOWLIST = {
     Path("magazyn/factory.py"),
 }
-FORBIDDEN_PRINT_AGENT_ATTRIBUTES = FORBIDDEN_IMPORTS["magazyn.print_agent"] | {
+FORBIDDEN_PRINT_AGENT_ATTRIBUTES = LEGACY_PRINT_AGENT_ATTRIBUTES | {
+    "agent",
+    "logger",
     "LabelAgent",
     "load_config",
     "settings",
@@ -105,6 +109,8 @@ def test_no_legacy_facade_imports():
             if module == "magazyn":
                 for alias in node.names:
                     if alias.name == "print_agent":
+                        rel_path = path.relative_to(REPO_ROOT)
+                        violations.append(f"{rel_path}:{node.lineno} -> from magazyn import print_agent")
                         print_agent_aliases.add(alias.asname or alias.name)
 
             forbidden_names = FORBIDDEN_IMPORTS.get(module)
@@ -186,6 +192,34 @@ def test_print_agent_stays_a_thin_bootstrap():
 
     assert defined_blocks == []
     assert exported_names == ["agent", "logger"]
+
+
+def test_models_package_init_stays_empty_marker():
+    path = REPO_ROOT / "magazyn" / "models" / "__init__.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    public_imports = [
+        node for node in ast.iter_child_nodes(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    defined_blocks = [
+        node.name for node in ast.iter_child_nodes(tree)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    exported_names = None
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
+            continue
+        if isinstance(node.value, ast.List):
+            exported_names = [
+                item.value for item in node.value.elts
+                if isinstance(item, ast.Constant)
+            ]
+
+    assert public_imports == []
+    assert defined_blocks == []
+    assert exported_names == []
 
 
 def test_root_modules_stay_within_size_budget():

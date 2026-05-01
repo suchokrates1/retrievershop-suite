@@ -1,12 +1,4 @@
-"""
-Synchronizacja statusów przesyłek z Allegro API.
-
-Ten moduł odpowiada za:
-- Pobieranie statusów przesyłek bezpośrednio z Allegro API
-- Mapowanie statusów Allegro na wewnętrzne statusy zamówień
-- Aktualizację statusów w bazie danych
-- Automatyczne przejścia statusów (wydrukowano → wyslano → w_transporcie → dostarczono)
-"""
+"""Synchronizacja statusów przesyłek z Allegro API."""
 
 import logging
 from typing import Optional, Dict, List, Tuple
@@ -16,6 +8,7 @@ from sqlalchemy import and_, func
 
 from .db import get_session
 from .models.orders import Order, OrderStatusLog
+from .services.return_core import create_return_from_order
 from .settings_store import settings_store
 from . import allegro_api
 from .services.order_status import add_order_status
@@ -37,6 +30,98 @@ CARRIER_ID_MAP = {
     "orlen paczka": "ORLEN_PACZKA",
 }
 
+CARRIER_ALLEGRO = "ALLEGRO"
+UNCLAIMED_ORDER_STATUS = "nieodebrano"
+RETURN_TO_SENDER_STATUSES = {"RETURNED", "RETURNED_TO_SENDER"}
+PICKUP_POINT_STATUSES = {"AT_PICKUP_POINT", "READY_TO_PICKUP", "PICKUP_REMINDER", "AVIZO", "AVAILABLE_FOR_PICKUP"}
+UNCLAIMED_ISSUE_HINTS = (
+    "refused to accept",
+    "pick-up deadline",
+    "pickup deadline",
+    "not picked up",
+    "nie odebr",
+    "odmow",
+    "cancel",
+)
+
+
+def _collect_tracking_statuses(waybill_data: Dict) -> List[Dict[str, str]]:
+    statuses: List[Dict[str, str]] = []
+
+    def _append_status(status_code: Optional[str], occurred_at: str, description: str) -> None:
+        if not status_code:
+            return
+        statuses.append(
+            {
+                "code": status_code,
+                "occurred_at": occurred_at or "",
+                "description": description or "",
+            }
+        )
+
+    def _collect(status_list: Optional[List[Dict]]) -> None:
+        for status in status_list or []:
+            _append_status(
+                status.get("status") or status.get("type") or status.get("code"),
+                status.get("occurredAt") or status.get("dateTime") or status.get("timestamp") or "",
+                status.get("description") or status.get("name") or "",
+            )
+
+    for event in waybill_data.get("events") or []:
+        _append_status(
+            event.get("type"),
+            event.get("occurredAt") or "",
+            event.get("description") or "",
+        )
+
+    _collect(waybill_data.get("statuses"))
+
+    tracking_details = waybill_data.get("trackingDetails") or {}
+    _collect(tracking_details.get("statuses"))
+
+    return sorted(statuses, key=lambda item: (bool(item["occurred_at"]), item["occurred_at"]))
+
+
+def _infer_special_order_status(tracking_statuses: List[Dict[str, str]]) -> Optional[Tuple[str, str]]:
+    pickup_seen = False
+    unclaimed_issue_description = ""
+    returned_description = ""
+
+    for status in tracking_statuses:
+        code = (status.get("code") or "").upper()
+        description = status.get("description") or ""
+        description_lower = description.lower()
+
+        if code in PICKUP_POINT_STATUSES:
+            pickup_seen = True
+
+        if code == "ISSUE" and any(hint in description_lower for hint in UNCLAIMED_ISSUE_HINTS):
+            unclaimed_issue_description = description
+
+        if code in RETURN_TO_SENDER_STATUSES:
+            returned_description = description
+
+    if returned_description:
+        if pickup_seen or unclaimed_issue_description:
+            return UNCLAIMED_ORDER_STATUS, unclaimed_issue_description or returned_description
+        return "zwrot", returned_description
+
+    return None
+
+
+def _ensure_not_collected_return(order: Order, description: str) -> None:
+    note = "Nie odebrano przesylki - wrócila do nadawcy"
+    if description:
+        note = f"{note}. {description}"
+
+    create_return_from_order(
+        order,
+        tracking_number=order.delivery_package_nr,
+        return_carrier=CARRIER_ALLEGRO,
+        status="not_collected",
+        notes=note,
+    )
+
 
 def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[Optional[str], str]:
     """
@@ -48,43 +133,15 @@ def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[Optional[str], 
     Returns:
         (status_code, description)
     """
-    candidates: List[Tuple[bool, str, str, str]] = []
-
-    def _collect_statuses(statuses: Optional[List[Dict]]) -> None:
-        for status in statuses or []:
-            status_code = status.get("status") or status.get("type") or status.get("code")
-            if not status_code:
-                continue
-            occurred_at = (
-                status.get("occurredAt")
-                or status.get("dateTime")
-                or status.get("timestamp")
-                or ""
-            )
-            description = status.get("description") or status.get("name") or ""
-            candidates.append((bool(occurred_at), occurred_at, status_code, description))
-
-    for event in waybill_data.get("events") or []:
-        status_code = event.get("type")
-        if not status_code:
-            continue
-        occurred_at = event.get("occurredAt") or ""
-        description = event.get("description") or ""
-        candidates.append((bool(occurred_at), occurred_at, status_code, description))
-
-    _collect_statuses(waybill_data.get("statuses"))
-
-    tracking_details = waybill_data.get("trackingDetails") or {}
-    _collect_statuses(tracking_details.get("statuses"))
-
+    candidates = _collect_tracking_statuses(waybill_data)
     if not candidates:
         return None, ""
 
-    _, _, latest_status, latest_description = max(candidates)
-    return latest_status, latest_description
+    latest = candidates[-1]
+    return latest["code"], latest["description"]
 
 
-def get_carrier_id(delivery_method: Optional[str]) -> Optional[str]:
+def get_carrier_id(delivery_method: Optional[str], waybill: Optional[str] = None) -> Optional[str]:
     """
     Mapuj nazwę metody dostawy na ID przewoźnika w Allegro API.
     
@@ -94,10 +151,16 @@ def get_carrier_id(delivery_method: Optional[str]) -> Optional[str]:
     Returns:
         ID przewoźnika lub None jeśli nie rozpoznano
     """
+    if waybill and waybill.upper().startswith("AD"):
+        return CARRIER_ALLEGRO
+
     if not delivery_method:
         return None
     
     method_lower = delivery_method.lower().strip()
+
+    if method_lower.startswith("allegro "):
+        return CARRIER_ALLEGRO
     
     # Sprawdź bezpośrednie dopasowanie
     for key, carrier_id in CARRIER_ID_MAP.items():
@@ -180,7 +243,7 @@ def sync_parcel_statuses() -> Dict[str, int]:
             # Grupuj według przewoźnika
             by_carrier: Dict[str, List[Order]] = defaultdict(list)
             for order in orders:
-                carrier_id = get_carrier_id(order.delivery_method)
+                carrier_id = get_carrier_id(order.delivery_method, order.delivery_package_nr)
                 if carrier_id:
                     by_carrier[carrier_id].append(order)
                 else:
@@ -218,12 +281,18 @@ def sync_parcel_statuses() -> Dict[str, int]:
                             
                             order = waybill_map[waybill]
 
+                            tracking_statuses = _collect_tracking_statuses(waybill_data)
                             allegro_status, description = _extract_latest_tracking_status(waybill_data)
                             if not allegro_status:
                                 continue
 
-                            # Mapuj na wewnętrzny status
-                            new_status = ALLEGRO_TRACKING_MAP.get(allegro_status)
+                            special_status = _infer_special_order_status(tracking_statuses)
+                            if special_status:
+                                new_status, special_description = special_status
+                                description = special_description or description
+                            else:
+                                # Mapuj na wewnętrzny status
+                                new_status = ALLEGRO_TRACKING_MAP.get(allegro_status)
 
                             if new_status:
                                 # Pobierz obecny status zamówienia
@@ -248,6 +317,8 @@ def sync_parcel_statuses() -> Dict[str, int]:
                                         new_status,
                                         notes=note_text
                                     )
+                                    if new_status == UNCLAIMED_ORDER_STATUS:
+                                        _ensure_not_collected_return(order, description)
                                     stats["updated"] += 1
                                 else:
                                     logger.debug(

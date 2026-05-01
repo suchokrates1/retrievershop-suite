@@ -1,9 +1,9 @@
 import importlib
-import magazyn.print_agent as pa
+import magazyn.services.print_agent_runtime as print_agent_runtime
 
 
 def test_agent_loop_stores_courier_code(monkeypatch):
-    mod = importlib.reload(pa)
+    mod = importlib.reload(print_agent_runtime)
     agent = mod.agent
 
     monkeypatch.setattr(agent, "_send_periodic_reports", lambda: None)
@@ -51,7 +51,7 @@ def test_agent_loop_stores_courier_code(monkeypatch):
 
 
 def test_agent_loop_treats_pobranie_as_cod_with_zero_payment(monkeypatch):
-    mod = importlib.reload(pa)
+    mod = importlib.reload(print_agent_runtime)
     agent = mod.agent
 
     monkeypatch.setattr(agent, "_send_periodic_reports", lambda: None)
@@ -125,7 +125,7 @@ def test_get_orders_includes_blad_druku_under_3_retries(app):
             db.add(OrderStatusLog(order_id=oid, status="blad_druku", notes="test"))
             db.commit()
 
-        mod = importlib.reload(pa)
+        mod = importlib.reload(print_agent_runtime)
         agent = mod.agent
         orders = agent.get_orders()
         order_ids = [o["order_id"] for o in orders]

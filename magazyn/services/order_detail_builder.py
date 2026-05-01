@@ -45,6 +45,7 @@ RETURN_STATUS_MAP = {
     "pending": ("Zgloszono zwrot", "bg-warning text-dark"),
     "in_transit": ("Paczka zwrotna w drodze", "bg-info"),
     "delivered": ("Paczka zwrotna odebrana", "bg-primary"),
+    "not_collected": ("Nie odebrano - wróciło do nadawcy", "bg-warning text-dark"),
     "completed": ("Zwrot zakonczony", "bg-success"),
     "cancelled": ("Zwrot anulowany", "bg-secondary"),
 }
@@ -313,6 +314,8 @@ class OrderDetailBuilder:
         return_stage_index = -1
         if active_return.status in return_stage_keys:
             return_stage_index = return_stage_keys.index(active_return.status)
+        elif active_return.status == "not_collected":
+            return_stage_index = return_stage_keys.index("delivered")
         
         return return_info, return_status_history, return_stage_index
     

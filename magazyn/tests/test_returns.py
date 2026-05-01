@@ -26,6 +26,7 @@ class TestReturnsSystem:
             RETURN_STATUS_PENDING,
             RETURN_STATUS_IN_TRANSIT,
             RETURN_STATUS_DELIVERED,
+            RETURN_STATUS_NOT_COLLECTED,
             RETURN_STATUS_COMPLETED,
             RETURN_STATUS_CANCELLED,
         )
@@ -33,6 +34,7 @@ class TestReturnsSystem:
         assert RETURN_STATUS_PENDING == "pending"
         assert RETURN_STATUS_IN_TRANSIT == "in_transit"
         assert RETURN_STATUS_DELIVERED == "delivered"
+        assert RETURN_STATUS_NOT_COLLECTED == "not_collected"
         assert RETURN_STATUS_COMPLETED == "completed"
         assert RETURN_STATUS_CANCELLED == "cancelled"
     
@@ -42,13 +44,14 @@ class TestReturnsSystem:
             RETURN_STATUS_PENDING,
             RETURN_STATUS_IN_TRANSIT,
             RETURN_STATUS_DELIVERED,
+            RETURN_STATUS_NOT_COLLECTED,
             RETURN_STATUS_COMPLETED,
             RETURN_STATUS_CANCELLED,
         )
         
         # Sprawdz ze statusy sa unikalne
         statuses = [RETURN_STATUS_PENDING, RETURN_STATUS_IN_TRANSIT,
-                    RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED,
+                    RETURN_STATUS_DELIVERED, RETURN_STATUS_NOT_COLLECTED, RETURN_STATUS_COMPLETED,
                     RETURN_STATUS_CANCELLED]
         assert len(statuses) == len(set(statuses))
     

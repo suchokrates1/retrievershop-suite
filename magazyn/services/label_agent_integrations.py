@@ -52,7 +52,7 @@ def get_order_packages(agent, order_id: str, *, get_shipment_details, create_all
 
 
 def create_allegro_shipment(agent, order_id: str, checkout_form_id: str) -> List[Dict[str, Any]]:
-    return shipment_creator(agent).create(order_id, checkout_form_id, agent.last_order_data)
+    return agent._shipment_creator().create(order_id, checkout_form_id, agent.last_order_data)
 
 
 def shipment_creator(

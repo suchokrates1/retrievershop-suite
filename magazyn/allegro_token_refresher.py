@@ -200,7 +200,7 @@ class AllegroTokenRefresher:
             "Successfully refreshed Allegro access token automatically (expires in %s seconds)",
             expires_in if expires_in is not None else "unknown",
         )
-        from .print_agent import agent
+        from .services.print_agent_runtime import agent
         agent.reload_config()
         return True
 

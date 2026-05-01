@@ -148,9 +148,41 @@ def get_checkout_form(access_token: str, order_external_id: str) -> Tuple[Option
         return None, f"Blad polaczenia: {e}"
 
 
+def build_checkout_refund_details(checkout_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Wylicz szczegoly refundu bez Customer Returns API."""
+    payment = checkout_data.get("payment") or {}
+    summary = checkout_data.get("summary") or {}
+    delivery = checkout_data.get("delivery") or {}
+
+    total_to_pay = summary.get("totalToPay") or payment.get("paidAmount") or {}
+    delivery_cost = delivery.get("cost") or {}
+
+    total_amount = float(total_to_pay.get("amount", 0) or 0)
+    delivery_amount = float(delivery_cost.get("amount", 0) or 0)
+    currency = (
+        total_to_pay.get("currency")
+        or delivery_cost.get("currency")
+        or "PLN"
+    )
+
+    if total_amount <= 0:
+        for item in checkout_data.get("lineItems") or []:
+            price = (item.get("price") or {}).get("amount")
+            if price is None:
+                continue
+            total_amount += float(price) * int(item.get("quantity", 1) or 1)
+
+    return {
+        "total_amount": total_amount,
+        "delivery_amount": delivery_amount,
+        "currency": currency,
+        "items": checkout_data.get("lineItems") or [],
+    }
+
+
 def initiate_refund(
     access_token: str,
-    return_id: str,
+    return_id: Optional[str],
     order_external_id: str,
     line_items: Optional[List[Dict[str, Any]]] = None,
     delivery_cost_covered: bool = True,
@@ -174,20 +206,18 @@ def initiate_refund(
     if not access_token:
         return False, "Brak tokenu dostepu Allegro", None
 
-    if not return_id:
-        return False, "Brak ID zwrotu Allegro", None
-
     if not order_external_id:
         return False, "Brak external_order_id zamowienia", None
 
-    # Waliduj status zwrotu
-    return_data, error = get_customer_return(access_token, return_id)
-    if error:
-        return False, error, None
+    if return_id:
+        # Waliduj status zwrotu tylko dla Customer Returns
+        return_data, error = get_customer_return(access_token, return_id)
+        if error:
+            return False, error, None
 
-    can_refund, validation_msg = validate_return_for_refund(return_data)
-    if not can_refund:
-        return False, validation_msg, None
+        can_refund, validation_msg = validate_return_for_refund(return_data)
+        if not can_refund:
+            return False, validation_msg, None
 
     # Pobierz dane platnosci z checkout-forms
     checkout_data, cf_error = get_checkout_form(access_token, order_external_id)
@@ -228,7 +258,7 @@ def initiate_refund(
     try:
         logger.info(
             "Inicjuje zwrot pieniedzy: return_id=%s, order=%s, payment=%s, command=%s",
-            return_id, order_external_id, payment_id, command_id,
+            return_id or "<synthetic>", order_external_id, payment_id, command_id,
         )
         response = _request_with_retry(
             requests.post, url, endpoint="payments-refunds",
@@ -242,7 +272,7 @@ def initiate_refund(
             currency = total.get("currency", "PLN")
             logger.info(
                 "Zwrot pieniedzy zainicjowany: return_id=%s, kwota=%s %s, refund_id=%s",
-                return_id, amount, currency, resp_data.get("id"),
+                return_id or "<synthetic>", amount, currency, resp_data.get("id"),
             )
             return True, f"Zwrot pieniedzy zainicjowany! Kwota: {amount} {currency}", resp_data
 
@@ -267,7 +297,7 @@ def initiate_refund(
             return False, f"Blad Allegro API ({response.status_code}): {error_msg}", None
 
     except requests.RequestException as e:
-        logger.error("Blad HTTP przy inicjowaniu zwrotu %s: %s", return_id, e)
+        logger.error("Blad HTTP przy inicjowaniu zwrotu %s: %s", return_id or "<synthetic>", e)
         return False, f"Blad polaczenia z Allegro: {e}", None
 
 

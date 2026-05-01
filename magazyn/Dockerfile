@@ -28,13 +28,17 @@ FROM python:3.12-slim AS runtime
 
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV TZ=Europe/Warsaw
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     cups-client \
     curl \
+    tzdata \
     && rm -rf /var/lib/apt/lists/* \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
     && mkdir -p /etc/cups \
     && echo "ServerName /var/run/cups/cups.sock" > /etc/cups/client.conf
 

@@ -289,6 +289,14 @@
                             <span class="badge badge-success"><i class="bi bi-check"></i> Stan przywrocony</span>
                             {% else %}
                             <span class="badge badge-neutral"><i class="bi bi-hourglass"></i> Stan do przywrocenia</span>
+                            {% if not return_info.allegro_return_id and return_info.status in ['pending', 'in_transit'] %}
+                            <form action="{{ url_for('orders.mark_return_delivered', order_id=order.order_id) }}" method="POST" class="inline ml-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline btn-info btn-sm" onclick="return confirm('Oznaczyc paczke zwrotna jako odebrana?')">
+                                    <i class="bi bi-box-seam"></i> Oznacz jako odebrany
+                                </button>
+                            </form>
+                            {% endif %}
                             <form action="{{ url_for('orders.restore_return_stock', order_id=order.order_id) }}" method="POST" class="inline ml-2">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-outline btn-success btn-sm" onclick="return confirm('Przywrocic stan magazynowy dla tego zwrotu?')">
@@ -303,7 +311,7 @@
                         <div class="mt-3 pt-3 border-t border-base-300">
                             <span class="badge badge-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
                         </div>
-                        {% elif return_info.allegro_return_id and return_info.status in ['delivered', 'in_transit', 'completed'] %}
+                        {% elif return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed'] %}
                         <div class="mt-3 pt-3 border-t border-base-300">
                             <h6 class="text-error mb-2 font-semibold"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
                             <button type="button" class="btn btn-error btn-sm" id="refundBtn"
@@ -453,12 +461,18 @@
                         <i class="bi bi-person-lines-fill"></i> Strona klienta
                     </a>
                     {% endif %}
+                    {% if not return_info and current_status.status in ['dostarczono', 'nieodebrano'] %}
+                    <button type="button" class="btn btn-outline btn-warning w-full mb-2"
+                            onclick="document.getElementById('manualReturnModal').showModal()">
+                        <i class="bi bi-arrow-return-left"></i> Utworz reczny zwrot
+                    </button>
+                    {% endif %}
                     {% if order.user_login %}
                     <a href="{{ url_for('discussions.discussions_list') }}?user={{ order.user_login }}" class="btn btn-outline btn-primary w-full mb-2">
                         <i class="bi bi-chat-dots"></i> Chat z {{ order.customer_name or order.user_login }}
                     </a>
                     {% endif %}
-                    {% if return_info and not return_info.refund_processed and return_info.allegro_return_id and return_info.status in ['delivered', 'completed'] %}
+                    {% if return_info and not return_info.refund_processed and return_info.status in ['delivered', 'not_collected', 'completed'] %}
                     <button type="button" class="btn btn-error w-full mt-1" id="refundBtnQuick"
                             onclick="document.getElementById('refundModal').showModal()">
                         <i class="bi bi-currency-exchange"></i> Zwroc pieniadze
@@ -900,8 +914,46 @@ details[open] summary::before {
 }
 </style>
 
+{% if not return_info and current_status.status in ['dostarczono', 'nieodebrano'] %}
+<dialog id="manualReturnModal" class="modal">
+    <div class="modal-box max-w-lg">
+        <h3 class="font-bold text-lg mb-4">
+            <i class="bi bi-arrow-return-left mr-2"></i>
+            Utworz reczny zwrot
+        </h3>
+        <p class="mb-3 text-sm text-base-content/70">
+            Ta opcja tworzy zwrot poza Allegro, np. gdy klient zgłasza zwrot po terminie i akceptujesz wysylke zwrotna na jego koszt.
+        </p>
+        <form action="{{ url_for('orders.create_manual_return', order_id=order.order_id) }}" method="POST" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label for="manualReturnTracking" class="label"><span class="label-text">Numer sledzenia zwrotu (opcjonalnie)</span></label>
+                <input id="manualReturnTracking" name="return_tracking_number" type="text" class="input input-bordered w-full" maxlength="128" placeholder="Np. 1234567890">
+            </div>
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" class="checkbox" name="mark_in_transit" value="true">
+                    <span class="label-text">Klient juz nadał paczke zwrotna</span>
+                </label>
+            </div>
+            <div>
+                <label for="manualReturnNotes" class="label"><span class="label-text">Notatka</span></label>
+                <textarea id="manualReturnNotes" name="notes" class="textarea textarea-bordered w-full" rows="3" maxlength="500" placeholder="Np. Zwrot po terminie Allegro, zaakceptowany prokonsumencko; wysylka po stronie klienta"></textarea>
+            </div>
+            <div class="modal-action">
+                <button class="btn" type="button" onclick="document.getElementById('manualReturnModal').close()">Anuluj</button>
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-plus-circle"></i> Utworz zwrot
+                </button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+
 {# Modal potwierdzenia zwrotu pieniędzy #}
-{% if return_info and return_info.status in ['delivered', 'in_transit', 'completed'] and return_info.allegro_return_id %}
+{% if return_info and return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed'] %}
 <div x-data="refundModal()" x-cloak>
 <dialog id="refundModal" class="modal" x-ref="modal">
     <div class="modal-box max-w-lg">
@@ -976,7 +1028,7 @@ details[open] summary::before {
                   @submit="handleSubmit($event)">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="confirm" value="true">
-                <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id }}">
+                <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id or '' }}">
                 <input type="hidden" name="delivery_cost_covered" :value="deliveryCostCovered ? 'true' : 'false'">
                 <input type="hidden" name="reason" :value="reason">
                 <button type="submit" class="btn btn-error" :disabled="!confirmed">

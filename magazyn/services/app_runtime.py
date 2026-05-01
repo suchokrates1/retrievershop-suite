@@ -15,7 +15,7 @@ class PrintAgentStartResult:
 
 def register_shutdown_hooks() -> None:
     from .. import billing_types_scheduler, order_sync_scheduler, promo_scheduler
-    from ..print_agent import agent as label_agent
+    from .print_agent_runtime import agent as label_agent
 
     atexit.register(label_agent.stop_agent_thread)
     atexit.register(order_sync_scheduler.stop_sync_scheduler)

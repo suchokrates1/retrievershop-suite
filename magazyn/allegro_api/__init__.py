@@ -76,6 +76,7 @@ from .tracking import (
 )
 
 from .refunds import (
+    build_checkout_refund_details,
     get_customer_return,
     get_checkout_form,
     validate_return_for_refund,
@@ -176,6 +177,7 @@ __all__ = [
     # Tracking
     "fetch_parcel_tracking",
     # Refunds
+    "build_checkout_refund_details",
     "get_customer_return",
     "get_checkout_form",
     "validate_return_for_refund",

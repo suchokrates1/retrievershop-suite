@@ -2,10 +2,13 @@ services:
   postgres:
     container_name: retrievershop-postgres
     image: postgres:16-alpine
+    command: ["postgres", "-c", "timezone=Europe/Warsaw", "-c", "log_timezone=Europe/Warsaw"]
     environment:
       POSTGRES_DB: magazyn
       POSTGRES_USER: magazyn
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Europe/Warsaw
+      PGTZ: Europe/Warsaw
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -44,6 +47,7 @@ services:
       - CUPS_SERVER=/var/run/cups/cups.sock
       - CDP_HOST=192.168.31.5
       - CDP_PORT=9223
+      - TZ=Europe/Warsaw
     user: root
     command: ["gunicorn", "magazyn.wsgi:app", "--config", "/app/magazyn/gunicorn.conf.py"]
     restart: always

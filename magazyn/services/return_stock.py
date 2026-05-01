@@ -7,7 +7,11 @@ import logging
 from typing import Callable, Dict, Optional
 
 from ..db import get_session
-from ..domain.returns import RETURN_STATUS_COMPLETED, RETURN_STATUS_DELIVERED
+from ..domain.returns import (
+    RETURN_STATUS_COMPLETED,
+    RETURN_STATUS_DELIVERED,
+    RETURN_STATUS_NOT_COLLECTED,
+)
 from ..models.allegro import AllegroOffer
 from ..models.orders import OrderProduct
 from ..models.products import ProductSize
@@ -84,9 +88,13 @@ def restore_stock_for_return(
             active_logger.info("Stan dla zwrotu #%s juz zostal przywrocony", return_id)
             return True
 
-        if return_record.status not in [RETURN_STATUS_DELIVERED, RETURN_STATUS_COMPLETED]:
+        if return_record.status not in [
+            RETURN_STATUS_DELIVERED,
+            RETURN_STATUS_NOT_COLLECTED,
+            RETURN_STATUS_COMPLETED,
+        ]:
             active_logger.warning(
-                "Zwrot #%s nie jest w statusie delivered - nie mozna przywrocic stanu",
+                "Zwrot #%s nie jest w statusie delivered/not_collected - nie mozna przywrocic stanu",
                 return_id,
             )
             return False
@@ -153,7 +161,7 @@ def process_delivered_returns(
 
     with get_session() as db:
         delivered_returns = db.query(Return).filter(
-            Return.status == RETURN_STATUS_DELIVERED,
+            Return.status.in_([RETURN_STATUS_DELIVERED, RETURN_STATUS_NOT_COLLECTED]),
             Return.stock_restored.is_(False),
         ).all()
 

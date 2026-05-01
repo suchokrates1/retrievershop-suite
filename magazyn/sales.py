@@ -9,10 +9,10 @@ from flask import (
 )
 from .auth import login_required
 from .env_info import ENV_INFO
-from .print_agent import agent as label_agent
 from .db import get_session
 from .settings_store import SettingsPersistenceError, settings_store
 from .models.products import Product, Sale, ShippingThreshold
+from .services.print_agent_runtime import agent as label_agent
 from sqlalchemy import or_
 from decimal import Decimal
 
