@@ -68,6 +68,9 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
 
     app = Flask(__name__)
     app.secret_key = settings.SECRET_KEY
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     
     # Configure CSRF protection
     app.config['WTF_CSRF_TIME_LIMIT'] = None  # Disable CSRF token expiration
