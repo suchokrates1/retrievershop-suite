@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from magazyn.models.orders import Order, OrderStatusLog
 from magazyn.models.returns import Return
+from magazyn.allegro_api.refunds import initiate_refund
 from magazyn.services.return_refunds import check_refund_eligibility
 
 
@@ -64,3 +65,53 @@ def test_check_refund_eligibility_allows_manual_return_without_allegro_return_id
     assert details["allegro_status"] == "MANUAL_RETURN"
     assert details["total_amount"] == 229.0
     assert details["allegro_return_id"] is None
+
+
+def test_initiate_refund_normalizes_custom_reason_to_refund(monkeypatch):
+    captured = {}
+
+    checkout_form = {
+        "payment": {"id": "payment-1"},
+        "lineItems": [
+            {
+                "id": "line-1",
+                "quantity": 1,
+            }
+        ],
+    }
+
+    class DummyResponse:
+        status_code = 201
+
+        def json(self):
+            return {
+                "id": "refund-1",
+                "totalValue": {"amount": "229.00", "currency": "PLN"},
+            }
+
+    def fake_request_with_retry(method, url, *, endpoint, **kwargs):
+        captured["endpoint"] = endpoint
+        captured["payload"] = kwargs["json"]
+        return DummyResponse()
+
+    monkeypatch.setattr(
+        "magazyn.allegro_api.refunds.get_checkout_form",
+        lambda access_token, order_external_id: (checkout_form, None),
+    )
+    monkeypatch.setattr(
+        "magazyn.allegro_api.refunds._request_with_retry",
+        fake_request_with_retry,
+    )
+
+    success, message, response_data = initiate_refund(
+        access_token="token",
+        return_id=None,
+        order_external_id="order-1",
+        reason="Nie odebrano przesylki",
+    )
+
+    assert success is True
+    assert "zainicjowany" in message.lower()
+    assert response_data["id"] == "refund-1"
+    assert captured["endpoint"] == "payments-refunds"
+    assert captured["payload"]["reason"] == "REFUND"

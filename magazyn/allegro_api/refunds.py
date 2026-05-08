@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-from .core import API_BASE_URL, DEFAULT_TIMEOUT, _request_with_retry
+from .core import API_BASE_URL, DEFAULT_TIMEOUT, _extract_allegro_error_details, _request_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,17 @@ REFUNDABLE_STATUSES = {
     "PARCEL_DELIVERED",
     ALLEGRO_RETURN_STATUS_ACCEPTED,
 }
+
+ALLEGRO_REFUND_REASON_REFUND = "REFUND"
+ALLEGRO_REFUND_REASONS = {ALLEGRO_REFUND_REASON_REFUND}
+
+
+def _normalize_refund_reason(reason: Optional[str]) -> str:
+    """Zwróć dozwolony kod reason dla Allegro payments/refunds."""
+    normalized = (reason or "").strip().upper()
+    if normalized in ALLEGRO_REFUND_REASONS:
+        return normalized
+    return ALLEGRO_REFUND_REASON_REFUND
 
 
 def get_customer_return(access_token: str, return_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -244,7 +255,7 @@ def initiate_refund(
         "payment": {"id": payment_id},
         "order": {"id": order_external_id},
         "commandId": command_id,
-        "reason": reason or "REFUND",
+        "reason": _normalize_refund_reason(reason),
         "lineItems": line_items,
     }
 
@@ -296,6 +307,16 @@ def initiate_refund(
             logger.error("Blad Allegro API (%s): %s", response.status_code, error_msg)
             return False, f"Blad Allegro API ({response.status_code}): {error_msg}", None
 
+    except requests.HTTPError as e:
+        error_details = _extract_allegro_error_details(getattr(e, "response", None))
+        error_message = error_details.get("error_message") or str(e)
+        logger.error(
+            "Blad HTTP przy inicjowaniu zwrotu %s: %s details=%s",
+            return_id or "<synthetic>",
+            error_message,
+            error_details,
+        )
+        return False, f"Blad polaczenia z Allegro: {error_message}", None
     except requests.RequestException as e:
         logger.error("Blad HTTP przy inicjowaniu zwrotu %s: %s", return_id or "<synthetic>", e)
         return False, f"Blad polaczenia z Allegro: {e}", None
