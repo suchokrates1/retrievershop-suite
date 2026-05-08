@@ -60,13 +60,23 @@ def _build_receiver(order_data: dict) -> dict:
     delivery = order_data.get("delivery", {})
     address = delivery.get("address", {})
     pickup_point = delivery.get("pickupPoint", {})
+    pickup_address = pickup_point.get("address", {})
+
+    street = address.get("street", "")
+    city = address.get("city", "")
+    zip_code = address.get("zipCode", "")
+
+    if pickup_point.get("id"):
+        street = pickup_address.get("street") or street
+        city = pickup_address.get("city") or city
+        zip_code = pickup_address.get("zipCode") or zip_code
 
     receiver = {
         "name": (address.get("firstName", "") + " "
                  + address.get("lastName", "")).strip(),
-        "street": address.get("street", ""),
-        "city": address.get("city", ""),
-        "zipCode": address.get("zipCode", ""),
+        "street": street,
+        "city": city,
+        "zipCode": zip_code,
         "countryCode": address.get("countryCode", "PL"),
         "phone": address.get("phoneNumber")
                  or order_data.get("buyer", {}).get("phoneNumber", ""),
@@ -74,7 +84,7 @@ def _build_receiver(order_data: dict) -> dict:
     }
 
     if pickup_point and pickup_point.get("id"):
-        receiver["pickupPointId"] = pickup_point["id"]
+        receiver["point"] = pickup_point["id"]
 
     return receiver
 

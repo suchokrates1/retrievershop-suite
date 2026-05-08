@@ -64,17 +64,26 @@ def build_sender(settings_store: Any) -> Dict[str, str]:
 
 def build_receiver(order_data: Dict[str, Any]) -> Dict[str, str]:
     """Zbuduj dane odbiorcy z danych zamowienia."""
+    point_id = order_data.get("delivery_point_id", "")
+    street = order_data.get("delivery_address", "")
+    postal_code = order_data.get("delivery_postcode", "")
+    city = order_data.get("delivery_city", "")
+
+    if point_id:
+        street = order_data.get("delivery_point_address") or street
+        postal_code = order_data.get("delivery_point_postcode") or postal_code
+        city = order_data.get("delivery_point_city") or city
+
     receiver = {
         "name": order_data.get("delivery_fullname", ""),
-        "street": order_data.get("delivery_address", ""),
-        "postalCode": order_data.get("delivery_postcode", ""),
-        "city": order_data.get("delivery_city", ""),
+        "street": street,
+        "postalCode": postal_code,
+        "city": city,
         "countryCode": order_data.get("delivery_country_code", "PL"),
         "email": order_data.get("email", ""),
         "phone": order_data.get("phone", ""),
     }
 
-    point_id = order_data.get("delivery_point_id", "")
     if point_id:
         receiver["point"] = point_id
 

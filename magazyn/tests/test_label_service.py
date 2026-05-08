@@ -27,7 +27,14 @@ SAMPLE_ORDER_DATA = {
             "countryCode": "PL",
             "phoneNumber": "600111222",
         },
-        "pickupPoint": {"id": "KRA123"},
+        "pickupPoint": {
+            "id": "KRA123",
+            "address": {
+                "street": "Punktowa 7",
+                "city": "Krakow",
+                "zipCode": "30-002",
+            },
+        },
     },
     "buyer": {
         "email": "jan@test.pl",
@@ -60,10 +67,10 @@ def test_build_receiver_with_pickup():
     receiver = _build_receiver(SAMPLE_ORDER_DATA)
 
     assert receiver["name"] == "Jan Kowalski"
-    assert receiver["street"] == "Testowa 5"
+    assert receiver["street"] == "Punktowa 7"
     assert receiver["city"] == "Krakow"
-    assert receiver["zipCode"] == "30-001"
-    assert receiver["pickupPointId"] == "KRA123"
+    assert receiver["zipCode"] == "30-002"
+    assert receiver["point"] == "KRA123"
     assert receiver["phone"] == "600111222"
     assert receiver["email"] == "jan@test.pl"
 
@@ -72,7 +79,7 @@ def test_build_receiver_no_pickup():
     receiver = _build_receiver(SAMPLE_ORDER_NO_PICKUP)
 
     assert receiver["name"] == "Anna Nowak"
-    assert "pickupPointId" not in receiver
+    assert "point" not in receiver
     assert receiver["phone"] == "700222333"
 
 
