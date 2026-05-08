@@ -161,7 +161,6 @@ STATUS_EMAIL_MAP = {
     "pobrano": "confirmation",
     "wyslano": "shipment",
     "dostarczono": "delivery",
-    "zwrot": "correction",
 }
 
 
