@@ -10,7 +10,9 @@ from ..db import get_session
 from ..domain.returns import (
     RETURN_STATUS_COMPLETED,
     RETURN_STATUS_DELIVERED,
+    RETURN_STATUS_IN_TRANSIT,
     RETURN_STATUS_NOT_COLLECTED,
+    RETURN_STATUS_PENDING,
 )
 from ..models.allegro import AllegroOffer
 from ..models.orders import OrderProduct
@@ -71,6 +73,7 @@ def _find_product_size_for_return_item(db, return_record: Return, item: dict) ->
 def restore_stock_for_return(
     return_id: int,
     *,
+    accept_pending_as_delivered: bool = False,
     send_message: Callable[[str], bool] = send_messenger,
     log: Optional[logging.Logger] = None,
 ) -> bool:
@@ -87,6 +90,18 @@ def restore_stock_for_return(
         if return_record.stock_restored:
             active_logger.info("Stan dla zwrotu #%s juz zostal przywrocony", return_id)
             return True
+
+        if accept_pending_as_delivered and return_record.status in [
+            RETURN_STATUS_PENDING,
+            RETURN_STATUS_IN_TRANSIT,
+        ]:
+            return_record.status = RETURN_STATUS_DELIVERED
+            _add_return_status_log(
+                db,
+                return_record.id,
+                RETURN_STATUS_DELIVERED,
+                "Przywrocenie stanu automatycznie uznalo zwrot za odebrany",
+            )
 
         if return_record.status not in [
             RETURN_STATUS_DELIVERED,
