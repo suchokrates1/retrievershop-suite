@@ -34,9 +34,15 @@ def restore_return_stock_for_order(order_id: str) -> OrderReturnActionResult:
             )
         if return_record.stock_restored:
             return OrderReturnActionResult("Stan juz zostal przywrocony", "warning")
-        if restore_stock_for_return(return_record.id):
+        auto_marked_delivered = return_record.status in {RETURN_STATUS_PENDING, RETURN_STATUS_IN_TRANSIT}
+        if restore_stock_for_return(return_record.id, accept_pending_as_delivered=True):
+            message = "Stan magazynowy zostal przywrocony"
+            if auto_marked_delivered:
+                message = (
+                    "Stan magazynowy zostal przywrocony, a zwrot automatycznie oznaczono jako odebrany"
+                )
             return OrderReturnActionResult(
-                "Stan magazynowy zostal przywrocony",
+                message,
                 "success",
             )
         return OrderReturnActionResult(

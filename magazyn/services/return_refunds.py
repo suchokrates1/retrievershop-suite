@@ -25,6 +25,17 @@ def _is_manual_return(return_record: Return) -> bool:
     return not return_record.allegro_return_id
 
 
+def _is_stock_restored_refund_override(return_record: Return) -> bool:
+    return bool(
+        return_record.stock_restored
+        and return_record.status in {
+            RETURN_STATUS_DELIVERED,
+            RETURN_STATUS_NOT_COLLECTED,
+            RETURN_STATUS_COMPLETED,
+        }
+    )
+
+
 def _add_return_status_log(db, return_id: int, status: str, notes: str = None) -> None:
     db.add(ReturnStatusLog(return_id=return_id, status=status, notes=notes))
 
@@ -70,12 +81,14 @@ def process_refund(
         effective_reason = reason
         if not effective_reason and return_record.status == RETURN_STATUS_NOT_COLLECTED:
             effective_reason = "Nie odebrano przesylki"
+        elif not effective_reason and _is_stock_restored_refund_override(return_record):
+            effective_reason = "Zwrot potwierdzony po przywroceniu stanu"
         elif not effective_reason and _is_manual_return(return_record):
             effective_reason = "Ręczny zwrot poza Allegro"
 
         success, message, _response_data = allegro_api.initiate_refund(
             access_token=access_token,
-            return_id=return_record.allegro_return_id,
+            return_id=None if _is_stock_restored_refund_override(return_record) else return_record.allegro_return_id,
             order_external_id=order_record.external_order_id,
             delivery_cost_covered=delivery_cost_covered,
             reason=effective_reason,
@@ -153,25 +166,28 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         if not access_token:
             return False, "Brak tokenu Allegro", None
 
-        if _is_manual_return(return_record):
+        if _is_manual_return(return_record) or _is_stock_restored_refund_override(return_record):
             checkout_data, cf_error = allegro_api.get_checkout_form(access_token, return_record.order.external_order_id)
             if cf_error:
                 return False, f"Blad pobierania danych z Allegro: {cf_error}", None
 
             details = allegro_api.build_checkout_refund_details(checkout_data)
-            allegro_status = "NOT_COLLECTED" if return_record.status == RETURN_STATUS_NOT_COLLECTED else "MANUAL_RETURN"
-            message = (
-                "Zwrot gotowy do realizacji: nie odebrano przesylki"
-                if allegro_status == "NOT_COLLECTED"
-                else "Zwrot gotowy do realizacji: ręczny zwrot"
-            )
+            if return_record.status == RETURN_STATUS_NOT_COLLECTED:
+                allegro_status = "NOT_COLLECTED"
+                message = "Zwrot gotowy do realizacji: nie odebrano przesylki"
+            elif _is_manual_return(return_record):
+                allegro_status = "MANUAL_RETURN"
+                message = "Zwrot gotowy do realizacji: ręczny zwrot"
+            else:
+                allegro_status = "STOCK_RESTORED"
+                message = "Zwrot gotowy do realizacji: potwierdzono zwrot przez przywrocenie stanu"
             return True, message, {
                 "allegro_status": allegro_status,
                 "total_amount": details["total_amount"],
                 "currency": details["currency"],
                 "delivery_amount": details["delivery_amount"],
                 "items": details["items"],
-                "allegro_return_id": None,
+                "allegro_return_id": return_record.allegro_return_id,
             }
 
         if not return_record.allegro_return_id:

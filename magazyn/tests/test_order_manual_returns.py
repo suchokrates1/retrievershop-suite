@@ -126,3 +126,40 @@ def test_mark_manual_return_delivered(app, client, login):
             return_record = db.query(Return).filter(Return.order_id == order_id).first()
             assert return_record is not None
             assert return_record.status == "delivered"
+
+
+def test_restore_return_stock_uses_pending_delivery_override(app, client, login, monkeypatch):
+    order_id = "allegro_manual_return_restore_override"
+    captured = {}
+
+    with app.app_context():
+        from magazyn.db import get_session
+
+        with get_session() as db:
+            db.add(
+                Order(
+                    order_id=order_id,
+                    external_order_id="cf-manual-return-restore-override",
+                    platform="allegro",
+                    customer_name="Jan Testowy",
+                    payment_done=199,
+                    delivery_method="Allegro Kurier DHL",
+                )
+            )
+            db.add(Return(order_id=order_id, status="pending", customer_name="Jan Testowy", items_json="[]"))
+            db.commit()
+
+    def fake_restore_stock(return_id, *, accept_pending_as_delivered=False, **_kwargs):
+        captured["return_id"] = return_id
+        captured["accept_pending_as_delivered"] = accept_pending_as_delivered
+        return True
+
+    monkeypatch.setattr(
+        "magazyn.services.order_return_actions.restore_stock_for_return",
+        fake_restore_stock,
+    )
+
+    response = client.post(f"/order/{order_id}/restore_return_stock", data={}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert captured["accept_pending_as_delivered"] is True
