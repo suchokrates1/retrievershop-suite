@@ -1,7 +1,12 @@
 import pandas as pd
 from pathlib import Path
 from sqlalchemy.sql import text
-from magazyn.domain.invoice_import import import_invoice_rows
+from magazyn.domain.invoice_import import (
+    _extract_invoice_metadata,
+    _parse_ksef_text,
+    import_invoice_rows,
+    parse_product_name_to_fields,
+)
 from magazyn.models.products import Product, ProductSize, PurchaseBatch
 
 
@@ -176,6 +181,69 @@ def test_import_invoice_pdf_skips_invalid_size(app_mod, client, login):
             .first()
         )
         assert ps.quantity == 1
+
+
+def test_parse_ksef_invoice_text_maps_gtin_and_new_variants():
+    text = """
+Numer faktury
+FS 2026/05/000415Faktura podstawowa
+Sprzedawca
+NIP: 5992999304
+Nazwa: TIP-TOP Agnieszka Pawlicka
+Pozycje
+Faktura wystawiona w cenach brutto w walucie PLN
+Lp. Nazwa towaru lub usługi Cena jedn. brutto Ilość Miara Rabat Stawka
+podatkuWartość sprzedaży
+brutto
+1 Smycz dla psa z amortyzatorem Truelove
+Adventure czarny> L74.25 3 szt 7.42 23% 200.49
+2 Kapok dla psa Truelove Dive liliowy> M (69-81
+cm)194.25 1 szt 29.14 23% 165.11
+3 Kamizelka chłodząca dla psa Truelove żółta>
+XXL149.25 1 szt 14.92 23% 134.33
+4 Linka treningowa wodoodporna dla psa Hexa
+(13mm, 5m) pomarańczowa69.75 1 szt 6.97 23% 62.78
+Lp. GTIN Indeks
+1 6971818794228 TL-SM-advent-L-CZA
+2 6976128188422 TL-KAP-DIVE-M-LIL
+3 6970117172058 TL-KA-CHL-XXL-ZOL
+4 5905544764607 SV-SM-hex13-5m-POM-DPR
+"""
+
+    df = _parse_ksef_text(text)
+    invoice_number, supplier = _extract_invoice_metadata(text)
+
+    assert invoice_number == "FS 2026/05/000415"
+    assert supplier == "TIP-TOP Agnieszka Pawlicka"
+    assert len(df) == 4
+    assert df.iloc[0].to_dict() | {"Cena": round(df.iloc[0]["Cena"], 2)} == {
+        "Nazwa": "Smycz dla psa z amortyzatorem Truelove Adventure",
+        "Kolor": "czarny",
+        "Rozmiar": "L",
+        "Ilość": 3,
+        "Cena": 66.83,
+        "Barcode": "6971818794228",
+        "SKU": "TL-SM-advent-L-CZA",
+    }
+    assert df.iloc[2]["Rozmiar"] == "2XL"
+    assert df.iloc[2]["Kolor"] == "żółta"
+    assert df.iloc[3]["Rozmiar"] == "Uniwersalny"
+    assert df.iloc[3]["Kolor"] == "pomarańczowa"
+    assert parse_product_name_to_fields(df.iloc[1]["Nazwa"]) == (
+        "Kapok",
+        "Truelove",
+        "Dive",
+    )
+    assert parse_product_name_to_fields(df.iloc[2]["Nazwa"]) == (
+        "Kamizelka",
+        "Truelove",
+        "Chłodząca",
+    )
+    assert parse_product_name_to_fields(df.iloc[3]["Nazwa"]) == (
+        "Linka",
+        "Hexa",
+        "Treningowa wodoodporna 13mm 5m",
+    )
 
 
 def test_confirm_invoice_updates_existing(app_mod, client, login, tmp_path):
