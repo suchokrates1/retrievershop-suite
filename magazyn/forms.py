@@ -42,6 +42,8 @@ class AddItemForm(FlaskForm):
             ("Turkusowy", "Turkusowy"),
             ("Żółty", "Żółty"),
             ("Szary", "Szary"),
+            ("Bananowy", "Bananowy"),
+            ("Liliowy", "Liliowy"),
             ("Złoty", "Złoty"),
             ("Beżowy", "Beżowy"),
             ("Khaki", "Khaki"),

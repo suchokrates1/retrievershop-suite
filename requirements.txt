@@ -27,6 +27,7 @@ et_xmlfile==2.0.0
 
 # PDF
 pypdf==3.17.4
+cryptography==46.0.5
 
 # Config / Utils
 python-dotenv==1.1.1

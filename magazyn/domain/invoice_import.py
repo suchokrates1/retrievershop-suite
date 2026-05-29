@@ -4,6 +4,7 @@ import io
 import logging
 import re
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -11,6 +12,7 @@ from pypdf import PdfReader
 
 from ..constants import (
     ALL_SIZES,
+    KNOWN_COLORS,
     normalize_product_title_fragment,
     resolve_product_alias,
 )
@@ -38,10 +40,16 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
     category = None
     if "saszetk" in name_lower or "sakw" in name_lower or "torebk" in name_lower or "nerk" in name_lower:
         category = "Saszetki"
-    elif "amortyzator" in name_lower:
-        category = "Amortyzator"
+    elif "kamizelk" in name_lower:
+        category = "Kamizelka"
+    elif "kapok" in name_lower:
+        category = "Kapok"
+    elif "linka" in name_lower:
+        category = "Linka"
     elif "smycz" in name_lower:
         category = "Smycz"
+    elif "amortyzator" in name_lower:
+        category = "Amortyzator"
     elif "pas" in name_lower and ("bezpiecz" in name_lower or "samochodow" in name_lower):
         category = "Pas bezpieczeństwa"
     elif "obroża" in name_lower or "obroza" in name_lower:
@@ -53,6 +61,7 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
     brand = "Truelove"
     known_brands_map = {
         "truelove": "Truelove",
+        "hexa": "Hexa",
         "julius-k9": "Julius-K9",
         "julius k9": "Julius-K9",
         "ruffwear": "Ruffwear",
@@ -82,10 +91,17 @@ def parse_product_name_to_fields(name: str) -> Tuple[str, str, str]:
         ("fron line", "Front Line"),
         ("frolin", "Front Line"),
         ("premium", "Premium"),  # Generic premium (e.g. Pas samochodowy Premium)
+        ("active pro+", "Active Pro+"),
+        ("active pro", "Active Pro+"),
         ("active", "Active"),
         ("blossom", "Blossom"),
         ("tropical", "Tropical"),
         ("tropic", "Tropical"),
+        ("dive", "Dive"),
+        ("chłodząca", "Chłodząca"),
+        ("chlodzaca", "Chłodząca"),
+        ("hexa (13mm, 5m)", "Treningowa wodoodporna 13mm 5m"),
+        ("hexa 13mm 5m", "Treningowa wodoodporna 13mm 5m"),
         ("lumen", "Lumen"),
         ("amor", "Amor"),
         ("classic", "Classic"),
@@ -208,6 +224,174 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
         )
 
     return pd.DataFrame(rows)
+
+
+_SIZE_ALIASES = {"XXL": "2XL", "XXXL": "3XL"}
+
+_KSEF_COLOR_CODE_MAP = {
+    "BAN": "bananowy",
+    "CZA": "czarny",
+    "CZE": "czerwony",
+    "KHA": "zielony-khaki",
+    "LIL": "liliowy",
+    "POM": "pomarańczowy",
+    "ZOL": "żółty",
+    "ŻOL": "żółty",
+}
+
+
+def _normalize_invoice_size(value: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9]", "", value or "").upper()
+    token = _SIZE_ALIASES.get(token, token)
+    return token if token in ALL_SIZES else ""
+
+
+def _size_from_sku(sku: str) -> str:
+    for part in reversed(re.split(r"[-_/]", sku or "")):
+        size = _normalize_invoice_size(part)
+        if size:
+            return size
+    return ""
+
+
+def _color_from_sku(sku: str) -> str:
+    for part in reversed(re.split(r"[-_/]", sku or "")):
+        color = _KSEF_COLOR_CODE_MAP.get(part.upper())
+        if color:
+            return color
+    return ""
+
+
+def _strip_trailing_color(value: str) -> Tuple[str, str]:
+    text = re.sub(r"\s+", " ", value or "").strip()
+    color_candidates = sorted(set(KNOWN_COLORS), key=len, reverse=True)
+    for color in color_candidates:
+        match = re.search(rf"(?i)(?:^|\s)({re.escape(color)})$", text)
+        if match:
+            name = text[: match.start(1)].strip(" ,")
+            return name, match.group(1).casefold()
+    return text, ""
+
+
+def _parse_ksef_sku_map(lines: List[str]) -> Dict[int, Tuple[str, str]]:
+    sku_map: Dict[int, Tuple[str, str]] = {}
+    in_gtin_table = False
+    for raw_line in lines:
+        line = re.sub(r"\s+", " ", raw_line or "").strip()
+        if not line:
+            continue
+        if line.startswith("Lp. GTIN"):
+            in_gtin_table = True
+            continue
+        if not in_gtin_table or line.startswith("Wydruk pochodzi"):
+            continue
+        match = re.match(r"^(\d{1,3})\s+(\d{8,13})\s+(.+)$", line)
+        if match:
+            sku_map[int(match.group(1))] = (
+                match.group(2).strip(),
+                match.group(3).strip(),
+            )
+    return sku_map
+
+
+def _parse_ksef_entries(lines: List[str]) -> List[str]:
+    entries: List[str] = []
+    current: List[str] = []
+    in_products = False
+    for raw_line in lines:
+        line = re.sub(r"\s+", " ", raw_line or "").strip()
+        if not line:
+            continue
+        if line == "Pozycje":
+            in_products = True
+            continue
+        if line.startswith("Lp. GTIN"):
+            break
+        if not in_products:
+            continue
+        if line.startswith("Wydruk pochodzi"):
+            continue
+        if line.startswith(("Faktura wystawiona", "Lp. Nazwa", "podatku", "brutto")):
+            continue
+        if re.match(r"^\d{1,3}\s+", line):
+            if current:
+                entries.append(" ".join(current))
+            current = [line]
+        elif current:
+            current.append(line)
+    if current:
+        entries.append(" ".join(current))
+    return entries
+
+
+def _parse_ksef_item(entry: str, sku_map: Dict[int, Tuple[str, str]]) -> Dict | None:
+    match = re.match(
+        r"^(?P<lp>\d{1,3})\s+"
+        r"(?P<body>.+?)"
+        r"(?P<unit_price>\d{1,6}\.\d{2})\s+"
+        r"(?P<qty>\d+)\s+szt\s+"
+        r"(?P<discount>\d{1,6}(?:\.\d{1,2})?)\s+23%\s+"
+        r"(?P<total>\d{1,8}(?:\.\d{1,2})?)$",
+        entry,
+    )
+    if not match:
+        logger.warning("Nie rozpoznano pozycji KSeF: %s", entry)
+        return None
+
+    lp = int(match.group("lp"))
+    barcode, sku = sku_map.get(lp, ("", ""))
+    quantity = int(match.group("qty"))
+    total = _to_decimal(match.group("total"))
+    price = Decimal("0.00")
+    if quantity > 0:
+        price = (total / Decimal(quantity)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+    body = re.sub(r"\s+", " ", match.group("body")).strip()
+    size = _size_from_sku(sku)
+    color = ""
+
+    name_part = body
+    if ">" in body:
+        name_part, variant_part = body.rsplit(">", 1)
+        variant_size = re.match(r"\s*([A-Za-z0-9]+)", variant_part or "")
+        if variant_size:
+            size = _normalize_invoice_size(variant_size.group(1)) or size
+        _, variant_color = _strip_trailing_color(variant_part)
+        color = variant_color
+
+    name, trailing_color = _strip_trailing_color(name_part)
+    color = trailing_color or color or _color_from_sku(sku)
+    if not size:
+        size = "Uniwersalny"
+
+    return {
+        "Nazwa": name,
+        "Kolor": color,
+        "Rozmiar": size,
+        "Ilość": quantity,
+        "Cena": float(price),
+        "Barcode": barcode,
+        "SKU": sku,
+    }
+
+
+def _parse_ksef_text(text: str) -> pd.DataFrame:
+    lines = [line.strip() for line in (text or "").splitlines()]
+    sku_map = _parse_ksef_sku_map(lines)
+    rows = []
+    for entry in _parse_ksef_entries(lines):
+        row = _parse_ksef_item(entry, sku_map)
+        if row:
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _parse_ksef_invoice(fh) -> pd.DataFrame:
+    reader = PdfReader(fh)
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    return _parse_ksef_text(text)
 
 
 def _parse_tiptop_invoice(fh) -> pd.DataFrame:
@@ -417,10 +601,24 @@ def _extract_invoice_metadata(text: str) -> Tuple[str, str]:
     """Extract invoice number and supplier from PDF text."""
     invoice_number = None
     supplier = None
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    for idx, line in enumerate(lines):
+        if line == "Numer faktury" and idx + 1 < len(lines):
+            next_line = lines[idx + 1]
+            number_match = re.match(r"([A-Z]{1,10}\s+\d{4}/\d{2}/\d{6})", next_line)
+            if number_match:
+                invoice_number = number_match.group(1).strip()
+        if line == "Sprzedawca":
+            for supplier_line in lines[idx + 1 : idx + 8]:
+                if supplier_line.startswith("Nazwa:"):
+                    supplier = supplier_line.split(":", 1)[1].strip()
+                    break
+        if invoice_number and supplier:
+            break
     
     # Szukaj numeru faktury: "Faktura FS 2026/02/000006" lub "Faktura VAT 123/2026"
     invoice_match = re.search(r'Faktura\s+(?:FS|VAT)?\s*([A-Z0-9/-]+)', text, re.IGNORECASE)
-    if invoice_match:
+    if not invoice_number and invoice_match:
         invoice_number = invoice_match.group(1).strip()
     
     # Szukaj dostawcy - TipTop format ma strukture:
@@ -430,9 +628,9 @@ def _extract_invoice_metadata(text: str) -> Tuple[str, str]:
     
     # Proba 1: TipTop - szukaj nazwy przed pierwszym NIP
     tiptop_match = re.search(r'Nabywca[^\n]*\n([A-ZŻŹĆŃÓŁĘĄŚ][A-Za-zżźćńółęąśŻŹĆŃÓŁĘĄŚ\s\-]+?)(?:\n|Retriever)', text)
-    if tiptop_match:
+    if not supplier and tiptop_match:
         supplier = tiptop_match.group(1).strip()
-    else:
+    elif not supplier:
         # Proba 2: Standardowy format - po "Sprzedawca"
         supplier_match = re.search(r'Sprzedawca[\s\n]+([^\n]+?)(?:\n|ul\.|NIP)', text)
         if supplier_match:
@@ -459,7 +657,9 @@ def _parse_pdf(file) -> Tuple[pd.DataFrame, str, str]:
     invoice_number, supplier = _extract_invoice_metadata(text)
     
     file_obj.seek(0)
-    if "Kod kreskowy" in text:
+    if "Numer KSeF" in text or "Lp. GTIN Indeks" in text:
+        df = _parse_ksef_text(text)
+    elif "Kod kreskowy" in text:
         df = _parse_tiptop_invoice(file_obj)
     else:
         file_obj.seek(0)
@@ -665,6 +865,8 @@ def import_invoice_file(file, invoice_number: str = None, supplier: str = None):
 __all__ = [
     "_parse_simple_pdf",
     "_parse_tiptop_invoice",
+    "_parse_ksef_invoice",
+    "_parse_ksef_text",
     "_parse_pdf",
     "_import_invoice_df",
     "import_invoice_rows",
