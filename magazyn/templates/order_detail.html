@@ -976,6 +976,17 @@ details[open] summary::before {
         <div x-show="!loading && checked">
             <div x-show="eligible">
                 <h6 class="font-semibold">Szczegoly zwrotu:</h6>
+                <div x-show="details.isPartial" class="alert alert-info py-2 mb-2">
+                    <span>Zwrot czesciowy — zwrocona zostanie tylko kwota za zwracane produkty.</span>
+                </div>
+                <div x-show="details.returnedItems.length" class="mb-2">
+                    <p class="text-sm font-semibold mb-1">Zwracane produkty:</p>
+                    <ul class="list-disc list-inside text-sm">
+                        <template x-for="item in details.returnedItems" :key="item.name">
+                            <li><span x-text="item.name"></span> <span x-text="'x' + item.quantity"></span></li>
+                        </template>
+                    </ul>
+                </div>
                 <div class="overflow-x-auto">
                 <table class="table table-sm">
                     <tr>
@@ -983,7 +994,7 @@ details[open] summary::before {
                         <td class="text-success font-bold" x-text="details.totalAmount"></td>
                     </tr>
                     <tr>
-                        <td><strong>W tym koszt dostawy:</strong></td>
+                        <td><strong>Koszt dostawy (opcjonalnie):</strong></td>
                         <td x-text="details.deliveryAmount"></td>
                     </tr>
                     <tr>
@@ -1054,7 +1065,9 @@ document.addEventListener('alpine:init', () => {
         details: {
             totalAmount: '',
             deliveryAmount: '',
-            allegroStatus: ''
+            allegroStatus: '',
+            isPartial: false,
+            returnedItems: []
         },
 
         init() {
@@ -1089,6 +1102,9 @@ document.addEventListener('alpine:init', () => {
                     this.details.totalAmount = data.details.total_amount.toFixed(2) + ' ' + data.details.currency;
                     this.details.deliveryAmount = data.details.delivery_amount.toFixed(2) + ' ' + data.details.currency;
                     this.details.allegroStatus = data.details.allegro_status;
+                    this.details.isPartial = !!data.details.is_partial;
+                    this.details.returnedItems = data.details.returned_items || [];
+                    this.deliveryCostCovered = !this.details.isPartial;
                 } else {
                     this.eligible = false;
                     this.notEligibleReason = data.message;
