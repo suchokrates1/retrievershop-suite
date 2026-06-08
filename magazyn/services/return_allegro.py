@@ -107,6 +107,20 @@ def check_allegro_customer_returns(*, log: Optional[logging.Logger] = None) -> D
     return stats
 
 
+def _serialize_allegro_return_items(items: list) -> list:
+    return [
+        {
+            "name": item.get("name"),
+            "quantity": item.get("quantity", 1),
+            "offerId": item.get("offerId"),
+            "price": item.get("price"),
+            "reason": item.get("reason", {}).get("type"),
+            "comment": item.get("reason", {}).get("userComment"),
+        }
+        for item in items
+    ]
+
+
 def _update_existing_return(db, existing: Return, return_data: dict, allegro_status: str, log: logging.Logger) -> bool:
     updated = False
 
@@ -140,6 +154,14 @@ def _update_existing_return(db, existing: Return, return_data: dict, allegro_sta
         updated = True
         log.info("Zaktualizowano zwrot #%s: %s -> %s", existing.id, old_status, new_status)
 
+    allegro_items = _serialize_allegro_return_items(return_data.get("items", []))
+    if allegro_items:
+        new_items_json = json.dumps(allegro_items, ensure_ascii=False)
+        if existing.items_json != new_items_json:
+            existing.items_json = new_items_json
+            updated = True
+            log.info("Zaktualizowano pozycje zwrotu #%s (%d produktow)", existing.id, len(allegro_items))
+
     return updated
 
 
@@ -152,15 +174,7 @@ def _create_return_from_allegro_payload(db, order: Order, return_data: dict, all
         return_tracking = parcel.get("waybill")
         return_carrier = parcel.get("carrierId")
 
-    items = [
-        {
-            "name": item.get("name"),
-            "quantity": item.get("quantity", 1),
-            "reason": item.get("reason", {}).get("type"),
-            "comment": item.get("reason", {}).get("userComment"),
-        }
-        for item in return_data.get("items", [])
-    ]
+    items = _serialize_allegro_return_items(return_data.get("items", []))
     initial_status = map_allegro_return_status(allegro_status)
     buyer = return_data.get("buyer", {})
 

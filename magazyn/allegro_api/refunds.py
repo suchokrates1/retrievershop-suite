@@ -159,6 +159,122 @@ def get_checkout_form(access_token: str, order_external_id: str) -> Tuple[Option
         return None, f"Blad polaczenia: {e}"
 
 
+def _normalize_offer_id(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _normalize_item_name(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def build_refund_line_items(
+    return_items: List[Dict[str, Any]],
+    checkout_data: Dict[str, Any],
+) -> Tuple[Optional[List[Dict[str, Any]]], float, str, Optional[str]]:
+    """
+    Mapuj zwracane pozycje na payload lineItems dla POST /payments/refunds.
+
+    Dopasowanie: offerId -> offer.id z checkout-form, fallback po nazwie produktu.
+    """
+    if not return_items:
+        return None, 0.0, "PLN", None
+
+    checkout_lines = checkout_data.get("lineItems") or []
+    if not checkout_lines:
+        return None, 0.0, "PLN", "Brak pozycji w checkout-form"
+
+    by_offer: Dict[str, Dict[str, Any]] = {}
+    by_name: Dict[str, Dict[str, Any]] = {}
+    for line in checkout_lines:
+        offer_id = _normalize_offer_id((line.get("offer") or {}).get("id"))
+        name = _normalize_item_name((line.get("offer") or {}).get("name"))
+        if offer_id:
+            by_offer[offer_id] = line
+        if name:
+            by_name[name] = line
+
+    payload: List[Dict[str, Any]] = []
+    total_amount = 0.0
+    currency = "PLN"
+
+    for return_item in return_items:
+        offer_id = _normalize_offer_id(
+            return_item.get("offerId")
+            or return_item.get("offer_id")
+            or return_item.get("auction_id")
+        )
+        name = _normalize_item_name(return_item.get("name"))
+        quantity = int(return_item.get("quantity", 1) or 1)
+
+        checkout_line = by_offer.get(offer_id) if offer_id else None
+        if checkout_line is None and name:
+            checkout_line = by_name.get(name)
+        if checkout_line is None:
+            label = return_item.get("name") or offer_id or "nieznana pozycja"
+            return None, 0.0, currency, f"Nie znaleziono pozycji checkout dla zwrotu: {label}"
+
+        ordered_qty = int(checkout_line.get("quantity", 1) or 1)
+        refund_qty = min(max(quantity, 1), ordered_qty)
+        payload.append(
+            {
+                "id": checkout_line["id"],
+                "type": "QUANTITY",
+                "quantity": refund_qty,
+            }
+        )
+
+        price = return_item.get("price") or checkout_line.get("price") or {}
+        amount = float(price.get("amount", 0) or 0)
+        currency = price.get("currency", currency) or currency
+        total_amount += amount * refund_qty
+
+    return payload, total_amount, currency, None
+
+
+def build_partial_refund_details(
+    return_items: List[Dict[str, Any]],
+    checkout_data: Dict[str, Any],
+    *,
+    delivery_cost_covered: bool = False,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Wylicz kwote i pozycje zwrotu na podstawie faktycznie zwracanych produktow."""
+    line_items, total_amount, currency, error = build_refund_line_items(return_items, checkout_data)
+    if error:
+        return None, error
+    if not line_items:
+        return None, "Brak pozycji do zwrotu"
+
+    delivery = checkout_data.get("delivery") or {}
+    delivery_cost = delivery.get("cost") or {}
+    delivery_amount = float(delivery_cost.get("amount", 0) or 0)
+    order_line_count = len(checkout_data.get("lineItems") or [])
+    is_partial = len(return_items) < order_line_count
+
+    if delivery_cost_covered and delivery_amount > 0:
+        total_amount += delivery_amount
+
+    returned_items = [
+        {
+            "name": item.get("name"),
+            "quantity": int(item.get("quantity", 1) or 1),
+            "offer_id": item.get("offerId") or item.get("offer_id") or item.get("auction_id"),
+        }
+        for item in return_items
+    ]
+
+    return {
+        "total_amount": total_amount,
+        "delivery_amount": delivery_amount,
+        "currency": currency,
+        "line_items": line_items,
+        "is_partial": is_partial,
+        "returned_items": returned_items,
+        "items": returned_items,
+    }, None
+
+
 def build_checkout_refund_details(checkout_data: Dict[str, Any]) -> Dict[str, Any]:
     """Wylicz szczegoly refundu bez Customer Returns API."""
     payment = checkout_data.get("payment") or {}
@@ -258,6 +374,18 @@ def initiate_refund(
         "reason": _normalize_refund_reason(reason),
         "lineItems": line_items,
     }
+
+    if delivery_cost_covered:
+        delivery = checkout_data.get("delivery") or {}
+        delivery_cost = delivery.get("cost") or {}
+        delivery_amount = delivery_cost.get("amount")
+        if delivery_amount and float(delivery_amount) > 0:
+            payload["delivery"] = {
+                "value": {
+                    "amount": str(delivery_amount),
+                    "currency": delivery_cost.get("currency", "PLN"),
+                }
+            }
 
     url = f"{API_BASE_URL}/payments/refunds"
     headers = {

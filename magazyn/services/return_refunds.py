@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .. import allegro_api
 from ..db import get_session
@@ -38,6 +39,89 @@ def _is_stock_restored_refund_override(return_record: Return) -> bool:
 
 def _add_return_status_log(db, return_id: int, status: str, notes: str = None) -> None:
     db.add(ReturnStatusLog(return_id=return_id, status=status, notes=notes))
+
+
+def _resolve_return_items(
+    return_record: Return,
+    allegro_return_data: Optional[Dict[str, Any]] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Zwroc pozycje faktycznie objete zwrotem (Allegro API ma pierwszenstwo)."""
+    if allegro_return_data and allegro_return_data.get("items"):
+        return allegro_return_data["items"]
+
+    try:
+        parsed = json.loads(return_record.items_json or "[]")
+    except json.JSONDecodeError:
+        parsed = []
+
+    return parsed or None
+
+
+def _build_refund_execution(
+    return_record: Return,
+    order_external_id: str,
+    access_token: str,
+    *,
+    allegro_return_data: Optional[Dict[str, Any]] = None,
+    delivery_cost_covered: bool = False,
+) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    """Przygotuj line_items dla Allegro payments/refunds."""
+    return_items = _resolve_return_items(return_record, allegro_return_data)
+    if not return_items:
+        return None, None
+
+    checkout_data, cf_error = allegro_api.get_checkout_form(access_token, order_external_id)
+    if cf_error:
+        return None, f"Blad pobierania danych z Allegro: {cf_error}"
+
+    details, build_error = allegro_api.build_partial_refund_details(
+        return_items,
+        checkout_data,
+        delivery_cost_covered=delivery_cost_covered,
+    )
+    if build_error:
+        return None, build_error
+
+    return details["line_items"], None
+
+
+def _build_refund_eligibility_details(
+    return_record: Return,
+    order_external_id: str,
+    access_token: str,
+    *,
+    allegro_return_data: Optional[Dict[str, Any]] = None,
+    allegro_status: str,
+    message: str,
+) -> Tuple[bool, str, Optional[Dict]]:
+    return_items = _resolve_return_items(return_record, allegro_return_data)
+    checkout_data, cf_error = allegro_api.get_checkout_form(access_token, order_external_id)
+    if cf_error:
+        return False, f"Blad pobierania danych z Allegro: {cf_error}", None
+
+    if return_items:
+        details, build_error = allegro_api.build_partial_refund_details(
+            return_items,
+            checkout_data,
+            delivery_cost_covered=False,
+        )
+        if build_error:
+            return False, build_error, None
+        details["allegro_status"] = allegro_status
+        details["allegro_return_id"] = return_record.allegro_return_id
+        return True, message, details
+
+    details = allegro_api.build_checkout_refund_details(checkout_data)
+    return True, message, {
+        "allegro_status": allegro_status,
+        "total_amount": details["total_amount"],
+        "currency": details["currency"],
+        "delivery_amount": details["delivery_amount"],
+        "items": details["items"],
+        "returned_items": [],
+        "is_partial": False,
+        "allegro_return_id": return_record.allegro_return_id,
+    }
 
 
 def process_refund(
@@ -86,10 +170,30 @@ def process_refund(
         elif not effective_reason and _is_manual_return(return_record):
             effective_reason = "Ręczny zwrot poza Allegro"
 
+        allegro_return_data = None
+        if return_record.allegro_return_id and not _is_stock_restored_refund_override(return_record):
+            allegro_return_data, allegro_error = allegro_api.get_customer_return(
+                access_token,
+                return_record.allegro_return_id,
+            )
+            if allegro_error:
+                return False, f"Blad pobierania danych zwrotu z Allegro: {allegro_error}"
+
+        line_items, build_error = _build_refund_execution(
+            return_record,
+            order_record.external_order_id,
+            access_token,
+            allegro_return_data=allegro_return_data,
+            delivery_cost_covered=delivery_cost_covered,
+        )
+        if build_error:
+            return False, build_error
+
         success, message, _response_data = allegro_api.initiate_refund(
             access_token=access_token,
             return_id=None if _is_stock_restored_refund_override(return_record) else return_record.allegro_return_id,
             order_external_id=order_record.external_order_id,
+            line_items=line_items,
             delivery_cost_covered=delivery_cost_covered,
             reason=effective_reason,
         )
@@ -167,11 +271,6 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
             return False, "Brak tokenu Allegro", None
 
         if _is_manual_return(return_record) or _is_stock_restored_refund_override(return_record):
-            checkout_data, cf_error = allegro_api.get_checkout_form(access_token, return_record.order.external_order_id)
-            if cf_error:
-                return False, f"Blad pobierania danych z Allegro: {cf_error}", None
-
-            details = allegro_api.build_checkout_refund_details(checkout_data)
             if return_record.status == RETURN_STATUS_NOT_COLLECTED:
                 allegro_status = "NOT_COLLECTED"
                 message = "Zwrot gotowy do realizacji: nie odebrano przesylki"
@@ -181,14 +280,13 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
             else:
                 allegro_status = "STOCK_RESTORED"
                 message = "Zwrot gotowy do realizacji: potwierdzono zwrot przez przywrocenie stanu"
-            return True, message, {
-                "allegro_status": allegro_status,
-                "total_amount": details["total_amount"],
-                "currency": details["currency"],
-                "delivery_amount": details["delivery_amount"],
-                "items": details["items"],
-                "allegro_return_id": return_record.allegro_return_id,
-            }
+            return _build_refund_eligibility_details(
+                return_record,
+                return_record.order.external_order_id,
+                access_token,
+                allegro_status=allegro_status,
+                message=message,
+            )
 
         if not return_record.allegro_return_id:
             return False, "Brak ID zwrotu Allegro", None
@@ -201,33 +299,14 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         if not can_refund:
             return False, validation_msg, None
 
-        refund = return_data.get("refund") or {}
-        total_value = refund.get("totalValue") or {}
-        delivery = refund.get("delivery") or {}
-
-        total_amount = float(total_value.get("amount", 0))
-        currency = total_value.get("currency", "PLN")
-
-        if total_amount <= 0:
-            items = return_data.get("items", [])
-            for item in items:
-                price = item.get("price", {})
-                item_amount = float(price.get("amount", 0))
-                quantity = int(item.get("quantity", 1))
-                total_amount += item_amount * quantity
-                if currency == "PLN":
-                    currency = price.get("currency", "PLN")
-
-        details = {
-            "allegro_status": return_data.get("status"),
-            "total_amount": total_amount,
-            "currency": currency,
-            "delivery_amount": float(delivery.get("amount", 0)) if delivery else 0,
-            "items": return_data.get("items", []),
-            "allegro_return_id": return_record.allegro_return_id,
-        }
-
-        return True, validation_msg, details
+        return _build_refund_eligibility_details(
+            return_record,
+            return_record.order.external_order_id,
+            access_token,
+            allegro_return_data=return_data,
+            allegro_status=return_data.get("status"),
+            message=validation_msg,
+        )
 
 
 __all__ = ["check_refund_eligibility", "process_refund"]
