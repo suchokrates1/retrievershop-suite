@@ -110,6 +110,14 @@ def test_get_carrier_id_prefers_allegro_for_ad_waybill():
     assert get_carrier_id("Allegro Automat DHL BOX 24/7 (AD)", "AD0299ERY3") == "ALLEGRO"
 
 
+def test_get_carrier_id_maps_inpost_paczkomaty_to_inpost():
+    assert get_carrier_id("Allegro Paczkomaty InPost", "620999684205420670338030") == "INPOST"
+
+
+def test_get_carrier_id_maps_one_box_to_allegro():
+    assert get_carrier_id("Allegro One Box, One Kurier", "A004NKV0T6") == "ALLEGRO"
+
+
 def test_infer_not_collected_from_return_to_sender_history():
     payload = {
         "trackingDetails": {

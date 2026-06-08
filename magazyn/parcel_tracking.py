@@ -156,19 +156,19 @@ def get_carrier_id(delivery_method: Optional[str], waybill: Optional[str] = None
 
     if not delivery_method:
         return None
-    
-    method_lower = delivery_method.lower().strip()
 
-    if method_lower.startswith("allegro "):
-        return CARRIER_ALLEGRO
-    
-    # Sprawdź bezpośrednie dopasowanie
-    for key, carrier_id in CARRIER_ID_MAP.items():
+    from .allegro_api.carriers import resolve_carrier_id
+
+    carrier_id = resolve_carrier_id(delivery_method)
+    if carrier_id and carrier_id != "OTHER":
+        return carrier_id
+
+    method_lower = delivery_method.lower().strip()
+    for key, mapped_carrier_id in CARRIER_ID_MAP.items():
         if key in method_lower:
-            return carrier_id
-    
-    # Domyślnie dla zamówień Allegro używamy "ALLEGRO"
-    return "ALLEGRO"
+            return mapped_carrier_id
+
+    return CARRIER_ALLEGRO
 
 
 def sync_parcel_statuses() -> Dict[str, int]:
