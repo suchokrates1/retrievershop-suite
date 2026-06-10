@@ -91,9 +91,11 @@ def build_receiver(order_data: Dict[str, Any]) -> Dict[str, str]:
 
 
 def choose_package_dimensions(products: List[Dict[str, Any]]) -> Dict[str, int]:
-    """Dobierz gabaryt paczki na podstawie lacznej liczby produktow."""
+    """Dobierz wymiary paczki (InPost A/B: width max 38, height 8/19)."""
     total_qty = sum(product.get("quantity", 1) for product in products)
-    return {"length": 50, "width": 40, "height": 8}
+    if total_qty > 5:
+        return {"length": 40, "width": 38, "height": 19}
+    return {"length": 40, "width": 38, "height": 8}
 
 
 def build_label_references(products: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:

@@ -122,8 +122,11 @@ def _find_delivery_service_id(delivery_method_name: str) -> Optional[str]:
 
 
 def _default_packages(total_qty: int = 1) -> list[dict]:
-    """Domyslna paczka dla zamowienia."""
-    dims = {"length": 50, "width": 40, "height": 8}
+    """Domyslna paczka dla zamowienia. Gabaryt A do 5 szt, B powyzej."""
+    if total_qty > 5:
+        dims = {"length": 40, "width": 38, "height": 19}
+    else:
+        dims = {"length": 40, "width": 38, "height": 8}
     return [{
         "weight": {"value": 1.0, "unit": "KILOGRAM"},
         "dimensions": {
