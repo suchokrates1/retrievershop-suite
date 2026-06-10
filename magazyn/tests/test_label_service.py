@@ -171,6 +171,18 @@ def test_default_packages():
     assert len(pkgs) == 1
     assert pkgs[0]["weight"]["value"] == 1.0
     assert pkgs[0]["weight"]["unit"] == "KILOGRAM"
+    assert pkgs[0]["dimensions"] == {
+        "length": 40,
+        "width": 38,
+        "height": 8,
+        "unit": "CENTIMETER",
+    }
+
+
+def test_default_packages_gabaryt_b():
+    pkgs = _default_packages(total_qty=6)
+
+    assert pkgs[0]["dimensions"]["height"] == 19
 
 
 # --------------- _wait_for_confirmation ---------------

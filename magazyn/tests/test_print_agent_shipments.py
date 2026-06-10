@@ -1,6 +1,6 @@
 """Testy dla helperow shipment management agenta drukowania."""
 
-from magazyn.services.print_agent_shipments import build_receiver
+from magazyn.services.print_agent_shipments import build_receiver, choose_package_dimensions
 
 
 def test_build_receiver_uses_pickup_point_address_for_point_delivery():
@@ -30,6 +30,18 @@ def test_build_receiver_uses_pickup_point_address_for_point_delivery():
         "phone": "+48665254563",
         "point": "352854",
     }
+
+
+def test_choose_package_dimensions_gabaryt_a():
+    dims = choose_package_dimensions([{"quantity": 2}, {"quantity": 3}])
+
+    assert dims == {"length": 40, "width": 38, "height": 8}
+
+
+def test_choose_package_dimensions_gabaryt_b():
+    dims = choose_package_dimensions([{"quantity": 6}])
+
+    assert dims == {"length": 40, "width": 38, "height": 19}
 
 
 def test_build_receiver_uses_home_address_without_pickup_point():
