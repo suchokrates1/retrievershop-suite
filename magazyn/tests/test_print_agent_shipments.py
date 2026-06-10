@@ -1,6 +1,10 @@
 """Testy dla helperow shipment management agenta drukowania."""
 
-from magazyn.services.print_agent_shipments import build_receiver, choose_package_dimensions
+from magazyn.services.print_agent_shipments import (
+    build_receiver,
+    choose_package_dimensions,
+    truncate_pickup_street,
+)
 
 
 def test_build_receiver_uses_pickup_point_address_for_point_delivery():
@@ -42,6 +46,29 @@ def test_choose_package_dimensions_gabaryt_b():
     dims = choose_package_dimensions([{"quantity": 6}])
 
     assert dims == {"length": 40, "width": 38, "height": 19}
+
+
+def test_build_receiver_truncates_long_pickup_point_street():
+    order_data = {
+        "delivery_fullname": "Monika Koleśnik",
+        "delivery_address": "Andrukiewicza 11 m 36",
+        "delivery_postcode": "15-204",
+        "delivery_city": "Białystok",
+        "delivery_country_code": "PL",
+        "delivery_point_id": "AL042BI1",
+        "delivery_point_address": "Piasta 140h/ Ks. Stanisława Andruszkiewicza",
+        "delivery_point_postcode": "15-204",
+        "delivery_point_city": "Białystok",
+        "email": "buyer@allegromail.pl",
+        "phone": "+48123456789",
+    }
+
+    long_street = order_data["delivery_point_address"]
+    receiver = build_receiver(order_data)
+
+    assert receiver["street"] == truncate_pickup_street(long_street)
+    assert len(receiver["street"]) == 35
+    assert receiver["point"] == "AL042BI1"
 
 
 def test_build_receiver_uses_home_address_without_pickup_point():
