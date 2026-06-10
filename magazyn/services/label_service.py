@@ -67,7 +67,9 @@ def _build_receiver(order_data: dict) -> dict:
     zip_code = address.get("zipCode", "")
 
     if pickup_point.get("id"):
-        street = pickup_address.get("street") or street
+        from .print_agent_shipments import truncate_pickup_street
+
+        street = truncate_pickup_street(pickup_address.get("street") or street)
         city = pickup_address.get("city") or city
         zip_code = pickup_address.get("zipCode") or zip_code
 

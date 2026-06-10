@@ -8,6 +8,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .print_agent_config import calculate_cod_amount, is_cod_order
 
+MAX_PICKUP_STREET_LENGTH = 35
+
+
+def truncate_pickup_street(street: str, *, max_length: int = MAX_PICKUP_STREET_LENGTH) -> str:
+    """Obetnij ulice punktu odbioru do limitu Allegro Shipment Management."""
+    normalized = (street or "").strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[:max_length].rstrip()
+
 
 def shorten_product_name(full_name: str) -> str:
     words = full_name.strip().split()
@@ -73,6 +83,7 @@ def build_receiver(order_data: Dict[str, Any]) -> Dict[str, str]:
         street = order_data.get("delivery_point_address") or street
         postal_code = order_data.get("delivery_point_postcode") or postal_code
         city = order_data.get("delivery_point_city") or city
+        street = truncate_pickup_street(street)
 
     receiver = {
         "name": order_data.get("delivery_fullname", ""),
@@ -172,6 +183,8 @@ __all__ = [
     "build_receiver",
     "build_sender",
     "choose_package_dimensions",
+    "truncate_pickup_street",
+    "MAX_PICKUP_STREET_LENGTH",
     "resolve_carrier_id",
     "shorten_product_name",
 ]
