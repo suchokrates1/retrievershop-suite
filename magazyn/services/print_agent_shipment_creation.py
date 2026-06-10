@@ -13,6 +13,9 @@ from .print_agent_shipments import (
     build_sender,
 )
 
+# Wysylam z Allegro dodaje tracking ALLEGRO automatycznie — reczny POST zwraca 422.
+SKIP_MANUAL_TRACKING_CARRIER_IDS = frozenset({"ALLEGRO"})
+
 
 class PrintShipmentCreator:
     """Buduje payload i tworzy shipment w Allegro Shipment Management."""
@@ -195,7 +198,7 @@ class PrintShipmentCreator:
         carrier_id: Optional[str],
         waybill: str,
     ) -> None:
-        if waybill and carrier_id:
+        if waybill and carrier_id and carrier_id not in SKIP_MANUAL_TRACKING_CARRIER_IDS:
             try:
                 self.add_shipment_tracking(
                     checkout_form_id,
@@ -209,6 +212,13 @@ class PrintShipmentCreator:
                     order_id,
                     exc,
                 )
+        elif waybill and carrier_id in SKIP_MANUAL_TRACKING_CARRIER_IDS:
+            self.logger.debug(
+                "Pomijam reczne dodanie trackingu %s dla %s (carrier=%s dodawany przez WzA)",
+                waybill,
+                order_id,
+                carrier_id,
+            )
 
         try:
             self.update_fulfillment_status(checkout_form_id, "PROCESSING")
