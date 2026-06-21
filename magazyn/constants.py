@@ -140,6 +140,10 @@ _PRODUCT_TITLE_REPLACEMENTS = [
     (re.compile(r"\btruelobve\b", re.IGNORECASE), "Truelove"),
     (re.compile(r"\btuelove\b", re.IGNORECASE), "Truelove"),
     (re.compile(r"\btrelove\b", re.IGNORECASE), "Truelove"),
+    # Literowki w "psa" / kategorii
+    (re.compile(r"\bpda\b", re.IGNORECASE), "psa"),
+    (re.compile(r"\bsrednieho\b", re.IGNORECASE), "średniego"),
+    (re.compile(r"\bamortyaator\b", re.IGNORECASE), "Amortyzator"),
     # Literowki w "Front"
     (re.compile(r"\bfron\b", re.IGNORECASE), "Front"),
     (re.compile(r"\bfrone\b", re.IGNORECASE), "Front"),
@@ -154,9 +158,9 @@ _PRODUCT_TITLE_REPLACEMENTS = [
     (re.compile(r"\bmateria[l\u0142]\b", re.IGNORECASE), ""),
     (re.compile(r"\bodblaskow[aey]\b", re.IGNORECASE), ""),
     (re.compile(r"\bantyucieczkow[aey]\b", re.IGNORECASE), ""),
-    (re.compile(r"\btradycyjn[aey]\b", re.IGNORECASE), ""),
-    # Znaczniki dlugosci (2m, 1.5m itp.)
-    (re.compile(r"\b\d+(?:[.,]\d+)?m\b"), ""),
+    # Znaczniki dlugosci (2m, 1.5m, 250 cm itp.)
+    (re.compile(r"\b\d+(?:[.,]\d+)?\s*(?:m|metr\w*|cm)\b", re.IGNORECASE), ""),
+    (re.compile(r"\bduza\b", re.IGNORECASE), ""),
 ]
 
 
@@ -187,9 +191,18 @@ def _normalize_alias_key(value: str) -> str:
 
 
 _PRODUCT_ALIAS_GROUPS: dict[str, set[str]] = {
-    "Amortyzator do smyczy dla średniego psa": {
-        "Amortyzator dla psa Truelove Premium",
+    "Amortyzator dla psa Truelove Premium": {
         "Amortyzator do smyczy dla średniego psa Truelove",
+        "Amortyzator do smyczy dla średniego psa",
+    },
+    "Smycz dla psa Truelove Active": {
+        "Smycz tradycyjna Truelove",
+        "Smycz tradycyjna dla psa Truelove",
+    },
+    "Saszetki dla psa Truelove Standard": {
+        "Saszetka na przysmaki Truelove",
+        "Saszetki na przysmaki Truelove",
+        "Duża saszetka na przysmaki dla psa Truelove",
     },
     "Szelki dla psa Truelove Tropical": {
         "Szelki dla psa Truelove Front Line Premium Tropical",

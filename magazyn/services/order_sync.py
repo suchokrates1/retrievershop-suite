@@ -12,6 +12,7 @@ from typing import Optional
 
 from sqlalchemy import func
 
+from ..constants import resolve_product_alias
 from ..models.orders import Order, OrderProduct, OrderStatusLog
 from ..models.products import Product, ProductSize
 from .order_status import add_order_status
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 def _strip_diacritics_ord(text: str) -> str:
     if not text:
         return ""
+    # NFKD nie rozkłada polskiego ł/Ł — mapuj explicite przed normalizacją.
+    text = text.replace("Ł", "L").replace("ł", "l")
     normalized = unicodedata.normalize("NFKD", text)
     return "".join(ch for ch in normalized if not unicodedata.combining(ch))
 
@@ -92,18 +95,61 @@ def _extract_series_from_name(product_name: str) -> str:
     match = re.search(r"Truelove\s+(.+)", product_name, re.IGNORECASE)
     if match:
         return match.group(1).strip()
-    return product_name
+    normalized = _strip_diacritics_ord(product_name).lower()
+    if "amortyzator" in normalized and "smyczy" in normalized:
+        return "Premium"
+    return ""
+
+
+def _normalized_name_keys(name: str) -> set[str]:
+    keys: set[str] = set()
+    if not name:
+        return keys
+    for variant in (name, resolve_product_alias(name)):
+        normalized = _strip_diacritics_ord(variant).lower().strip()
+        if normalized:
+            keys.add(normalized)
+    return keys
+
+
+def _product_name_keys(product: Product) -> set[str]:
+    keys: set[str] = set()
+    for raw_name in (product.name or "", product._name or ""):
+        keys.update(_normalized_name_keys(raw_name))
+    return keys
+
+
+def _color_matches(db_color: str, color_norm: str) -> bool:
+    if not color_norm:
+        return True
+    if not db_color:
+        return False
+    return _normalize_color_key(db_color) == color_norm
 
 
 def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional[ProductSize]:
     """Dopasuj produkt z zamówienia do rozmiaru produktu w magazynie."""
-    series = _extract_series_from_name(name)
-    if not series:
-        return None
-
-    series_norm = _strip_diacritics_ord(series).lower()
     color_norm = _normalize_color_key(color)
     size_upper = size.upper() if size else size
+    parsed_name_keys = _normalized_name_keys(name)
+
+    if name and size:
+        exact_candidates = (
+            db.query(ProductSize)
+            .join(Product)
+            .filter(func.upper(ProductSize.size) == size_upper)
+            .all()
+        )
+        for product_size in exact_candidates:
+            product = product_size.product
+            if not parsed_name_keys & _product_name_keys(product):
+                continue
+            if not _color_matches(product.color or "", color_norm):
+                continue
+            return product_size
+
+    series = _extract_series_from_name(name)
+    series_norm = _strip_diacritics_ord(series).lower() if series else ""
     candidates = (
         db.query(ProductSize)
         .join(Product)
@@ -111,46 +157,88 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
         .all()
     )
 
-    for product_size in candidates:
-        product = product_size.product
-        db_series = _strip_diacritics_ord(product.series or "").lower()
-        db_color = _normalize_color_key(product.color or "")
-
-        if series_norm == db_series and color_norm == db_color:
-            return product_size
-
-    for product_size in candidates:
-        product = product_size.product
-        db_series = _strip_diacritics_ord(product.series or "").lower()
-        db_color = _normalize_color_key(product.color or "")
-
-        if (
-            db_series
-            and (db_series in series_norm or series_norm in db_series)
-            and color_norm == db_color
-        ):
-            return product_size
-
-    if not color_norm:
-        series_matches = []
+    if series_norm:
         for product_size in candidates:
             product = product_size.product
             db_series = _strip_diacritics_ord(product.series or "").lower()
-            if db_series and (
-                series_norm == db_series
-                or db_series in series_norm
-                or series_norm in db_series
+
+            if series_norm == db_series and _color_matches(product.color or "", color_norm):
+                return product_size
+
+        for product_size in candidates:
+            product = product_size.product
+            db_series = _strip_diacritics_ord(product.series or "").lower()
+
+            if (
+                db_series
+                and (db_series in series_norm or series_norm in db_series)
+                and _color_matches(product.color or "", color_norm)
             ):
-                db_name_norm = _strip_diacritics_ord(product.name or "").lower()
-                name_norm = _strip_diacritics_ord(name or "").lower()
-                if (
-                    db_name_norm == name_norm
-                    or db_name_norm in name_norm
-                    or name_norm in db_name_norm
+                return product_size
+
+        if not color_norm:
+            series_matches = []
+            for product_size in candidates:
+                product = product_size.product
+                db_series = _strip_diacritics_ord(product.series or "").lower()
+                if db_series and (
+                    series_norm == db_series
+                    or db_series in series_norm
+                    or series_norm in db_series
                 ):
-                    series_matches.append(product_size)
-        if len(series_matches) == 1:
-            return series_matches[0]
+                    if parsed_name_keys & _product_name_keys(product):
+                        series_matches.append(product_size)
+            if len(series_matches) == 1:
+                return series_matches[0]
+
+    # Smycz bez serii w tytule: dopasuj po kolorze gdy jest jednoznacznie.
+    if parsed_name_keys & _normalized_name_keys("Smycz dla psa Truelove") and color_norm:
+        smycz_matches = [
+            ps
+            for ps in candidates
+            if _color_matches(ps.product.color or "", color_norm)
+            and (ps.product.category or "").lower() == "smycz"
+        ]
+        if len(smycz_matches) == 1:
+            return smycz_matches[0]
+
+    # Saszetki Standard w magazynie tylko w rozmiarze M.
+    if (
+        size_upper == "UNIWERSALNY"
+        and parsed_name_keys & _normalized_name_keys("Saszetki dla psa Truelove Standard")
+    ):
+        retry = (
+            db.query(ProductSize)
+            .join(Product)
+            .filter(func.upper(ProductSize.size) == "M")
+            .all()
+        )
+        for product_size in retry:
+            product = product_size.product
+            if not parsed_name_keys & _product_name_keys(product):
+                continue
+            if _color_matches(product.color or "", color_norm):
+                return product_size
+
+    # Smycz Active Pro+ bez rozmiaru w tytule.
+    if parsed_name_keys & _normalized_name_keys("Smycz dla psa Truelove Active Pro+") and color_norm:
+        pro_candidates = (
+            db.query(ProductSize)
+            .join(Product)
+            .filter(Product.series == "Active Pro+")
+            .all()
+        )
+        pro_matches = [
+            ps
+            for ps in pro_candidates
+            if _color_matches(ps.product.color or "", color_norm)
+        ]
+        if len(pro_matches) == 1:
+            return pro_matches[0]
+        for preferred_size in ("L", "M", "S"):
+            sized = [ps for ps in pro_matches if ps.size.upper() == preferred_size]
+            if len(sized) == 1:
+                return sized[0]
 
     return None
 

@@ -198,16 +198,9 @@ def consume_order_stock(products: List[dict]):
                     .first()
                 )
             if not ps and name:
-                query = (
-                    db.query(ProductSize)
-                    .join(Product, Product.id == ProductSize.product_id)
-                    .filter(Product.name == name)
-                )
-                if color is not None:
-                    query = query.filter(Product.color == color)
-                if size is not None:
-                    query = query.filter(ProductSize.size == size)
-                ps = query.first()
+                from ..services.order_sync import match_product_to_warehouse
+
+                ps = match_product_to_warehouse(db, name, color or "", size or "")
                 if ps and barcode and not ps.barcode:
                     ps.barcode = barcode
                     db.commit()
