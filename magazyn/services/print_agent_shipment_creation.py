@@ -12,6 +12,7 @@ from .print_agent_shipments import (
     build_receiver,
     build_sender,
 )
+from .shipment_waybills import extract_waybills_from_shipment_details
 
 # Wysylam z Allegro dodaje tracking ALLEGRO automatycznie — reczny POST zwraca 422.
 SKIP_MANUAL_TRACKING_CARRIER_IDS = frozenset({"ALLEGRO"})
@@ -151,7 +152,7 @@ class PrintShipmentCreator:
             self.logger.error("Brak shipmentId po utworzeniu (commandId=%s)", command_id)
             return []
 
-        waybill = self._load_waybill(shipment_id)
+        waybill, waybills = self._load_waybills(shipment_id)
         self._sync_tracking_and_fulfillment(
             checkout_form_id,
             order_id,
@@ -170,26 +171,26 @@ class PrintShipmentCreator:
             {
                 "shipment_id": shipment_id,
                 "waybill": waybill,
+                "waybills": waybills,
                 "carrier_id": carrier_id or "",
                 "courier_code": carrier_id or "",
                 "courier_package_nr": waybill,
             }
         ]
 
-    def _load_waybill(self, shipment_id: str) -> str:
+    def _load_waybills(self, shipment_id: str) -> tuple[str, list[str]]:
         try:
             details = self.get_shipment_details(shipment_id)
-            for package in details.get("packages", []):
-                waybill = package.get("waybill", "")
-                if waybill:
-                    return waybill
+            waybills = extract_waybills_from_shipment_details(details)
+            if waybills:
+                return waybills[0], waybills
         except Exception as exc:
             self.logger.warning(
                 "Nie mozna pobrac szczegolow przesylki %s: %s",
                 shipment_id,
                 exc,
             )
-        return ""
+        return "", []
 
     def _sync_tracking_and_fulfillment(
         self,

@@ -8,6 +8,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple
 
+from .label_barcode_extract import (
+    extract_dhl_box_barcodes_from_label_pdf,
+    needs_dhl_box_label_barcode_extraction,
+)
 from .print_agent_errors import ApiError, ShipmentExpiredError
 
 
@@ -147,6 +151,8 @@ class PrintLabelService:
         self,
         order_id: str,
         packages: List[Dict[str, Any]],
+        *,
+        delivery_method: str = "",
     ) -> CollectedLabels:
         labels: List[Tuple[str, str]] = []
         courier_code = ""
@@ -163,6 +169,10 @@ class PrintLabelService:
                 package_ids.append(str(shipment_id))
             if tracking_number:
                 tracking_numbers.append(str(tracking_number))
+            for extra in package.get("waybills") or []:
+                extra = str(extra).strip()
+                if extra and extra not in tracking_numbers:
+                    tracking_numbers.append(extra)
             if not shipment_id:
                 self.logger.warning("  Brak shipment_id dla zamowienia %s", order_id)
                 continue
@@ -173,6 +183,7 @@ class PrintLabelService:
                 courier_code,
                 package_ids,
                 tracking_numbers,
+                delivery_method=delivery_method,
             )
             if label_data:
                 labels.append((label_data, extension))
@@ -206,6 +217,24 @@ class PrintLabelService:
         )
         return label_base64, "pdf"
 
+    def _append_label_barcodes(
+        self,
+        label_data: str,
+        tracking_numbers: List[str],
+        *,
+        delivery_method: str = "",
+    ) -> None:
+        if not label_data or not needs_dhl_box_label_barcode_extraction(delivery_method):
+            return
+        try:
+            label_bytes = base64.b64decode(label_data)
+        except (ValueError, TypeError):
+            return
+        for code in extract_dhl_box_barcodes_from_label_pdf(label_bytes):
+            if code not in tracking_numbers:
+                tracking_numbers.append(code)
+                self.logger.info("Kod DHL BOX z etykiety PDF: %s", code)
+
     def _fetch_package_label(
         self,
         order_id: str,
@@ -213,15 +242,23 @@ class PrintLabelService:
         courier_code: str,
         package_ids: List[str],
         tracking_numbers: List[str],
+        *,
+        delivery_method: str = "",
     ) -> Tuple[str, str]:
         try:
-            return self.retry(
+            label_data, extension = self.retry(
                 self.fetch_label,
                 courier_code,
                 shipment_id,
                 stage="label",
                 retry_exceptions=(ApiError,),
             )
+            self._append_label_barcodes(
+                label_data,
+                tracking_numbers,
+                delivery_method=delivery_method,
+            )
+            return label_data, extension
         except ShipmentExpiredError:
             self.logger.warning(
                 "Przesylka %s wygasla (403) - anuluje i tworze nowa dla %s",
@@ -237,6 +274,12 @@ class PrintLabelService:
             )
             if not label_data:
                 self.errors_total.labels(stage="loop").inc()
+            else:
+                self._append_label_barcodes(
+                    label_data,
+                    tracking_numbers,
+                    delivery_method=delivery_method,
+                )
             return label_data, extension
         except ApiError as exc:
             self.logger.error(

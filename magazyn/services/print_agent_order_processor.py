@@ -73,7 +73,11 @@ class PrintOrderProcessor:
         if packages is None:
             return
 
-        collected_labels = self.collect_order_labels(order_id, packages)
+        collected_labels = self.collect_order_labels(
+            order_id,
+            packages,
+            delivery_method=str(order.get("delivery_method") or order.get("shipping") or ""),
+        )
         apply_package_tracking(
             last_order_data,
             courier_code=collected_labels.courier_code,

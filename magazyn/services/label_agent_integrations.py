@@ -119,8 +119,18 @@ def label_service(
     )
 
 
-def collect_order_labels(agent, order_id: str, packages: List[Dict[str, Any]]) -> CollectedLabels:
-    return agent._label_service().collect_order_labels(order_id, packages)
+def collect_order_labels(
+    agent,
+    order_id: str,
+    packages: List[Dict[str, Any]],
+    *,
+    delivery_method: str = "",
+) -> CollectedLabels:
+    return agent._label_service().collect_order_labels(
+        order_id,
+        packages,
+        delivery_method=delivery_method,
+    )
 
 
 def recreate_shipment_and_get_label(
