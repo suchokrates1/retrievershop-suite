@@ -18,6 +18,13 @@ magazyn/scripts/venv/
 .archive/
 scripts/archive/
 scripts/debug/
+scripts/_*.py
+tmp_deploy/
+
+# Runtime data volume (Docker mount) — tylko README w repo
+data/*
+!data/.gitignore
+!data/README.md
 
 # Pliki testowe i tymczasowe
 *.html
