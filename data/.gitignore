@@ -1,0 +1,4 @@
+# Runtime volume (docker: ./data -> /app/data). Nie commituj zawartości serwera.
+*
+!.gitignore
+!README.md
