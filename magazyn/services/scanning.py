@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -48,26 +49,64 @@ def parse_last_order_data(raw: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def barcode_scan_candidates(barcode: str) -> list[str]:
+    """Rozszerz kod skanera o warianty używane na etykietach przewoźników."""
+    barcode = barcode.strip()
+    if not barcode:
+        return []
+
+    candidates = [barcode]
+    if "+" in barcode:
+        upper = barcode.upper()
+        if upper.startswith("2L"):
+            # Routing DHL/Orlen: unikalny jest prefiks przed '+', sufiks bywa wspólny.
+            prefix = barcode.split("+", 1)[0].strip()
+            if prefix:
+                candidates.append(prefix)
+        else:
+            for part in barcode.split("+"):
+                part = part.strip()
+                if part:
+                    candidates.append(part)
+
+    if barcode.upper().startswith("JJD"):
+        digits = re.sub(r"\D", "", barcode)
+        if digits:
+            candidates.append(digits)
+            if len(digits) >= 11:
+                candidates.append(digits[-11:])
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
+    return unique
+
+
 def barcode_matches_order(order_data: dict[str, Any], barcode: str) -> bool:
     """Sprawdź, czy kod z etykiety pasuje do zapisanych danych zamówienia."""
     package_ids = order_data.get("package_ids") or []
-    tracking_numbers = order_data.get("tracking_numbers") or []
+    tracking_numbers = [str(value) for value in (order_data.get("tracking_numbers") or [])]
     delivery_package_nr = str(order_data.get("delivery_package_nr") or "").strip()
 
-    if barcode in package_ids or barcode in tracking_numbers:
-        return True
-    if delivery_package_nr and barcode == delivery_package_nr:
-        return True
-
-    for tracking_number in tracking_numbers:
-        tracking_number = str(tracking_number or "")
-        if len(tracking_number) >= 6 and tracking_number in barcode:
+    for candidate in barcode_scan_candidates(barcode):
+        if candidate in package_ids or candidate in tracking_numbers:
             return True
-        if len(barcode) >= 6 and barcode in tracking_number:
+        if delivery_package_nr and candidate == delivery_package_nr:
             return True
 
-    if delivery_package_nr and len(delivery_package_nr) >= 6:
-        return delivery_package_nr in barcode or barcode in delivery_package_nr
+        for tracking_number in tracking_numbers:
+            tracking_number = str(tracking_number or "")
+            if len(tracking_number) >= 6 and tracking_number in candidate:
+                return True
+            if len(candidate) >= 6 and candidate in tracking_number:
+                return True
+
+        if delivery_package_nr and len(delivery_package_nr) >= 6:
+            if delivery_package_nr in candidate or candidate in delivery_package_nr:
+                return True
 
     return False
 
@@ -360,6 +399,7 @@ __all__ = [
     "AUTO_PACK_TARGET_STATUS",
     "AutoPackResult",
     "barcode_matches_order",
+    "barcode_scan_candidates",
     "check_and_auto_pack",
     "load_order_for_barcode",
     "parse_last_order_data",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional
 
 from .print_agent_delivery import resolve_delivery_service_id
+from .shipment_waybills import extract_waybills_from_shipment_details
 
 
 def get_order_packages_from_shipment_management(
@@ -51,16 +52,14 @@ def resolve_delivery_service_from_api(delivery_method: str, *, get_delivery_serv
 def _stored_shipment_payload(stored_shipment_id: str, order_id: str, get_shipment_details, logger) -> dict:
     details = get_shipment_details(stored_shipment_id)
     carrier = details.get("carrier", "")
-    waybill = ""
-    for package in details.get("packages", []):
-        waybill = package.get("waybill", "")
-        if waybill:
-            break
+    waybills = extract_waybills_from_shipment_details(details)
+    waybill = waybills[0] if waybills else ""
 
     logger.info("Uzyto zapisany shipment_management_id=%s dla %s", stored_shipment_id, order_id)
     return {
         "shipment_id": stored_shipment_id,
         "waybill": waybill,
+        "waybills": waybills,
         "carrier_id": carrier,
         "courier_code": carrier,
         "courier_package_nr": waybill,

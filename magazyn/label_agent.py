@@ -331,8 +331,15 @@ class LabelAgent:
         self,
         order_id: str,
         packages: List[Dict[str, Any]],
+        *,
+        delivery_method: str = "",
     ):
-        return integrations.collect_order_labels(self, order_id, packages)
+        return integrations.collect_order_labels(
+            self,
+            order_id,
+            packages,
+            delivery_method=delivery_method,
+        )
 
     def _recreate_shipment_and_get_label(
         self,

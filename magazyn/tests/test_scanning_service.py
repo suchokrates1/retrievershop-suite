@@ -65,6 +65,36 @@ def test_barcode_matches_order_direct_and_partial_tracking():
     assert barcode_matches_order(order_data, "missing") is False
 
 
+def test_barcode_matches_orlen_carrier_waybill():
+    order_data = {
+        "package_ids": ["ship-1"],
+        "tracking_numbers": ["AD02MJHDL5", "2102413302196"],
+        "delivery_package_nr": "AD02MJHDL5",
+    }
+    assert barcode_matches_order(order_data, "2102413302196") is True
+
+
+def test_barcode_matches_dhl_jjd_and_routing_from_label():
+    order_a = {"tracking_numbers": ["2LPL02495+83545000"]}
+    order_b = {"tracking_numbers": ["2LPL00910+83545000"]}
+    assert barcode_matches_order(order_a, "2LPL02495+83545000") is True
+    assert barcode_matches_order(order_b, "2LPL02495+83545000") is False
+    assert barcode_matches_order(order_b, "2LPL00910+83545000") is True
+    order_data = {
+        "tracking_numbers": [
+            "AD02MHU8Z9",
+            "30774980700",
+            "JJD000030230864000435460935",
+            "2LPL02495+83545000",
+        ],
+        "delivery_package_nr": "AD02MHU8Z9",
+        "package_ids": ["d988625a-39dc-44fe-8684-35f2fb0b791f"],
+    }
+    assert barcode_matches_order(order_data, "JJD000030230864000435460935") is True
+    assert barcode_matches_order(order_data, "2LPL02495+83545000") is True
+    assert barcode_matches_order(order_data, "30774980700") is True
+
+
 def test_check_and_auto_pack_packs_single_product_order(app):
     product_size_id = _create_auto_pack_order(app, order_id="ORD-PACK", quantity=1)
     scan_state = {
