@@ -14,6 +14,7 @@ from .models.allegro import AllegroOffer
 from .models.products import Product, ProductSize
 from .db import get_session
 from .parsing import parse_offer_title, normalize_color
+from .services.order_sync import match_product_to_warehouse
 from .env_tokens import clear_allegro_tokens, empty_allegro_token_values, update_allegro_tokens
 from .metrics import ALLEGRO_SYNC_ERRORS_TOTAL
 from .domain import allegro_prices
@@ -290,6 +291,17 @@ def sync_offers():
                                     break
                     else:
                         product_size = product_sizes[0] if product_sizes else None
+
+                if not product_size and name and size:
+                    product_size = match_product_to_warehouse(
+                        session, name, color or "", size
+                    )
+                    if product_size:
+                        logger.debug(
+                            "Matched offer %s by series/color/size: %s",
+                            offer.get("id"),
+                            title[:80],
+                        )
 
                 product_id = product_size.product_id if product_size else None
                 product_size_id = product_size.id if product_size else None

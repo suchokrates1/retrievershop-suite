@@ -277,9 +277,10 @@ print('\n'.join(f'{k}: {old[k]} -> {new.get(k)}' for k in old if str(old[k])!=st
         fi
     fi
 
-    # Fallback: failover trwal >5min -> token Allegro mogl sie odswiezyc
+    # Fallback: failover trwal >5min -> sprawdz czy Mikrus ma nowsze dane niz snapshot
+    # (NIE ustawiaj flagi automatycznie — unikamy nadpisania swiezszej bazy minipc)
     if [ -z "$sync_reason" ] && [ "$elapsed" -gt 300 ]; then
-        sync_reason="Failover trwal ${elapsed}s >5min"
+        log "Failover trwal ${elapsed}s >5min ale brak zmian w snapshot — reverse sync pominiety"
     fi
 
     rm -f "$SNAPSHOT_FILE" "$ACTIVATE_TIME_FILE"

@@ -64,8 +64,12 @@ CATEGORY_KEYWORDS: list[tuple[str, str, str | None, int]] = [
     ("amortyzator do smyczy", "Amortyzator dla psa", "Premium", 3),
     ("amortyaator do smyczy", "Amortyzator dla psa", "Premium", 3),
     ("amortyzator", "Amortyzator dla psa", "Premium", 2),
+    ("kamizelka", "Kamizelka dla psa", "Chłodząca", 3),
+    ("kapok", "Kapok dla psa", None, 2),
     ("saszetki", "Saszetki dla psa", None, 2),
     ("saszetka", "Saszetki dla psa", None, 2),
+    ("torebka", "Saszetki dla psa", None, 2),
+    ("przysmaki", "Saszetki dla psa", None, 1),
     ("smycz automatyczna", "Smycz dla psa", "Handy", 2),
     ("obroza", "Obroża dla psa", None, 1),
     ("smycz", "Smycz dla psa", None, 1),
@@ -99,6 +103,13 @@ SERIES_KEYWORDS: list[tuple[str, str, int]] = [
     ("blossom", "Blossom", 2),
     ("tropical", "Tropical", 2),
     ("active", "Active", 1),
+    ("chlodzaca", "Chłodząca", 3),
+    ("tradycyjna", "Active", 3),
+    ("active pro+", "Active Pro+", 4),
+    ("active pro", "Active Pro+", 3),
+    ("na przysmaki", "Standard", 2),
+    ("torebka na przysmaki", "Treat Basic", 3),
+    ("trening sportowy", "Treat Basic", 2),
     ("outdoor", "Outdoor", 2),
     ("security", "Security", 2),
     ("tracker", "Tracker", 2),
@@ -118,7 +129,8 @@ SERIES_KEYWORDS: list[tuple[str, str, int]] = [
 def _strip_diacritics(value: str) -> str:
     """Return *value* lower-cased and stripped of diacritics."""
 
-    normalized = unicodedata.normalize("NFKD", value.lower())
+    lowered = value.lower().replace("ł", "l")
+    normalized = unicodedata.normalize("NFKD", lowered)
     return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
@@ -215,57 +227,28 @@ def parse_product_info(item: dict) -> tuple[str, str, str]:
     if not item:
         return "", "", ""
 
-    name = item.get("name", "") or ""
+    raw_name = item.get("name", "") or ""
 
-    # Usun szum z nazwy: znaczniki dlugosci (2m, 1.5m) i slowo "material"
-    name = re.sub(r'\b\d+(?:[.,]\d+)?m\b', '', name).strip()
-    name = re.sub(r'\bmateria[\u0142l]\b', '', name, flags=re.IGNORECASE).strip()
-    name = re.sub(r'\s+', ' ', name)
-
-    size = ""
-    color = ""
-
+    attr_size = ""
+    attr_color = ""
     for attr in item.get("attributes", []):
         aname = (attr.get("name") or "").lower()
-        if aname in {"rozmiar", "size"} and not size:
-            size = attr.get("value", "")
-        elif aname in {"kolor", "color"} and not color:
-            color = attr.get("value", "")
+        if aname in {"rozmiar", "size"} and not attr_size:
+            attr_size = attr.get("value", "")
+        elif aname in {"kolor", "color"} and not attr_color:
+            attr_color = attr.get("value", "")
 
-    if not size:
-        words = name.strip().split()
-        known_colors_norm = {_strip_diacritics(c.lower()) for c in KNOWN_COLORS}
-        if len(words) >= 3:
-            maybe_size = words[-1]
-            if maybe_size.upper() in {s.upper() for s in ALL_SIZES}:
-                size = maybe_size
-                if not color:
-                    candidate_color = words[-2]
-                    if _strip_diacritics(candidate_color.lower()) in known_colors_norm:
-                        color = candidate_color
-                        name = " ".join(words[:-2])
-                    else:
-                        # Nie jest znanym kolorem - zostaw w nazwie
-                        name = " ".join(words[:-1])
-                else:
-                    name = " ".join(words[:-1])
-        if not size and len(words) >= 2:
-            maybe_color = words[-1].lower()
-            if maybe_color in {c.lower() for c in KNOWN_COLORS}:
-                if len(words) >= 3 and words[-2].upper() in {s.upper() for s in ALL_SIZES}:
-                    size = words[-2]
-                    if not color:
-                        color = words[-1]
-                    name = " ".join(words[:-2])
-                else:
-                    if not color:
-                        color = words[-1]
-                    size = "Uniwersalny"
-                    name = " ".join(words[:-1])
+    offer_name, offer_color, offer_size = parse_offer_title(raw_name)
 
-    name = normalize_product_title_fragment(name.strip())
-    name = resolve_product_alias(name)
-    color = normalize_color(color)
+    detected_name = _detect_product_name(raw_name)
+    if detected_name:
+        name = resolve_product_alias(detected_name)
+    else:
+        name = offer_name
+
+    size = attr_size or offer_size
+    color = normalize_color(attr_color or offer_color)
+
     return name, size, color
 
 

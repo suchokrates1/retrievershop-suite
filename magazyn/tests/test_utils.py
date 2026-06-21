@@ -265,7 +265,7 @@ def test_ensure_db_migrates_wrong_name(tmp_path, monkeypatch):
 def test_parse_product_info_color_only():
     item = {"name": "Smycz dla psa czerwony"}
     name, size, color = parse_product_info(item)
-    assert name == "Smycz dla psa"
+    assert name == "Smycz dla psa Truelove"
     assert size == "Uniwersalny"
     assert color.lower() == "czerwony"
 

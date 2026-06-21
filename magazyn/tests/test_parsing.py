@@ -73,6 +73,33 @@ def test_parse_offer_title_resolves_amortyzator_alias_to_inventory_name():
         "Amortyzator do smyczy dla średniego psa Truelove żółty"
     )
 
-    assert name == "Amortyzator do smyczy dla średniego psa"
+    assert name == "Amortyzator dla psa Truelove Premium"
     assert color == "Żółty"
     assert size == "Uniwersalny"
+
+
+def test_parse_offer_title_detects_kamizelka_chlodzaca():
+    name, color, size = parse_offer_title(
+        "Kamizelka chłodząca dla średniego psa Truelove M żółta"
+    )
+
+    assert name == "Kamizelka dla psa Truelove Chłodząca"
+    assert color == "Żółty"
+    assert size == "M"
+
+
+def test_parse_product_info_detects_kamizelka_chlodzaca():
+    from magazyn.parsing import parse_product_info
+
+    name, size, color = parse_product_info(
+        {
+            "name": "Kamizelka chłodząca dla średniego psa Truelove M żółta",
+            "quantity": 1,
+            "price_brutto": "217.00",
+            "attributes": [],
+        }
+    )
+
+    assert name == "Kamizelka dla psa Truelove Chłodząca"
+    assert color == "Żółty"
+    assert size == "M"
