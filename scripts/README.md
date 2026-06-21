@@ -18,7 +18,6 @@ python scripts/ops/audit_unlinked.py
 | Skrypt | Opis |
 |--------|------|
 | `audit_wfirma_invoices.py` | Audyt duplikatów faktur wFirma vs zamówienia |
-| `correct_incident_invoices.py` | Korekty zerujące duplikatów wFirma (lista w skrypcie) |
 | `audit_unlinked.py` | Oferty i pozycje zamówień bez powiązania z magazynem |
 | `audit_partial_refunds.py` | Audyt częściowych zwrotów |
 | `audit_return_stock.py` | Audyt stocku po zwrotach |
@@ -27,11 +26,6 @@ python scripts/ops/audit_unlinked.py
 | `export_orders.py` | Eksport zamówień |
 | `sync_allegro_orders.py` | Sync zamówień Allegro |
 | `link_manual_shipment.py` | Ręczne powiązanie przesyłki |
-
-## `incident/2026-06-16/` — archiwum incydentu failover
-
-Skrypty jednorazowe z okresu awarii reverse sync (16.06.2026).  
-Zachowane do audytu; **nie uruchamiaj ponownie** bez weryfikacji (twarde ID zamówień/przesyłek).
 
 ## `failover/` — HA magazyn.retrievershop.pl
 
