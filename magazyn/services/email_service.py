@@ -1,14 +1,11 @@
 """
-Serwis email do klienta - transakcyjne wiadomosci HTML.
+Serwis email do klienta - transakcyjne wiadomosci.
 
-Obsluguje: potwierdzenie zamowienia, wyslanie przesylki,
-fakture (z PDF w zalaczniku) i potwierdzenie dostawy.
-Kazdy email zawiera link do personalizowanej strony zamowienia.
+Dla zamowien Allegro (@allegromail.pl) wiadomosci ida przez Messaging API
+z potwierdzeniem statusu DELIVERED/VERIFYING. Dla pozostalych adresow
+uzywamy SMTP z szablonami HTML.
 
-UWAGA: Allegro wyswietla emaile wyslane na @allegromail.pl
-jako wiadomosci w Centrum Wiadomosci. Allegro stripuje HTML
-i wyswietla wersje plain text, dlatego kazdy email musi miec
-poprawna wersje tekstowa.
+Szablony plain-text (templates/messages/) odzwierciedlaja tresc maili HTML.
 """
 
 import logging
@@ -20,6 +17,8 @@ from email.utils import formataddr
 from flask import render_template
 
 from ..config import settings
+from .allegro_order_notifications import send_order_message
+from .notification_delivery import DeliveryResult, is_allegro_proxy_email
 from .tracking import get_tracking_url
 
 logger = logging.getLogger(__name__)
@@ -166,6 +165,49 @@ def _send_html_email(
         return False
 
 
+def _render_message_text(template_name: str, **ctx) -> str:
+    """Renderuj szablon plain-text dla Centrum Wiadomości Allegro."""
+    return render_template(f"messages/{template_name}", **ctx).strip()
+
+
+def deliver_customer_notification(
+    order,
+    *,
+    subject: str,
+    html_body: str,
+    text_body: str | None = None,
+    attachment: bytes | None = None,
+    attachment_filename: str | None = None,
+) -> DeliveryResult:
+    """
+    Dostarcz powiadomienie: Allegro Messaging API dla @allegromail.pl,
+    w przeciwnym razie SMTP.
+    """
+    email = order.email
+    if not email:
+        return DeliveryResult(success=False, channel="none", error="Brak email")
+
+    if is_allegro_proxy_email(email):
+        body = text_body or _html_to_plain_text(html_body)
+        return send_order_message(
+            order,
+            body,
+            attachment=attachment,
+            attachment_filename=attachment_filename,
+        )
+
+    ok = _send_html_email(
+        to_email=email,
+        subject=subject,
+        html_body=html_body,
+        attachment=attachment,
+        attachment_filename=attachment_filename,
+    )
+    if ok:
+        return DeliveryResult(success=True, channel="smtp")
+    return DeliveryResult(success=False, channel="smtp", error="SMTP send failed")
+
+
 def _load_order_context(order):
     """Przygotuj wspolny kontekst danych zamowienia do szablonow email."""
     products = []
@@ -200,36 +242,38 @@ def _load_order_context(order):
     }
 
 
-def send_order_confirmation(order) -> bool:
+def send_order_confirmation(order) -> DeliveryResult:
     """Wyslij email z potwierdzeniem zamowienia."""
     email = order.email
     if not email:
         logger.debug(
             "Brak adresu email dla zamowienia %s - pomijam", order.order_id
         )
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak email")
 
     ctx = _load_order_context(order)
     html = render_template("emails/order_confirmation.html", **ctx)
-    return _send_html_email(
-        to_email=email,
+    text = _render_message_text("order_confirmation.txt", **ctx)
+    return deliver_customer_notification(
+        order,
         subject=f"Potwierdzenie zamowienia #{ctx['order_id']} - Retriever Shop",
         html_body=html,
+        text_body=text,
     )
 
 
-def send_shipment_notification(order) -> bool:
+def send_shipment_notification(order) -> DeliveryResult:
     """Wyslij email o nadaniu przesylki."""
     email = order.email
     if not email:
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak email")
 
     tracking_number = order.delivery_package_nr
     if not tracking_number:
         logger.debug(
             "Brak numeru przesylki dla %s - pomijam email", order.order_id
         )
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak trackingu")
 
     tracking_url = None
     try:
@@ -252,20 +296,22 @@ def send_shipment_notification(order) -> bool:
     ctx["carrier"] = order.delivery_method or ""
 
     html = render_template("emails/shipment_notification.html", **ctx)
-    return _send_html_email(
-        to_email=email,
+    text = _render_message_text("shipment_notification.txt", **ctx)
+    return deliver_customer_notification(
+        order,
         subject=f"Przesylka nadana - zamowienie #{ctx['order_id']} - Retriever Shop",
         html_body=html,
+        text_body=text,
     )
 
 
 def send_invoice_email(
     order, pdf_data: bytes | None = None, pdf_filename: str | None = None
-) -> bool:
+) -> DeliveryResult:
     """Wyslij email z faktura (opcjonalnie z PDF w zalaczniku)."""
     email = order.email
     if not email:
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak email")
 
     ctx = _load_order_context(order)
 
@@ -293,27 +339,31 @@ def send_invoice_email(
     ctx["invoice_data"] = invoice_data
 
     html = render_template("emails/invoice_email.html", **ctx)
-    return _send_html_email(
-        to_email=email,
+    text = _render_message_text("invoice_email.txt", **ctx)
+    return deliver_customer_notification(
+        order,
         subject=f"Faktura do zamowienia #{ctx['order_id']} - Retriever Shop",
         html_body=html,
+        text_body=text,
         attachment=pdf_data,
         attachment_filename=pdf_filename,
     )
 
 
-def send_delivery_confirmation(order) -> bool:
+def send_delivery_confirmation(order) -> DeliveryResult:
     """Wyslij email o dostarczeniu przesylki."""
     email = order.email
     if not email:
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak email")
 
     ctx = _load_order_context(order)
     html = render_template("emails/delivery_confirmation.html", **ctx)
-    return _send_html_email(
-        to_email=email,
+    text = _render_message_text("delivery_confirmation.txt", **ctx)
+    return deliver_customer_notification(
+        order,
         subject=f"Zamowienie #{ctx['order_id']} dostarczone - Retriever Shop",
         html_body=html,
+        text_body=text,
     )
 
 
@@ -324,11 +374,11 @@ def send_invoice_correction(
     pdf_data: bytes | None = None,
     pdf_filename: str | None = None,
     invoice_number: str = "",
-) -> bool:
+) -> DeliveryResult:
     """Wyslij email z korekta faktury (odpowiednik automatyzacji BL 90895)."""
     email = order.email
     if not email:
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak email")
 
     ctx = _load_order_context(order)
     ctx["reason"] = reason
@@ -336,10 +386,12 @@ def send_invoice_correction(
     ctx["invoice_number"] = invoice_number
 
     html = render_template("emails/invoice_correction.html", **ctx)
-    return _send_html_email(
-        to_email=email,
+    text = _render_message_text("invoice_correction.txt", **ctx)
+    return deliver_customer_notification(
+        order,
         subject=f"Korekta za zamowienie nr {ctx['order_id']}",
         html_body=html,
+        text_body=text,
         attachment=pdf_data,
         attachment_filename=pdf_filename,
     )
@@ -350,11 +402,11 @@ def send_refund_notification(
     reason: str = "",
     refund_amount: float | None = None,
     items: list | None = None,
-) -> bool:
+) -> DeliveryResult:
     """Wyslij email z potwierdzeniem zwrotu pieniedzy (bez korekty faktury)."""
     email = order.email
     if not email:
-        return False
+        return DeliveryResult(success=False, channel="none", error="Brak email")
 
     ctx = _load_order_context(order)
     ctx["reason"] = reason
@@ -362,8 +414,10 @@ def send_refund_notification(
     ctx["items"] = items or []
 
     html = render_template("emails/refund_notification.html", **ctx)
-    return _send_html_email(
-        to_email=email,
+    text = _render_message_text("refund_notification.txt", **ctx)
+    return deliver_customer_notification(
+        order,
         subject=f"Potwierdzenie zwrotu - zamowienie #{ctx['order_id']} - Retriever Shop",
         html_body=html,
+        text_body=text,
     )

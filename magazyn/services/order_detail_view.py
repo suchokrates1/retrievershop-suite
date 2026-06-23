@@ -41,6 +41,14 @@ def build_order_detail_view_context(db, order, *, app_base_url: str = "") -> dic
     return context
 
 
+def _email_was_sent(value) -> bool:
+    if value is True:
+        return True
+    if isinstance(value, dict):
+        return value.get("sent") is True
+    return False
+
+
 def _email_context(raw_emails_sent: str | None) -> dict:
     emails_sent = {}
     if raw_emails_sent:
@@ -51,12 +59,25 @@ def _email_context(raw_emails_sent: str | None) -> dict:
 
     return {
         "email_log": [
-            {"type": key, "label": EMAIL_TYPES_MAP.get(key, key), "sent": True}
+            {
+                "type": key,
+                "label": EMAIL_TYPES_MAP.get(key, key),
+                "sent": True,
+                "channel": (
+                    emails_sent.get(key, {}).get("channel")
+                    if isinstance(emails_sent.get(key), dict)
+                    else ("smtp" if emails_sent.get(key) is True else None)
+                ),
+            }
             for key in EMAIL_TYPES_MAP
-            if emails_sent.get(key)
+            if _email_was_sent(emails_sent.get(key))
         ],
         "all_email_types": [
-            {"type": key, "label": label, "sent": bool(emails_sent.get(key))}
+            {
+                "type": key,
+                "label": label,
+                "sent": _email_was_sent(emails_sent.get(key)),
+            }
             for key, label in EMAIL_TYPES_MAP.items()
         ],
         "emails_sent": emails_sent,

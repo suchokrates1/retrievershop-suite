@@ -197,7 +197,7 @@ class TestEmailService:
                     )
                     result = send_order_confirmation(order)
 
-                    assert result is True
+                    assert result.success is True
                     mock_send.assert_called_once()
                     call_kwargs = mock_send.call_args
                     assert call_kwargs[1]["to_email"] == "jan@test.pl"
@@ -224,7 +224,7 @@ class TestEmailService:
                     )
                     result = send_shipment_notification(order)
 
-                    assert result is True
+                    assert result.success is True
                     call_kwargs = mock_send.call_args
                     assert "INP123456789" in call_kwargs[1]["html_body"]
 
@@ -242,7 +242,7 @@ class TestEmailService:
                     send_shipment_notification,
                 )
                 result = send_shipment_notification(order)
-                assert result is False
+                assert result.success is False
 
     def test_send_invoice_email(self, app, order_with_invoice):
         """send_invoice_email renderuje dane faktury."""
@@ -265,7 +265,7 @@ class TestEmailService:
                         pdf_filename="faktura.pdf",
                     )
 
-                    assert result is True
+                    assert result.success is True
                     call_kwargs = mock_send.call_args
                     assert call_kwargs[1]["attachment"] == b"%PDF-fake"
                     assert (
@@ -290,7 +290,7 @@ class TestEmailService:
                     )
                     result = send_delivery_confirmation(order)
 
-                    assert result is True
+                    assert result.success is True
                     call_kwargs = mock_send.call_args
                     assert "dostarczone" in call_kwargs[1]["html_body"].lower()
 
@@ -308,7 +308,7 @@ class TestEmailService:
                     send_order_confirmation,
                 )
                 result = send_order_confirmation(order)
-                assert result is False
+                assert result.success is False
 
     def test_send_invoice_correction(self, app, order_with_invoice):
         """send_invoice_correction renderuje dane korekty."""
@@ -333,7 +333,7 @@ class TestEmailService:
                         pdf_filename="korekta.pdf",
                     )
 
-                    assert result is True
+                    assert result.success is True
                     call_kwargs = mock_send.call_args
                     assert "Korekta" in call_kwargs[1]["subject"]
                     assert "Zwrot produktu" in call_kwargs[1]["html_body"]

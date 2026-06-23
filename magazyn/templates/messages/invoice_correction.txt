@@ -1,0 +1,17 @@
+══════════════════════════════════════
+RETRIEVER SHOP — Korekta faktury
+══════════════════════════════════════
+
+W załączniku przesyłamy korektę do zamówienia #{{ order_id }}.
+{% if invoice_number %}
+Numer dokumentu: {{ invoice_number }}
+{% endif %}{% if reason %}
+Powód: {{ reason }}
+{% endif %}{% if refund_amount is not none %}
+Kwota zwrotu: {{ '%.2f'|format(refund_amount) }} zł
+{% endif %}{% if order_page_url %}
+▶ Szczegóły zamówienia:
+{{ order_page_url }}
+{% endif %}
+Pozdrawiamy,
+Retriever Shop

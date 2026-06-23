@@ -43,6 +43,8 @@ from .messaging import (
     fetch_discussion_chat,
     fetch_thread_messages,
     send_thread_message,
+    send_new_message,
+    find_thread_id_for_login,
     send_discussion_message,
 )
 
@@ -156,6 +158,8 @@ __all__ = [
     "fetch_discussion_chat",
     "fetch_thread_messages",
     "send_thread_message",
+    "send_new_message",
+    "find_thread_id_for_login",
     "send_discussion_message",
     # Billing
     "fetch_billing_entries",

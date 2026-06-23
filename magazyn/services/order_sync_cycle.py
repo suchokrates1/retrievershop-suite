@@ -32,6 +32,7 @@ class OrderSyncCycle:
             self.run_allegro_fulfillment_sync(app)
             self.run_returns_sync()
             self.run_invoice_processing()
+            self.run_notification_retry()
             self.run_unpaid_auto_cancel()
             self.run_daily_offer_and_promo_sync()
 
@@ -88,6 +89,22 @@ class OrderSyncCycle:
                 )
         except Exception as inv_err:
             self.logger.error(f"Error in invoice processing: {inv_err}", exc_info=True)
+
+    def run_notification_retry(self) -> None:
+        try:
+            from .notification_retry import retry_pending_allegro_notifications
+
+            stats = retry_pending_allegro_notifications()
+            if stats["retried"] > 0:
+                self.logger.info(
+                    "Notification retry: checked=%s retried=%s success=%s errors=%s",
+                    stats["checked"],
+                    stats["retried"],
+                    stats["success"],
+                    stats["errors"],
+                )
+        except Exception as exc:
+            self.logger.error("Error in notification retry: %s", exc, exc_info=True)
 
     def run_unpaid_auto_cancel(self) -> None:
         try:

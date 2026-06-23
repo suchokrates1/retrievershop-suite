@@ -22,7 +22,7 @@ def dispatch_status_email(db, order_id: str, status: str) -> None:
         logger.debug("Email dispatch: brak mapowania dla statusu '%s'", status)
         return
 
-    from .invoice_service import _mark_email_sent, _was_email_sent
+    from .notification_delivery import _mark_email_sent, _was_email_sent
 
     db.flush()
 
@@ -53,18 +53,34 @@ def dispatch_status_email(db, order_id: str, status: str) -> None:
         )
 
         sent = False
+        delivery = None
         if email_type == "confirmation":
-            sent = send_order_confirmation(order)
+            delivery = send_order_confirmation(order)
         elif email_type == "shipment":
-            sent = send_shipment_notification(order)
+            delivery = send_shipment_notification(order)
         elif email_type == "delivery":
-            sent = send_delivery_confirmation(order)
+            delivery = send_delivery_confirmation(order)
         elif email_type == "correction":
-            sent = send_invoice_correction(order)
+            delivery = send_invoice_correction(order)
 
-        if sent:
-            _mark_email_sent(db, order, email_type)
-            logger.info("Email '%s' wyslany dla zamowienia %s", email_type, order_id)
+        sent = delivery.success if delivery else False
+
+        if sent and delivery:
+            _mark_email_sent(db, order, email_type, delivery)
+            logger.info(
+                "Email '%s' wyslany dla zamowienia %s (channel=%s)",
+                email_type,
+                order_id,
+                delivery.channel,
+            )
+        elif delivery:
+            logger.warning(
+                "Email '%s' NIE wyslany dla zamowienia %s (channel=%s, error=%s)",
+                email_type,
+                order_id,
+                delivery.channel,
+                delivery.error,
+            )
         else:
             logger.warning(
                 "Email '%s' NIE wyslany dla zamowienia %s (send zwrocilo False)",
