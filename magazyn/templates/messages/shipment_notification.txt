@@ -1,0 +1,22 @@
+══════════════════════════════════════
+RETRIEVER SHOP — Przesyłka nadana
+══════════════════════════════════════
+
+Zamówienie #{{ order_id }} zostało przekazane kurierowi.
+
+NUMER PRZESYŁKI:
+{{ tracking_number }}
+{% if carrier %}
+PRZEWOŹNIK:
+{{ carrier }}
+{% endif %}{% if tracking_url %}
+▶ Śledź przesyłkę:
+{{ tracking_url }}
+{% endif %}{% if order_page_url %}
+▶ Status zamówienia:
+{{ order_page_url }}
+{% endif %}
+Czas dostawy zależy od wybranej metody wysyłki.
+
+Pozdrawiamy,
+Retriever Shop

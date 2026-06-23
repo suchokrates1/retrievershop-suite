@@ -1,0 +1,19 @@
+══════════════════════════════════════
+RETRIEVER SHOP — Potwierdzenie zwrotu
+══════════════════════════════════════
+
+Potwierdzamy zwrot środków za zamówienie #{{ order_id }}.
+{% if refund_amount is not none %}
+Kwota zwrotu: {{ '%.2f'|format(refund_amount) }} zł
+{% endif %}{% if reason %}
+Powód: {{ reason }}
+{% endif %}{% if items %}
+ZWRÓCONE POZYCJE:
+{% for item in items -%}
+▸ {{ item.name or item.get('name', 'Produkt') }} — {{ item.quantity or item.get('quantity', 1) }} szt.
+{% endfor %}{% endif %}{% if order_page_url %}
+▶ Szczegóły zamówienia:
+{{ order_page_url }}
+{% endif %}
+Pozdrawiamy,
+Retriever Shop

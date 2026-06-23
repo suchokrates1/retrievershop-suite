@@ -1,0 +1,26 @@
+══════════════════════════════════════
+RETRIEVER SHOP — Faktura
+══════════════════════════════════════
+
+Dziękujemy za zakupy! W załączniku przesyłamy fakturę do zamówienia #{{ order_id }}.
+
+{% if order_date %}Data zamówienia: {{ order_date }}
+{% endif %}PRODUKTY:
+{% for p in products -%}
+▸ {{ p.name }} — {{ p.quantity }} szt. — {{ '%.2f'|format(p.price * p.quantity) }} zł
+{% endfor %}
+──────────────────────────────────────
+RAZEM: {{ '%.2f'|format(order_total) }} zł
+──────────────────────────────────────
+{% if invoice_data %}
+DANE DO FAKTURY:
+{% if invoice_data.company %}Firma: {{ invoice_data.company }}
+{% endif %}{% if invoice_data.nip %}NIP: {{ invoice_data.nip }}
+{% endif %}{% if invoice_data.name %}Imię i nazwisko: {{ invoice_data.name }}
+{% endif %}{% if invoice_data.address %}Adres: {{ invoice_data.address }}{% if invoice_data.postcode %}, {{ invoice_data.postcode }}{% endif %} {{ invoice_data.city }}
+{% endif %}{% endif %}{% if order_page_url %}
+▶ Status zamówienia:
+{{ order_page_url }}
+{% endif %}
+Pozdrawiamy,
+Retriever Shop

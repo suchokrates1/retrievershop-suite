@@ -1,0 +1,25 @@
+══════════════════════════════════════
+RETRIEVER SHOP — Potwierdzenie zamówienia
+══════════════════════════════════════
+
+Dziękujemy za zamówienie #{{ order_id }}!
+Twoje zamówienie zostało przyjęte do realizacji.
+Poinformujemy Cię, gdy przesyłka zostanie nadana.
+
+PRODUKTY:
+{% for p in products -%}
+▸ {{ p.name }}{% if p.attributes %} ({{ p.attributes }}){% endif %}
+  {{ p.quantity }} szt. × {{ '%.2f'|format(p.price) }} zł = {{ '%.2f'|format(p.price * p.quantity) }} zł
+{% endfor %}
+──────────────────────────────────────
+Produkty: {{ '%.2f'|format(products_total) }} zł
+{% if delivery_cost > 0 %}Wysyłka:  {{ '%.2f'|format(delivery_cost) }} zł
+{% endif %}RAZEM:    {{ '%.2f'|format(order_total) }} zł
+──────────────────────────────────────
+{% if delivery_method %}Dostawa: {{ delivery_method }}
+{% endif %}{% if order_page_url %}
+▶ Status zamówienia:
+{{ order_page_url }}
+{% endif %}
+Pozdrawiamy,
+Retriever Shop

@@ -1,0 +1,15 @@
+══════════════════════════════════════
+RETRIEVER SHOP — Zamówienie dostarczone
+══════════════════════════════════════
+
+Zamówienie #{{ order_id }} zostało dostarczone.
+Mamy nadzieję, że produkty spełnią oczekiwania Twojego pupila!
+
+{% if order_page_url %}
+▶ Szczegóły zamówienia:
+{{ order_page_url }}
+{% endif %}
+Jeśli masz pytania, odpowiedz na tę wiadomość.
+
+Pozdrawiamy,
+Retriever Shop

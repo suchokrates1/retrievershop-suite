@@ -190,14 +190,20 @@ def generate_and_send_invoice(order_id: str) -> dict:
             pdf_filename = f"{safe_nr}.pdf"
 
         try:
-            sent = send_invoice_email(
+            delivery = send_invoice_email(
                 order,
                 pdf_data=pdf_data,
                 pdf_filename=pdf_filename,
             )
-            if sent:
-                _mark_email_sent(db, order, "invoice")
+            if delivery.success:
+                from .notification_delivery import _mark_email_sent
+
+                _mark_email_sent(db, order, "invoice", delivery)
                 db.commit()
+            else:
+                result["errors"].append(
+                    f"Nie udalo sie wyslac faktury do klienta: {delivery.error}"
+                )
         except Exception as exc:
             result["errors"].append(f"Blad wysylki email z faktura: {exc}")
 
@@ -210,27 +216,8 @@ def generate_and_send_invoice(order_id: str) -> dict:
     return result
 
 
-def _mark_email_sent(db, order, email_type: str):
-    """Oznacz dany typ emaila jako wyslany."""
-    sent = {}
-    if order.emails_sent:
-        try:
-            sent = json.loads(order.emails_sent)
-        except (json.JSONDecodeError, TypeError):
-            sent = {}
-    sent[email_type] = True
-    order.emails_sent = json.dumps(sent)
-
-
-def _was_email_sent(order, email_type: str) -> bool:
-    """Sprawdz czy dany typ emaila juz zostal wyslany."""
-    if not order.emails_sent:
-        return False
-    try:
-        sent = json.loads(order.emails_sent)
-        return sent.get(email_type, False)
-    except (json.JSONDecodeError, TypeError):
-        return False
+# Backward-compatible re-exports for tests and legacy imports.
+from .notification_delivery import _mark_email_sent, _was_email_sent  # noqa: E402
 
 
 def generate_correction_invoice(
@@ -358,7 +345,7 @@ def generate_correction_invoice(
             safe_nr = invoice_number.replace("/", "_").replace("\\", "_")
             pdf_filename = f"{safe_nr}.pdf"
             try:
-                send_invoice_correction(
+                delivery = send_invoice_correction(
                     order,
                     reason=reason,
                     refund_amount=abs(inv["total"]),
@@ -366,8 +353,15 @@ def generate_correction_invoice(
                     pdf_filename=pdf_filename,
                     invoice_number=invoice_number,
                 )
-                _mark_email_sent(db, order, "correction")
-                db.commit()
+                if delivery.success:
+                    from .notification_delivery import _mark_email_sent
+
+                    _mark_email_sent(db, order, "correction", delivery)
+                    db.commit()
+                else:
+                    result["errors"].append(
+                        f"Nie udalo sie wyslac korekty: {delivery.error}"
+                    )
             except Exception as exc:
                 result["errors"].append(f"Blad wysylki korekty emailem: {exc}")
 

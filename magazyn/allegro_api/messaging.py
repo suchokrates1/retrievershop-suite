@@ -161,6 +161,85 @@ def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 20) ->
     return data
 
 
+def send_new_message(
+    access_token: str,
+    recipient_login: str,
+    order_id: str,
+    text: str,
+    attachment_ids: Optional[list] = None,
+) -> dict:
+    """
+    Utwórz nową wiadomość powiązaną z zamówieniem (POST /messaging/messages).
+
+    Wymagane: login kupującego oraz checkout-form id zamówienia.
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+        "Content-Type": "application/vnd.allegro.public.v1+json",
+    }
+    payload: dict = {
+        "recipient": {"login": recipient_login},
+        "order": {"id": order_id},
+        "text": text,
+    }
+    if attachment_ids:
+        payload["attachments"] = [{"id": aid} for aid in attachment_ids]
+    else:
+        payload["attachments"] = []
+
+    url = f"{API_BASE_URL}/messaging/messages"
+    response = _request_with_retry(
+        requests.post,
+        url,
+        endpoint="send_new_message",
+        headers=headers,
+        json=payload,
+    )
+    return response.json()
+
+
+def find_thread_id_for_login(access_token: str, buyer_login: str) -> Optional[str]:
+    """Znajdź wątek Centrum Wiadomości po loginie kupującego."""
+    target = _normalize_buyer_login(buyer_login)
+    if not target:
+        return None
+
+    offset = 0
+    limit = 20
+    while offset < 200:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.allegro.public.v1+json",
+        }
+        url = f"{API_BASE_URL}/messaging/threads"
+        response = _request_with_retry(
+            requests.get,
+            url,
+            endpoint="message_threads",
+            headers=headers,
+            params={"offset": offset, "limit": limit},
+        )
+        data = response.json()
+        threads = data.get("threads", [])
+        for thread in threads:
+            interlocutor = thread.get("interlocutor") or {}
+            login = _normalize_buyer_login(interlocutor.get("login", ""))
+            if login == target:
+                return thread.get("id")
+        if not threads or len(threads) < limit:
+            break
+        offset += limit
+    return None
+
+
+def _normalize_buyer_login(login: str) -> str:
+    login = (login or "").strip().lower()
+    if login.startswith("client:"):
+        return login.split(":", 1)[1]
+    return login
+
+
 def send_thread_message(
     access_token: str, 
     thread_id: str, 
