@@ -7,6 +7,7 @@ from importlib import import_module
 
 MODEL_MODULES = (
     "magazyn.models.allegro",
+    "magazyn.models.allegro_ads_panel",
     "magazyn.models.messages",
     "magazyn.models.orders",
     "magazyn.models.price_reports",

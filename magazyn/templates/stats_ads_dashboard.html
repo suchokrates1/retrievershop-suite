@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+.stats-shell {
+    --stats-accent: #ff7a18;
+    --stats-accent-2: #f9c74f;
+    --stats-surface: linear-gradient(135deg, rgba(17, 56, 62, 0.95), rgba(33, 89, 95, 0.88));
+    --stats-card: rgba(255, 255, 255, 0.06);
+}
+.stats-hero {
+    background: radial-gradient(1200px 600px at 0% 0%, rgba(249, 199, 79, 0.35), transparent 45%),
+                radial-gradient(900px 500px at 100% 20%, rgba(255, 122, 24, 0.3), transparent 40%),
+                var(--stats-surface);
+    border-radius: 1.25rem;
+}
+.chart-wrap {
+    background: rgba(12, 30, 34, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    padding: 1rem;
+}
+.chart-canvas-shell { position: relative; width: 100%; height: 300px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stats-shell" x-data="adsPanelStats()" x-init="init()">
+    {% include "partials/stats_nav.html" %}
+
+    <section class="stats-hero p-6 md:p-8 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
+            <div>
+                <p class="text-sm uppercase tracking-wider opacity-80">Allegro Sales Center</p>
+                <h1 class="text-3xl md:text-4xl font-bold">Statystyki Ads</h1>
+                <p class="opacity-80 mt-2">Dane z panelu Allegro Ads: kampanie, koszty, sprzedaż i oferty.</p>
+                <p class="text-sm opacity-70 mt-2" x-show="meta.period" x-text="meta.period"></p>
+                <p class="text-xs opacity-60" x-show="meta.synced_at" x-text="'Ostatnia synchronizacja: ' + meta.synced_at"></p>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-primary btn-sm" :disabled="loading || syncing" @click="syncNow()">
+                    <span x-show="!syncing">Synchronizuj teraz</span>
+                    <span x-show="syncing">Synchronizacja...</span>
+                </button>
+                <button class="btn btn-outline btn-sm" :disabled="loading" @click="load()">Odśwież</button>
+            </div>
+        </div>
+    </section>
+
+    <template x-if="error">
+        <div class="alert alert-error mb-4"><span x-text="error"></span></div>
+    </template>
+
+    <template x-if="loading">
+        <div class="skeleton h-40 w-full mb-4"></div>
+    </template>
+
+    <template x-if="!loading && !data">
+        <div class="alert alert-warning">Brak danych. Uruchom synchronizację (scheduler codziennie o 8:00 lub przycisk powyżej).</div>
+    </template>
+
+    <template x-if="!loading && data">
+        <section class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Koszt brutto (wszystkie)</div>
+                <div class="text-2xl font-bold" x-text="fmtMoney(summaryAll.cost)"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Kliknięcia</div>
+                <div class="text-2xl font-bold" x-text="summaryAll.clicks || 0"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">ROAS (panel)</div>
+                <div class="text-2xl font-bold" x-text="summaryAll.roi ?? '-'"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">POAS (realny zysk)</div>
+                <div class="text-2xl font-bold" x-text="summaryAll.poas ?? '-'"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Realny zysk</div>
+                <div class="text-2xl font-bold" x-text="fmtMoney(summaryAll.real_profit)"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Sprzedane szt.</div>
+                <div class="text-2xl font-bold" x-text="summaryAll.sale_count || 0"></div>
+            </div>
+        </section>
+
+        <section class="chart-wrap mb-6">
+            <h3 class="font-semibold mb-3">Wykres dzienny (bieżący miesiąc)</h3>
+            <div class="chart-canvas-shell"><canvas id="adsPanelChart"></canvas></div>
+        </section>
+
+        <section class="chart-wrap mb-6 overflow-x-auto">
+            <h3 class="font-semibold mb-3">Kampanie</h3>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Kampania</th>
+                        <th>Kliknięcia</th>
+                        <th>Odsłony</th>
+                        <th>CTR</th>
+                        <th>CPC</th>
+                        <th>Koszt</th>
+                        <th>ROAS (panel)</th>
+                        <th>POAS</th>
+                        <th>Realny zysk</th>
+                        <th>Sprzedane</th>
+                        <th>Wartość</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="row in data.campaigns" :key="row.campaign_entity_id + row.campaign_name">
+                        <tr class="hover">
+                            <td>
+                                <button class="link" @click="toggleCampaign(row)" x-text="row.campaign_name"></button>
+                            </td>
+                            <td x-text="row.clicks"></td>
+                            <td x-text="row.impressions"></td>
+                            <td x-text="fmtPct(row.ctr)"></td>
+                            <td x-text="fmtMoney(row.cpc)"></td>
+                            <td x-text="fmtMoney(row.cost)"></td>
+                            <td x-text="row.roi ?? '-'"></td>
+                            <td x-text="row.poas ?? '-'"></td>
+                            <td x-text="fmtMoney(row.real_profit)"></td>
+                            <td x-text="row.sale_count"></td>
+                            <td x-text="fmtMoney(row.sale_value)"></td>
+                        </tr>
+                        <tr x-show="expandedCampaign === row.campaign_entity_id" x-cloak>
+                            <td colspan="12" class="bg-base-300/30">
+                                <div class="text-sm font-medium mb-2">Sprzedane oferty</div>
+                                <table class="table table-xs">
+                                    <thead><tr><th>Oferta</th><th>ID</th><th>Szt.</th><th>Wartość</th><th>Realny zysk</th><th>POAS</th></tr></thead>
+                                    <tbody>
+                                        <template x-for="item in row.sold_items" :key="item.offer_id">
+                                            <tr>
+                                                <td x-text="item.offer_name"></td>
+                                                <td>
+                                                    <a class="link" :href="'https://allegro.pl/oferta/' + item.offer_id" target="_blank" rel="noopener" x-text="item.offer_id"></a>
+                                                </td>
+                                                <td x-text="item.quantity"></td>
+                                                <td x-text="fmtMoney(item.sale_value)"></td>
+                                                <td x-text="fmtMoney(item.real_profit)"></td>
+                                                <td x-text="item.poas ?? '-'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </section>
+    </template>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+<script>
+function adsPanelStats() {
+    return {
+        loading: false,
+        syncing: false,
+        error: null,
+        data: null,
+        meta: {},
+        expandedCampaign: null,
+        chart: null,
+        get summaryAll() {
+            return (this.data?.campaigns || []).find(c => c.campaign_name === 'Wszystkie kampanie') || {};
+        },
+        fmtMoney(v) {
+            if (v === null || v === undefined || v === '') return '-';
+            return Number(v).toFixed(2) + ' zł';
+        },
+        fmtPct(v) {
+            if (v === null || v === undefined) return '-';
+            return (Number(v) * 100).toFixed(2) + '%';
+        },
+        toggleCampaign(row) {
+            this.expandedCampaign = this.expandedCampaign === row.campaign_entity_id ? null : row.campaign_entity_id;
+        },
+        async init() {
+            await this.load();
+        },
+        async load() {
+            this.loading = true;
+            this.error = null;
+            try {
+                const r = await fetch('/api/stats/ads-panel');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const payload = await r.json();
+                this.data = payload.data;
+                this.meta = {
+                    synced_at: payload.data?.synced_at || null,
+                    period: payload.data ? `${payload.data.period_start} – ${payload.data.period_end}` : '',
+                };
+                this.$nextTick(() => this.renderChart());
+            } catch (e) {
+                this.error = e.message || 'Błąd ładowania';
+            } finally {
+                this.loading = false;
+            }
+        },
+        async syncNow() {
+            this.syncing = true;
+            this.error = null;
+            try {
+                const r = await fetch('/api/stats/ads-panel/sync', { method: 'POST', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || '' } });
+                const payload = await r.json();
+                if (!r.ok) throw new Error(payload?.error?.message || 'Sync failed');
+                await this.load();
+            } catch (e) {
+                this.error = e.message || 'Synchronizacja nie powiodła się';
+            } finally {
+                this.syncing = false;
+            }
+        },
+        renderChart() {
+            const canvas = document.getElementById('adsPanelChart');
+            if (!canvas || !this.data?.chart?.length) return;
+            if (this.chart) this.chart.destroy();
+            const labels = this.data.chart.map(p => p.day);
+            this.chart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Koszt', data: this.data.chart.map(p => p.cost), borderColor: '#ff7a18', tension: 0.25 },
+                        { label: 'Kliknięcia', data: this.data.chart.map(p => p.clicks), borderColor: '#f9c74f', tension: 0.25, yAxisID: 'y1' },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'PLN' } },
+                        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } },
+                    },
+                },
+            });
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -17,6 +17,7 @@ from .orders import bp as orders_bp
 from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import promo_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import billing_types_scheduler  # noqa: F401 - publiczny import kompatybilnosci
+from . import allegro_ads_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from .app import bp as main_bp, start_print_agent, ensure_db_initialized
 from .discussions import bp as discussions_bp
 from .diagnostics import bp as diagnostics_bp
