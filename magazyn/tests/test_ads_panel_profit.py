@@ -4,6 +4,8 @@ from decimal import Decimal
 from magazyn.db import get_session
 from magazyn.models.orders import Order, OrderProduct
 from magazyn.services.allegro_ads_panel.profit import compute_profit_by_offer
+from magazyn.services.stats_api_ads_panel import _sold_item_metrics
+from magazyn.models.orders import Order, OrderProduct
 
 
 def test_compute_profit_by_offer_splits_order_profit(app):
@@ -45,3 +47,17 @@ def test_compute_profit_by_offer_splits_order_profit(app):
     assert result["111"]["real_profit"] == Decimal("25.00")
     assert result["111"]["real_revenue"] == Decimal("100.00")
     assert result["111"]["orders"] == 1
+
+
+def test_sold_item_metrics_per_unit():
+    item = type("Item", (), {"offer_id": "1", "offer_name": "Test", "quantity": 4, "sale_value": Decimal("400")})()
+    metrics = _sold_item_metrics(
+        item=item,
+        campaign_cost=Decimal("100"),
+        campaign_sale_value=Decimal("400"),
+        offer_profit={"real_profit": Decimal("80"), "real_revenue": Decimal("400"), "orders": 2},
+    )
+    assert metrics["ad_cost"] == 100.0
+    assert metrics["ad_cost_per_unit"] == 25.0
+    assert metrics["net_profit"] == -20.0
+    assert metrics["net_profit_per_unit"] == -5.0

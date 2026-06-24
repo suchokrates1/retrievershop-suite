@@ -6,7 +6,6 @@
     --stats-accent: #ff7a18;
     --stats-accent-2: #f9c74f;
     --stats-surface: linear-gradient(135deg, rgba(17, 56, 62, 0.95), rgba(33, 89, 95, 0.88));
-    --stats-card: rgba(255, 255, 255, 0.06);
 }
 .stats-hero {
     background: radial-gradient(1200px 600px at 0% 0%, rgba(249, 199, 79, 0.35), transparent 45%),
@@ -21,11 +20,13 @@
     padding: 1rem;
 }
 .chart-canvas-shell { position: relative; width: 100%; height: 300px; }
+.profit-positive { color: #4ade80; }
+.profit-negative { color: #f87171; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="stats-shell" x-data="adsPanelStats()" x-init="init()">
+<div class="stats-shell pb-10" x-data="adsPanelStats()" x-init="init()">
     {% include "partials/stats_nav.html" %}
 
     <section class="stats-hero p-6 md:p-8 mb-6">
@@ -33,7 +34,7 @@
             <div>
                 <p class="text-sm uppercase tracking-wider opacity-80">Allegro Sales Center</p>
                 <h1 class="text-3xl md:text-4xl font-bold">Statystyki Ads</h1>
-                <p class="opacity-80 mt-2">Dane z panelu Allegro Ads: kampanie, koszty, sprzedaż i oferty.</p>
+                <p class="opacity-80 mt-2">Kampanie, koszty reklamy, sprzedaż i realny zysk po odjęciu reklamy.</p>
                 <p class="text-sm opacity-70 mt-2" x-show="meta.period" x-text="meta.period"></p>
                 <p class="text-xs opacity-60" x-show="meta.synced_at" x-text="'Ostatnia synchronizacja: ' + meta.synced_at"></p>
             </div>
@@ -47,49 +48,101 @@
         </div>
     </section>
 
-    <template x-if="error">
-        <div class="alert alert-error mb-4"><span x-text="error"></span></div>
-    </template>
+    <div x-show="error" x-cloak class="alert alert-error mb-4"><span x-text="error"></span></div>
+    <div x-show="loading" class="skeleton h-40 w-full mb-4"></div>
+    <div x-show="!loading && !data" x-cloak class="alert alert-warning mb-4">
+        Brak danych. Uruchom synchronizację (scheduler codziennie o 8:00 lub przycisk powyżej).
+    </div>
 
-    <template x-if="loading">
-        <div class="skeleton h-40 w-full mb-4"></div>
-    </template>
-
-    <template x-if="!loading && !data">
-        <div class="alert alert-warning">Brak danych. Uruchom synchronizację (scheduler codziennie o 8:00 lub przycisk powyżej).</div>
-    </template>
-
-    <template x-if="!loading && data">
-        <section class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+    <div x-show="!loading && data" x-cloak>
+        <section class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
             <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="text-xs opacity-70">Koszt brutto (wszystkie)</div>
-                <div class="text-2xl font-bold" x-text="fmtMoney(summaryAll.cost)"></div>
-            </div>
-            <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="text-xs opacity-70">Kliknięcia</div>
-                <div class="text-2xl font-bold" x-text="summaryAll.clicks || 0"></div>
-            </div>
-            <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="text-xs opacity-70">ROAS (panel)</div>
-                <div class="text-2xl font-bold" x-text="summaryAll.roi ?? '-'"></div>
-            </div>
-            <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="text-xs opacity-70">POAS (realny zysk)</div>
-                <div class="text-2xl font-bold" x-text="summaryAll.poas ?? '-'"></div>
-            </div>
-            <div class="stat bg-base-200 rounded-xl p-4">
-                <div class="text-xs opacity-70">Realny zysk</div>
-                <div class="text-2xl font-bold" x-text="fmtMoney(summaryAll.real_profit)"></div>
+                <div class="text-xs opacity-70">Koszt reklamy</div>
+                <div class="text-xl font-bold" x-text="fmtMoney(summaryAll.cost)"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Sprzedane szt.</div>
-                <div class="text-2xl font-bold" x-text="summaryAll.sale_count || 0"></div>
+                <div class="text-xl font-bold" x-text="summaryAll.sale_count || 0"></div>
             </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">ROAS (panel)</div>
+                <div class="text-xl font-bold" x-text="summaryAll.roi ?? '-'"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Realny zysk</div>
+                <div class="text-xl font-bold" x-text="fmtMoney(summaryAll.real_profit)"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Zysk po reklamie</div>
+                <div class="text-xl font-bold" :class="profitClass(summaryAll.net_profit)" x-text="fmtMoney(summaryAll.net_profit)"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">POAS</div>
+                <div class="text-xl font-bold" x-text="summaryAll.poas ?? '-'"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Koszt reklamy / szt.</div>
+                <div class="text-xl font-bold" x-text="fmtPerUnit(summaryAll.cost, summaryAll.sale_count)"></div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="text-xs opacity-70">Zysk / szt. po reklamie</div>
+                <div class="text-xl font-bold" :class="profitClass(summaryAll.net_profit)" x-text="fmtPerUnit(summaryAll.net_profit, summaryAll.sale_count)"></div>
+            </div>
+        </section>
+
+        <section class="chart-wrap mb-6 overflow-x-auto">
+            <h3 class="font-semibold mb-1">Sprzedaż z reklamą — lista produktów</h3>
+            <p class="text-xs opacity-70 mb-3">
+                Koszt reklamy = udział kampanii wg wartości sprzedaży oferty.
+                Koszt/szt. = koszt reklamy ÷ ilość. Zysk po reklamie = realny zysk − koszt reklamy.
+            </p>
+            <table class="table table-sm table-zebra">
+                <thead>
+                    <tr>
+                        <th>Kampania</th>
+                        <th>Oferta</th>
+                        <th>ID</th>
+                        <th>Szt.</th>
+                        <th>Wartość</th>
+                        <th>Koszt reklamy</th>
+                        <th>Koszt/szt.</th>
+                        <th>Realny zysk</th>
+                        <th>Zysk/szt.</th>
+                        <th>Zysk po reklamie</th>
+                        <th>Zysk/szt. po rekl.</th>
+                        <th>POAS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="row in data.ad_sales || []" :key="row.campaign_entity_id + '-' + row.offer_id">
+                        <tr>
+                            <td x-text="row.campaign_name"></td>
+                            <td class="max-w-[14rem] truncate" :title="row.offer_name" x-text="row.offer_name"></td>
+                            <td>
+                                <a class="link" :href="'https://allegro.pl/oferta/' + row.offer_id" target="_blank" rel="noopener" x-text="row.offer_id"></a>
+                            </td>
+                            <td x-text="row.quantity"></td>
+                            <td x-text="fmtMoney(row.sale_value)"></td>
+                            <td x-text="fmtMoney(row.ad_cost)"></td>
+                            <td x-text="fmtMoney(row.ad_cost_per_unit)"></td>
+                            <td x-text="fmtMoney(row.real_profit)"></td>
+                            <td x-text="fmtMoney(row.real_profit_per_unit)"></td>
+                            <td :class="profitClass(row.net_profit)" x-text="fmtMoney(row.net_profit)"></td>
+                            <td :class="profitClass(row.net_profit_per_unit)" x-text="fmtMoney(row.net_profit_per_unit)"></td>
+                            <td x-text="row.poas ?? '-'"></td>
+                        </tr>
+                    </template>
+                    <tr x-show="!(data.ad_sales || []).length">
+                        <td colspan="12" class="text-center opacity-60">Brak sprzedanych ofert w snapshotcie.</td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
 
         <section class="chart-wrap mb-6">
             <h3 class="font-semibold mb-3">Wykres dzienny (bieżący miesiąc)</h3>
             <div class="chart-canvas-shell"><canvas id="adsPanelChart"></canvas></div>
+            <p x-show="!(data.chart || []).length" class="text-sm opacity-60 mt-2">Brak punktów wykresu.</p>
         </section>
 
         <section class="chart-wrap mb-6 overflow-x-auto">
@@ -99,61 +152,33 @@
                     <tr>
                         <th>Kampania</th>
                         <th>Kliknięcia</th>
-                        <th>Odsłony</th>
-                        <th>CTR</th>
-                        <th>CPC</th>
                         <th>Koszt</th>
-                        <th>ROAS (panel)</th>
-                        <th>POAS</th>
+                        <th>ROAS</th>
                         <th>Realny zysk</th>
+                        <th>Zysk po reklamie</th>
+                        <th>POAS</th>
                         <th>Sprzedane</th>
                         <th>Wartość</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="row in data.campaigns" :key="row.campaign_entity_id + row.campaign_name">
+                    <template x-for="row in data.campaigns || []" :key="row.campaign_entity_id + row.campaign_name">
                         <tr class="hover">
-                            <td>
-                                <button class="link" @click="toggleCampaign(row)" x-text="row.campaign_name"></button>
-                            </td>
+                            <td class="font-medium" x-text="row.campaign_name"></td>
                             <td x-text="row.clicks"></td>
-                            <td x-text="row.impressions"></td>
-                            <td x-text="fmtPct(row.ctr)"></td>
-                            <td x-text="fmtMoney(row.cpc)"></td>
                             <td x-text="fmtMoney(row.cost)"></td>
                             <td x-text="row.roi ?? '-'"></td>
-                            <td x-text="row.poas ?? '-'"></td>
                             <td x-text="fmtMoney(row.real_profit)"></td>
+                            <td :class="profitClass(row.net_profit)" x-text="fmtMoney(row.net_profit)"></td>
+                            <td x-text="row.poas ?? '-'"></td>
                             <td x-text="row.sale_count"></td>
                             <td x-text="fmtMoney(row.sale_value)"></td>
-                        </tr>
-                        <tr x-show="expandedCampaign === row.campaign_entity_id" x-cloak>
-                            <td colspan="12" class="bg-base-300/30">
-                                <div class="text-sm font-medium mb-2">Sprzedane oferty</div>
-                                <table class="table table-xs">
-                                    <thead><tr><th>Oferta</th><th>ID</th><th>Szt.</th><th>Wartość</th><th>Realny zysk</th><th>POAS</th></tr></thead>
-                                    <tbody>
-                                        <template x-for="item in row.sold_items" :key="item.offer_id">
-                                            <tr>
-                                                <td x-text="item.offer_name"></td>
-                                                <td>
-                                                    <a class="link" :href="'https://allegro.pl/oferta/' + item.offer_id" target="_blank" rel="noopener" x-text="item.offer_id"></a>
-                                                </td>
-                                                <td x-text="item.quantity"></td>
-                                                <td x-text="fmtMoney(item.sale_value)"></td>
-                                                <td x-text="fmtMoney(item.real_profit)"></td>
-                                                <td x-text="item.poas ?? '-'"></td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
-                            </td>
                         </tr>
                     </template>
                 </tbody>
             </table>
         </section>
-    </template>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
@@ -165,7 +190,6 @@ function adsPanelStats() {
         error: null,
         data: null,
         meta: {},
-        expandedCampaign: null,
         chart: null,
         get summaryAll() {
             return (this.data?.campaigns || []).find(c => c.campaign_name === 'Wszystkie kampanie') || {};
@@ -174,12 +198,13 @@ function adsPanelStats() {
             if (v === null || v === undefined || v === '') return '-';
             return Number(v).toFixed(2) + ' zł';
         },
-        fmtPct(v) {
-            if (v === null || v === undefined) return '-';
-            return (Number(v) * 100).toFixed(2) + '%';
+        fmtPerUnit(total, qty) {
+            if (total === null || total === undefined || total === '' || !qty) return '-';
+            return (Number(total) / Number(qty)).toFixed(2) + ' zł';
         },
-        toggleCampaign(row) {
-            this.expandedCampaign = this.expandedCampaign === row.campaign_entity_id ? null : row.campaign_entity_id;
+        profitClass(v) {
+            if (v === null || v === undefined || v === '') return '';
+            return Number(v) >= 0 ? 'profit-positive' : 'profit-negative';
         },
         async init() {
             await this.load();
@@ -207,7 +232,10 @@ function adsPanelStats() {
             this.syncing = true;
             this.error = null;
             try {
-                const r = await fetch('/api/stats/ads-panel/sync', { method: 'POST', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || '' } });
+                const r = await fetch('/api/stats/ads-panel/sync', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || '' },
+                });
                 const payload = await r.json();
                 if (!r.ok) throw new Error(payload?.error?.message || 'Sync failed');
                 await this.load();
@@ -219,7 +247,10 @@ function adsPanelStats() {
         },
         renderChart() {
             const canvas = document.getElementById('adsPanelChart');
-            if (!canvas || !this.data?.chart?.length) return;
+            if (!canvas || !this.data?.chart?.length) {
+                if (this.chart) { this.chart.destroy(); this.chart = null; }
+                return;
+            }
             if (this.chart) this.chart.destroy();
             const labels = this.data.chart.map(p => p.day);
             this.chart = new Chart(canvas, {
