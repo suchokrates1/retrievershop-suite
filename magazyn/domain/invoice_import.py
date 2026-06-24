@@ -532,10 +532,11 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                        'fioletowe', 'fioletowy', 'fioletowa', 'fiolet',
                        'brązowe', 'brązowy', 'brązowa',
                        'limonkowe', 'limonkowy', 'limonkowa',
+                       'liliowe', 'liliowy', 'liliowa',
                        'khaki', 'zielony-khaki',
-                       'stalowa róż', 'stalowa różowa']
+                       'stalowa róż', 'stalowa różowa', 'stalowa zieleń']
         # Kolory dwuwyrazowe - lista do sprawdzenia przed petla po slowach
-        _two_word_colors = ['stalowa róż', 'stalowa różowa', 'zielony-khaki']
+        _two_word_colors = ['stalowa róż', 'stalowa różowa', 'stalowa zieleń', 'zielony-khaki']
         
         name_words = name_part.split()
         # Sprawdz kolory dwuwyrazowe na koncu nazwy
@@ -556,6 +557,12 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
             'zielony-khaki': 'zielony', 'khaki': 'zielony',
             'stalowa roz': 'różowy', 'stalowa rozowa': 'różowy',
             'stalowa róż': 'różowy',
+            'stalowa zieleń': 'zielony', 'stalowa zielen': 'zielony',
+            'żółta': 'żółty', 'żółte': 'żółty',
+            'liliowa': 'liliowy', 'liliowe': 'liliowy',
+            'pomarańczowa': 'pomarańczowy', 'pomarańczowe': 'pomarańczowy',
+            'czarne': 'czarny', 'czarna': 'czarny',
+            'różowe': 'różowy', 'różowa': 'różowy',
         }
         color = _color_normalize.get(color.lower(), color)
         
@@ -597,10 +604,11 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _extract_invoice_metadata(text: str) -> Tuple[str, str]:
-    """Extract invoice number and supplier from PDF text."""
+def _extract_invoice_metadata(text: str) -> Tuple[str, str, str | None]:
+    """Extract invoice number, supplier and delivery date from PDF text."""
     invoice_number = None
     supplier = None
+    delivery_date = None
     lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
     for idx, line in enumerate(lines):
         if line == "Numer faktury" and idx + 1 < len(lines):
@@ -615,6 +623,14 @@ def _extract_invoice_metadata(text: str) -> Tuple[str, str]:
                     break
         if invoice_number and supplier:
             break
+
+    delivery_match = re.search(
+        r"Data dostawy:\s*(\d{4}-\d{2}-\d{2})",
+        text,
+        re.IGNORECASE,
+    )
+    if delivery_match:
+        delivery_date = delivery_match.group(1)
     
     # Szukaj numeru faktury: "Faktura FS 2026/02/000006" lub "Faktura VAT 123/2026"
     invoice_match = re.search(r'Faktura\s+(?:FS|VAT)?\s*([A-Z0-9/-]+)', text, re.IGNORECASE)
@@ -639,23 +655,23 @@ def _extract_invoice_metadata(text: str) -> Tuple[str, str]:
             if candidate not in ('Nabywca / Platnik', 'Nabywca', 'Odbiorca'):
                 supplier = candidate
     
-    return invoice_number, supplier
+    return invoice_number, supplier, delivery_date
 
 
-def _parse_pdf(file) -> Tuple[pd.DataFrame, str, str]:
+def _parse_pdf(file) -> Tuple[pd.DataFrame, str, str, str | None]:
     """Parse PDF invoices in various formats.
-    
+
     Returns:
-        Tuple of (DataFrame, invoice_number, supplier)
+        Tuple of (DataFrame, invoice_number, supplier, delivery_date)
     """
     data = file.read()
     file_obj = io.BytesIO(data)
     reader = PdfReader(io.BytesIO(data))
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    
+
     # Wyciagnij metadane faktury
-    invoice_number, supplier = _extract_invoice_metadata(text)
-    
+    invoice_number, supplier, delivery_date = _extract_invoice_metadata(text)
+
     file_obj.seek(0)
     if "Numer KSeF" in text or "Lp. GTIN Indeks" in text:
         df = _parse_ksef_text(text)
@@ -664,24 +680,26 @@ def _parse_pdf(file) -> Tuple[pd.DataFrame, str, str]:
     else:
         file_obj.seek(0)
         df = _parse_simple_pdf(file_obj)
-    
-    return df, invoice_number, supplier
+
+    return df, invoice_number, supplier, delivery_date
 
 
 def _import_invoice_df(
     df: pd.DataFrame,
     invoice_number: str = None,
     supplier: str = None,
+    delivery_date: str | None = None,
 ):
     """Record purchases using rows from a DataFrame.
-    
+
     Args:
         df: DataFrame with columns: Nazwa, Kolor, Rozmiar, Ilość, Cena, Barcode
         invoice_number: Invoice/receipt number for tracking
         supplier: Supplier name
+        delivery_date: Delivery date (YYYY-MM-DD), defaults to today
     """
-    # Jedna data dla calej dostawy/faktury
-    delivery_date = datetime.now().strftime('%Y-%m-%d')
+    if not delivery_date:
+        delivery_date = datetime.now().strftime('%Y-%m-%d')
     for _, row in df.iterrows():
         name = normalize_product_title_fragment(row.get("Nazwa", ""))
         name = resolve_product_alias(name)
@@ -825,21 +843,28 @@ def import_invoice_rows(
     rows: List[Dict],
     invoice_number: str = None,
     supplier: str = None,
+    delivery_date: str | None = None,
 ):
     """Record purchases from a list of row dictionaries.
-    
+
     Args:
         rows: List of dicts with keys: Nazwa, Kolor, Rozmiar, Ilość, Cena, Barcode
         invoice_number: Invoice/receipt number for tracking
         supplier: Supplier name
+        delivery_date: Delivery date (YYYY-MM-DD)
     """
     df = pd.DataFrame(rows)
-    _import_invoice_df(df, invoice_number=invoice_number, supplier=supplier)
+    _import_invoice_df(
+        df,
+        invoice_number=invoice_number,
+        supplier=supplier,
+        delivery_date=delivery_date,
+    )
 
 
 def import_invoice_file(file, invoice_number: str = None, supplier: str = None):
     """Parse uploaded invoice (Excel or PDF) and record purchases.
-    
+
     Args:
         file: File object with filename attribute
         invoice_number: Optional override for invoice number
@@ -847,10 +872,11 @@ def import_invoice_file(file, invoice_number: str = None, supplier: str = None):
     """
     filename = file.filename or ""
     ext = filename.rsplit(".", 1)[-1].lower()
+    delivery_date = None
     if ext in {"xlsx", "xls"}:
         df = pd.read_excel(file)
     elif ext == "pdf":
-        df, pdf_invoice_number, pdf_supplier = _parse_pdf(file)
+        df, pdf_invoice_number, pdf_supplier, delivery_date = _parse_pdf(file)
         # Użyj danych z PDF jeśli nie podano nadpisania
         if not invoice_number:
             invoice_number = pdf_invoice_number
@@ -859,7 +885,12 @@ def import_invoice_file(file, invoice_number: str = None, supplier: str = None):
     else:
         raise ValueError("Nieobsługiwany format pliku")
 
-    _import_invoice_df(df, invoice_number=invoice_number, supplier=supplier)
+    _import_invoice_df(
+        df,
+        invoice_number=invoice_number,
+        supplier=supplier,
+        delivery_date=delivery_date,
+    )
 
 
 __all__ = [

@@ -273,11 +273,12 @@ def import_invoice():
                 pdf_path = None
                 invoice_number = None
                 supplier = None
+                delivery_date = None
                 
                 if ext in {"xlsx", "xls"}:
                     df = pd.read_excel(io.BytesIO(data))
                 elif ext == "pdf":
-                    df, invoice_number, supplier = _parse_pdf(io.BytesIO(data))
+                    df, invoice_number, supplier, delivery_date = _parse_pdf(io.BytesIO(data))
                     tmp = tempfile.NamedTemporaryFile(
                         delete=False, suffix=".pdf"
                     )
@@ -292,6 +293,7 @@ def import_invoice():
                 session["invoice_rows"] = rows
                 session["invoice_number"] = invoice_number
                 session["invoice_supplier"] = supplier
+                session["invoice_delivery_date"] = delivery_date
                 if pdf_path:
                     session["invoice_pdf"] = pdf_path
                 else:
@@ -329,6 +331,7 @@ def confirm_invoice():
     rows = session.get("invoice_rows") or []
     invoice_number = session.get("invoice_number")
     supplier = session.get("invoice_supplier")
+    delivery_date = session.get("invoice_delivery_date")
     confirmed = []
     for idx, base in enumerate(rows):
         if not request.form.get(f"accept_{idx}"):
@@ -369,7 +372,12 @@ def confirm_invoice():
         )
     if confirmed:
         try:
-            import_invoice_rows(confirmed, invoice_number=invoice_number, supplier=supplier)
+            import_invoice_rows(
+                confirmed,
+                invoice_number=invoice_number,
+                supplier=supplier,
+                delivery_date=delivery_date,
+            )
             flash("Zaimportowano fakture", "success")
         except Exception as exc:
             logger.exception("Blad podczas potwierdzania faktury")
