@@ -211,10 +211,11 @@ Lp. GTIN Indeks
 """
 
     df = _parse_ksef_text(text)
-    invoice_number, supplier = _extract_invoice_metadata(text)
+    invoice_number, supplier, delivery_date = _extract_invoice_metadata(text)
 
     assert invoice_number == "FS 2026/05/000415"
     assert supplier == "TIP-TOP Agnieszka Pawlicka"
+    assert delivery_date is None
     assert len(df) == 4
     assert df.iloc[0].to_dict() | {"Cena": round(df.iloc[0]["Cena"], 2)} == {
         "Nazwa": "Smycz dla psa z amortyzatorem Truelove Adventure",
