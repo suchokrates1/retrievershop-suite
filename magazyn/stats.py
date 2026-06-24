@@ -48,6 +48,7 @@ from .services import stats_api_returns as _returns_endpoints
 from .services import stats_api_billing as _billing_endpoints
 from .services import stats_api_logistics as _logistics_endpoints
 from .services import stats_api_catalog as _catalog_endpoints
+from .services import stats_api_ads_panel as _ads_panel_endpoints
 from .services import stats_api_support as _support_endpoints
 
 
@@ -118,6 +119,18 @@ def stats_ads_offer_analytics():
 @login_required
 def stats_refund_timeline():
     return _returns_endpoints.stats_refund_timeline()
+
+
+@bp.route("/ads-panel")
+@login_required
+def stats_ads_panel_overview():
+    return _ads_panel_endpoints.stats_ads_panel_overview()
+
+
+@bp.route("/ads-panel/sync", methods=["POST"])
+@login_required
+def stats_ads_panel_sync():
+    return _ads_panel_endpoints.stats_ads_panel_sync()
 
 
 @bp.route("/returns")

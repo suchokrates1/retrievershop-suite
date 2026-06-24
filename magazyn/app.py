@@ -256,9 +256,17 @@ def dashboard_heavy():
 @bp.route("/stats")
 @login_required
 def stats_dashboard():
-    """Widok dashboardu statystyk (Sprint 5)."""
+    """Widok ogolnych statystyk operacyjnych."""
     username = session["username"]
-    return render_template("stats_dashboard.html", username=username)
+    return render_template("stats_dashboard.html", username=username, stats_tab="general")
+
+
+@bp.route("/stats/ads")
+@login_required
+def stats_ads_dashboard():
+    """Widok statystyk Allegro Ads Panel."""
+    username = session["username"]
+    return render_template("stats_ads_dashboard.html", username=username, stats_tab="ads")
 
 
 @bp.route("/stats/billing-types")

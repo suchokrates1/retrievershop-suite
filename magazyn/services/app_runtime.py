@@ -14,13 +14,14 @@ class PrintAgentStartResult:
 
 
 def register_shutdown_hooks() -> None:
-    from .. import billing_types_scheduler, order_sync_scheduler, promo_scheduler
+    from .. import billing_types_scheduler, order_sync_scheduler, promo_scheduler, allegro_ads_scheduler
     from .print_agent_runtime import agent as label_agent
 
     atexit.register(label_agent.stop_agent_thread)
     atexit.register(order_sync_scheduler.stop_sync_scheduler)
     atexit.register(promo_scheduler.stop_promo_scheduler)
     atexit.register(billing_types_scheduler.stop_billing_types_scheduler)
+    atexit.register(allegro_ads_scheduler.stop_allegro_ads_scheduler)
 
 
 def start_order_sync_scheduler(app: Any) -> None:
@@ -39,6 +40,12 @@ def start_billing_types_scheduler(app: Any) -> None:
     from .. import billing_types_scheduler
 
     billing_types_scheduler.start_billing_types_scheduler(app)
+
+
+def start_allegro_ads_scheduler(app: Any) -> None:
+    from .. import allegro_ads_scheduler
+
+    allegro_ads_scheduler.start_allegro_ads_scheduler(app)
 
 
 def start_price_report_scheduler(app: Any) -> None:
@@ -96,6 +103,9 @@ def start_gunicorn_worker_runtime(app: Any, worker_log: Any, worker_pid: int) ->
 
     start_billing_types_scheduler(app)
     worker_log.info(f"Billing types scheduler started in worker {worker_pid}")
+
+    start_allegro_ads_scheduler(app)
+    worker_log.info(f"Allegro Ads scheduler started in worker {worker_pid}")
 
     auto_resume_incomplete_price_reports(app)
     worker_log.info(f"Auto-resume incomplete reports done in worker {worker_pid}")
