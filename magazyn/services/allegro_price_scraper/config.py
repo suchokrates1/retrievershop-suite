@@ -20,9 +20,8 @@ COMPETITOR_PRICES_ARE_NET = os.environ.get("ALLEGRO_COMPETITOR_PRICES_ARE_NET", 
     "true",
     "yes",
 }
-# Gdy dialog CDP nie wstanie (lazy-load nie wyzwoli sie), uzyj podsumowania SSR (HTTP)
-# z business.allegro.pl jako fallback dla najtanszej oferty + liczby konkurentow.
-PRICE_CHECK_HTTP_FALLBACK = os.environ.get("ALLEGRO_PRICE_CHECK_HTTP_FALLBACK", "true").lower() in {
+# Przy bloku / braku dialogu: Google -> allegro.pl -> oferta (ludzka sciezka w CDP).
+ENABLE_GOOGLE_WARMUP = os.environ.get("ALLEGRO_ENABLE_GOOGLE_WARMUP", "true").lower() in {
     "1",
     "true",
     "yes",
