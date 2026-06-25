@@ -7,7 +7,7 @@ import re
 import urllib.parse
 from typing import Any
 
-from .config import MY_SELLER
+from .config import MY_SELLER, COMPETITOR_PRICES_ARE_NET, STANDARD_VAT_RATE
 from .delivery import parse_delivery_days
 from .models import CompetitorOffer
 
@@ -29,6 +29,106 @@ def parse_price(price_str: str) -> float:
     if "," in normalized:
         normalized = normalized.replace(".", "").replace(",", ".")
     return float(normalized)
+
+
+def is_net_price_label(text: str | None) -> bool:
+    """True gdy etykieta lub fragment tekstu wskazuje cene netto (nie brutto)."""
+    if not text:
+        return False
+
+    normalized = text.lower().translate(str.maketrans("ąćęłńóśźż", "acelnoszz"))
+    if "brutto" in normalized:
+        return False
+    return bool(re.search(r"\bnetto\b", normalized))
+
+
+def is_net_price_article(text: str, aria_label: str | None = None) -> bool:
+    """Wykrywa czy kafelek oferty pokazuje cene netto (konto firmowe Allegro)."""
+    if is_net_price_label(aria_label):
+        return True
+
+    if not text:
+        return False
+
+    normalized = text.lower().translate(str.maketrans("ąćęłńóśźż", "acelnoszz"))
+    if "brutto" in normalized:
+        return False
+
+    for line in normalized.splitlines():
+        if "netto" not in line:
+            continue
+        if re.search(r"\d+(?:[.,]\d{2})?\s*zl", line):
+            return True
+
+    lines = normalized.splitlines()
+    for index, line in enumerate(lines):
+        if "netto" not in line:
+            continue
+        window = "\n".join(lines[max(0, index - 1) : index + 2])
+        if re.search(r"\d+(?:[.,]\d{2})?\s*zl", window):
+            return True
+
+    return bool(
+        re.search(r"\d+(?:[.,]\d{2})?\s*zl[^\n]{0,40}\bnetto\b", normalized)
+        or re.search(r"\bnetto\b[^\n]{0,40}\d+(?:[.,]\d{2})?\s*zl", normalized)
+    )
+
+
+def gross_from_net(net_price: float, vat_rate: float = STANDARD_VAT_RATE) -> float:
+    """Konwertuje cene netto na brutto (zaokraglenie do groszy)."""
+    return round(net_price * (1.0 + vat_rate), 2)
+
+
+_VAT_GROSS_RE = re.compile(
+    r"([\d\s\u00a0\u202f]+,\d{2})\s*z[łl]\s*z\s*\d{1,2}\s*%\s*VAT", re.IGNORECASE
+)
+_VAT_DELIVERY_GROSS_RE = re.compile(
+    r"([\d\s\u00a0\u202f]+,\d{2})\s*z[łl]\s*z\s*dostaw[aąy][^\n]*?z\s*VAT", re.IGNORECASE
+)
+_NO_VAT_RE = re.compile(r"\bbez\s+VAT\b", re.IGNORECASE)
+
+
+def _first_price(pattern: re.Pattern[str], text: str) -> float | None:
+    match = pattern.search(text or "")
+    if not match:
+        return None
+    try:
+        return parse_price(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def resolve_gross_prices(
+    text: str,
+    net_price: float,
+    net_total: float,
+    assume_net: bool,
+) -> tuple[float, float, str]:
+    """Ustala brutto na podstawie jawnego VAT z tekstu kafelka.
+
+    Allegro na koncie firmowym pokazuje obok ceny netto dokladne brutto:
+    ``231,00 zl z 23% VAT`` (jawny VAT) albo ``219,99 zl bez VAT`` (sprzedawca
+    zwolniony -> brutto == netto). Korzystamy z tego zamiast slepego x1.23.
+
+    Zwraca (brutto, brutto_z_dostawa, zrodlo).
+    """
+    explicit = _first_price(_VAT_GROSS_RE, text)
+    if explicit is not None:
+        gross, source = explicit, "vat_line"
+    elif _NO_VAT_RE.search(text or ""):
+        gross, source = net_price, "bez_vat"
+    elif assume_net:
+        gross, source = gross_from_net(net_price), "assumed_net"
+    else:
+        gross, source = net_price, "as_is"
+
+    ratio = (gross / net_price) if net_price else 1.0
+    explicit_delivery = _first_price(_VAT_DELIVERY_GROSS_RE, text)
+    if explicit_delivery is not None:
+        gross_total = explicit_delivery
+    else:
+        gross_total = round(net_total * ratio, 2)
+    return gross, gross_total, source
 
 
 def normalize_seller_name(seller_name: str) -> str:
@@ -69,10 +169,18 @@ def is_excluded_offer_condition(condition: str) -> bool:
     return condition in {"powystawowy", "uzywany", "odnowiony"}
 
 
-def parse_competitor_articles(articles: list[dict[str, Any]], product_title: str = "") -> list[CompetitorOffer]:
+def parse_competitor_articles(
+    articles: list[dict[str, Any]],
+    product_title: str = "",
+    dialog_shows_net_prices: bool = False,
+    competitor_prices_are_net: bool | None = None,
+) -> list[CompetitorOffer]:
     """Parsuje surowe artykuly z dialogu na oferty konkurencji."""
     if not articles:
         return []
+
+    if competitor_prices_are_net is None:
+        competitor_prices_are_net = COMPETITOR_PRICES_ARE_NET
 
     offers = []
     for article in articles:
@@ -94,6 +202,7 @@ def parse_competitor_articles(articles: list[dict[str, Any]], product_title: str
             seller_match = re.search(r"\bod\s*\n(?:Super Sprzedawcy\s*\n)?\s*(\S+)", text)
 
         aria_price = article.get("ariaPrice")
+        aria_price_label = article.get("ariaPriceLabel")
         delivery_match = re.search(r"(\d+(?:,\d{2})?)\s*zł\s*z\s*dostaw", text)
         delivery_price_str = delivery_match.group(1) if delivery_match else None
 
@@ -134,6 +243,25 @@ def parse_competitor_articles(articles: list[dict[str, Any]], product_title: str
                 exc,
             )
             continue
+
+        assume_net = (
+            competitor_prices_are_net
+            or dialog_shows_net_prices
+            or is_net_price_article(text, aria_price_label)
+        )
+        if assume_net and "brutto" in (aria_price_label or "").lower():
+            assume_net = False
+
+        net_price = price
+        price, total, gross_source = resolve_gross_prices(text, price, total, assume_net)
+        if gross_source != "as_is" and price != net_price:
+            logger.debug(
+                "Article %s: cena netto %s -> brutto %s (zrodlo=%s)",
+                article.get("index"),
+                net_price,
+                price,
+                gross_source,
+            )
 
         if price < 1.0:
             logger.warning(

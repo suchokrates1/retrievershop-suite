@@ -128,7 +128,7 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
     fast_mode=True: tryb reczny - pomija pauze nocna i czeka losowo
     MANUAL_MIN_BATCH_DELAY..MANUAL_MAX_BATCH_DELAY minut miedzy partiami.
     """
-    from .scripts.price_checker_ws import CDP_HOST, CDP_PORT
+    from .scripts.price_checker_ws import CDP_HOST, CDP_PORT_PRICE_CHECK
     run_report_worker(
         app,
         report_id,
@@ -148,7 +148,7 @@ def _report_worker(app, report_id: int, schedule: List[datetime], fast_mode: boo
         finalize_report=finalize_report,
         send_report_notification=send_report_notification,
         cdp_host=CDP_HOST,
-        cdp_port=CDP_PORT,
+        cdp_port=CDP_PORT_PRICE_CHECK,
     )
 
 

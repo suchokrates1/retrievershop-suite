@@ -46,7 +46,7 @@ def recheck_report_item(
     max_discount_provider: Callable[[], float],
 ) -> dict[str, Any]:
     from ..allegro_api.offers import get_offer_badge_price, get_offer_details
-    from ..scripts.price_checker_ws import CDP_HOST, CDP_PORT, MAX_DELIVERY_DAYS, check_offer_price
+    from ..scripts.price_checker_ws import CDP_HOST, CDP_PORT_PRICE_CHECK, MAX_DELIVERY_DAYS, check_offer_price
 
     try:
         with get_session() as session:
@@ -125,7 +125,7 @@ def recheck_report_item(
                     title,
                     current_our_price,
                     CDP_HOST,
-                    CDP_PORT,
+                    CDP_PORT_PRICE_CHECK,
                     MAX_DELIVERY_DAYS,
                 )
             )

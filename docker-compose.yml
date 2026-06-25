@@ -47,6 +47,7 @@ services:
       - CUPS_SERVER=/var/run/cups/cups.sock
       - CDP_HOST=192.168.31.5
       - CDP_PORT=9223
+      - ALLEGRO_COMPETITOR_PRICES_ARE_NET=true
       - TZ=Europe/Warsaw
     user: root
     command: ["gunicorn", "magazyn.wsgi:app", "--config", "/app/magazyn/gunicorn.conf.py"]
