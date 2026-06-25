@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 
 try:
     import websockets
@@ -15,9 +16,12 @@ from .cdp import (
     cdp_call,
     close_page_target,
     create_isolated_page_target,
+    detect_block_page,
     fetch_competitor_offer_payload,
     navigate_to_url,
+    scroll_competitor_dialog,
     wait_for_dialog,
+    warmup_via_google,
 )
 from .config import (
     CDP_ARTICLE_POLL_ATTEMPTS,
@@ -26,8 +30,8 @@ from .config import (
     CDP_HTTP_TIMEOUT_SECONDS,
     CDP_PORT,
     CDP_PORT_PRICE_CHECK,
+    ENABLE_GOOGLE_WARMUP,
     MAX_DELIVERY_DAYS,
-    PRICE_CHECK_HTTP_FALLBACK,
 )
 from .db import get_excluded_sellers
 from .models import CompetitorOffer, PriceCheckResult
@@ -36,72 +40,51 @@ from .parser import build_offer_url, filter_competitor_offers, parse_competitor_
 logger = logging.getLogger(__name__)
 
 
-def _maybe_http_fallback(
-    offer_id: str,
-    my_price: float | None,
-    cdp_host: str,
-    cdp_port: int,
-) -> PriceCheckResult | None:
-    """Wywoluje fallback SSR tylko gdy wlaczony flaga konfiguracyjna."""
-    if not PRICE_CHECK_HTTP_FALLBACK:
-        return None
-    return _http_ssr_fallback(offer_id, my_price, cdp_host, cdp_port)
+async def _poll_dialog_offers(ws, title: str) -> tuple[list[CompetitorOffer], dict, bool]:
+    """Czeka na dialog, przewija i parsuje oferty konkurencji."""
+    await scroll_competitor_dialog(ws)
 
+    payload: dict = {
+        "articleCount": 0,
+        "articles": [],
+        "containerSource": None,
+        "dialogShowsNetPrices": False,
+    }
+    dialog_shows_net_prices = False
+    fetch_msg_id = 200
 
-def _http_ssr_fallback(
-    offer_id: str,
-    my_price: float | None,
-    cdp_host: str,
-    cdp_port: int,
-) -> PriceCheckResult | None:
-    """Fallback przez SSR HTTP gdy dialog CDP nie wstanie.
-
-    Daje najtanszego konkurenta (brutto z VAT) i liczbe ofert z podsumowania
-    Allegro. Pozycja jest przyblizona (SSR podaje tylko NAJTANIEJ/NAJSZYBCIEJ),
-    dlatego wynik jest oznaczony jako zrodlo 'ssr'.
-    """
-    try:
-        from .http_offers import cheapest_gross_from_snapshot, fetch_offer_ssr_snapshot
-        from .session import fetch_allegro_session
-    except Exception as exc:  # pragma: no cover - brak zaleznosci
-        logger.debug("Fallback SSR niedostepny: %s", exc)
-        return None
-
-    try:
-        snapshot = fetch_offer_ssr_snapshot(
-            offer_id, session=fetch_allegro_session(cdp_host, cdp_port)
+    for _ in range(CDP_ARTICLE_POLL_ATTEMPTS):
+        payload = await fetch_competitor_offer_payload(ws, msg_id=fetch_msg_id)
+        fetch_msg_id += 1
+        dialog_shows_net_prices = bool(payload.get("dialogShowsNetPrices"))
+        offers = parse_competitor_articles(
+            payload.get("articles", []),
+            title,
+            dialog_shows_net_prices=dialog_shows_net_prices,
         )
-    except Exception as exc:
-        logger.warning("Fallback SSR oferty %s nie powiodl sie: %s", offer_id, exc)
-        return None
+        if offers:
+            return offers, payload, dialog_shows_net_prices
+        if payload.get("articleCount", 0) > 0:
+            await scroll_competitor_dialog(ws)
+        await asyncio.sleep(CDP_ARTICLE_POLL_INTERVAL_SECONDS)
 
-    if not snapshot:
-        return None
+    return [], payload, dialog_shows_net_prices
 
-    cheapest_gross = cheapest_gross_from_snapshot(snapshot)
-    if cheapest_gross is None:
-        return None
 
-    result = PriceCheckResult(offer_id=offer_id, success=True, my_price=my_price)
-    result.source = "ssr"
-    result.competitors_all_count = snapshot.offer_count
-    cheapest = CompetitorOffer(
-        seller="(SSR podsumowanie)",
-        price=cheapest_gross,
-        price_with_delivery=cheapest_gross,
-        is_mine=False,
-    )
-    result.competitors = [cheapest]
-    result.cheapest_competitor = cheapest
-    if my_price:
-        result.my_position = 1 if my_price <= cheapest_gross else 2
-    logger.info(
-        "Oferta %s: fallback SSR -> najtanszy konkurent %.2f zl brutto (%s ofert)",
-        offer_id,
-        cheapest_gross,
-        snapshot.offer_count,
-    )
-    return result
+async def _open_offer_page(ws, url: str, *, via_google: bool) -> bool:
+    """Laduje strone oferty. Przy via_google najpierw warm-up przez wyszukiwarke."""
+    if via_google and ENABLE_GOOGLE_WARMUP:
+        await warmup_via_google(ws)
+        await asyncio.sleep(random.uniform(1.5, 3.5))
+
+    await navigate_to_url(ws, url)
+    await asyncio.sleep(random.uniform(0.5, 1.5))
+
+    blocked = await detect_block_page(ws)
+    dialog_ok = await wait_for_dialog(ws)
+    if blocked:
+        logger.info("Wykryto blokade/captcha na stronie oferty")
+    return dialog_ok and not blocked
 
 
 async def check_offer_price(
@@ -112,7 +95,7 @@ async def check_offer_price(
     cdp_port: int = CDP_PORT_PRICE_CHECK,
     max_delivery_days: int = MAX_DELIVERY_DAYS,
 ) -> PriceCheckResult:
-    """Sprawdza ceny konkurencji dla danej oferty."""
+    """Sprawdza ceny konkurencji dla danej oferty (tylko CDP, bez HTTP GET)."""
     result = PriceCheckResult(
         offer_id=offer_id,
         success=False,
@@ -144,45 +127,17 @@ async def check_offer_price(
             await cdp_call(ws, "Emulation.setFocusEmulationEnabled", {"enabled": True}, msg_id=898)
             await cdp_call(ws, "Emulation.clearDeviceMetricsOverride", msg_id=899)
 
-            await navigate_to_url(ws, url)
-            if not await wait_for_dialog(ws):
-                fallback = await asyncio.to_thread(
-                    _maybe_http_fallback, offer_id, my_price, cdp_host, cdp_port
-                )
-                if fallback is not None:
-                    return fallback
+            loaded = await _open_offer_page(ws, url, via_google=False)
+            if not loaded and ENABLE_GOOGLE_WARMUP:
+                logger.info("Oferta %s: ponawiam przez Google (blok lub brak dialogu)", offer_id)
+                result.source = "cdp_google"
+                loaded = await _open_offer_page(ws, url, via_google=True)
+
+            if not loaded:
                 result.error = "Dialog 'Inne oferty produktu' nie pojawil sie"
                 return result
 
-            payload = {"articleCount": 0, "articles": [], "containerSource": None, "dialogShowsNetPrices": False}
-            all_offers = []
-            fetch_msg_id = 200
-            dialog_shows_net_prices = False
-            for _ in range(CDP_ARTICLE_POLL_ATTEMPTS):
-                payload = await fetch_competitor_offer_payload(ws, msg_id=fetch_msg_id)
-                fetch_msg_id += 1
-                dialog_shows_net_prices = bool(payload.get("dialogShowsNetPrices"))
-                count = payload.get("articleCount", 0)
-                all_offers = parse_competitor_articles(
-                    payload.get("articles", []),
-                    title,
-                    dialog_shows_net_prices=dialog_shows_net_prices,
-                )
-                if all_offers:
-                    logger.debug(
-                        "Znaleziono %s artykulow i %s parsowalnych ofert w dialogu (%s)",
-                        count,
-                        len(all_offers),
-                        payload.get("containerSource"),
-                    )
-                    break
-                if count > 0:
-                    logger.debug(
-                        "Kontener %s ma %s artykulow, ale jeszcze brak parsowalnych ofert",
-                        payload.get("containerSource") or "brak",
-                        count,
-                    )
-                await asyncio.sleep(CDP_ARTICLE_POLL_INTERVAL_SECONDS)
+            all_offers, payload, dialog_shows_net_prices = await _poll_dialog_offers(ws, title)
 
             logger.info(
                 "Oferta %s: container=%s, raw_articles=%s, parsed_offers=%s, netto_dialog=%s",
@@ -194,11 +149,6 @@ async def check_offer_price(
             )
 
             if not all_offers:
-                fallback = await asyncio.to_thread(
-                    _maybe_http_fallback, offer_id, my_price, cdp_host, cdp_port
-                )
-                if fallback is not None:
-                    return fallback
                 result.error = (
                     "Brak ofert w dialogu "
                     f"(container={payload.get('containerSource') or 'brak'}, "
@@ -241,7 +191,9 @@ async def check_offer_price(
                 result.cheapest_competitor = min(competitors_filtered, key=lambda offer: offer.price)
 
             if result.my_price and competitors_filtered:
-                result.my_position = 1 + sum(1 for competitor in competitors_filtered if competitor.price < result.my_price)
+                result.my_position = 1 + sum(
+                    1 for competitor in competitors_filtered if competitor.price < result.my_price
+                )
             elif result.my_price:
                 result.my_position = 1
 

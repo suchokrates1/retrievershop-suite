@@ -303,42 +303,38 @@ def test_resolve_gross_prices_sources():
     assert (gross, source) == (119.99, "as_is")
 
 
-def test_http_ssr_fallback_builds_result_from_snapshot():
-    from magazyn.services.allegro_price_scraper import checker, http_offers, session
-    from magazyn.services.allegro_price_scraper.http_offers import (
-        SsrCompetitorSummary,
-        SsrOffersSnapshot,
-    )
+def test_is_block_page_text_detects_captcha_and_robot():
+    from magazyn.services.allegro_price_scraper.cdp import is_block_page_text
 
-    snapshot = SsrOffersSnapshot(
-        offer_id="18675226204",
-        product_id=None,
-        product_name="Szelki",
-        offer_count=7,
-        summaries=[
-            SsrCompetitorSummary("NAJTANIEJ", 219.99, 219.99, "netto", "", "cheapest"),
-            SsrCompetitorSummary("NAJSZYBCIEJ", 187.80, 231.00, "netto", "", "fastest"),
-        ],
-        source_url="https://business.allegro.pl/oferta/x-18675226204",
-    )
-
-    with patch.object(session, "fetch_allegro_session", return_value=object()), \
-         patch.object(http_offers, "fetch_offer_ssr_snapshot", return_value=snapshot):
-        result = checker._http_ssr_fallback("18675226204", my_price=229.0, cdp_host="h", cdp_port=1)
-
-    assert result is not None
-    assert result.success is True
-    assert result.source == "ssr"
-    assert result.competitors_all_count == 7
-    assert result.cheapest_competitor.price == 219.99  # min(219.99, 231.00)
-    assert result.my_position == 2  # 229 > 219.99
+    assert is_block_page_text("Potwierdz ze nie jestes robotem - captcha")
+    assert is_block_page_text("Access Denied")
+    assert not is_block_page_text("Inne oferty produktu 187,80 zł")
 
 
-def test_http_ssr_fallback_disabled_by_flag():
-    from magazyn.services.allegro_price_scraper import checker
+def test_open_offer_page_retries_via_google(monkeypatch):
+    from magazyn.services.allegro_price_scraper import checker as checker_mod
 
-    with patch.object(checker, "PRICE_CHECK_HTTP_FALLBACK", False):
-        assert checker._maybe_http_fallback("1", 100.0, "h", 1) is None
+    calls = {"direct": 0, "google": 0}
+
+    async def fake_open(ws, url, *, via_google):
+        if via_google:
+            calls["google"] += 1
+            return True
+        calls["direct"] += 1
+        return False
+
+    monkeypatch.setattr(checker_mod, "_open_offer_page", fake_open)
+    monkeypatch.setattr(checker_mod, "ENABLE_GOOGLE_WARMUP", True)
+
+    async def _run():
+        ws = object()
+        ok = await checker_mod._open_offer_page(ws, "https://allegro.pl/oferta/x-1", via_google=False)
+        assert ok is False
+        ok2 = await checker_mod._open_offer_page(ws, "https://allegro.pl/oferta/x-1", via_google=True)
+        assert ok2 is True
+
+    asyncio.run(_run())
+    assert calls == {"direct": 1, "google": 1}
 
 
 def test_cdp_call_ignores_events_and_returns_matching_response():

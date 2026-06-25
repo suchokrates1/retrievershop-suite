@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
+import re
 import urllib.request
 from typing import Any, Optional
 
@@ -13,6 +15,25 @@ from .models import CompetitorOffer
 from .parser import parse_competitor_articles
 
 logger = logging.getLogger(__name__)
+
+_BLOCK_TEXT_PATTERNS = (
+    r"\bcaptcha\b",
+    r"\brobot\b",
+    r"odmowa\s+dost",
+    r"verify\s+you\s+are",
+    r"nie\s+jestes\s+robot",
+    r"dzialanie\s+zablokow",
+    r"dostep\s+zablokow",
+    r"access\s+denied",
+)
+
+
+def is_block_page_text(text: str) -> bool:
+    """Heurystyka tekstu strony (captcha / blokada) — do testow i logow."""
+    if not text:
+        return False
+    normalized = text.lower().translate(str.maketrans("ąćęłńóśźż", "acelnoszz"))
+    return any(re.search(pattern, normalized) for pattern in _BLOCK_TEXT_PATTERNS)
 
 
 def cdp_json_request(host: str, port: int, path: str, method: str = "GET") -> dict[str, Any]:
@@ -96,6 +117,110 @@ async def navigate_to_url(ws, url: str, timeout: int = 30) -> None:
             continue
 
     await asyncio.sleep(3)
+
+
+DETECT_BLOCK_JS = r"""
+(function() {
+  const text = ((document.title || '') + ' ' + (document.body?.innerText || '')).toLowerCase();
+  const patterns = [/captcha/, /robot/, /odmowa dost/, /verify you are/, /nie jestes robot/,
+                    /dzialanie zablokow/, /dostep zablokow/, /access denied/];
+  if (patterns.some(p => p.test(text))) return true;
+  if (document.querySelector('iframe[src*="captcha"], #captcha, [class*="captcha"], [id*="captcha"]')) {
+    return true;
+  }
+  return false;
+})()
+"""
+
+FIND_ALLEGRO_LINK_JS = r"""
+(function() {
+  for (const a of document.querySelectorAll('a[href]')) {
+    try {
+      const u = new URL(a.href, location.href);
+      if (u.hostname.endsWith('allegro.pl')) return a.href;
+    } catch (e) {}
+  }
+  for (const a of document.querySelectorAll('a[href]')) {
+    const h = a.href || '';
+    const m = h.match(/[?&]q=(https?[^&]+)/i);
+    if (m) {
+      try {
+        const decoded = decodeURIComponent(m[1]);
+        if (/allegro\.pl/i.test(decoded)) return decoded;
+      } catch (e) {}
+    }
+  }
+  return null;
+})()
+"""
+
+SCROLL_DIALOG_JS = r"""
+(function() {
+  const dialog = Array.from(document.querySelectorAll("[role='dialog']"))
+    .find(d => (d.innerText || '').includes('Inne oferty produktu'));
+  if (!dialog) return 0;
+  const before = dialog.scrollTop;
+  dialog.scrollTop = dialog.scrollHeight;
+  return dialog.querySelectorAll('article').length;
+})()
+"""
+
+
+async def detect_block_page(ws) -> bool:
+    """Wykrywa captcha lub strone blokady na biezacej karcie."""
+    result = await cdp_call(
+        ws,
+        "Runtime.evaluate",
+        {"expression": DETECT_BLOCK_JS, "returnByValue": True},
+        msg_id=880,
+        timeout=CDP_EVALUATE_TIMEOUT_SECONDS,
+    )
+    return bool(result.get("result", {}).get("result", {}).get("value"))
+
+
+async def scroll_competitor_dialog(ws) -> int:
+    """Przewija dialog ofert (lazy-load) i zwraca liczbe artykulow."""
+    result = await cdp_call(
+        ws,
+        "Runtime.evaluate",
+        {"expression": SCROLL_DIALOG_JS, "returnByValue": True},
+        msg_id=881,
+        timeout=CDP_EVALUATE_TIMEOUT_SECONDS,
+    )
+    value = result.get("result", {}).get("result", {}).get("value", 0)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+async def warmup_via_google(ws) -> bool:
+    """Ludzka sciezka: Google -> wynik allegro.pl -> gotowe do wejscia na oferte."""
+    try:
+        logger.info("Warm-up: Google -> allegro.pl")
+        await navigate_to_url(ws, "https://www.google.com/search?q=allegro", timeout=25)
+        await asyncio.sleep(random.uniform(2.0, 4.0))
+
+        link_result = await cdp_call(
+            ws,
+            "Runtime.evaluate",
+            {"expression": FIND_ALLEGRO_LINK_JS, "returnByValue": True},
+            msg_id=882,
+            timeout=CDP_EVALUATE_TIMEOUT_SECONDS,
+        )
+        allegro_url = link_result.get("result", {}).get("result", {}).get("value")
+        if allegro_url:
+            logger.info("Warm-up: klikam wynik %s", str(allegro_url)[:90])
+            await navigate_to_url(ws, str(allegro_url), timeout=25)
+        else:
+            logger.warning("Warm-up: brak linku w Google, przechodze na allegro.pl")
+            await navigate_to_url(ws, "https://allegro.pl/", timeout=25)
+
+        await asyncio.sleep(random.uniform(2.0, 5.0))
+        return True
+    except Exception as exc:
+        logger.warning("Warm-up Google nie powiodl sie: %s", exc)
+        return False
 
 
 async def wait_for_dialog(ws, timeout: int = 15) -> bool:
