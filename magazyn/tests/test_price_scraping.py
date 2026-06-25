@@ -130,7 +130,8 @@ def test_price_check_result_competitors_all_count():
 def test_parse_competitor_articles_parses_condition_and_url():
     from magazyn.scripts.price_checker_ws import parse_competitor_articles
 
-    offers = parse_competitor_articles([
+    offers = parse_competitor_articles(
+        [
         {
             "index": 0,
             "offerId": "99988877766",
@@ -138,7 +139,9 @@ def test_parse_competitor_articles_parses_condition_and_url():
             "ariaPrice": "119,99",
             "text": "Powystawowy\nod\nSuper Sprzedawcy\nWhatsUpDog\n119,99 zł\n119,99 zł z dostawą\nSmart!\ndostawa jutro",
         }
-    ])
+    ],
+        competitor_prices_are_net=False,
+    )
 
     assert len(offers) == 1
     assert offers[0].seller == "WhatsUpDog"
@@ -175,6 +178,167 @@ def test_filter_competitor_offers_excludes_sellers_case_insensitive():
 
     assert filtered == []
     assert stats == {"delivery": 0, "excluded_sellers": 1, "condition": 0}
+
+
+def test_is_net_price_article_detects_aria_and_text():
+    from magazyn.services.allegro_price_scraper.parser import (
+        gross_from_net,
+        is_net_price_article,
+        parse_competitor_articles,
+    )
+
+    assert is_net_price_article("", "aktualna cena netto 187,80 zł")
+    assert is_net_price_article("187,80 zł\nnetto", None)
+    assert not is_net_price_article("187,80 zł\nbrutto", None)
+    assert not is_net_price_article("187,80 zł", "aktualna cena 187,80 zł")
+
+    offers = parse_competitor_articles([
+        {
+            "index": 0,
+            "offerId": "111",
+            "ariaPrice": "187,80",
+            "ariaPriceLabel": "aktualna cena netto 187,80 zł",
+            "text": "od\nSellerX\n187,80 zł\n187,80 zł z dostawą\ndostawa jutro",
+        }
+    ])
+    assert len(offers) == 1
+    assert offers[0].price == gross_from_net(187.80)
+    assert offers[0].price == 230.99
+
+
+def test_parse_competitor_articles_converts_when_dialog_shows_net_prices():
+    from magazyn.services.allegro_price_scraper.parser import gross_from_net, parse_competitor_articles
+
+    offers = parse_competitor_articles(
+        [{
+            "index": 0,
+            "offerId": "222",
+            "ariaPrice": "169,11",
+            "ariaPriceLabel": "aktualna cena 169,11 zł",
+            "text": "od\nSellerY\n169,11 zł\n169,11 zł z dostawą\ndostawa jutro",
+        }],
+        dialog_shows_net_prices=True,
+        competitor_prices_are_net=False,
+    )
+    assert len(offers) == 1
+    assert offers[0].price == gross_from_net(169.11)
+
+
+def test_parse_competitor_articles_converts_on_business_session_flag():
+    from magazyn.services.allegro_price_scraper.parser import gross_from_net, parse_competitor_articles
+
+    offers = parse_competitor_articles(
+        [{
+            "index": 0,
+            "offerId": "333",
+            "ariaPrice": "187,80",
+            "ariaPriceLabel": "aktualna cena 187,80 zł",
+            "text": "od\niamron\n187,80 zł\n187,80 zł z dostawą\ndostawa jutro",
+        }],
+        competitor_prices_are_net=True,
+    )
+    assert len(offers) == 1
+    assert offers[0].price == gross_from_net(187.80)
+    assert offers[0].price == 230.99
+
+
+def test_parse_competitor_articles_uses_explicit_vat_gross():
+    """Gdy kafelek podaje jawne brutto 'z 23% VAT', uzywamy go zamiast x1.23."""
+    from magazyn.services.allegro_price_scraper.parser import parse_competitor_articles
+
+    offers = parse_competitor_articles(
+        [{
+            "index": 0,
+            "offerId": "444",
+            "ariaPrice": "187,80",
+            "ariaPriceLabel": "187,80 zł aktualna cena",
+            "text": (
+                "od\npetset_pl\nStan Nowy\n187,80 zł\nnetto\n"
+                "dostawa za 0 zł\n231,00 zł z 23% VAT\n"
+                "241,49 zł z dostawą z VAT\ndostawa w sobotę"
+            ),
+        }],
+        competitor_prices_are_net=True,
+    )
+    assert len(offers) == 1
+    # 187,80 x 1.23 = 230.99, ale Allegro podaje 231,00 -> bierzemy jawne brutto
+    assert offers[0].price == 231.00
+    assert offers[0].price_with_delivery == 241.49
+
+
+def test_parse_competitor_articles_handles_bez_vat_seller():
+    """Sprzedawca 'bez VAT' (zwolniony): brutto == netto, BEZ doliczania 23%."""
+    from magazyn.services.allegro_price_scraper.parser import parse_competitor_articles
+
+    offers = parse_competitor_articles(
+        [{
+            "index": 0,
+            "offerId": "555",
+            "ariaPrice": "219,99",
+            "ariaPriceLabel": "219,99 zł aktualna cena",
+            "text": (
+                "od\nShip_Store1\nStan Nowy\n219,99 zł\nnetto\n"
+                "219,99 zł bez VAT\ndarmowa dostawa\ndostawa jutro"
+            ),
+        }],
+        competitor_prices_are_net=True,
+    )
+    assert len(offers) == 1
+    assert offers[0].price == 219.99  # nie 270,59
+
+
+def test_resolve_gross_prices_sources():
+    from magazyn.services.allegro_price_scraper.parser import gross_from_net, resolve_gross_prices
+
+    gross, total, source = resolve_gross_prices("187,80 zł\nnetto\n231,00 zł z 23% VAT", 187.80, 187.80, True)
+    assert (gross, source) == (231.00, "vat_line")
+
+    gross, total, source = resolve_gross_prices("219,99 zł bez VAT", 219.99, 219.99, True)
+    assert (gross, source) == (219.99, "bez_vat")
+
+    gross, total, source = resolve_gross_prices("169,11 zł netto", 169.11, 169.11, True)
+    assert (gross, source) == (gross_from_net(169.11), "assumed_net")
+
+    gross, total, source = resolve_gross_prices("119,99 zł", 119.99, 119.99, False)
+    assert (gross, source) == (119.99, "as_is")
+
+
+def test_http_ssr_fallback_builds_result_from_snapshot():
+    from magazyn.services.allegro_price_scraper import checker, http_offers, session
+    from magazyn.services.allegro_price_scraper.http_offers import (
+        SsrCompetitorSummary,
+        SsrOffersSnapshot,
+    )
+
+    snapshot = SsrOffersSnapshot(
+        offer_id="18675226204",
+        product_id=None,
+        product_name="Szelki",
+        offer_count=7,
+        summaries=[
+            SsrCompetitorSummary("NAJTANIEJ", 219.99, 219.99, "netto", "", "cheapest"),
+            SsrCompetitorSummary("NAJSZYBCIEJ", 187.80, 231.00, "netto", "", "fastest"),
+        ],
+        source_url="https://business.allegro.pl/oferta/x-18675226204",
+    )
+
+    with patch.object(session, "fetch_allegro_session", return_value=object()), \
+         patch.object(http_offers, "fetch_offer_ssr_snapshot", return_value=snapshot):
+        result = checker._http_ssr_fallback("18675226204", my_price=229.0, cdp_host="h", cdp_port=1)
+
+    assert result is not None
+    assert result.success is True
+    assert result.source == "ssr"
+    assert result.competitors_all_count == 7
+    assert result.cheapest_competitor.price == 219.99  # min(219.99, 231.00)
+    assert result.my_position == 2  # 229 > 219.99
+
+
+def test_http_ssr_fallback_disabled_by_flag():
+    from magazyn.services.allegro_price_scraper import checker
+
+    with patch.object(checker, "PRICE_CHECK_HTTP_FALLBACK", False):
+        assert checker._maybe_http_fallback("1", 100.0, "h", 1) is None
 
 
 def test_cdp_call_ignores_events_and_returns_matching_response():

@@ -38,6 +38,7 @@ class PriceCheckResult:
     our_other_offers: list[CompetitorOffer] | None = None
     error: Optional[str] = None
     checked_at: str = ""
+    source: str = "cdp"
 
     def __post_init__(self) -> None:
         if self.competitors is None:

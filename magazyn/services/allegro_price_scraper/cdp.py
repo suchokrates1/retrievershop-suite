@@ -192,6 +192,7 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
         function pickContainer(root) {
             const seen = new Set();
             const candidates = [];
+            const isDialogRoot = root.getAttribute && root.getAttribute('role') === 'dialog';
 
             function addCandidate(candidate, source) {
                 if (!candidate || seen.has(candidate)) return;
@@ -202,18 +203,34 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
                 }
             }
 
-            addCandidate(root, 'root');
             for (const selector of containerSelectors) {
                 root.querySelectorAll(selector).forEach((candidate) => addCandidate(candidate, selector));
             }
             root.querySelectorAll('article').forEach((article) => addCandidate(article.parentElement, 'article-parent'));
 
-            candidates.sort((left, right) => right.articleCount - left.articleCount);
-            return candidates[0] || null;
+            if (!isDialogRoot) {
+                addCandidate(root, 'root');
+            }
+
+            if (!candidates.length) {
+                return null;
+            }
+
+            const preferred = candidates.filter((entry) =>
+                entry.source === '[data-box-name="ProductOffersListingContainer"]'
+                || entry.source === '[data-role="opbox-offers-list"]'
+            );
+            const pool = preferred.length ? preferred : candidates;
+            pool.sort((left, right) => left.articleCount - right.articleCount);
+            return pool[0];
         }
 
         const dialogs = Array.from(document.querySelectorAll("[role='dialog']"));
         const activeDialog = dialogs.find((dialog) => dialog.innerText?.includes("Inne oferty produktu"));
+        const dialogText = activeDialog?.innerText || "";
+        const dialogShowsNetPrices = /ceny\s+netto|wyswietlamy\s+ceny\s+netto|cena\s+netto/i.test(
+            dialogText.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        ) && !/brutto/i.test(dialogText);
 
         if (activeDialog) {
             const picked = pickContainer(activeDialog);
@@ -223,7 +240,7 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
             }
         }
 
-        if (!container) {
+        if (!container && !activeDialog) {
             const picked = pickContainer(document.body);
             if (picked) {
                 container = picked.candidate;
@@ -232,12 +249,13 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
         }
 
         if (!container) {
-            return { containerSource: null, articleCount: 0, articles: [] };
+            return { containerSource: null, articleCount: 0, articles: [], dialogShowsNetPrices: false };
         }
 
         const articles = container.querySelectorAll('article');
         return {
             containerSource,
+            dialogShowsNetPrices,
             articleCount: articles.length,
             articles: Array.from(articles).map((art, idx) => {
                 let offerId = null;
@@ -290,9 +308,11 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
                 }
 
                 let ariaPrice = null;
-                const priceEl = art.querySelector('p[aria-label*="aktualna cena"]');
+                let ariaPriceLabel = null;
+                const priceEl = art.querySelector('p[aria-label*="aktualna cena"], p[aria-label*="cena"]');
                 if (priceEl) {
-                    const match = priceEl.getAttribute('aria-label').match(/([\d\s]+(?:,\d{2})?)\s*zł/);
+                    ariaPriceLabel = priceEl.getAttribute('aria-label');
+                    const match = ariaPriceLabel.match(/([\d\s]+(?:,\d{2})?)\s*zł/);
                     if (match) ariaPrice = match[1].replace(/\s/g, '');
                 }
 
@@ -301,6 +321,7 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
                     offerId: offerId,
                     offerUrl: offerUrl,
                     ariaPrice: ariaPrice,
+                    ariaPriceLabel: ariaPriceLabel,
                     text: art.innerText || ''
                 };
             })
@@ -318,6 +339,7 @@ async def fetch_competitor_offer_payload(ws, msg_id: int = 200) -> dict[str, Any
 
     return result.get("result", {}).get("result", {}).get("value", {}) or {
         "containerSource": None,
+        "dialogShowsNetPrices": False,
         "articleCount": 0,
         "articles": [],
     }
@@ -333,8 +355,13 @@ async def extract_competitor_offers(ws, product_title: str = "") -> list[Competi
         return []
 
     logger.info(
-        "Pobrano %s artykulow z kontenera %s",
+        "Pobrano %s artykulow z kontenera %s (netto=%s)",
         payload.get("articleCount", len(articles)),
         payload.get("containerSource") or "brak",
+        payload.get("dialogShowsNetPrices"),
     )
-    return parse_competitor_articles(articles, product_title)
+    return parse_competitor_articles(
+        articles,
+        product_title,
+        dialog_shows_net_prices=bool(payload.get("dialogShowsNetPrices")),
+    )
