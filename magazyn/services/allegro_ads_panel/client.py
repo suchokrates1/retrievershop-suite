@@ -84,10 +84,26 @@ class AllegroAdsPanelClient:
             "X-PPC-OPERATING-MARKETPLACE": marketplace_id,
         }
 
-    def _post(self, path: str, body: dict, *, params: dict | None = None) -> dict:
+    def _headers_for(self, *, include_marketplace_header: bool = True) -> dict[str, str]:
+        if include_marketplace_header:
+            return self._headers
+        return {
+            key: value
+            for key, value in self._headers.items()
+            if key != "X-PPC-OPERATING-MARKETPLACE"
+        }
+
+    def _post(
+        self,
+        path: str,
+        body: dict,
+        *,
+        params: dict | None = None,
+        include_marketplace_header: bool = True,
+    ) -> dict:
         response = self._session.post(
             f"{BASE_URL}{path}",
-            headers=self._headers,
+            headers=self._headers_for(include_marketplace_header=include_marketplace_header),
             json=body,
             params=params,
             timeout=45,
@@ -136,10 +152,12 @@ class AllegroAdsPanelClient:
         period_end: date,
         campaign_name: str | None = None,
     ) -> list[ChartPoint]:
+        # Chart API returns all-zero series when X-PPC-OPERATING-MARKETPLACE is sent.
         payload = self._post(
             f"/api/v2/statistics/chart/campaigns/{scope_id_b64}",
             self._table_body(period_start=period_start, period_end=period_end, campaign_name=campaign_name),
             params={"marketplace": self.marketplace_id},
+            include_marketplace_header=False,
         )
         points: list[ChartPoint] = []
         for item in payload.get("chart") or []:
