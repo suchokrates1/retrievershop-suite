@@ -37,6 +37,21 @@
                 <p class="opacity-80 mt-2">Kampanie, koszty reklamy, sprzedaż i realny zysk po odjęciu reklamy.</p>
                 <p class="text-sm opacity-70 mt-2" x-show="meta.period" x-text="meta.period"></p>
                 <p class="text-xs opacity-60" x-show="meta.synced_at" x-text="'Ostatnia synchronizacja: ' + meta.synced_at"></p>
+                <div class="form-control w-full max-w-md mt-4" x-show="campaignOptions.length">
+                    <label class="label py-1" for="ads-campaign-select">
+                        <span class="label-text font-medium">Kampania</span>
+                    </label>
+                    <select
+                        id="ads-campaign-select"
+                        class="select select-bordered select-sm bg-base-100/90"
+                        x-model="selectedCampaignId"
+                        @change="renderChart()"
+                    >
+                        <template x-for="opt in campaignOptions" :key="opt.id">
+                            <option :value="opt.id" x-text="opt.name"></option>
+                        </template>
+                    </select>
+                </div>
             </div>
             <div class="flex gap-2">
                 <button class="btn btn-primary btn-sm" :disabled="loading || syncing" @click="syncNow()">
@@ -58,35 +73,35 @@
         <section class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Koszt reklamy</div>
-                <div class="text-xl font-bold" x-text="fmtMoney(summaryAll.cost)"></div>
+                <div class="text-xl font-bold" x-text="fmtMoney(summarySelected.cost)"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Sprzedane szt.</div>
-                <div class="text-xl font-bold" x-text="summaryAll.sale_count || 0"></div>
+                <div class="text-xl font-bold" x-text="summarySelected.sale_count || 0"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">ROAS (panel)</div>
-                <div class="text-xl font-bold" x-text="summaryAll.roi ?? '-'"></div>
+                <div class="text-xl font-bold" x-text="summarySelected.roi ?? '-'"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Realny zysk</div>
-                <div class="text-xl font-bold" x-text="fmtMoney(summaryAll.real_profit)"></div>
+                <div class="text-xl font-bold" x-text="fmtMoney(summarySelected.real_profit)"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Zysk po reklamie</div>
-                <div class="text-xl font-bold" :class="profitClass(summaryAll.net_profit)" x-text="fmtMoney(summaryAll.net_profit)"></div>
+                <div class="text-xl font-bold" :class="profitClass(summarySelected.net_profit)" x-text="fmtMoney(summarySelected.net_profit)"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">POAS</div>
-                <div class="text-xl font-bold" x-text="summaryAll.poas ?? '-'"></div>
+                <div class="text-xl font-bold" x-text="summarySelected.poas ?? '-'"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Koszt reklamy / szt.</div>
-                <div class="text-xl font-bold" x-text="fmtPerUnit(summaryAll.cost, summaryAll.sale_count)"></div>
+                <div class="text-xl font-bold" x-text="fmtPerUnit(summarySelected.cost, summarySelected.sale_count)"></div>
             </div>
             <div class="stat bg-base-200 rounded-xl p-4">
                 <div class="text-xs opacity-70">Zysk / szt. po reklamie</div>
-                <div class="text-xl font-bold" :class="profitClass(summaryAll.net_profit)" x-text="fmtPerUnit(summaryAll.net_profit, summaryAll.sale_count)"></div>
+                <div class="text-xl font-bold" :class="profitClass(summarySelected.net_profit)" x-text="fmtPerUnit(summarySelected.net_profit, summarySelected.sale_count)"></div>
             </div>
         </section>
 
@@ -99,7 +114,7 @@
             <table class="table table-sm table-zebra">
                 <thead>
                     <tr>
-                        <th>Kampania</th>
+                        <th x-show="isAllCampaigns">Kampania</th>
                         <th>Oferta</th>
                         <th>ID</th>
                         <th>Szt.</th>
@@ -114,9 +129,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="row in data.ad_sales || []" :key="row.campaign_entity_id + '-' + row.offer_id">
+                    <template x-for="row in filteredAdSales" :key="row.campaign_entity_id + '-' + row.offer_id">
                         <tr>
-                            <td x-text="row.campaign_name"></td>
+                            <td x-show="isAllCampaigns" x-text="row.campaign_name"></td>
                             <td class="max-w-[14rem] truncate" :title="row.offer_name" x-text="row.offer_name"></td>
                             <td>
                                 <a class="link" :href="'https://allegro.pl/oferta/' + row.offer_id" target="_blank" rel="noopener" x-text="row.offer_id"></a>
@@ -132,20 +147,23 @@
                             <td x-text="row.poas ?? '-'"></td>
                         </tr>
                     </template>
-                    <tr x-show="!(data.ad_sales || []).length">
-                        <td colspan="12" class="text-center opacity-60">Brak sprzedanych ofert w snapshotcie.</td>
+                    <tr x-show="!filteredAdSales.length">
+                        <td :colspan="isAllCampaigns ? 12 : 11" class="text-center opacity-60">Brak sprzedanych ofert w snapshotcie.</td>
                     </tr>
                 </tbody>
             </table>
         </section>
 
         <section class="chart-wrap mb-6">
-            <h3 class="font-semibold mb-3">Wykres dzienny (bieżący miesiąc)</h3>
+            <h3 class="font-semibold mb-3">
+                Wykres dzienny
+                <span class="text-sm font-normal opacity-70" x-show="selectedCampaignName" x-text="'— ' + selectedCampaignName"></span>
+            </h3>
             <div class="chart-canvas-shell"><canvas id="adsPanelChart"></canvas></div>
-            <p x-show="!(data.chart || []).length" class="text-sm opacity-60 mt-2">Brak punktów wykresu.</p>
+            <p x-show="!activeChart.length" class="text-sm opacity-60 mt-2">Brak punktów wykresu dla wybranej kampanii.</p>
         </section>
 
-        <section class="chart-wrap mb-6 overflow-x-auto">
+        <section class="chart-wrap mb-6 overflow-x-auto" x-show="isAllCampaigns">
             <h3 class="font-semibold mb-3">Kampanie</h3>
             <table class="table table-sm">
                 <thead>
@@ -191,8 +209,40 @@ function adsPanelStats() {
         data: null,
         meta: {},
         chart: null,
-        get summaryAll() {
-            return (this.data?.campaigns || []).find(c => c.campaign_name === 'Wszystkie kampanie') || {};
+        selectedCampaignId: '',
+        get campaignOptions() {
+            const rows = (this.data?.campaigns || []).slice().sort((a, b) => {
+                if (a.campaign_name === 'Wszystkie kampanie') return -1;
+                if (b.campaign_name === 'Wszystkie kampanie') return 1;
+                return a.campaign_name.localeCompare(b.campaign_name, 'pl');
+            });
+            return rows.map(c => ({ id: c.campaign_entity_id, name: c.campaign_name }));
+        },
+        get selectedCampaignRow() {
+            return (this.data?.campaigns || []).find(c => c.campaign_entity_id === this.selectedCampaignId) || {};
+        },
+        get selectedCampaignName() {
+            return this.selectedCampaignRow.campaign_name || '';
+        },
+        get isAllCampaigns() {
+            return this.selectedCampaignRow.campaign_name === 'Wszystkie kampanie';
+        },
+        get summarySelected() {
+            return this.selectedCampaignRow || {};
+        },
+        get filteredAdSales() {
+            if (this.isAllCampaigns) return this.data?.ad_sales || [];
+            return (this.data?.ad_sales || []).filter(
+                row => row.campaign_entity_id === this.selectedCampaignId
+            );
+        },
+        get activeChart() {
+            const charts = this.data?.charts;
+            if (charts) {
+                const key = this.isAllCampaigns ? '' : this.selectedCampaignId;
+                return charts[key] || charts[''] || [];
+            }
+            return this.isAllCampaigns ? (this.data?.chart || []) : [];
         },
         fmtMoney(v) {
             if (v === null || v === undefined || v === '') return '-';
@@ -221,6 +271,9 @@ function adsPanelStats() {
                     synced_at: payload.data?.synced_at || null,
                     period: payload.data ? `${payload.data.period_start} – ${payload.data.period_end}` : '',
                 };
+                if (!this.selectedCampaignId && this.campaignOptions.length) {
+                    this.selectedCampaignId = this.campaignOptions[0].id;
+                }
                 this.$nextTick(() => this.renderChart());
             } catch (e) {
                 this.error = e.message || 'Błąd ładowania';
@@ -247,19 +300,19 @@ function adsPanelStats() {
         },
         renderChart() {
             const canvas = document.getElementById('adsPanelChart');
-            if (!canvas || !this.data?.chart?.length) {
+            if (!canvas || !this.activeChart.length) {
                 if (this.chart) { this.chart.destroy(); this.chart = null; }
                 return;
             }
             if (this.chart) this.chart.destroy();
-            const labels = this.data.chart.map(p => p.day);
+            const labels = this.activeChart.map(p => p.day);
             this.chart = new Chart(canvas, {
                 type: 'line',
                 data: {
                     labels,
                     datasets: [
-                        { label: 'Koszt', data: this.data.chart.map(p => p.cost), borderColor: '#ff7a18', tension: 0.25 },
-                        { label: 'Kliknięcia', data: this.data.chart.map(p => p.clicks), borderColor: '#f9c74f', tension: 0.25, yAxisID: 'y1' },
+                        { label: 'Koszt', data: this.activeChart.map(p => p.cost), borderColor: '#ff7a18', tension: 0.25 },
+                        { label: 'Kliknięcia', data: this.activeChart.map(p => p.clicks), borderColor: '#f9c74f', tension: 0.25, yAxisID: 'y1' },
                     ],
                 },
                 options: {
