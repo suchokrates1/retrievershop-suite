@@ -177,28 +177,39 @@ def sync_ads_panel_statistics(
         db.flush()
 
         try:
-            chart_points = client.fetch_chart(
+            chart_points_total = 0
+
+            def _store_chart_points(
+                points: list,
+                *,
+                campaign_entity_id: str = "",
+            ) -> None:
+                nonlocal chart_points_total
+                for point in points:
+                    db.add(
+                        AllegroAdsChartDaily(
+                            snapshot_id=snapshot.id,
+                            campaign_entity_id=campaign_entity_id,
+                            day=point.day,
+                            clicks=point.clicks,
+                            impressions=point.impressions,
+                            cost=point.cost,
+                            sale_count=point.sale_count,
+                            sale_value=point.sale_value,
+                            ctr=point.ctr,
+                            cpc=point.cpc,
+                            roi=point.roi,
+                        )
+                    )
+                    chart_points_total += 1
+
+            aggregate_chart = client.fetch_chart(
                 scope_id,
                 period_start=period_start,
                 period_end=period_end,
                 campaign_name=None,
             )
-            for point in chart_points:
-                db.add(
-                    AllegroAdsChartDaily(
-                        snapshot_id=snapshot.id,
-                        day=point.day,
-                        clicks=point.clicks,
-                        impressions=point.impressions,
-                        cost=point.cost,
-                        sale_count=point.sale_count,
-                        sale_value=point.sale_value,
-                        ctr=point.ctr,
-                        cpc=point.cpc,
-                        roi=point.roi,
-                    )
-                )
-            result["chart_points"] = len(chart_points)
+            _store_chart_points(aggregate_chart)
 
             for campaign in campaigns:
                 name = campaign["name"]
@@ -230,6 +241,15 @@ def sync_ads_panel_statistics(
                 db.flush()
                 result["campaigns_synced"] += 1
 
+                if name_filter and entity_id:
+                    campaign_chart = client.fetch_chart(
+                        scope_id,
+                        period_start=period_start,
+                        period_end=period_end,
+                        campaign_name=name_filter,
+                    )
+                    _store_chart_points(campaign_chart, campaign_entity_id=entity_id)
+
                 if entity_id and summary.sale_count > 0:
                     sold_items = client.fetch_sold_items(
                         scope_id,
@@ -250,6 +270,8 @@ def sync_ads_panel_statistics(
                             )
                         )
                         result["sold_items_synced"] += 1
+
+            result["chart_points"] = chart_points_total
         except Exception as exc:
             snapshot.status = "error"
             snapshot.error_message = str(exc)

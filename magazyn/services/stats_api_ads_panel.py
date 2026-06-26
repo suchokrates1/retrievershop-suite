@@ -17,6 +17,29 @@ from ..services.allegro_ads_panel.profit import (
 from ..services.stats_support import json_error as _json_error
 
 AGGREGATE_CAMPAIGN_NAME = "Wszystkie kampanie"
+AGGREGATE_CHART_KEY = ""
+
+
+def _serialize_chart_point(point) -> dict:
+    return {
+        "day": point.day.isoformat(),
+        "clicks": point.clicks,
+        "impressions": point.impressions,
+        "cost": _decimal(point.cost),
+        "sale_count": point.sale_count,
+        "sale_value": _decimal(point.sale_value),
+        "ctr": _decimal(point.ctr),
+        "cpc": _decimal(point.cpc),
+        "roi": _decimal(point.roi),
+    }
+
+
+def _charts_by_campaign(chart_points) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for point in sorted(chart_points, key=lambda p: (p.campaign_entity_id or "", p.day)):
+        key = point.campaign_entity_id or AGGREGATE_CHART_KEY
+        grouped.setdefault(key, []).append(_serialize_chart_point(point))
+    return grouped
 
 
 def _decimal(value) -> float | None:
@@ -186,20 +209,8 @@ def stats_ads_panel_overview():
             reverse=True,
         )
 
-        chart = [
-            {
-                "day": point.day.isoformat(),
-                "clicks": point.clicks,
-                "impressions": point.impressions,
-                "cost": _decimal(point.cost),
-                "sale_count": point.sale_count,
-                "sale_value": _decimal(point.sale_value),
-                "ctr": _decimal(point.ctr),
-                "cpc": _decimal(point.cpc),
-                "roi": _decimal(point.roi),
-            }
-            for point in sorted(snapshot.chart_points, key=lambda p: p.day)
-        ]
+        chart_by_campaign = _charts_by_campaign(snapshot.chart_points)
+        default_chart = chart_by_campaign.get(AGGREGATE_CHART_KEY, [])
 
         payload = {
             "snapshot_date": snapshot.snapshot_date.isoformat(),
@@ -211,7 +222,8 @@ def stats_ads_panel_overview():
             "error_message": snapshot.error_message,
             "campaigns": campaigns,
             "ad_sales": ad_sales,
-            "chart": chart,
+            "chart": default_chart,
+            "charts": chart_by_campaign,
         }
 
     return jsonify(

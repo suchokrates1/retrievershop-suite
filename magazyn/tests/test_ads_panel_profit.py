@@ -4,8 +4,7 @@ from decimal import Decimal
 from magazyn.db import get_session
 from magazyn.models.orders import Order, OrderProduct
 from magazyn.services.allegro_ads_panel.profit import compute_profit_by_offer
-from magazyn.services.stats_api_ads_panel import _sold_item_metrics
-from magazyn.models.orders import Order, OrderProduct
+from magazyn.services.stats_api_ads_panel import _charts_by_campaign, _sold_item_metrics
 
 
 def test_compute_profit_by_offer_splits_order_profit(app):
@@ -47,6 +46,17 @@ def test_compute_profit_by_offer_splits_order_profit(app):
     assert result["111"]["real_profit"] == Decimal("25.00")
     assert result["111"]["real_revenue"] == Decimal("100.00")
     assert result["111"]["orders"] == 1
+
+
+def test_charts_by_campaign_groups_points():
+    points = [
+        type("P", (), {"campaign_entity_id": "", "day": date(2026, 6, 1), "clicks": 1, "impressions": 2, "cost": Decimal("1"), "sale_count": 0, "sale_value": Decimal("0"), "ctr": None, "cpc": None, "roi": None})(),
+        type("P", (), {"campaign_entity_id": "camp-a", "day": date(2026, 6, 1), "clicks": 3, "impressions": 4, "cost": Decimal("2"), "sale_count": 1, "sale_value": Decimal("10"), "ctr": None, "cpc": None, "roi": None})(),
+    ]
+    grouped = _charts_by_campaign(points)
+    assert len(grouped[""]) == 1
+    assert len(grouped["camp-a"]) == 1
+    assert grouped["camp-a"][0]["clicks"] == 3
 
 
 def test_sold_item_metrics_per_unit():

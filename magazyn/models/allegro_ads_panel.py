@@ -84,16 +84,23 @@ class AllegroAdsSoldItem(Base):
 
 
 class AllegroAdsChartDaily(Base):
-    """Dzienne punkty wykresu (konto / zakres)."""
+    """Dzienne punkty wykresu (konto / zakres / kampania)."""
 
     __tablename__ = "allegro_ads_chart_daily"
     __table_args__ = (
-        UniqueConstraint("snapshot_id", "day", name="uq_ads_chart_snapshot_day"),
+        UniqueConstraint(
+            "snapshot_id",
+            "campaign_entity_id",
+            "day",
+            name="uq_ads_chart_snapshot_campaign_day",
+        ),
         Index("idx_allegro_ads_chart_daily_day", "day"),
+        Index("idx_allegro_ads_chart_daily_campaign", "campaign_entity_id"),
     )
 
     id = Column(Integer, primary_key=True)
     snapshot_id = Column(Integer, ForeignKey("allegro_ads_snapshots.id", ondelete="CASCADE"), nullable=False)
+    campaign_entity_id = Column(String, nullable=False, default="")
     day = Column(Date, nullable=False)
     clicks = Column(Integer, nullable=False, default=0)
     impressions = Column(Integer, nullable=False, default=0)
