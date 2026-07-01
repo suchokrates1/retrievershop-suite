@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from magazyn.db import get_session
+from sqlalchemy import desc
 from magazyn.models.orders import Order, OrderStatusLog
 from magazyn.services.manual_order_actions import apply_manual_tracking, finalize_manual_order_creation
 from magazyn.services.order_status import add_order_status
@@ -62,7 +62,7 @@ def test_finalize_manual_order_with_tracking_sets_wydrukowano(app):
             latest = (
                 db.query(OrderStatusLog)
                 .filter(OrderStatusLog.order_id == "manual_test_tracking")
-                .order_by(OrderStatusLog.timestamp.desc())
+                .order_by(desc(OrderStatusLog.timestamp), desc(OrderStatusLog.id))
                 .first()
             )
 
@@ -93,7 +93,7 @@ def test_apply_manual_tracking_updates_existing_order(app):
             latest = (
                 db.query(OrderStatusLog)
                 .filter(OrderStatusLog.order_id == "manual_test_update_tracking")
-                .order_by(OrderStatusLog.timestamp.desc())
+                .order_by(desc(OrderStatusLog.timestamp), desc(OrderStatusLog.id))
                 .first()
             )
 

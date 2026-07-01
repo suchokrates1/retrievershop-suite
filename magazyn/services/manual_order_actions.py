@@ -63,7 +63,7 @@ def _current_status(db, order_id: str) -> Optional[str]:
     latest = (
         db.query(OrderStatusLog)
         .filter(OrderStatusLog.order_id == order_id)
-        .order_by(desc(OrderStatusLog.timestamp))
+        .order_by(desc(OrderStatusLog.timestamp), desc(OrderStatusLog.id))
         .first()
     )
     return latest.status if latest else None
@@ -88,6 +88,7 @@ def apply_manual_tracking(
     if resolved_courier:
         order.courier_code = resolved_courier
 
+    db.flush()
     should_advance = advance_status and _current_status(db, order.order_id) in {
         None,
         "pobrano",
