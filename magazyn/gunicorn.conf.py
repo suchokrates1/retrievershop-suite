@@ -13,7 +13,13 @@ graceful_timeout = 30  # Graceful worker restart timeout
 
 def post_worker_init(worker):
     """Hook called after worker is initialized - start scheduler only in first worker."""
-    
+
+    if os.environ.get("DISABLE_SCHEDULERS") == "1":
+        worker.log.warning(
+            f"Worker {worker.pid}: DISABLE_SCHEDULERS=1 - pomijam start schedulerow tla"
+        )
+        return
+
     # Use lock file to ensure only ONE worker starts the scheduler
     lock_file = os.path.join(tempfile.gettempdir(), "magazyn_scheduler.lock")
     

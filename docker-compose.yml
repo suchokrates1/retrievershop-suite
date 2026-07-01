@@ -49,6 +49,10 @@ services:
       - CDP_PORT=9223
       - ALLEGRO_COMPETITOR_PRICES_ARE_NET=true
       - TZ=Europe/Warsaw
+      # Awaryjny wylacznik workerow tla / print agenta (patrz magazyn/factory.py,
+      # magazyn/gunicorn.conf.py). Ustaw DISABLE_SCHEDULERS=1 w .env np. przy
+      # przywracaniu bazy z backupu, zeby sync nie ruszyl produkcji przedwczesnie.
+      - DISABLE_SCHEDULERS=${DISABLE_SCHEDULERS:-0}
     user: root
     command: ["gunicorn", "magazyn.wsgi:app", "--config", "/app/magazyn/gunicorn.conf.py"]
     restart: always
