@@ -17,7 +17,7 @@ env:
 
 jobs:
   test:
-    name: Testy
+    name: Testy jednostkowe
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -38,11 +38,43 @@ jobs:
           SECRET_KEY: test-ci-key
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          pytest magazyn/tests/ -q --tb=line -m "not e2e"
+          pytest magazyn/tests/ -q --tb=line -m "not e2e and not production"
+
+  e2e:
+    name: Testy E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalacja zaleznosci
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-flask pytest-playwright
+          playwright install --with-deps chromium
+
+      - name: Uruchomienie testow E2E
+        env:
+          DB_PATH: /tmp/test_magazyn_e2e.db
+          SECRET_KEY: test-ci-e2e-key
+          CI: "true"
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+          pytest \
+            magazyn/tests/e2e/ \
+            magazyn/tests/test_stocktake_ui.py \
+            -m e2e \
+            --browser chromium \
+            -q --tb=short
 
   build_image:
     name: Build i push GHCR
-    needs: test
+    needs: [test, e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -115,7 +147,14 @@ jobs:
               docker logs --tail 30 retrievershop-magazyn
               exit 1
             fi
-            echo "Deploy OK - kontener healthy"
+            echo "Sprawdzam /healthz i /login..."
+            curl -fsS http://127.0.0.1:8000/healthz
+            LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/login)
+            if [ "$LOGIN_CODE" != "200" ]; then
+              echo "Login page HTTP $LOGIN_CODE (oczekiwano 200)"
+              exit 1
+            fi
+            echo "Deploy OK - kontener healthy, /healthz i /login odpowiadaja"
 
       - name: Sync image do VPS failover
         uses: appleboy/ssh-action@v1.2.5
