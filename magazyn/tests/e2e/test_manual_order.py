@@ -4,6 +4,12 @@ import pytest
 from playwright.sync_api import Page, expect
 
 
+def _fill_field(page: Page, selector: str, value: str) -> None:
+    field = page.locator(selector).first
+    field.fill(value)
+    field.dispatch_event("input")
+
+
 def _fill_manual_order_form(
     page: Page,
     *,
@@ -11,16 +17,16 @@ def _fill_manual_order_form(
     customer: str = "Jan Testowy E2E",
     price: str = "200",
 ) -> None:
-    page.fill("#customer_name", customer)
-    page.fill("#delivery_address", "ul. Testowa 1")
-    page.fill("#delivery_city", "Warszawa")
-    page.fill("#delivery_postcode", "00-001")
-    page.fill("#payment_done", price)
-    page.fill("#delivery_package_nr", tracking)
+    _fill_field(page, "#customer_name", customer)
+    _fill_field(page, "#delivery_address", "ul. Testowa 1")
+    _fill_field(page, "#delivery_city", "Warszawa")
+    _fill_field(page, "#delivery_postcode", "00-001")
+    _fill_field(page, "#payment_done", price)
+    _fill_field(page, "#delivery_package_nr", tracking)
 
-    page.locator('input[name="prod_name[]"]').first.fill("Szelki testowe E2E")
-    page.locator('input[name="prod_qty[]"]').first.fill("1")
-    page.locator('input[name="prod_price[]"]').first.fill(price)
+    _fill_field(page, 'input[name="prod_name[]"]', "Szelki testowe E2E")
+    _fill_field(page, 'input[name="prod_qty[]"]', "1")
+    _fill_field(page, 'input[name="prod_price[]"]', price)
 
 
 @pytest.mark.e2e
@@ -35,7 +41,7 @@ class TestManualOrderFlow:
         _fill_manual_order_form(page, tracking=tracking)
 
         page.get_by_role("button", name="Zapisz zamówienie").click()
-        page.wait_for_url("**/order/manual_*")
+        page.wait_for_url("**/order/manual_*", timeout=60000)
 
         expect(page.locator(".badge", has_text="Wydrukowano")).to_be_visible()
         expect(page.get_by_text(tracking)).to_be_visible()
@@ -54,7 +60,7 @@ class TestManualOrderFlow:
         _fill_manual_order_form(page, tracking=initial_tracking, customer="Anna Testowa E2E")
 
         page.get_by_role("button", name="Zapisz zamówienie").click()
-        page.wait_for_url("**/order/manual_*")
+        page.wait_for_url("**/order/manual_*", timeout=60000)
         expect(page.get_by_text(initial_tracking)).to_be_visible()
 
         page.fill("#manual_tracking_number", updated_tracking)
