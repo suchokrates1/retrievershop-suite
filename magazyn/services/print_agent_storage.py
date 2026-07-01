@@ -138,25 +138,36 @@ class PrintAgentStorage:
         last_order_data: Optional[Dict[str, Any]] = None,
         *,
         update_printed_at: bool = True,
+        db_session=None,
     ) -> None:
         """Zapisz lub zaktualizuj rekord w printed_orders bez zmiany statusu zamowienia."""
         data_json = json.dumps(last_order_data or {}, ensure_ascii=False)
-        self.ensure_db()
         conflict_set = (
             "printed_at = excluded.printed_at, last_order_data = excluded.last_order_data"
             if update_printed_at
             else "last_order_data = excluded.last_order_data"
         )
+        insert_sql = text(
+            "INSERT INTO printed_orders(order_id, printed_at, last_order_data) "
+            "VALUES (:oid, :ts, :data) "
+            f"ON CONFLICT(order_id) DO UPDATE SET {conflict_set}"
+        )
+        params = {"oid": order_id, "ts": self._now().isoformat(), "data": data_json}
+
+        if db_session is not None:
+            db_session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS printed_orders("
+                    "order_id TEXT PRIMARY KEY, printed_at TEXT, last_order_data TEXT)"
+                )
+            )
+            db_session.execute(insert_sql, params)
+            return
+
+        self.ensure_db()
         try:
             with db_connect() as conn:
-                conn.execute(
-                    text(
-                        "INSERT INTO printed_orders(order_id, printed_at, last_order_data) "
-                        "VALUES (:oid, :ts, :data) "
-                        f"ON CONFLICT(order_id) DO UPDATE SET {conflict_set}"
-                    ),
-                    {"oid": order_id, "ts": self._now().isoformat(), "data": data_json},
-                )
+                conn.execute(insert_sql, params)
         except (DBAPIError, Exception) as exc:
             if self._handle_readonly_error("upsert_printed_order_record", exc):
                 return
