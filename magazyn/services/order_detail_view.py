@@ -38,6 +38,7 @@ def build_order_detail_view_context(db, order, *, app_base_url: str = "") -> dic
         }
     )
     context.update(_email_context(order.emails_sent))
+    context["is_manual_order"] = order.order_id.startswith("manual_")
     return context
 
 

@@ -16,6 +16,7 @@ from .services.order_list import build_orders_list_context
 from .services.order_sync import sync_order_from_data
 from .services.order_status import add_order_status
 from .services.order_labels import reprint_order_labels
+from .services.manual_order_actions import apply_manual_tracking, finalize_manual_order_creation, is_manual_order
 from .services.order_return_actions import (
     create_manual_return_for_order,
     mark_return_delivered_for_order,
@@ -328,11 +329,45 @@ def add_order():
 
     with get_session() as db:
         order = sync_order_from_data(db, payload.order_data)
-        add_order_status(db, order.order_id, "pobrano",
-                         notes=f"Zamowienie reczne ({payload.order_data['platform']})")
+        finalize_manual_order_creation(db, order, payload.order_data)
         db.commit()
         flash(f"Zamowienie {order.order_id} zostalo utworzone.", "success")
         return redirect(url_for("orders.order_detail", order_id=order.order_id))
+
+
+@bp.route("/order/<order_id>/manual_tracking", methods=["POST"])
+@login_required
+def update_manual_tracking(order_id: str):
+    """Dodaj lub zmien nr przesylki w zamowieniu recznym."""
+    tracking_number = request.form.get("tracking_number", "").strip()
+    courier_code = request.form.get("courier_code", "").strip() or None
+
+    if not tracking_number:
+        flash("Podaj numer przesylki", "danger")
+        return redirect(url_for(".order_detail", order_id=order_id))
+
+    with get_session() as db:
+        order = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order:
+            abort(404)
+        if not is_manual_order(order):
+            flash("Ta akcja jest dostepna tylko dla zamowien recznych", "danger")
+            return redirect(url_for(".order_detail", order_id=order_id))
+
+        try:
+            apply_manual_tracking(
+                db,
+                order,
+                tracking_number,
+                courier_code=courier_code,
+                notes="Numer przesylki dodany recznie",
+            )
+            db.commit()
+            flash("Numer przesylki zapisany", "success")
+        except ValueError as exc:
+            flash(str(exc), "danger")
+
+    return redirect(url_for(".order_detail", order_id=order_id))
 
 
 @bp.route("/orders/sync-all", methods=["POST"])

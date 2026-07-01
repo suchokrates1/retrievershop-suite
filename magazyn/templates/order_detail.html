@@ -502,7 +502,25 @@
                         <code>{{ order.delivery_package_nr }}</code>
                         {% endif %}
                     </p>
+                    {% elif is_manual_order %}
+                    <p class="mb-2 text-base-content/60">Brak numeru przesylki</p>
                     {% endif %}
+                    {% if is_manual_order %}
+                    <form action="{{ url_for('orders.update_manual_tracking', order_id=order.order_id) }}" method="post" class="mt-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label for="manual_tracking_number" class="label-text">
+                            {{ 'Zmien' if order.delivery_package_nr else 'Dodaj' }} nr przesylki
+                        </label>
+                        <div class="flex gap-2 mt-1">
+                            <input type="text" name="tracking_number" id="manual_tracking_number"
+                                   class="input input-bordered input-sm flex-1"
+                                   value="{{ order.delivery_package_nr or '' }}"
+                                   placeholder="np. numer InPost" required>
+                            <button type="submit" class="btn btn-sm btn-primary">Zapisz</button>
+                        </div>
+                    </form>
+                    {% endif %}
+                    {% if not is_manual_order %}
                     <div class="flex gap-2 mt-3">
                         <form action="{{ url_for('orders.reprint_label', order_id=order.order_id) }}" method="post" class="mb-0">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -517,6 +535,7 @@
                             </button>
                         </form>
                     </div>
+                    {% endif %}
                 </div>
             </div>
 

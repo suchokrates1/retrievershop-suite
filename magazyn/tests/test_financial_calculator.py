@@ -245,3 +245,26 @@ class TestCalculateOrderProfit:
                 result = calc.calculate_order_profit(order)
 
         assert result.profit == Decimal("0") - Decimal("0.16")
+
+    def test_manual_order_uses_products_json_commission(self):
+        order = MagicMock()
+        order.payment_done = "200.00"
+        order.order_id = "manual_123_abc"
+        order.delivery_method = "Kurier InPost"
+        order.external_order_id = None
+        order.products_json = (
+            '[{"name": "Produkt", "price_brutto": 200.0, "quantity": 1, "commission_fee": 15.0}]'
+        )
+        order.real_profit_allegro_fees = None
+        order.real_profit_is_final = False
+
+        calc = FinancialCalculator(MagicMock(), settings_store=None)
+
+        with patch.object(calc, 'get_purchase_cost_for_order', return_value=Decimal("100.00")):
+            with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
+                result = calc.refresh_order_profit_cache(order)
+
+        assert result.allegro_fees == Decimal("15.00")
+        assert result.fee_source == "manual"
+        assert result.billing_complete is True
+        assert result.shipping_estimated is False

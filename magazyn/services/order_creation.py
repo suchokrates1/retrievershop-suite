@@ -41,6 +41,7 @@ def build_manual_order_payload(form: Any) -> ManualOrderPayload:
     prices = form.getlist("prod_price[]")
 
     products = []
+    amount_commission_applied = False
     for idx, name in enumerate(names):
         if not name.strip():
             continue
@@ -48,8 +49,9 @@ def build_manual_order_payload(form: Any) -> ManualOrderPayload:
         price = _as_float(prices[idx] if idx < len(prices) else 0)
         if commission_type == "percent" and commission_value > 0:
             commission_fee = round(price * commission_value / 100, 2)
-        elif commission_type == "amount" and commission_value > 0:
+        elif commission_type == "amount" and commission_value > 0 and not amount_commission_applied:
             commission_fee = commission_value
+            amount_commission_applied = True
         else:
             commission_fee = 0.0
 

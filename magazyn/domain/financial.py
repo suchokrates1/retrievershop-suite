@@ -256,6 +256,28 @@ class FinancialCalculator:
                 return Decimal(str(order.payment_done or 0))
         return Decimal(str(order.payment_done or 0))
 
+    @staticmethod
+    def get_manual_order_fees(order) -> Optional[Decimal]:
+        """Pobierz sume prowizji z products_json dla zamowien recznych."""
+        order_id = str(getattr(order, "order_id", "") or "")
+        if not order_id.startswith("manual_"):
+            return None
+
+        products_json = getattr(order, "products_json", None)
+        if not products_json:
+            return Decimal("0")
+
+        try:
+            products = _json.loads(products_json)
+        except Exception:
+            return None
+
+        total = Decimal("0")
+        for product in products:
+            if product.get("commission_fee") is not None:
+                total += Decimal(str(product["commission_fee"]))
+        return total
+
     def _estimate_fee_snapshot(
         self,
         sale_price: Decimal,
@@ -296,6 +318,16 @@ class FinancialCalculator:
     ) -> Dict[str, Any]:
         billing_started_at = time.perf_counter()
         external_order_id = external_order_id or getattr(order, 'external_order_id', None)
+
+        manual_fees = self.get_manual_order_fees(order)
+        if manual_fees is not None:
+            return {
+                "fees": manual_fees,
+                "fee_source": "manual",
+                "shipping_estimated": False,
+                "billing_complete": True,
+                "error": None,
+            }
 
         cached_fees = _decimal_or_none(
             getattr(order, 'real_profit_allegro_fees', None) if order is not None else None
