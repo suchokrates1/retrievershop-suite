@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Optional, Mapping, Any
 
@@ -142,12 +143,22 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
         # Base.metadata.create_all(engine)  # Removed: use Alembic migrations only
         create_default_user_if_needed(app)
 
-    start_print_agent(app)
-    
+    # Awaryjny wylacznik: DISABLE_SCHEDULERS=1 blokuje print agent i wszystkie
+    # background workery (sync zamowien, tokeny, promocje...). Uzywany np. przy
+    # przywracaniu bazy z backupu, zeby nic automatycznie nie ruszylo produkcji
+    # zanim recznie nie zweryfikujemy stanu danych.
+    _schedulers_disabled = os.environ.get("DISABLE_SCHEDULERS") == "1"
+    if _schedulers_disabled:
+        app.logger.warning(
+            "DISABLE_SCHEDULERS=1 - print agent i workery tla NIE zostana uruchomione"
+        )
+    else:
+        start_print_agent(app)
+
     # Start token refresher only in dev mode (flask run / wsgi __main__).
     # In production gunicorn.conf.py starts it in exactly one worker via file lock.
     _is_gunicorn = "gunicorn" in sys.modules
-    if not _is_gunicorn:
+    if not _is_gunicorn and not _schedulers_disabled:
         app_runtime.start_dev_token_refresher(app)
 
     # Store app instance for scheduler initialization from gunicorn hook
