@@ -155,6 +155,7 @@ class TestHomePage:
             f"({vp['width']}x{vp['height']})"
         )
 
+    @pytest.mark.snapshot
     @pytest.mark.parametrize("viewport_name", ["mobile", "tablet", "desktop"])
     def test_home_snapshot(self, logged_in_page: Page, live_url: str, viewport_name: str, assert_snapshot):
         _goto_and_stabilize(logged_in_page, f"{live_url}/", VIEWPORTS[viewport_name])
@@ -182,6 +183,7 @@ class TestStatsDashboard:
             f"({vp['width']}x{vp['height']})"
         )
 
+    @pytest.mark.snapshot
     @pytest.mark.parametrize("viewport_name", ["mobile", "tablet", "desktop"])
     def test_stats_snapshot(self, logged_in_page: Page, live_url: str, viewport_name: str, assert_snapshot):
         _goto_and_stabilize_stats(logged_in_page, f"{live_url}/stats", VIEWPORTS[viewport_name])
@@ -209,6 +211,7 @@ class TestOrdersList:
             f"({vp['width']}x{vp['height']})"
         )
 
+    @pytest.mark.snapshot
     @pytest.mark.parametrize("viewport_name", ["mobile", "tablet", "desktop"])
     def test_orders_snapshot(self, logged_in_page: Page, live_url: str, viewport_name: str, assert_snapshot):
         _goto_and_stabilize(logged_in_page, f"{live_url}/orders", VIEWPORTS[viewport_name])
@@ -236,6 +239,7 @@ class TestItems:
             f"({vp['width']}x{vp['height']})"
         )
 
+    @pytest.mark.snapshot
     @pytest.mark.parametrize("viewport_name", ["mobile", "tablet", "desktop"])
     def test_items_snapshot(self, logged_in_page: Page, live_url: str, viewport_name: str, assert_snapshot):
         _goto_and_stabilize(logged_in_page, f"{live_url}/items", VIEWPORTS[viewport_name])
