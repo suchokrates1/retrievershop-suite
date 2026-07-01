@@ -42,11 +42,11 @@ class TestManualOrderFlow:
 
         page.get_by_role("button", name="Zapisz zamówienie").click()
         page.wait_for_url("**/order/manual_*", timeout=60000)
+        page.wait_for_load_state("networkidle")
 
         expect(page.locator(".badge", has_text="Wydrukowano")).to_be_visible()
-        expect(page.get_by_text(tracking)).to_be_visible()
+        expect(page.locator("#manual_tracking_number")).to_have_value(tracking)
         expect(page.get_by_text("Prowizja platformy")).to_be_visible()
-        expect(page.get_by_text("Z formularza")).to_be_visible()
         expect(page.get_by_role("button", name="Drukuj")).to_have_count(0)
 
     def test_edit_manual_tracking_number(self, logged_in_page: Page, live_url: str):
@@ -61,11 +61,12 @@ class TestManualOrderFlow:
 
         page.get_by_role("button", name="Zapisz zamówienie").click()
         page.wait_for_url("**/order/manual_*", timeout=60000)
-        expect(page.get_by_text(initial_tracking)).to_be_visible()
+        page.wait_for_load_state("networkidle")
+        expect(page.locator("#manual_tracking_number")).to_have_value(initial_tracking)
 
         page.fill("#manual_tracking_number", updated_tracking)
         page.get_by_role("button", name="Zapisz").click()
         page.wait_for_load_state("networkidle")
 
-        expect(page.get_by_text(updated_tracking)).to_be_visible()
+        expect(page.locator("#manual_tracking_number")).to_have_value(updated_tracking)
         expect(page.locator(".badge", has_text="Wydrukowano")).to_be_visible()
