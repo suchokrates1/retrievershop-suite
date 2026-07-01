@@ -138,6 +138,12 @@ class OrderDetailBuilder:
             "fee_details": [],
             "estimated_shipping": None,
         }
+
+        manual_fees = FinancialCalculator.get_manual_order_fees(order)
+        if manual_fees is not None:
+            result["commission"] = manual_fees
+            result["billing_data_available"] = True
+            return result
         
         try:
             access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")

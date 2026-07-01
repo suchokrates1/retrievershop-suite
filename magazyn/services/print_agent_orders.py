@@ -30,6 +30,9 @@ def collect_printable_orders(
         recent_orders = db.query(Order).filter(Order.date_add >= week_ago).all()
 
         for order in recent_orders:
+            if order.order_id.startswith("manual_"):
+                continue
+
             latest = (
                 db.query(OrderStatusLog)
                 .filter(OrderStatusLog.order_id == order.order_id)

@@ -17,7 +17,8 @@
             <div class="grid grid-cols-12 gap-3">
                 <div class="col-span-12 md:col-span-3">
                     <label for="platform" class="label-text">Platforma</label>
-                    <select name="platform" id="platform" class="select select-bordered w-full" required>
+                    <select name="platform" id="platform" class="select select-bordered w-full" required
+                            @change="onPlatformChange($event.target.value)">
                         <option value="olx">OLX</option>
                         <option value="allegro_manual">Allegro (ręczne)</option>
                         <option value="shop">Sklep</option>
@@ -156,11 +157,11 @@
                         <span x-text="commissionType === 'percent' ? 'Prowizja (%)' : 'Prowizja (PLN)'"></span>
                     </label>
                     <input type="number" step="0.01" min="0" name="commission_value" id="commission_value"
-                           class="input input-bordered w-full" value="10.0">
+                           class="input input-bordered w-full" value="7.5" x-model="commissionValue">
                 </div>
                 <div class="col-span-12 md:col-span-4 flex items-end">
                     <small class="text-base-content/60">
-                        Domyślnie 10% (Allegro). Dla OLX zwykle ~5-8%.
+                        OLX: zwykle 7,5%. Allegro ręczne: ~10%.
                     </small>
                 </div>
             </div>
@@ -303,7 +304,23 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('addOrder', () => ({
         deliveryMethod: 'Kurier InPost',
         commissionType: 'percent',
+        commissionValue: 7.5,
         wantInvoice: false,
+
+        onPlatformChange(platform) {
+            if (platform === 'allegro_manual') {
+                this.commissionType = 'percent';
+                this.commissionValue = 10;
+            } else if (platform === 'olx') {
+                this.commissionType = 'percent';
+                this.commissionValue = 7.5;
+            } else {
+                this.commissionType = 'percent';
+                this.commissionValue = 0;
+            }
+            document.getElementById('commission_type').value = this.commissionType;
+            document.getElementById('commission_value').value = this.commissionValue;
+        },
         products: [{ name: '', ean: '', qty: 1, price: '', searchQuery: '', suggestions: [], showSuggestions: false, info: '' }],
 
         addProduct() {
