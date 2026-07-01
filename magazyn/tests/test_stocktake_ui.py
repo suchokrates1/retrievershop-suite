@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import threading
 import time
-import os
 import pytest
 from collections import OrderedDict
 from typing import TYPE_CHECKING
@@ -30,10 +29,14 @@ try:
 except ImportError:
     _PLAYWRIGHT_AVAILABLE = False
 
-pytestmark = pytest.mark.skipif(
-    not _PLAYWRIGHT_AVAILABLE or os.getenv("CI") == "true",
-    reason="Testy UI wymagaja Playwright z zainstalowana przegladarka",
-)
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.ui,
+    pytest.mark.skipif(
+        not _PLAYWRIGHT_AVAILABLE,
+        reason="Testy UI wymagaja Playwright z zainstalowana przegladarka",
+    ),
+]
 
 
 EAN = "6900000000001"

@@ -1,0 +1,54 @@
+name: E2E UI (Playwright)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "magazyn/**"
+      - ".github/workflows/e2e.yml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-ui
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  playwright:
+    name: Playwright (lokalny serwer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalacja zaleznosci
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-flask pytest-playwright pillow
+          playwright install --with-deps chromium
+
+      - name: Testy E2E UI (bez snapshotow i CDP)
+        env:
+          DB_PATH: /tmp/test_magazyn_e2e.db
+          SECRET_KEY: test-ci-e2e-key
+          CI: "true"
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+          pytest \
+            magazyn/tests/e2e/test_mobile_menu.py \
+            magazyn/tests/e2e/test_visual_snapshots.py \
+            magazyn/tests/test_stocktake_ui.py \
+            -m "e2e and not snapshot" \
+            --browser chromium \
+            -v --tb=short
