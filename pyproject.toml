@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["magazyn/tests"]
 markers = [
-    "e2e: testy E2E w przegladarce (Playwright)",
+    "e2e: testy E2E w przegladarce (Playwright, lokalny serwer Flask)",
     "ui: testy UI Playwright z lokalnym serwerem Flask",
-    "snapshot: porownanie zrzutow ekranu (wrazliwe na OS/rendering)",
+    "production: testy reczne przeciw zywej produkcji (nie uruchamiac w CI)",
 ]

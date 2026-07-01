@@ -3,110 +3,12 @@
 Uruchamia aplikacje Flask na losowym porcie i udostepnia
 fixture `live_url` oraz `page` z Playwright.
 """
-import io
-import pathlib
+import threading
 
 import pytest
-import threading
 from collections import OrderedDict
 from flask.sessions import SecureCookieSessionInterface
 from werkzeug.serving import make_server
-
-from PIL import Image
-
-# ---------------------------------------------------------------------------
-# Katalog z referencyjnymi snapshotami (obok tego pliku)
-# ---------------------------------------------------------------------------
-SNAPSHOTS_DIR = pathlib.Path(__file__).parent / "snapshots"
-MAX_SNAPSHOT_HEIGHT = 7800
-
-
-# Rejestrujemy opcje w sposob kompatybilny z pytest-playwright
-# (oba pluginy definiuja pytest_addoption, wiec musi to byc conftest plugin)
-def pytest_addoption(parser):
-    group = parser.getgroup("snapshots", "Visual snapshot comparison")
-    group.addoption(
-        "--update-snapshots",
-        action="store_true",
-        default=False,
-        help="Nadpisuje referencyjne snapshoty nowymi zrzutami.",
-    )
-
-
-def _pixel_diff_ratio(img_a: Image.Image, img_b: Image.Image) -> float:
-    """Zwraca ulamek pikseli rozniących sie miedzy dwoma obrazami RGBA.
-
-    Jesli obrazy maja rozna wysokosc (np. przez dynamiczna tresc),
-    porownuje wspolna czesc i dodaje kare za roznice wysokosci.
-    """
-    wa, ha = img_a.size
-    wb, hb = img_b.size
-    if wa != wb:
-        return 1.0
-    w = wa
-    h_common = min(ha, hb)
-    h_max = max(ha, hb)
-    px_a = img_a.load()
-    px_b = img_b.load()
-    diff = 0
-    for y in range(h_common):
-        for x in range(w):
-            if px_a[x, y] != px_b[x, y]:
-                diff += 1
-    # Piksele poza wspolna czescia traktujemy jako rozne
-    diff += w * (h_max - h_common)
-    return diff / (w * h_max)
-
-
-def _normalize_snapshot_image(img: Image.Image) -> Image.Image:
-    """Przycina zrzut do bezpiecznej wysokosci, aby unikac limitow narzedzi."""
-    if img.height <= MAX_SNAPSHOT_HEIGHT:
-        return img
-    return img.crop((0, 0, img.width, MAX_SNAPSHOT_HEIGHT))
-
-
-def _normalize_snapshot_bytes(screenshot_bytes: bytes) -> bytes:
-    """Normalizuje screenshot bytes do deterministycznego formatu PNG."""
-    img = Image.open(io.BytesIO(screenshot_bytes)).convert("RGBA")
-    img = _normalize_snapshot_image(img)
-    out = io.BytesIO()
-    img.save(out, format="PNG")
-    return out.getvalue()
-
-
-@pytest.fixture
-def assert_snapshot(request):
-    """Fixture do porownywania snapshotow.
-
-    Uzycie w tescie::
-
-        def test_foo(assert_snapshot, logged_in_page):
-            assert_snapshot(logged_in_page.screenshot(full_page=True), "foo.png")
-    """
-    update = request.config.getoption("--update-snapshots")
-
-    def _compare(screenshot_bytes: bytes, name: str, max_diff_ratio: float = 0.05):
-        SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-        ref_path = SNAPSHOTS_DIR / name
-        normalized_bytes = _normalize_snapshot_bytes(screenshot_bytes)
-
-        if update or not ref_path.exists():
-            ref_path.write_bytes(normalized_bytes)
-            return
-
-        ref_img = _normalize_snapshot_image(Image.open(ref_path).convert("RGBA"))
-        new_img = Image.open(io.BytesIO(normalized_bytes)).convert("RGBA")
-        ratio = _pixel_diff_ratio(ref_img, new_img)
-        if ratio > max_diff_ratio:
-            # Zapisz aktualny screenshot do analizy
-            actual_path = ref_path.with_suffix(".actual.png")
-            actual_path.write_bytes(normalized_bytes)
-            pytest.fail(
-                f"Snapshot '{name}' rozni sie o {ratio:.2%} (limit {max_diff_ratio:.0%}). "
-                f"Aktualny zrzut: {actual_path}"
-            )
-
-    return _compare
 
 
 @pytest.fixture(scope="session")
@@ -195,7 +97,6 @@ def _e2e_app(tmp_path_factory):
     configure_engine(str(db_path))
     with app.app_context():
         reset_db()
-        # Tworzymy uzytkownika testowego
         from magazyn.db import get_session
         from magazyn.models.users import User
         from werkzeug.security import generate_password_hash

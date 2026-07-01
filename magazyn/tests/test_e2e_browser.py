@@ -1,10 +1,12 @@
 """Testy E2E przez przegladarke CDP (Chrome DevTools Protocol).
 
+Testy reczne przeciw zywej produkcji — nie uruchamiaj w CI.
+
 Wymagaja uruchomionego Chromium z CDP na minipc (lub innym hoscie).
 Pomijane automatycznie jesli CDP jest niedostepny.
 
 Uruchomienie:
-    pytest magazyn/tests/test_e2e_browser.py -m e2e -v
+    pytest magazyn/tests/test_e2e_browser.py -m production -v
 
 Konfiguracja (zmienne srodowiskowe):
     E2E_CDP_HOST  - host CDP (domyslnie: 192.168.31.147)
@@ -22,7 +24,7 @@ import urllib.request
 
 import pytest
 
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.production
 
 CDP_HOST = os.environ.get("E2E_CDP_HOST", "192.168.31.147")
 CDP_PORT = int(os.environ.get("E2E_CDP_PORT", "9223"))
