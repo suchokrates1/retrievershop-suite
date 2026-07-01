@@ -126,6 +126,8 @@ jobs:
           command_timeout: 5m
           script: |
             cd /home/suchokrates1/retrievershop-suite
+            git fetch origin main
+            git pull --ff-only origin main || echo "UWAGA: git pull nieudany, kontynuuje deploy obrazu"
             echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             export MAGAZYN_IMAGE_TAG=latest
             docker compose pull magazyn_app

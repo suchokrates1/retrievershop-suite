@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import desc, text
+from sqlalchemy import desc
 
 from ..domain.returns import map_carrier_to_allegro
 from ..models.orders import Order, OrderStatusLog
 from .order_status import add_order_status
+from .print_agent_storage import PrintAgentStorage
+
+_logger = logging.getLogger(__name__)
+_print_storage = PrintAgentStorage(
+    logger=_logger,
+    now=lambda: datetime.now(timezone.utc),
+    handle_readonly_error=lambda _operation, _exc: False,
+)
 
 
 def is_manual_order(order: Order | str) -> bool:
@@ -24,27 +32,14 @@ def resolve_manual_courier_code(delivery_method: Optional[str]) -> Optional[str]
     return map_carrier_to_allegro(delivery_method)
 
 
-def _mark_manual_order_printed(db, order_id: str, *, tracking_number: str, courier_code: Optional[str]) -> None:
-    printed_at = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        text(
-            "INSERT INTO printed_orders(order_id, printed_at, last_order_data) "
-            "VALUES (:oid, :ts, :data) "
-            "ON CONFLICT(order_id) DO UPDATE SET "
-            "printed_at = excluded.printed_at, last_order_data = excluded.last_order_data"
-        ),
+def _mark_manual_order_printed(order_id: str, *, tracking_number: str, courier_code: Optional[str]) -> None:
+    _print_storage.upsert_printed_order_record(
+        order_id,
         {
-            "oid": order_id,
-            "ts": printed_at,
-            "data": json.dumps(
-                {
-                    "courier_code": courier_code,
-                    "delivery_package_nr": tracking_number,
-                    "manual_shipment": True,
-                    "skip_print": True,
-                },
-                ensure_ascii=False,
-            ),
+            "courier_code": courier_code,
+            "delivery_package_nr": tracking_number,
+            "manual_shipment": True,
+            "skip_print": True,
         },
     )
 
@@ -106,7 +101,6 @@ def apply_manual_tracking(
         )
 
     _mark_manual_order_printed(
-        db,
         order.order_id,
         tracking_number=tracking_number,
         courier_code=resolved_courier,

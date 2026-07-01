@@ -3,6 +3,7 @@
 Uruchamia aplikacje Flask na losowym porcie i udostepnia
 fixture `live_url` oraz `page` z Playwright.
 """
+import os
 import threading
 
 import pytest
@@ -78,6 +79,9 @@ def _e2e_app(tmp_path_factory):
     _orig_config_settings = config_module.settings
     factory.create_default_user_if_needed = lambda *a, **kw: None
     factory.start_print_agent = lambda *a, **kw: None
+
+    os.environ.pop("DATABASE_URL", None)
+    os.environ["TESTING"] = "1"
 
     settings_store._loaded = False
     settings_store._values = OrderedDict()

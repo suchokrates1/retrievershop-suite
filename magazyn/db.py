@@ -209,8 +209,19 @@ def init_db():
     """Initialize the SQLite database and create required tables."""
     Base.metadata.create_all(engine)
 
-def reset_db():
-    """Drop all tables and recreate them."""
+def reset_db(*, force: bool = False):
+    """Drop all tables and recreate them.
+
+    Bezpiecznik: na PostgreSQL wymaga ``force=True`` albo ``TESTING=1`` w env,
+    zeby przypadkowy pytest w kontenerze produkcyjnym nie wyczyscil bazy.
+    """
+    database_url = os.environ.get("DATABASE_URL", "")
+    testing = os.environ.get("TESTING") == "1" or os.environ.get("PYTEST_CURRENT_TEST")
+    if database_url.startswith("postgresql") and not force and not testing:
+        raise RuntimeError(
+            "reset_db() blocked on PostgreSQL. Unset DATABASE_URL for isolated tests "
+            "or pass force=True only in controlled environments."
+        )
     from sqlalchemy import text
     Base.metadata.drop_all(engine)
     if _is_postgres:
