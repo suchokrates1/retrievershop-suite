@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 from sqlalchemy import desc
+
+from magazyn.db import get_session
 from magazyn.models.orders import Order, OrderStatusLog
 from magazyn.services.manual_order_actions import apply_manual_tracking, finalize_manual_order_creation
 from magazyn.services.order_status import add_order_status
