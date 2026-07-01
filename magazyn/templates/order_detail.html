@@ -563,9 +563,11 @@
                     </p>
                     <div class="divider my-1"></div>
                     <h6 class="text-base-content/60 font-semibold mb-2">
-                        Koszty Allegro:
+                        {% if is_manual_order %}Prowizja platformy{% else %}Koszty Allegro{% endif %}:
                         {% if billing_data_available %}
-                        <span class="badge badge-success text-xs">Dane z API</span>
+                        <span class="badge badge-success text-xs">
+                            {% if is_manual_order %}Z formularza{% else %}Dane z API{% endif %}
+                        </span>
                         {% else %}
                         <span class="badge badge-warning text-xs">Szacunkowo</span>
                         {% endif %}
@@ -623,13 +625,13 @@
                         {% endif %}
                         
                         <p class="mb-1 text-sm font-bold">
-                            <strong>Suma oplat Allegro:</strong> 
+                            <strong>{% if is_manual_order %}Suma prowizji platformy{% else %}Suma oplat Allegro{% endif %}:</strong> 
                             <span class="text-error">-{{ '%.2f'|format(total_allegro_fees) }} {{ order.currency or 'PLN' }}</span>
                         </p>
                     {% else %}
                         {# Szacunkowe dane (brak API) #}
                         <p class="mb-1 small">
-                            <strong>Marza Allegro (~12.3%):</strong> 
+                            <strong>{% if is_manual_order %}Prowizja platformy{% else %}Marza Allegro (~12.3%){% endif %}:</strong> 
                             <span class="text-error">-{{ '%.2f'|format(allegro_commission) }} {{ order.currency or 'PLN' }}</span>
                         </p>
                     {% endif %}

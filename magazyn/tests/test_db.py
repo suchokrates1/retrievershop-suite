@@ -1,6 +1,8 @@
 import logging
 import sqlite3
 
+import pytest
+
 import magazyn.db as db
 from magazyn.db import sqlite_connect
 
@@ -54,3 +56,12 @@ def test_configure_sqlite_connection_readonly(tmp_path, caplog):
     assert any("journal_mode" in message for message in warning_messages)
     assert busy_timeout == db.SQLITE_BUSY_TIMEOUT_MS
     assert foreign_keys == 1
+
+
+def test_reset_db_blocked_on_postgres_without_testing(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/magazyn")
+    monkeypatch.delenv("TESTING", raising=False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    with pytest.raises(RuntimeError, match="reset_db\\(\\) blocked"):
+        db.reset_db()

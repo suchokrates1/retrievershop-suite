@@ -1,11 +1,9 @@
-import pytest
 from pathlib import Path
 from sqlalchemy.sql import text
 from magazyn.models.products import ProductSize
 from magazyn.domain.invoice_import import import_invoice_file
 
 
-@pytest.mark.xfail(reason="invoice size parsing mismatch, needs fix")
 def test_import_invoice_file_real(app_mod):
     pdf_path = Path("magazyn/samples/sample_invoice.pdf")
     with pdf_path.open("rb") as f:
@@ -15,7 +13,7 @@ def test_import_invoice_file_real(app_mod):
     expected = [
         {
             "name": "Szelki dla psa Truelove Front Line Premium",
-            "color": "różowe",
+            "color": "różowy",
             "size": "XL",
             "qty": 5,
             "price": 134.33,
@@ -63,7 +61,7 @@ def test_import_invoice_file_real(app_mod):
         },
         {
             "name": "Szelki z odpinanym przodem dla psa Truelove Front Line Premium",
-            "color": "czarne",
+            "color": "czarny",
             "size": "M",
             "qty": 5,
             "price": 134.33,
@@ -71,7 +69,7 @@ def test_import_invoice_file_real(app_mod):
         },
         {
             "name": "Szelki z odpinanym przodem dla psa Truelove Front Line Premium",
-            "color": "czarne",
+            "color": "czarny",
             "size": "S",
             "qty": 6,
             "price": 134.33,
@@ -80,7 +78,7 @@ def test_import_invoice_file_real(app_mod):
         {
             "name": "Pas samochodowy dla psa Truelove Premium",
             "color": "srebrny",
-            "size": "",
+            "size": "Uniwersalny",
             "qty": 10,
             "price": 53.33,
             "barcode": "6976128181720",

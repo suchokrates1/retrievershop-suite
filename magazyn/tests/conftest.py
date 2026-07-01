@@ -89,6 +89,9 @@ def app(tmp_path, monkeypatch):
     # Skip creating a default user or starting background threads during app factory
     monkeypatch.setattr('magazyn.factory.create_default_user_if_needed', lambda *args, **kwargs: None)
     monkeypatch.setattr('magazyn.factory.start_print_agent', lambda *args, **kwargs: None)
+    # W kontenerze produkcyjnym DATABASE_URL wskazuje Postgres — wymusz SQLite z tmp_path
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("TESTING", "1")
 
     # 2. Reset the internal state of the global settings_store singleton for test isolation
     monkeypatch.setattr(settings_store, '_loaded', False)

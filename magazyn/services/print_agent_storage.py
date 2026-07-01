@@ -132,26 +132,46 @@ class PrintAgentStorage:
             )
         return items
 
-    def mark_as_printed(
+    def upsert_printed_order_record(
         self,
         order_id: str,
         last_order_data: Optional[Dict[str, Any]] = None,
+        *,
+        update_printed_at: bool = True,
     ) -> None:
-        data_json = json.dumps(last_order_data or {})
+        """Zapisz lub zaktualizuj rekord w printed_orders bez zmiany statusu zamowienia."""
+        data_json = json.dumps(last_order_data or {}, ensure_ascii=False)
+        self.ensure_db()
+        conflict_set = (
+            "printed_at = excluded.printed_at, last_order_data = excluded.last_order_data"
+            if update_printed_at
+            else "last_order_data = excluded.last_order_data"
+        )
         try:
             with db_connect() as conn:
                 conn.execute(
                     text(
                         "INSERT INTO printed_orders(order_id, printed_at, last_order_data) "
                         "VALUES (:oid, :ts, :data) "
-                        "ON CONFLICT(order_id) DO UPDATE SET last_order_data = excluded.last_order_data"
+                        f"ON CONFLICT(order_id) DO UPDATE SET {conflict_set}"
                     ),
                     {"oid": order_id, "ts": self._now().isoformat(), "data": data_json},
                 )
         except (DBAPIError, Exception) as exc:
-            if self._handle_readonly_error("mark_as_printed", exc):
+            if self._handle_readonly_error("upsert_printed_order_record", exc):
                 return
             raise
+
+    def mark_as_printed(
+        self,
+        order_id: str,
+        last_order_data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.upsert_printed_order_record(
+            order_id,
+            last_order_data,
+            update_printed_at=False,
+        )
 
         try:
             from ..db import get_session
