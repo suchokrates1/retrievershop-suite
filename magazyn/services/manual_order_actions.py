@@ -32,7 +32,7 @@ def resolve_manual_courier_code(delivery_method: Optional[str]) -> Optional[str]
     return map_carrier_to_allegro(delivery_method)
 
 
-def _mark_manual_order_printed(order_id: str, *, tracking_number: str, courier_code: Optional[str]) -> None:
+def _mark_manual_order_printed(db, order_id: str, *, tracking_number: str, courier_code: Optional[str]) -> None:
     _print_storage.upsert_printed_order_record(
         order_id,
         {
@@ -41,6 +41,7 @@ def _mark_manual_order_printed(order_id: str, *, tracking_number: str, courier_c
             "manual_shipment": True,
             "skip_print": True,
         },
+        db_session=db,
     )
 
 
@@ -101,6 +102,7 @@ def apply_manual_tracking(
         )
 
     _mark_manual_order_printed(
+        db,
         order.order_id,
         tracking_number=tracking_number,
         courier_code=resolved_courier,
