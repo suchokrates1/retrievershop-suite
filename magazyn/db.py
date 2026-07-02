@@ -316,6 +316,7 @@ def record_sale(
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
     sale_date=None,
+    order_id=None,
 ):
     """Record a sale inside an existing session."""
     from .services.stock_records import record_sale as _record_sale
@@ -331,6 +332,7 @@ def record_sale(
         shipping_cost=shipping_cost,
         commission_fee=commission_fee,
         sale_date=sale_date,
+        order_id=order_id,
     )
 
 
@@ -341,11 +343,12 @@ def consume_stock(
     sale_price=Decimal("0.00"),
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
+    order_id=None,
 ):
-    """Remove quantity from stock using FIFO (oldest purchase batches first).
-    
-    Uses remaining_quantity field to track how much is left from each batch.
-    Records sale with actual purchase cost for profit calculation.
+    """Remove quantity from stock and record the sale.
+
+    Wycena metoda sredniej wazonej (AVCO) - koszt zakupu = proporcjonalny
+    udzial ``ProductSize.stock_value`` (patrz services/stock_records.py).
     """
     from .services.stock_records import consume_stock as _consume_stock
 
@@ -357,6 +360,7 @@ def consume_stock(
         decimal_converter=to_decimal,
         twoplaces=TWOPLACES,
         low_stock_threshold=settings.LOW_STOCK_THRESHOLD,
+        order_id=order_id,
         stock_alert_sender=send_stock_alert,
         log=logger,
         sale_price=sale_price,

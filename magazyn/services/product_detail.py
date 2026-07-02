@@ -91,7 +91,6 @@ def _delivery_history_payload(db, product_id: int, offset: int, limit: int) -> d
         {
             "size": batch.size,
             "quantity": batch.quantity,
-            "remaining": _remaining_quantity(batch),
             "price": float(batch.price),
             "total_value": float(batch.quantity * batch.price),
             "date": _format_purchase_date(batch.purchase_date),
@@ -130,6 +129,7 @@ def _order_history_payload(db, product: Product, offset: int, limit: int) -> dic
 def _build_sizes_data(db, product_id: int, sorted_sizes) -> list[dict[str, Any]]:
     sizes_data = []
     for product_size in sorted_sizes:
+        # Historia partii sluzy juz tylko do pokazania ostatniej ceny dostawy.
         batches = (
             db.query(PurchaseBatch)
             .filter(
@@ -139,19 +139,15 @@ def _build_sizes_data(db, product_id: int, sorted_sizes) -> list[dict[str, Any]]
             .all()
         )
         latest_batch = _latest_purchase_batch(batches)
-        total_qty = sum(batch.quantity for batch in batches)
-        total_value = sum(batch.quantity * batch.price for batch in batches)
-        avg_price = (total_value / total_qty) if total_qty > 0 else None
 
-        remaining_batches = [batch for batch in batches if (batch.remaining_quantity or 0) > 0]
-        fifo_remaining = sum(batch.remaining_quantity or 0 for batch in remaining_batches)
+        # Srednia wazona liczona z aktualnej wartosci magazynu (AVCO).
+        avg_price = product_size.avg_purchase_price
 
         sizes_data.append(
             {
                 "id": product_size.id,
                 "size": product_size.size,
                 "quantity": product_size.quantity,
-                "fifo_remaining": fifo_remaining,
                 "barcode": product_size.barcode,
                 "purchase_price": latest_batch.price if latest_batch else None,
                 "avg_purchase_price": avg_price,
@@ -198,7 +194,6 @@ def _build_delivery_history(db, product_id: int, *, limit: int) -> list[dict[str
             "id": batch.id,
             "size": batch.size,
             "quantity": batch.quantity,
-            "remaining": _remaining_quantity(batch),
             "price": batch.price,
             "total_value": batch.quantity * batch.price,
             "date": batch.purchase_date,
@@ -211,10 +206,15 @@ def _build_delivery_history(db, product_id: int, *, limit: int) -> list[dict[str
 
 
 def _average_purchase_price(db, product_id: int) -> Decimal | None:
-    batches = db.query(PurchaseBatch).filter(PurchaseBatch.product_id == product_id).all()
-    total_qty = sum(batch.quantity for batch in batches)
-    total_value = sum(batch.quantity * batch.price for batch in batches)
-    return (total_value / total_qty) if total_qty > 0 else None
+    """Srednia wazona cena zakupu na stanie (po wszystkich rozmiarach)."""
+    from ..models.products import ProductSize
+
+    rows = db.query(ProductSize).filter(ProductSize.product_id == product_id).all()
+    total_qty = sum(ps.quantity or 0 for ps in rows)
+    if total_qty <= 0:
+        return None
+    total_value = sum(Decimal(str(ps.stock_value or 0)) for ps in rows)
+    return total_value / Decimal(total_qty)
 
 
 def _build_allegro_data(db, product_id: int, sizes_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -317,10 +317,6 @@ def _matched_allegro_size(offer: AllegroOffer, sizes_data: list[dict[str, Any]])
         (size["size"] for size in sizes_data if size["id"] == offer.product_size_id),
         None,
     )
-
-
-def _remaining_quantity(batch: PurchaseBatch) -> int:
-    return batch.remaining_quantity if batch.remaining_quantity is not None else batch.quantity
 
 
 def _format_purchase_date(value) -> str | None:

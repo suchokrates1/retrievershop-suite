@@ -828,7 +828,6 @@ def _import_invoice_df(
                     product_id=product.id,
                     size=size,
                     quantity=quantity,
-                    remaining_quantity=quantity,  # FIFO support
                     price=price,
                     purchase_date=delivery_date,
                     barcode=barcode,
@@ -837,6 +836,8 @@ def _import_invoice_df(
                 )
             )
             ps.quantity += quantity
+            # Podnies wartosc magazynu (srednia wazona) o wartosc dostawy.
+            ps.stock_value = Decimal(str(ps.stock_value or 0)) + Decimal(quantity) * Decimal(str(price))
 
 
 def import_invoice_rows(

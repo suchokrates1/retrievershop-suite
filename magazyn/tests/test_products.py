@@ -207,7 +207,6 @@ def test_product_detail_service_builds_stock_and_delivery_context(app_mod):
                 product_id=product.id,
                 size="M",
                 quantity=3,
-                remaining_quantity=2,
                 price=Decimal("10.50"),
                 purchase_date="2026-04-27",
                 barcode="123",
@@ -223,7 +222,6 @@ def test_product_detail_service_builds_stock_and_delivery_context(app_mod):
     assert context["total_in_stock"] == 4
     assert context["total_delivered"] == 3
     assert context["sizes"][0]["purchase_price"] == Decimal("10.50")
-    assert context["delivery_history"][0]["remaining"] == 2
 
 
 def test_product_history_service_returns_delivery_payload(app_mod):
@@ -236,7 +234,6 @@ def test_product_history_service_returns_delivery_payload(app_mod):
                 product_id=product.id,
                 size="M",
                 quantity=2,
-                remaining_quantity=1,
                 price=Decimal("12.00"),
                 purchase_date="2026-04-27",
                 invoice_number="FV/2",
@@ -253,7 +250,6 @@ def test_product_history_service_returns_delivery_payload(app_mod):
     assert status_code == 200
     assert payload["total"] == 1
     assert payload["items"][0]["price"] == 12.0
-    assert payload["items"][0]["remaining"] == 1
 
 
 def test_product_history_service_returns_404_for_missing_product(app_mod):

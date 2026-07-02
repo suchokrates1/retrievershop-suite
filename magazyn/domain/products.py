@@ -3,13 +3,12 @@ from __future__ import annotations
 import logging
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime
 
 import pandas as pd
 
 from ..constants import ALL_SIZES
 from ..db import get_session
-from ..models.products import Product, ProductSize, PurchaseBatch
+from ..models.products import Product, ProductSize
 
 logger = logging.getLogger(__name__)
 TWOPLACES = Decimal("0.01")
@@ -135,6 +134,8 @@ def update_product(
             if not is_valid:
                 raise ValueError(f"Nieprawidłowy EAN dla rozmiaru {size}: {error_msg}")
     
+    from ..services.stock_adjust import apply_stock_adjustment
+
     with get_session() as db:
         product = db.query(Product).filter_by(id=product_id).first()
         if not product:
@@ -149,48 +150,38 @@ def update_product(
         for size in ALL_SIZES:
             qty = _to_int(quantities.get(size, 0))
             barcode = barcodes.get(size)
+
+            # Cena zakupu (jesli podana) dotyczy sztuk DOKLADANYCH przy tej
+            # edycji - traktujemy je jak realny zakup (srednia sie przesuwa).
+            # Bez ceny zwiekszenie idzie po biezacej sredniej (neutralne).
+            unit_price = None
+            if purchase_prices and size in purchase_prices:
+                raw_price = purchase_prices[size]
+                if raw_price is not None and raw_price > 0:
+                    unit_price = _to_decimal(raw_price)
+
             ps = (
                 db.query(ProductSize)
                 .filter_by(product_id=product_id, size=size)
                 .first()
             )
-            if ps:
-                ps.quantity = qty
-                ps.barcode = barcode
-            else:
-                db.add(
-                    ProductSize(
-                        product_id=product_id,
-                        size=size,
-                        quantity=qty,
-                        barcode=barcode,
-                    )
+            if not ps:
+                ps = ProductSize(
+                    product_id=product_id,
+                    size=size,
+                    quantity=0,
+                    stock_value=Decimal("0.00"),
+                    barcode=barcode,
                 )
-            
-            # Update purchase price if provided
-            if purchase_prices and size in purchase_prices:
-                price = purchase_prices[size]
-                if price is not None and price > 0:
-                    # Check if there's already a batch for this size today
-                    today = datetime.now().strftime("%Y-%m-%d")
-                    existing_batch = (
-                        db.query(PurchaseBatch)
-                        .filter_by(product_id=product_id, size=size, purchase_date=today)
-                        .first()
-                    )
-                    if existing_batch:
-                        existing_batch.price = _to_decimal(price)
-                    else:
-                        # Create new batch with 0 quantity (just to store price)
-                        db.add(
-                            PurchaseBatch(
-                                product_id=product_id,
-                                size=size,
-                                quantity=0,
-                                price=_to_decimal(price),
-                                purchase_date=today,
-                            )
-                        )
+                db.add(ps)
+                db.flush()
+            else:
+                ps.barcode = barcode
+
+            # Ustaw stan na podana ilosc utrzymujac spojnosc stock_value.
+            apply_stock_adjustment(
+                ps, set_to=qty, unit_price=unit_price, reason="edit_item"
+            )
     return product
 
 
@@ -250,19 +241,15 @@ def get_product_details(
             size: {"quantity": 0, "barcode": "", "purchase_price": ""} for size in ALL_SIZES
         }
         for s in sizes_rows:
-            # Get latest purchase price for this size
-            latest_batch = (
-                db.query(PurchaseBatch)
-                .filter_by(product_id=product_id, size=s.size)
-                .order_by(PurchaseBatch.purchase_date.desc())
-                .first()
-            )
-            purchase_price = float(latest_batch.price) if latest_batch else ""
-            
+            # Domyslna cena = biezaca srednia wazona zakupu (stock_value/quantity).
+            # Zostawienie jej = korekta neutralna dla sredniej; wpisanie innej =
+            # realny zakup, ktory przesuwa srednia.
+            avg = float(s.avg_purchase_price) if s.avg_purchase_price is not None else ""
+
             product_sizes[s.size] = {
                 "quantity": s.quantity,
                 "barcode": s.barcode or "",
-                "purchase_price": purchase_price,
+                "purchase_price": avg,
             }
     return product, product_sizes
 

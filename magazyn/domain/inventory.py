@@ -23,30 +23,38 @@ def _calculate_shipping(amount: Decimal) -> Decimal:
 
 
 def update_quantity(product_id: int, size: str, action: str):
-    """Increase or decrease stock quantity for a specific size."""
+    """Reczna korekta stanu o +/-1 dla rozmiaru (nie sprzedaz).
+
+    Zwiekszenie idzie po biezacej sredniej cenie zakupu (neutralne dla
+    sredniej), zmniejszenie zdejmuje proporcjonalny udzial wartosci. To
+    korekta stanu, wiec NIE tworzy rekordu sprzedazy.
+    """
+    from ..services.stock_adjust import apply_stock_adjustment
+
     with get_session() as db:
         ps = (
             db.query(ProductSize)
             .filter_by(product_id=product_id, size=size)
             .first()
         )
-        if ps:
-            if action == "increase":
-                ps.quantity += 1
-            elif action == "decrease" and ps.quantity > 0:
-                consume_stock(product_id, size, 1, sale_price=0)
-            elif action == "decrease":
-                logger.warning(
-                    "No stock to decrease for product_id=%s size=%s",
-                    product_id,
-                    size,
-                )
-        else:
+        if not ps:
             logger.warning(
                 "Product id %s size %s not found, quantity update skipped",
                 product_id,
                 size,
             )
+            return
+        if action == "increase":
+            apply_stock_adjustment(ps, delta=1, reason="manual_increase")
+        elif action == "decrease":
+            if ps.quantity > 0:
+                apply_stock_adjustment(ps, delta=-1, reason="manual_decrease")
+            else:
+                logger.warning(
+                    "No stock to decrease for product_id=%s size=%s",
+                    product_id,
+                    size,
+                )
 
 
 def get_products_for_delivery():
@@ -159,8 +167,14 @@ def import_from_dataframe(df: pd.DataFrame):
                     ps.barcode = size_barcode
 
 
-def consume_order_stock(products: List[dict]):
-    """Consume stock for products from a printed order."""
+def consume_order_stock(products: List[dict], order_id: str | None = None):
+    """Consume stock for products from a printed order.
+
+    ``order_id`` jest przekazywany dalej do ``consume_stock``/``record_sale``,
+    zeby powiazac powstale rekordy sprzedazy z konkretnym zamowieniem
+    (realny koszt zakupu FIFO na stronie zamowienia + poprawny zwrot do
+    oryginalnej partii).
+    """
     for item in products or []:
         try:
             qty = _to_int(item.get("quantity", 0))
@@ -213,6 +227,7 @@ def consume_order_stock(products: List[dict]):
                     sale_price=price,
                     shipping_cost=shipping_cost,
                     commission_fee=commission_fee,
+                    order_id=order_id,
                 )
             else:
                 logger.warning(
@@ -236,6 +251,7 @@ def consume_order_stock(products: List[dict]):
                     sale_price=Decimal("0.00"),
                     shipping_cost=Decimal("0.00"),
                     commission_fee=Decimal("0.00"),
+                    order_id=order_id,
                 )
 
 

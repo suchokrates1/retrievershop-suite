@@ -1,9 +1,18 @@
-"""Operacje zapisu zakupow, sprzedazy i FIFO magazynu."""
+"""Operacje zapisu zakupow i sprzedazy - wycena metoda sredniej wazonej (AVCO).
+
+Model wyceny: kazdy ``ProductSize`` trzyma ``quantity`` (liczba sztuk) oraz
+``stock_value`` (laczna wartosc zakupu tych sztuk). Srednia cena zakupu =
+``stock_value / quantity`` liczona w locie. Przyjecie towaru podnosi wartosc,
+sprzedaz zdejmuje proporcjonalny udzial wartosci (dzieki czemu sprzedaz calego
+stanu zeruje ``stock_value`` co do grosza). ``PurchaseBatch`` sluzy juz tylko
+jako dziennik dostaw (historia/raporty), nie do wyceny.
+"""
 
 from __future__ import annotations
 
 import datetime
 from decimal import Decimal, ROUND_HALF_UP
+from typing import Optional
 
 from ..models.products import Product, ProductSize, PurchaseBatch, Sale
 
@@ -22,7 +31,7 @@ def record_purchase(
     supplier=None,
     notes=None,
 ) -> None:
-    """Dodaj partie zakupu i zwieksz stan magazynowy."""
+    """Dodaj wpis dostawy (historia) i podnies stan oraz wartosc magazynu."""
     purchase_date = purchase_date or datetime.datetime.now().strftime("%Y-%m-%d")
     with session_factory() as session:
         price = decimal_converter(price)
@@ -31,7 +40,6 @@ def record_purchase(
                 product_id=product_id,
                 size=size,
                 quantity=quantity,
-                remaining_quantity=quantity,
                 price=price,
                 purchase_date=purchase_date,
                 barcode=barcode,
@@ -43,6 +51,8 @@ def record_purchase(
         product_size = session.query(ProductSize).filter_by(product_id=product_id, size=size).first()
         if product_size:
             product_size.quantity += quantity
+            current_value = Decimal(str(product_size.stock_value or 0))
+            product_size.stock_value = current_value + Decimal(quantity) * price
 
 
 def record_sale(
@@ -57,21 +67,30 @@ def record_sale(
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
     sale_date=None,
-) -> None:
-    """Zapisz sprzedaz w istniejacej sesji."""
+    order_id: Optional[str] = None,
+) -> Sale:
+    """Zapisz sprzedaz w istniejacej sesji.
+
+    ``order_id`` pozwala pozniej policzyc REALNY koszt zakupu dla zamowienia
+    (suma ``purchase_cost`` ze sprzedazy tego zamowienia) oraz - w razie zwrotu -
+    odtworzyc koszt sztuki, zeby oddac dokladnie tyle wartosci ile zeszlo
+    (patrz FinancialCalculator.get_purchase_cost_for_order i
+    services/return_stock.py).
+    """
     sale_date = sale_date or datetime.datetime.now().isoformat()
-    session.add(
-        Sale(
-            product_id=product_id,
-            size=size,
-            quantity=quantity,
-            sale_date=sale_date,
-            purchase_cost=decimal_converter(purchase_cost),
-            sale_price=decimal_converter(sale_price),
-            shipping_cost=decimal_converter(shipping_cost),
-            commission_fee=decimal_converter(commission_fee),
-        )
+    sale = Sale(
+        product_id=product_id,
+        size=size,
+        quantity=quantity,
+        sale_date=sale_date,
+        purchase_cost=decimal_converter(purchase_cost),
+        sale_price=decimal_converter(sale_price),
+        shipping_cost=decimal_converter(shipping_cost),
+        commission_fee=decimal_converter(commission_fee),
+        order_id=order_id,
     )
+    session.add(sale)
+    return sale
 
 
 def consume_stock(
@@ -88,8 +107,14 @@ def consume_stock(
     sale_price=Decimal("0.00"),
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
+    order_id: Optional[str] = None,
 ) -> int:
-    """Pobierz stan magazynowy metoda FIFO i zapisz sprzedaz."""
+    """Zdejmij stan magazynowy i zapisz sprzedaz z kosztem wg sredniej wazonej.
+
+    Koszt zakupu sprzedanych sztuk = proporcjonalny udzial ``stock_value``
+    (``stock_value * consumed / available``). Zdjecie calego stanu zeruje
+    ``stock_value``. ``order_id`` (jesli podany) laczy sprzedaz z zamowieniem.
+    """
     with session_factory() as session:
         sale_price = decimal_converter(sale_price)
         shipping_cost = decimal_converter(shipping_cost)
@@ -100,15 +125,20 @@ def consume_stock(
 
         available = product_size.quantity if product_size else 0
         to_consume = min(available, quantity)
-        batches = _purchase_batches(session, product_id, size)
-        batches = _fallback_batches_by_barcode(session, product_id, size, product_size, batches, log)
+        purchase_cost = Decimal("0.00")
+        consumed = 0
 
-        consumed, purchase_cost = _consume_batches(batches, to_consume)
-        if consumed == 0 and to_consume > 0 and product_size and not batches:
+        if to_consume > 0 and product_size:
+            stock_value = Decimal(str(product_size.stock_value or 0))
+            # Proporcjonalny udzial wartosci - zdjecie calego stanu (to_consume
+            # == available) daje dokladnie cala wartosc, wiec reszta = 0.
+            purchase_cost = stock_value * Decimal(to_consume) / Decimal(available)
             product_size.quantity -= to_consume
+            remaining_value = stock_value - purchase_cost
+            product_size.stock_value = (
+                remaining_value if product_size.quantity > 0 else Decimal("0.00")
+            )
             consumed = to_consume
-        elif consumed > 0 and product_size:
-            product_size.quantity -= consumed
             _send_low_stock_alert(
                 session,
                 product_id,
@@ -138,67 +168,10 @@ def consume_stock(
             sale_price=sale_price,
             shipping_cost=shipping_cost,
             commission_fee=commission_fee,
+            order_id=order_id,
         )
         _log_consumed_stock(session, product_id, size, consumed, log)
     return consumed
-
-
-def _purchase_batches(session, product_id, size):
-    return (
-        session.query(PurchaseBatch)
-        .filter(PurchaseBatch.product_id == product_id, PurchaseBatch.size == size)
-        .order_by(PurchaseBatch.purchase_date.asc(), PurchaseBatch.id.asc())
-        .all()
-    )
-
-
-def _fallback_batches_by_barcode(session, product_id, size, product_size, batches, log):
-    if any(batch.remaining_quantity and batch.remaining_quantity > 0 for batch in batches):
-        return batches
-    if not product_size or not product_size.barcode:
-        return batches
-
-    fallback_batches = (
-        session.query(PurchaseBatch)
-        .filter(
-            PurchaseBatch.product_id == product_id,
-            PurchaseBatch.barcode == product_size.barcode,
-            PurchaseBatch.size != size,
-        )
-        .order_by(PurchaseBatch.purchase_date.asc(), PurchaseBatch.id.asc())
-        .all()
-    )
-    if fallback_batches:
-        log.info(
-            "FIFO fallback: dopasowanie po barcode %s dla product_id=%s size=%s",
-            product_size.barcode,
-            product_id,
-            size,
-        )
-        return fallback_batches
-    return batches
-
-
-def _consume_batches(batches, to_consume: int) -> tuple[int, Decimal]:
-    remaining = to_consume
-    purchase_cost = Decimal("0.00")
-    for batch in batches:
-        if remaining <= 0:
-            break
-
-        batch_available = batch.remaining_quantity if batch.remaining_quantity is not None else batch.quantity
-        if batch_available <= 0:
-            continue
-
-        used = min(remaining, batch_available)
-        if batch.remaining_quantity is not None:
-            batch.remaining_quantity -= used
-        else:
-            batch.remaining_quantity = batch.quantity - used
-        batch.quantity = max(0, batch.quantity - used)
-        purchase_cost += used * batch.price
-        remaining -= used
-    return to_consume - remaining, purchase_cost
 
 
 def _send_low_stock_alert(

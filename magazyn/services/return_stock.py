@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Callable, Dict, Optional
 
-from ..db import get_session
+from ..db import TWOPLACES, get_session
 from ..domain.returns import (
     RETURN_STATUS_COMPLETED,
     RETURN_STATUS_DELIVERED,
@@ -16,7 +17,7 @@ from ..domain.returns import (
 )
 from ..models.allegro import AllegroOffer
 from ..models.orders import OrderProduct
-from ..models.products import ProductSize
+from ..models.products import ProductSize, Sale
 from ..models.returns import Return, ReturnStatusLog
 from ..notifications import send_messenger
 
@@ -68,6 +69,79 @@ def _find_product_size_for_return_item(db, return_record: Return, item: dict) ->
             product_size.id,
         )
     return product_size
+
+
+def _restore_stock_for_return_item(
+    db,
+    order_id: Optional[str],
+    product_size: ProductSize,
+    quantity: int,
+) -> int:
+    """Zwroc ``quantity`` sztuk na stan i odtworz ich wartosc (``stock_value``).
+
+    Sztuki powiazane ze sprzedaza danego zamowienia wracaja po SWOIM koszcie
+    zakupu (``Sale.purchase_cost`` z chwili sprzedazy) - dzieki temu przy
+    ponownej sprzedazy zejda po tej samej cenie, a srednia magazynu nie
+    zostaje zaklamana. ``Sale.quantity_returned`` chroni przed zwrotem wiekszej
+    liczby sztuk niz sprzedano (czesciowe / powtorzone zwroty tego samego
+    zamowienia).
+
+    Reszta (``quantity`` minus wynik), dla ktorej nie ma danych sprzedazy
+    (zamowienia sprzed wdrozenia ``order_id``, korekty reczne), wraca po
+    BIEZACEJ sredniej - neutralnie dla sredniej ceny zakupu.
+
+    Zwraca ile sztuk pokryto danymi sprzedazy.
+    """
+    if quantity <= 0:
+        return 0
+
+    remaining = quantity
+    restored_from_sales = 0
+
+    if order_id:
+        sales = (
+            db.query(Sale)
+            .filter(
+                Sale.order_id == order_id,
+                Sale.product_id == product_size.product_id,
+                Sale.size == product_size.size,
+            )
+            .order_by(Sale.id.asc())
+            .all()
+        )
+        for sale in sales:
+            if remaining <= 0:
+                break
+            sold = sale.quantity or 0
+            available = sold - (sale.quantity_returned or 0)
+            if available <= 0:
+                continue
+            take = min(available, remaining)
+            unit_cost = (
+                Decimal(str(sale.purchase_cost or 0)) / Decimal(sold)
+                if sold
+                else Decimal("0")
+            )
+            add_value = (unit_cost * Decimal(take)).quantize(
+                TWOPLACES, rounding=ROUND_HALF_UP
+            )
+            product_size.quantity = (product_size.quantity or 0) + take
+            product_size.stock_value = Decimal(str(product_size.stock_value or 0)) + add_value
+            sale.quantity_returned = (sale.quantity_returned or 0) + take
+            remaining -= take
+            restored_from_sales += take
+
+    if remaining > 0:
+        avg = (
+            Decimal(str(product_size.stock_value or 0)) / Decimal(product_size.quantity)
+            if product_size.quantity
+            else Decimal("0")
+        )
+        add_value = (avg * Decimal(remaining)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+        product_size.quantity = (product_size.quantity or 0) + remaining
+        product_size.stock_value = Decimal(str(product_size.stock_value or 0)) + add_value
+
+    return restored_from_sales
 
 
 def restore_stock_for_return(
@@ -123,14 +197,26 @@ def restore_stock_for_return(
 
                 if product_size:
                     old_qty = product_size.quantity or 0
-                    product_size.quantity = old_qty + quantity
+                    restored_from_sales = _restore_stock_for_return_item(
+                        db, return_record.order_id, product_size, quantity
+                    )
                     restored_items.append(f"{item.get('name', 'Produkt')} +{quantity} (bylo: {old_qty})")
                     active_logger.info(
-                        "Przywrocono stan: %s +%s (teraz: %s)",
+                        "Przywrocono stan: %s +%s (teraz: %s), w tym %s szt. po koszcie ze sprzedazy",
                         product_size.barcode,
                         quantity,
                         product_size.quantity,
+                        restored_from_sales,
                     )
+                    if restored_from_sales < quantity:
+                        active_logger.info(
+                            "Zwrot #%s: %s z %s szt. produktu %s bez danych sprzedazy "
+                            "(brak Sale z order_id - wartosc dodana po biezacej sredniej)",
+                            return_id,
+                            quantity - restored_from_sales,
+                            quantity,
+                            product_size.barcode,
+                        )
                 else:
                     active_logger.warning(
                         "Nie znaleziono produktu EAN=%s, product_size_id=%s",

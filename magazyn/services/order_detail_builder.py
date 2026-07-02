@@ -197,9 +197,17 @@ class OrderDetailBuilder:
         
         return result
     
-    def calculate_purchase_cost(self, order: Order) -> Decimal:
-        """Oblicz koszt zakupu produktow w zamowieniu (delegacja do FinancialCalculator)."""
-        return self._calculator.get_purchase_cost_for_order(order.order_id)
+    def calculate_purchase_cost(self, order: Order) -> tuple[Decimal, bool]:
+        """Oblicz koszt zakupu produktow w zamowieniu (delegacja do FinancialCalculator).
+
+        Zwraca (koszt, czy_w_pelni_realny). "Realny" = policzony z faktycznej
+        ceny partii FIFO zdjetej przy wysylce (Sale.purchase_cost), a nie z
+        szacunku opartego o cene najnowszej dostawy (patrz
+        FinancialCalculator.get_purchase_cost_for_order).
+        """
+        return self._calculator.get_purchase_cost_for_order(
+            order.order_id, with_source=True
+        )
     
     def build_status_history(self, order_id: str) -> tuple[list[dict], dict]:
         """
@@ -359,7 +367,7 @@ class OrderDetailBuilder:
         billing = self.fetch_billing_data(order, sale_price)
         
         # Koszt zakupu
-        purchase_cost = self.calculate_purchase_cost(order)
+        purchase_cost, purchase_cost_is_actual = self.calculate_purchase_cost(order)
         
         # Suma oplat Allegro (pomniejszona o bonus z kampanii CB2)
         total_allegro_fees = (
@@ -400,6 +408,7 @@ class OrderDetailBuilder:
             "billing_entries": billing["billing_entries"],
             "fee_details": billing["fee_details"],
             "purchase_cost": purchase_cost,
+            "purchase_cost_is_actual": purchase_cost_is_actual,
             "packaging_cost": packaging_cost,
             "real_profit": real_profit,
             "shipping_stages": SHIPPING_STAGES,

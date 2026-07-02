@@ -144,12 +144,24 @@ class FinancialCalculator:
             product_id: ID produktu
             size: Rozmiar produktu
             quantity: Ilosc sztuk
-            
+
         Returns:
-            Koszt zakupu (cena jednostkowa * ilosc)
+            Koszt zakupu (srednia wazona cena zakupu * ilosc)
         """
-        from ..models.products import PurchaseBatch
-        
+        from ..models.products import ProductSize, PurchaseBatch
+
+        product_size = (
+            self.db.query(ProductSize)
+            .filter(ProductSize.product_id == product_id, ProductSize.size == size)
+            .first()
+        )
+
+        # Preferuj biezaca srednia wazona (stock_value / quantity).
+        if product_size and product_size.quantity and product_size.stock_value:
+            avg = Decimal(str(product_size.stock_value)) / Decimal(product_size.quantity)
+            return avg * quantity
+
+        # Fallback: brak stanu/wartosci -> ostatnia znana cena dostawy.
         latest_batch = (
             self.db.query(PurchaseBatch)
             .filter(
@@ -159,36 +171,67 @@ class FinancialCalculator:
             .order_by(desc(PurchaseBatch.purchase_date))
             .first()
         )
-        
+
         if latest_batch:
             return Decimal(str(latest_batch.price)) * quantity
         return Decimal("0")
     
-    def get_purchase_cost_for_order(self, order_id: str) -> Decimal:
+    def get_purchase_cost_for_order(
+        self,
+        order_id: str,
+        *,
+        with_source: bool = False,
+    ):
         """
         Oblicza calkowity koszt zakupu dla zamowienia.
-        
-        Uzywa dwoch sciezek powiazania:
+
+        Preferuje REALNY koszt zapisany w Sale.purchase_cost (cena partii FIFO,
+        z ktorej towar faktycznie zszedl przy wysylce - patrz
+        services/stock_records.py: consume_stock/record_sale). Dziala tylko dla
+        produktow powiazanych z Sale przez order_id, czyli zamowien wyslanych
+        PO wdrozeniu tego powiazania (starsze Sale nie maja order_id).
+
+        Dla produktow bez takiego powiazania (zamowienie jeszcze niewyslane,
+        albo Sale sprzed wdrozenia order_id) spada do starego szacunku: ceny
+        NAJNOWSZEJ dostawy danego produktu - patrz get_purchase_cost_for_product.
+
+        Uzywa dwoch sciezek powiazania OrderProduct -> ProductSize:
         1. Bezposrednie: OrderProduct.product_size_id -> ProductSize
         2. Przez Allegro: OrderProduct.auction_id -> AllegroOffer.product_size_id
-        
+
         Args:
             order_id: ID zamowienia
-            
+            with_source: jesli True, zwraca krotke (koszt, czy_w_pelni_realny)
+
         Returns:
-            Suma kosztow zakupu dla wszystkich produktow w zamowieniu
+            Suma kosztow zakupu dla wszystkich produktow w zamowieniu (Decimal),
+            lub (Decimal, bool) jesli with_source=True.
         """
+        from sqlalchemy import func
+
         from ..models.allegro import AllegroOffer
         from ..models.orders import OrderProduct
-        
-        total_cost = Decimal("0")
+        from ..models.products import Sale
+
         order_products = self.db.query(OrderProduct).filter(
             OrderProduct.order_id == order_id
         ).all()
-        
+
+        actual_by_key: Dict[tuple, Decimal] = {}
+        for product_id, size, cost_sum in (
+            self.db.query(Sale.product_id, Sale.size, func.sum(Sale.purchase_cost))
+            .filter(Sale.order_id == order_id)
+            .group_by(Sale.product_id, Sale.size)
+            .all()
+        ):
+            actual_by_key[(product_id, size)] = Decimal(str(cost_sum or 0))
+
+        total_cost = Decimal("0")
+        is_fully_actual = bool(actual_by_key) or not order_products
+
         for op in order_products:
             product_size = op.product_size
-            
+
             # Fallback przez allegro_offers
             if not product_size and op.auction_id:
                 allegro_offer = self.db.query(AllegroOffer).filter(
@@ -196,15 +239,29 @@ class FinancialCalculator:
                 ).first()
                 if allegro_offer and allegro_offer.product_size:
                     product_size = allegro_offer.product_size
-            
-            if product_size and product_size.product:
-                cost = self.get_purchase_cost_for_product(
+
+            if not product_size or not product_size.product:
+                continue
+
+            key = (product_size.product_id, product_size.size)
+            if key in actual_by_key:
+                total_cost += actual_by_key.pop(key)
+            else:
+                total_cost += self.get_purchase_cost_for_product(
                     product_size.product_id,
                     product_size.size,
-                    op.quantity
+                    op.quantity,
                 )
-                total_cost += cost
-        
+                is_fully_actual = False
+
+        # Sale bez odpowiadajacej linii OrderProduct (np. produkt niedopasowany
+        # do magazynu przy sprzedazy -> zapisany na koncie placeholdera
+        # "Unknown") - to nadal realny, poniesiony koszt, wiec doliczamy.
+        for remaining_cost in actual_by_key.values():
+            total_cost += remaining_cost
+
+        if with_source:
+            return total_cost, is_fully_actual
         return total_cost
     
     def get_allegro_fees(
