@@ -48,3 +48,20 @@ def send_stock_alert(name: str, size: str, quantity: int) -> None:
     if send_messenger(text):
         return
     send_email("Low stock alert", text)
+
+
+def send_critical_alert(subject: str, body: str) -> bool:
+    """Wyslij alert wysokiego priorytetu WSZYSTKIMI dostepnymi kanalami naraz
+    (Messenger ORAZ email - nie tylko pierwszym, ktory sie uda).
+
+    W przeciwienstwie do ``send_stock_alert`` (gdzie duplikaty sa uciazliwe),
+    tutaj priorytetem jest maksymalizacja szansy, ze ktos zauwazy alert, np.
+    przy podejrzeniu utraty danych (patrz services/data_integrity_canary.py).
+    """
+    messenger_ok = send_messenger(f"{subject}\n\n{body}")
+    email_ok = send_email(subject, body)
+    if not messenger_ok and not email_ok:
+        logger.error(
+            "Critical alert NIE zostal dostarczony zadnym kanalem: %s", subject
+        )
+    return messenger_ok or email_ok

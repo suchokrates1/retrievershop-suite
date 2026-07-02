@@ -1,0 +1,18 @@
+# Zaleznosci wylacznie do testow/lintingu - CELOWO nie sa instalowane
+# w obrazie produkcyjnym (magazyn/Dockerfile instaluje tylko requirements.txt).
+#
+# To jest jedna z warstw ochrony po incydencie z 2026-07-01 (przypadkowe
+# uruchomienie `pytest` wewnatrz kontenera produkcyjnego wyczyscilo baze):
+# skoro pytest fizycznie nie istnieje w obrazie produkcyjnym, nie da sie go
+# tam juz przypadkiem odpalic. Patrz tez magazyn/db.py:reset_db() i
+# magazyn/migrations/README.md.
+
+-r requirements.txt
+
+pytest==8.4.2
+iniconfig==2.3.0
+pluggy==1.6.0
+pytest-flask
+pytest-cov
+pytest-playwright
+playwright

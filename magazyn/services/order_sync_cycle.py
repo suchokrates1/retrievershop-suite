@@ -26,6 +26,7 @@ class OrderSyncCycle:
 
     def run(self, app: Any) -> None:
         with app.app_context():
+            self.run_data_integrity_canary()
             self.run_allegro_events_sync(app)
             self.run_parcel_tracking_sync()
             self.run_profit_cache_refresh(app)
@@ -35,6 +36,23 @@ class OrderSyncCycle:
             self.run_notification_retry()
             self.run_unpaid_auto_cancel()
             self.run_daily_offer_and_promo_sync()
+
+    def run_data_integrity_canary(self) -> None:
+        """Wykryj nagly, nienaturalny spadek liczby rekordow w bazie (patrz
+        services/data_integrity_canary.py) i wyslij alert jesli tak sie stalo.
+        Zabezpieczenie po incydencie z 2026-07-01 (DROP ALL na produkcji)."""
+        from .data_integrity_canary import check_data_integrity
+
+        try:
+            stats = check_data_integrity()
+            if stats["alerts"]:
+                self.logger.critical(
+                    "Data integrity canary: WYKRYTO ANOMALIE - %s", stats["alerts"]
+                )
+        except Exception as exc:
+            self.logger.error(
+                "Error in data integrity canary: %s", exc, exc_info=True
+            )
 
     def run_allegro_events_sync(self, app: Any) -> None:
         self.logger.info("Starting Allegro Events sync")

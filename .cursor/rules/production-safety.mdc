@@ -1,0 +1,45 @@
+---
+description: Production database safety - lessons from the 2026-07-01 DB wipe incident
+alwaysApply: true
+---
+
+# Bezpieczenstwo produkcji (retrievershop-suite)
+
+2026-07-01 przypadkowe uruchomienie `pytest` wewnatrz kontenera produkcyjnego
+(z `DATABASE_URL` ustawionym na produkcyjny Postgres) wywolalo `reset_db()` i
+wyczyscilo cala baze produkcyjna. Ponizsze zasady maja to trwale uniemozliwic.
+
+## Nigdy nie ruszaj produkcji poleceniami testowymi
+
+- **NIGDY** nie uruchamiaj `pytest` / `python -m pytest` w sesji SSH/`docker exec`
+  podlaczonej do produkcyjnego kontenera (`retrievershop-magazyn`) lub bazy
+  (`retrievershop-postgres`). Przed jakimkolwiek poleceniem majacym cokolwiek
+  zmienic w bazie, sprawdz `echo $DATABASE_URL` i `hostname` / nazwe kontenera.
+- Testy odpalaj lokalnie albo w tymczasowym kontenerze `python:3.12-slim` z
+  zamontowanym repo (patrz przyklady w historii commitow) - NIGDY w
+  dlugozyjacym kontenerze produkcyjnym.
+- Obraz produkcyjny (`magazyn/Dockerfile`) CELOWO nie ma zainstalowanego
+  `pytest` (patrz `requirements.txt` vs `requirements-dev.txt`). Jesli w
+  kontenerze produkcyjnym `pytest` nagle dziala - to znaczy, ze ktos zlamal to
+  zabezpieczenie i trzeba to natychmiast naprawic.
+
+## `reset_db()` (magazyn/db.py)
+
+- Na PostgreSQL wymaga JAWNEGO `force=True` w kodzie. Ustawienie `TESTING=1`
+  lub `PYTEST_CURRENT_TEST` w env **NIE** wystarcza i nigdy nie powinno
+  wystarczac - to byla dokladnie ta luka, ktora doprowadzila do incydentu.
+- Testy jednostkowe/E2E maja w `conftest.py` wymuszone `monkeypatch.delenv("DATABASE_URL")`
+  - dzieki temu nigdy nie trafiaja w galaz kodu dla Postgresa.
+
+## Przed krytycznymi operacjami na serwerze
+
+- Zawsze zweryfikuj `hostname` / nazwe kontenera przed restartem, dropem,
+  migracja czy innym destrukcyjnym poleceniem.
+- Backupy: nocny `pg_dump` na `minipc` o 03:00 (poza tym repo, w `~/backup/`).
+  Po kazdej recznej ingerencji w produkcyjna baze zrob dodatkowy backup przed
+  i po zmianie.
+- Przy podejrzeniu utraty danych: NIE uruchamiaj niczego, co mogloby ponownie
+  zmodyfikowac dane (np. synchronizacji zamowien), dopoki nie ustalisz zakresu
+  szkody. Uzyj `DISABLE_SCHEDULERS=1` (patrz `docker-compose.yml`,
+  `magazyn/factory.py`, `magazyn/gunicorn.conf.py`), zeby zatrzymac wszystkie
+  workery tla przed diagnoza/naprawa.

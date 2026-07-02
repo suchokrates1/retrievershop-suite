@@ -65,3 +65,17 @@ def test_reset_db_blocked_on_postgres_without_testing(monkeypatch):
 
     with pytest.raises(RuntimeError, match="reset_db\\(\\) blocked"):
         db.reset_db()
+
+
+def test_reset_db_blocked_on_postgres_even_with_testing_env(monkeypatch):
+    """TESTING=1 (lub PYTEST_CURRENT_TEST) same w sobie NIE moga odblokowac
+    DROP ALL na Postgresie - to byla luka po incydencie z 2026-07-01, gdy
+    reczne uruchomienie pytest w kontenerze produkcyjnym z DATABASE_URL wciaz
+    ustawionym na prod moglo teoretycznie przejsc bezpiecznik. Jedyny legalny
+    sposob to jawne reset_db(force=True) w zaufanym kodzie."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/magazyn")
+    monkeypatch.setenv("TESTING", "1")
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_x (call)")
+
+    with pytest.raises(RuntimeError, match="reset_db\\(\\) blocked"):
+        db.reset_db()

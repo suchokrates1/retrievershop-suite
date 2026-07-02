@@ -212,15 +212,18 @@ def init_db():
 def reset_db(*, force: bool = False):
     """Drop all tables and recreate them.
 
-    Bezpiecznik: na PostgreSQL wymaga ``force=True`` albo ``TESTING=1`` w env,
-    zeby przypadkowy pytest w kontenerze produkcyjnym nie wyczyscil bazy.
+    Bezpiecznik: na PostgreSQL wymaga JAWNEGO ``force=True`` przekazanego przez
+    kod wywolujacy. Zmienna srodowiskowa TESTING=1 (ani PYTEST_CURRENT_TEST) NIE
+    wystarcza - mogla by zostac przypadkowo ustawiona w kontenerze produkcyjnym
+    (np. przy recznym debugowaniu) i sama w sobie nie moze odblokowac DROP ALL
+    na prod. Testy jednostkowe usuwaja DATABASE_URL i uzywaja izolowanego
+    SQLite (patrz magazyn/tests/conftest.py), wiec ten warunek ich nie dotyczy.
     """
     database_url = os.environ.get("DATABASE_URL", "")
-    testing = os.environ.get("TESTING") == "1" or os.environ.get("PYTEST_CURRENT_TEST")
-    if database_url.startswith("postgresql") and not force and not testing:
+    if database_url.startswith("postgresql") and not force:
         raise RuntimeError(
             "reset_db() blocked on PostgreSQL. Unset DATABASE_URL for isolated tests "
-            "or pass force=True only in controlled environments."
+            "or pass force=True explicitly only in controlled, trusted code paths."
         )
     from sqlalchemy import text
     Base.metadata.drop_all(engine)

@@ -281,6 +281,10 @@ def _order_sync_cycle() -> OrderSyncCycle:
     )
 
 
+def _run_data_integrity_canary() -> None:
+    _order_sync_cycle().run_data_integrity_canary()
+
+
 def _run_allegro_events_sync(app) -> None:
     _order_sync_cycle().run_allegro_events_sync(app)
 

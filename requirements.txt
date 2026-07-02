@@ -49,11 +49,6 @@ websockets>=12.0
 # Monitoring
 prometheus_client==0.20.0
 
-# Testing (nie instalowane w produkcji - mozna przeniesc do requirements-dev.txt)
-pytest==8.4.2
-iniconfig==2.3.0
-pluggy==1.6.0
-
 # OCR dependencies (optional)
 Pillow>=10.0.0
 pytesseract>=0.3.10
