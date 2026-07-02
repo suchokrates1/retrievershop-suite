@@ -34,6 +34,7 @@ data/*
 magazyn/tests/e2e/snapshots/*.actual.png
 *.txt
 !requirements.txt
+!requirements-dev.txt
 !magazyn/templates/messages/*.txt
 allegro_cookies*.json
 tokens.json

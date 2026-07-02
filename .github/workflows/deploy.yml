@@ -29,8 +29,7 @@ jobs:
 
       - name: Instalacja zaleznosci
         run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-flask
+          pip install -r requirements-dev.txt
 
       - name: Uruchomienie testow
         env:
@@ -54,8 +53,7 @@ jobs:
 
       - name: Instalacja zaleznosci
         run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-flask pytest-playwright
+          pip install -r requirements-dev.txt
           playwright install --with-deps chromium
 
       - name: Uruchomienie testow E2E
@@ -116,6 +114,31 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
+
+      - name: Backup bazy przed deployem
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: 100.110.194.46
+          username: suchokrates1
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 2m
+          script: |
+            set -euo pipefail
+            BACKUP_DIR="$HOME/backup/pre-deploy"
+            mkdir -p "$BACKUP_DIR"
+            BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz"
+            echo "Tworze backup produkcyjnej bazy przed deployem -> $BACKUP_FILE"
+            docker exec retrievershop-postgres pg_dump -U magazyn -d magazyn --clean --if-exists \
+              | gzip > "$BACKUP_FILE"
+            SIZE=$(stat -c%s "$BACKUP_FILE" 2>/dev/null || echo 0)
+            if [ "$SIZE" -lt 1000 ]; then
+              echo "BLAD: backup wyglada na pusty/zepsuty (rozmiar=$SIZE bajtow) - przerywam deploy!"
+              rm -f "$BACKUP_FILE"
+              exit 1
+            fi
+            echo "Backup OK ($SIZE bajtow)"
+            # Retencja: zachowaj tylko 20 najnowszych backupow pre-deploy
+            cd "$BACKUP_DIR" && ls -t pre-deploy-*.sql.gz 2>/dev/null | tail -n +21 | xargs -r rm --
 
       - name: Deploy przez SSH
         uses: appleboy/ssh-action@v1.2.5
