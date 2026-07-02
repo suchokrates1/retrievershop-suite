@@ -28,7 +28,7 @@ class PrintOrderProcessor:
         print_label: Callable[[str, str, str], None],
         mark_as_printed: Callable[[str, Dict[str, Any]], None],
         notify_messenger: Callable[[Dict[str, Any], bool], None],
-        consume_order_stock: Callable[[List[Dict[str, Any]]], None],
+        consume_order_stock: Callable[..., None],
         should_send_error_notification: Callable[[str], bool],
         send_label_error_notification: Callable[[str], None],
         increment_error_notification: Callable[[str], None],
@@ -190,7 +190,7 @@ class PrintOrderProcessor:
                     stage="print",
                     retry_exceptions=(self.print_error_type,),
                 )
-            self.consume_order_stock(last_order_data.get("products", []))
+            self.consume_order_stock(last_order_data.get("products", []), order_id=order_id)
             self.mark_as_printed(order_id, last_order_data)
             printed[order_id] = self.now()
             for entry in entries:

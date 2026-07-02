@@ -397,12 +397,18 @@ def stocktake_apply(stocktake_id):
             flash("Mozna aplikowac tylko zakonczony remanent.", "warning")
             return redirect(url_for("stocktake.stocktake_list"))
 
+        from ..services.stock_adjust import apply_stock_adjustment
+
         updated = 0
         for item in st.items:
             if item.scanned_qty != item.expected_qty:
                 ps = db.get(ProductSize, item.product_size_id)
                 if ps:
-                    ps.quantity = item.scanned_qty
+                    # Nadwyzka -> doksiegowanie po biezacej sredniej; brak ->
+                    # zdjecie po sredniej. Remanent to korekta liczby, nie zakup.
+                    apply_stock_adjustment(
+                        ps, set_to=item.scanned_qty, reason="stocktake"
+                    )
                     updated += 1
 
         st.status = "applied"

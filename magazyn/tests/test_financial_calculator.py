@@ -38,21 +38,36 @@ class TestPackagingCost:
 class TestPurchaseCostForProduct:
     """Testy kosztu zakupu produktu."""
 
-    def test_returns_latest_batch_price(self):
-        """Powinien zwrocic cene z najnowszej partii zakupu."""
+    def test_returns_weighted_average_from_stock(self):
+        """Preferuje biezaca srednia wazona (stock_value / quantity)."""
+        product_size = MagicMock()
+        product_size.quantity = 2
+        product_size.stock_value = Decimal("50.00")  # srednia 25
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = product_size
+
+        calc = FinancialCalculator(db, settings_store=None)
+        cost = calc.get_purchase_cost_for_product(product_id=1, size="M", quantity=2)
+        assert cost == Decimal("50.00")
+
+    def test_falls_back_to_latest_batch_when_no_stock(self):
+        """Brak stanu/wartosci -> ostatnia znana cena dostawy."""
         batch = MagicMock()
         batch.price = Decimal("25.00")
 
         db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
         db.query.return_value.filter.return_value.order_by.return_value.first.return_value = batch
 
         calc = FinancialCalculator(db, settings_store=None)
         cost = calc.get_purchase_cost_for_product(product_id=1, size="M", quantity=2)
         assert cost == Decimal("50.00")
 
-    def test_no_batch_returns_zero(self):
-        """Brak partii zakupu zwraca 0."""
+    def test_no_data_returns_zero(self):
+        """Brak stanu i brak partii zwraca 0."""
         db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
         db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
         calc = FinancialCalculator(db, settings_store=None)
@@ -84,24 +99,54 @@ class TestPurchaseCostForOrder:
 
         db = MagicMock()
         db.query.return_value.filter.return_value.all.return_value = [op1, op2]
+        # Brak realnych Sale.purchase_cost dla tego zamowienia (jeszcze niewyslane)
+        # -> get_purchase_cost_for_order spada do szacunku per-produkt.
+        db.query.return_value.filter.return_value.group_by.return_value.all.return_value = []
 
         calc = FinancialCalculator(db, settings_store=None)
 
         # Mock get_purchase_cost_for_product
         with patch.object(calc, 'get_purchase_cost_for_product') as mock_cost:
             mock_cost.side_effect = [Decimal("20.00"), Decimal("50.00")]
-            total = calc.get_purchase_cost_for_order("order-123")
+            total, is_actual = calc.get_purchase_cost_for_order("order-123", with_source=True)
 
         assert total == Decimal("70.00")
+        assert is_actual is False
 
     def test_no_products_returns_zero(self):
         """Zamowienie bez produktow zwraca 0."""
         db = MagicMock()
         db.query.return_value.filter.return_value.all.return_value = []
+        db.query.return_value.filter.return_value.group_by.return_value.all.return_value = []
 
         calc = FinancialCalculator(db, settings_store=None)
         total = calc.get_purchase_cost_for_order("order-empty")
         assert total == Decimal("0")
+
+    def test_uses_actual_sale_cost_when_available(self):
+        """Gdy istnieje Sale.order_id dla produktu, uzywa realnego kosztu FIFO
+        zamiast szacunku z najnowszej dostawy."""
+        op1 = MagicMock()
+        op1.product_size = MagicMock()
+        op1.product_size.product = MagicMock()
+        op1.product_size.product_id = 1
+        op1.product_size.size = "M"
+        op1.quantity = 2
+        op1.auction_id = None
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [op1]
+        db.query.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            (1, "M", Decimal("18.50")),
+        ]
+
+        calc = FinancialCalculator(db, settings_store=None)
+        with patch.object(calc, 'get_purchase_cost_for_product') as mock_cost:
+            total, is_actual = calc.get_purchase_cost_for_order("order-shipped", with_source=True)
+
+        mock_cost.assert_not_called()
+        assert total == Decimal("18.50")
+        assert is_actual is True
 
 
 class TestCalculateOrderProfit:

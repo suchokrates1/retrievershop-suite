@@ -20,7 +20,7 @@ class PrintQueueProcessor:
         notify_messenger: Callable[[Dict[str, Any], bool], None],
         retry: Callable[..., Any],
         print_label: Callable[[str, str, str], None],
-        consume_order_stock: Callable[[List[Dict[str, Any]]], None],
+        consume_order_stock: Callable[..., None],
         print_error_type: Type[Exception],
         errors_total: Any,
         now: Callable[[], datetime],
@@ -57,7 +57,7 @@ class PrintQueueProcessor:
             try:
                 self._print_items(queue, items)
                 last_order_data = items[0].get("last_order_data", {})
-                self.consume_order_stock(last_order_data.get("products", []))
+                self.consume_order_stock(last_order_data.get("products", []), order_id=order_id)
                 self.mark_as_printed(order_id, last_order_data)
                 printed[order_id] = self.now()
                 self.notify_messenger(last_order_data, True)

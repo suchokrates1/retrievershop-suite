@@ -143,7 +143,7 @@ def main() -> None:
                 db.commit()
                 logger.info("  Zapisano zamowienie %s w bazie.", order_id)
 
-            consume_order_stock(order_data.get("products", []))
+            consume_order_stock(order_data.get("products", []), order_id=order_id)
             logger.info("  Odjeto stan magazynowy dla %s.", order_id)
 
     logger.info("Gotowe.")

@@ -111,10 +111,10 @@ def test_import_products_handles_nan(app_mod, tmp_path):
 
 
 def test_consume_stock_multiple_batches(app_mod):
-    """Test FIFO consumption across multiple batches.
-    
-    FIFO = First In First Out: oldest batches consumed first by purchase_date.
-    """
+    """Konsumpcja z wielu dostaw wyceniana metoda sredniej wazonej (AVCO)."""
+    from decimal import Decimal
+    from magazyn.models.products import Sale
+
     with app_mod.get_session() as db:
         prod = Product(category="Zabawki", brand="Test", series="Prod", color="Red")
         db.add(prod)
@@ -122,35 +122,18 @@ def test_consume_stock_multiple_batches(app_mod):
         db.add(ProductSize(product_id=prod.id, size="M", quantity=0))
         pid = prod.id
 
-    # Record purchases in order (FIFO uses purchase_date)
-    # First: price 7.0
+    # Trzy dostawy po 1 szt: 7.0 + 5.0 + 6.0 -> wartosc 18.00, 3 szt, srednia 6.
     app_mod.record_purchase(pid, "M", 1, 7.0)
-    # Second: price 5.0
     app_mod.record_purchase(pid, "M", 1, 5.0)
-    # Third: price 6.0
     app_mod.record_purchase(pid, "M", 1, 6.0)
 
-    # Consume 2 items - FIFO means oldest batches (7.0, then 5.0) depleted first
+    # Sprzedaz 2 szt po sredniej 6 -> koszt 12.00, zostaje 1 szt warta 6.00.
     consumed = app_mod.consume_stock(pid, "M", 2, sale_price=0)
 
     with app_mod.get_session() as db:
-        qty = db.execute(
-            text(
-                "SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"
-            ),
-            {"pid": pid, "size": "M"},
-        ).fetchone()[0]
-        # Only get non-depleted batches
-        batches = db.execute(
-            text(
-                "SELECT price, quantity FROM purchase_batches "
-                "WHERE product_id=:pid AND size=:size AND quantity > 0 ORDER BY price"
-            ),
-            {"pid": pid, "size": "M"},
-        ).fetchall()
+        ps = db.query(ProductSize).filter_by(product_id=pid, size="M").one()
+        sale = db.query(Sale).filter_by(product_id=pid).one()
     assert consumed == 2
-    assert qty == 1  # 3 total - 2 consumed = 1 remaining
-    assert len(batches) == 1
-    # FIFO: oldest two batches (7.0, 5.0) depleted, newest (6.0) remains
-    assert float(batches[0][0]) == 6.0
-    assert batches[0][1] == 1
+    assert ps.quantity == 1  # 3 - 2 = 1
+    assert ps.stock_value == Decimal("6.00")
+    assert sale.purchase_cost == Decimal("12.00")

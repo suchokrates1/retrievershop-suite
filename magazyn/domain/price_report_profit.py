@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from ..models.allegro import AllegroOffer
 from ..models.price_reports import PriceReportItem
-from ..models.products import ProductSize, PurchaseBatch, ShippingThreshold
+from ..models.products import ProductSize, ShippingThreshold
 
 
 ALLEGRO_FEE_PERCENT = Decimal("0.123")
@@ -30,22 +30,11 @@ def _round_float(value: Decimal) -> float:
 
 
 def _average_purchase_price(session, product_size: ProductSize) -> Decimal:
-    batches = session.query(PurchaseBatch).filter(
-        PurchaseBatch.product_id == product_size.product_id,
-        PurchaseBatch.size == product_size.size,
-    ).all()
-    if not batches:
+    """Srednia wazona cena zakupu na stanie (AVCO) dla danego rozmiaru."""
+    qty = int(product_size.quantity or 0)
+    if qty <= 0:
         return Decimal("0")
-
-    total_qty = sum(int(batch.quantity or 0) for batch in batches)
-    if total_qty <= 0:
-        return Decimal("0")
-
-    total_value = sum(
-        Decimal(int(batch.quantity or 0)) * _to_decimal(batch.price)
-        for batch in batches
-    )
-    return total_value / Decimal(total_qty)
+    return _to_decimal(product_size.stock_value) / Decimal(qty)
 
 
 def _shipping_cost_for_price(session, our_price: Decimal) -> Decimal:

@@ -172,7 +172,7 @@ def main() -> None:
             db.commit()
             logger.info("Ustawiono status 'wyslano' dla %s.", ORDER_ID)
 
-        consume_order_stock(ORDER_DATA["products"])
+        consume_order_stock(ORDER_DATA["products"], order_id=ORDER_DATA["order_id"])
         logger.info("Odjeto stan magazynowy (1 szt., product_size_id=%s).", product_size.id)
 
     logger.info("Gotowe.")

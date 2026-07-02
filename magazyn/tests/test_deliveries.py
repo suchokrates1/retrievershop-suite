@@ -116,8 +116,11 @@ def test_record_multiple_deliveries(app_mod):
     assert qty_l == 1
 
 
-def test_consume_stock_fifo(app_mod):
-    """Test FIFO stock consumption - oldest batches consumed first."""
+def test_consume_stock_average(app_mod):
+    """Konsumpcja wycenia koszt metoda sredniej wazonej (AVCO)."""
+    from decimal import Decimal
+    from magazyn.models.products import Sale
+
     with app_mod.get_session() as db:
         prod = Product(category="Zabawki", brand="Test", series="Prod", color="Red")
         db.add(prod)
@@ -125,35 +128,21 @@ def test_consume_stock_fifo(app_mod):
         db.add(ProductSize(product_id=prod.id, size="M", quantity=0))
         pid = prod.id
 
-    # First purchase: 2 items at 5.0
+    # Dwie dostawy: 2 szt po 5.0 + 1 szt po 4.0 -> wartosc 14.00, 3 szt.
     app_mod.record_purchase(pid, "M", 2, 5.0)
-    # Second purchase: 1 item at 4.0
     app_mod.record_purchase(pid, "M", 1, 4.0)
-    
-    # Consume 2 items - FIFO means oldest batch (5.0) is depleted first
+
+    # Sprzedaz 2 szt po sredniej 14/3; koszt = round(14*2/3, 2) = 9.33.
     consumed = app_mod.consume_stock(pid, "M", 2, sale_price=0)
 
     with app_mod.get_session() as db:
-        qty = db.execute(
-            text(
-                "SELECT quantity FROM product_sizes WHERE product_id=:pid AND size=:size"
-            ),
-            {"pid": pid, "size": "M"},
-        ).fetchone()[0]
-        # Get only non-depleted batches (quantity > 0)
-        batches = db.execute(
-            text(
-                "SELECT price, quantity FROM purchase_batches "
-                "WHERE product_id=:pid AND size=:size AND quantity > 0 ORDER BY price"
-            ),
-            {"pid": pid, "size": "M"},
-        ).fetchall()
+        ps = db.query(ProductSize).filter_by(product_id=pid, size="M").one()
+        sale = db.query(Sale).filter_by(product_id=pid).one()
     assert consumed == 2
-    assert qty == 1  # 3 total - 2 consumed = 1 remaining
-    assert len(batches) == 1
-    # FIFO: oldest batch (5.0) depleted, newer batch (4.0) remains
-    assert float(batches[0][0]) == 4.0
-    assert batches[0][1] == 1
+    assert ps.quantity == 1  # 3 - 2 = 1
+    # Zostaje 1 szt warta ~4.67 (14 - 9.33) - srednia sie nie "zapomina".
+    assert ps.stock_value == Decimal("4.67")
+    assert sale.purchase_cost == Decimal("9.33")
 
 
 def test_deliveries_page_shows_color(app_mod):

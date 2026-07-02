@@ -640,6 +640,11 @@
                     <p class="mb-1 small">
                         <strong>Koszt zakupu:</strong> 
                         <span class="text-error">-{{ '%.2f'|format(purchase_cost) }} {{ order.currency or 'PLN' }}</span>
+                        {% if purchase_cost_is_actual %}
+                        <span class="badge badge-success badge-sm" title="Rzeczywista cena partii zdjetej z magazynu przy wysylce">rzeczywisty</span>
+                        {% else %}
+                        <span class="badge badge-warning badge-sm" title="Zamowienie jeszcze niewyslane (lub brak danych FIFO) - szacunek wg ceny najnowszej dostawy">szacunkowy</span>
+                        {% endif %}
                     </p>
                     {% endif %}
                     {% if packaging_cost > 0 %}

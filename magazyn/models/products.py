@@ -1,6 +1,17 @@
 """Modele produktow, stanow magazynowych i sprzedazy."""
 
-from sqlalchemy import Column, Float, ForeignKey, Index, Integer, Numeric, String, Text, case, func
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    case,
+    func,
+)
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 
@@ -95,6 +106,11 @@ class ProductSize(Base):
     )
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False, default=0)
+    # Laczna wartosc zakupu sztuk aktualnie na stanie (metoda sredniej wazonej
+    # kroczacej / AVCO). Srednia cena zakupu = stock_value / quantity liczona w
+    # locie - NIE przechowujemy zaokraglonej sredniej, zeby uniknac dryfu.
+    # Inwariant: stock_value >= 0 oraz quantity == 0 => stock_value == 0.
+    stock_value = Column(Numeric(12, 2), nullable=False, default=0)
     barcode = Column(String, unique=True)
     product = relationship("Product", back_populates="sizes")
     allegro_offers = relationship("AllegroOffer", back_populates="product_size")
@@ -104,9 +120,24 @@ class ProductSize(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def avg_purchase_price(self):
+        """Srednia wazona cena zakupu sztuki na stanie (None gdy brak stanu)."""
+        if not self.quantity:
+            return None
+        from decimal import Decimal
+
+        return Decimal(str(self.stock_value or 0)) / Decimal(self.quantity)
+
 
 class PurchaseBatch(Base):
-    """Batch produktow z jednej dostawy lub faktury."""
+    """Wpis historii dostawy (jedna pozycja z faktury/dostawy).
+
+    Sluzy WYLACZNIE jako dziennik dostaw (cena, ilosc, data, faktura,
+    dostawca) na potrzeby historii i raportow. NIE jest juz uzywany do
+    wyceny magazynu - wycena idzie metoda sredniej wazonej po
+    ``ProductSize.stock_value`` (patrz services/stock_records.py).
+    """
 
     __tablename__ = "purchase_batches"
     __table_args__ = (
@@ -123,7 +154,6 @@ class PurchaseBatch(Base):
     )
     size = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
-    remaining_quantity = Column(Integer, nullable=False, default=0)
     price = Column(Numeric(10, 2), nullable=False)
     purchase_date = Column(String, nullable=False)
     barcode = Column(String, nullable=True, index=True)
@@ -136,7 +166,10 @@ class PurchaseBatch(Base):
 
 class Sale(Base):
     __tablename__ = "sales"
-    __table_args__ = (Index("idx_sales_sale_date", "sale_date"),)
+    __table_args__ = (
+        Index("idx_sales_sale_date", "sale_date"),
+        Index("idx_sales_order_id", "order_id"),
+    )
 
     id = Column(Integer, primary_key=True)
     product_id = Column(
@@ -151,6 +184,19 @@ class Sale(Base):
     sale_price = Column(Numeric(10, 2), nullable=False, default=0.0)
     shipping_cost = Column(Numeric(10, 2), nullable=False, default=0.0)
     commission_fee = Column(Numeric(10, 2), nullable=False, default=0.0)
+    # Powiazanie z zamowieniem - pozwala policzyc REALNY koszt zakupu (FIFO,
+    # cena partii z ktorej faktycznie zeszla sztuka) zamiast szacunku z
+    # ostatniej dostawy. Nullable, bo starsze rekordy sprzed tej kolumny oraz
+    # reczne korekty magazynu (bez zamowienia) go nie maja.
+    order_id = Column(
+        String,
+        ForeignKey("orders.order_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Ile sztuk z tej sprzedazy zostalo juz zwroconych do magazynu. Chroni
+    # przed zwrotem wiecej niz sprzedano przy czesciowych/powtorzonych zwrotach
+    # tego samego zamowienia (patrz services/return_stock.py).
+    quantity_returned = Column(Integer, nullable=False, default=0)
 
 
 class ShippingThreshold(Base):
