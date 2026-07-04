@@ -96,8 +96,7 @@
                 <td>
                     <form method="post" action="{{ url_for('allegro.link_offer', offer_id=offer.offer_id) }}" class="flex items-center gap-2 flex-wrap">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="grow" x-data="offerRow('{{ offer.product_id or '' }}', '{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
-                            <input type="hidden" name="product_id" :value="productId">
+                        <div class="grow" x-data="offerRow('{{ offer.product_size_id or '' }}', '{{ offer.selected_label|e if offer.selected_label else 'Wybierz z magazynu' }}')">
                             <input type="hidden" name="product_size_id" :value="sizeId">
                             <button class="btn btn-outline w-full justify-between text-left" type="button" @click="openLinkModal()">
                                 <span class="truncate" x-text="selectedLabel"></span>
@@ -148,19 +147,16 @@
                     Aktualnie wybrane: <span class="font-semibold text-base-content" x-text="selectedLabel"></span>
                 </div>
                 <div class="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
-                    <button type="button" class="btn btn-ghost h-auto min-h-0 justify-start rounded-box border border-base-300 px-4 py-3 text-left w-full" @click="selectOption('none', '', 'Wybierz z magazynu')">
+                    <button type="button" class="btn btn-ghost h-auto min-h-0 justify-start rounded-box border border-base-300 px-4 py-3 text-left w-full" @click="selectOption('', 'Wybierz z magazynu')">
                         <div>
                             <div class="font-semibold">Brak powiazania</div>
                             <div class="text-sm text-base-content/60">Zostaw oferte bez przypisania.</div>
                         </div>
                     </button>
                     {% for item in inventory %}
-                    <button type="button" class="btn btn-ghost h-auto min-h-0 justify-start rounded-box border border-base-300 px-4 py-3 text-left w-full" @click="selectOption('{{ item.type }}', '{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
+                    <button type="button" class="btn btn-ghost h-auto min-h-0 justify-start rounded-box border border-base-300 px-4 py-3 text-left w-full" @click="selectOption('{{ item.id }}', '{{ item.label|e }}')" x-show="matchesFilter('{{ item.filter }}')" data-filter="{{ item.filter }}">
                         <div class="w-full">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="font-semibold">{{ item.label }}</span>
-                                <span class="badge badge-neutral">{{ item.type_label }}</span>
-                            </div>
+                            <span class="font-semibold">{{ item.label }}</span>
                             {% if item.extra %}
                             <div class="mt-1 text-sm text-base-content/60">{{ item.extra }}</div>
                             {% endif %}
@@ -206,14 +202,16 @@
 
 <script>
 // Powiazanie oferty z magazynem: lekki stan per wiersz (offerRow) + JEDEN
-// wspoldzielony modal z pelna lista magazynu (offerLinkModal). Dzieki temu
-// lista magazynu (setki pozycji) nie jest duplikowana w DOM dla kazdej
-// z ofert na stronie - poprzednia wersja renderowala ja osobno w kazdym
-// wierszu, co przy ~50 ofertach x kilkaset pozycji dawalo dziesiatki
+// wspoldzielony modal z pelna lista wariantow rozmiarowych (offerLinkModal).
+// Dzieki temu lista magazynu (setki pozycji) nie jest duplikowana w DOM dla
+// kazdej z ofert na stronie - poprzednia wersja renderowala ja osobno w
+// kazdym wierszu, co przy ~50 ofertach x kilkaset pozycji dawalo dziesiatki
 // tysiecy elementow i realnie "zamrazalo" przegladarke (zwlaszcza na telefonie).
+// Dopasowanie jest zawsze na poziomie rozmiaru/SKU (ProductSize) - produkt
+// sam w sobie to zestaw kilku rozmiarow, wiec linkowanie calego produktu
+// bez wskazania rozmiaru byloby niejednoznaczne.
 document.addEventListener('alpine:init', () => {
-    Alpine.data('offerRow', (initProductId, initSizeId, initLabel) => ({
-        productId: initProductId || '',
+    Alpine.data('offerRow', (initSizeId, initLabel) => ({
         sizeId: initSizeId || '',
         selectedLabel: initLabel || 'Wybierz z magazynu',
 
@@ -221,17 +219,8 @@ document.addEventListener('alpine:init', () => {
             window.dispatchEvent(new CustomEvent('open-link-modal', {
                 detail: {
                     selectedLabel: this.selectedLabel,
-                    apply: (kind, value, label) => {
-                        if (kind === 'product') {
-                            this.productId = value;
-                            this.sizeId = '';
-                        } else if (kind === 'size') {
-                            this.sizeId = value;
-                            this.productId = '';
-                        } else {
-                            this.productId = '';
-                            this.sizeId = '';
-                        }
+                    apply: (value, label) => {
+                        this.sizeId = value;
                         this.selectedLabel = label || 'Wybierz z magazynu';
                     },
                     toggleBtn: this.$el.querySelector('button'),
@@ -275,8 +264,8 @@ document.addEventListener('alpine:init', () => {
             if (button) button.focus();
         },
 
-        selectOption(kind, value, label) {
-            if (this._apply) this._apply(kind, value, label);
+        selectOption(value, label) {
+            if (this._apply) this._apply(value, label);
             this.selectedLabel = label || 'Wybierz z magazynu';
             this.close();
         },

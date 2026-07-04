@@ -140,10 +140,16 @@ def test_link_offer_to_product_size_updates_relation(client, login):
         assert updated.product_id == product_target.id
 
 
-def test_link_offer_to_product_updates_relation(client, login):
+def test_link_offer_without_size_id_clears_relation(client, login):
+    """Dopasowanie ofert jest teraz wylacznie po rozmiarze/SKU - wyslanie
+    formularza bez product_size_id usuwa powiazanie (nie linkuje juz samego
+    produktu)."""
     with get_session() as session:
         product = Product(name="Obroża miejska", color="Czarna")
         session.add(product)
+        session.flush()
+        size = ProductSize(product_id=product.id, size="Uniwersalny", quantity=2, barcode="XYZ999")
+        session.add(size)
         session.flush()
 
         offer_id = "offer-3"
@@ -152,12 +158,14 @@ def test_link_offer_to_product_updates_relation(client, login):
                 offer_id=offer_id,
                 title="Obroża bez rozmiaru",
                 price=Decimal("39.99"),
+                product_id=product.id,
+                product_size_id=size.id,
             )
         )
 
     response = client.post(
         f"/allegro/link/{offer_id}",
-        data={"product_id": product.id},
+        data={},
         follow_redirects=True,
     )
 
@@ -166,8 +174,7 @@ def test_link_offer_to_product_updates_relation(client, login):
     body = response.data.decode("utf-8")
     assert "Obroża bez rozmiaru" in body
     offer_row = body[body.index("Obroża bez rozmiaru"):][:600]
-    assert "Powiązana" in offer_row
-    assert "Obroża miejska" in offer_row
+    assert "Niepowiązana" in offer_row
 
     with get_session() as session:
         updated = (
@@ -175,7 +182,7 @@ def test_link_offer_to_product_updates_relation(client, login):
             .filter(AllegroOffer.offer_id == offer_id)
             .one()
         )
-        assert updated.product_id == product.id
+        assert updated.product_id is None
         assert updated.product_size_id is None
 
 
