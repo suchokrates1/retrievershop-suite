@@ -317,6 +317,79 @@ def test_add_item_rejects_negative_quantity(app_mod, client, login):
         assert db.query(Product).filter(Product._name == "NegProd").first() is None
 
 
+def test_add_item_does_not_create_phantom_sizes(app_mod, client, login):
+    """create_product nie powinien tworzyc pustych wierszy ProductSize dla
+    rozmiarow, ktorych formularz nie wypelnil (ani ilosc, ani kod)."""
+    data_add = {
+        "category": "Szelki",
+        "brand": "Truelove",
+        "series": "Front Line",
+        "color": "Bordowy",
+        "quantity_M": "2",
+        "barcode_M": "11100001",
+    }
+    resp = client.post("/add_item", data=data_add)
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        prod = db.query(Product).filter_by(category="Szelki", color="Bordowy").first()
+        assert prod is not None
+        sizes = db.query(ProductSize).filter_by(product_id=prod.id).all()
+        assert {s.size for s in sizes} == {"M"}
+
+
+def test_edit_item_does_not_create_phantom_sizes(app_mod, client, login):
+    """update_product nie powinien tworzyc pustego wiersza dla rozmiaru bez
+    ilosci i bez kodu kreskowego przy edycji istniejacego produktu."""
+    data_add = {
+        "category": "Szelki",
+        "brand": "Truelove",
+        "series": "Front Line",
+        "color": "Turkusowy",
+        "quantity_M": "2",
+        "barcode_M": "11100002",
+    }
+    resp = client.post("/add_item", data=data_add)
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        prod_id = (
+            db.query(Product).filter_by(category="Szelki", color="Turkusowy").first().id
+        )
+
+    data_edit = {
+        "category": "Szelki",
+        "brand": "Truelove",
+        "series": "Front Line",
+        "color": "Turkusowy",
+        "quantity_M": "5",
+        "barcode_M": "11100002",
+        "quantity_L": "0",
+    }
+    resp = client.post(f"/edit_item/{prod_id}", data=data_edit)
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        sizes = db.query(ProductSize).filter_by(product_id=prod_id).all()
+        assert {s.size for s in sizes} == {"M"}
+
+
+def test_add_item_warns_on_mixed_uniwersalny_and_sized(app_mod, client, login):
+    data_add = {
+        "category": "Szelki",
+        "brand": "Truelove",
+        "series": "Front Line",
+        "color": "Kremowy",
+        "quantity_M": "2",
+        "quantity_Uniwersalny": "3",
+    }
+    resp = client.post("/add_item", data=data_add)
+    assert resp.status_code == 302
+    with client.session_transaction() as sess:
+        msgs = sess.get("_flashes")
+    assert any("jednocze" in m for _, m in msgs)
+
+
 def test_domain_create_product_persists_sizes(app_mod):
     quantities = {size: idx for idx, size in enumerate(ALL_SIZES, start=1)}
     barcodes = {size: f"{10000000 + idx:08d}" for idx, size in enumerate(ALL_SIZES, start=1)}

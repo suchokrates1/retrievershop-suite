@@ -36,6 +36,28 @@ def test_update_and_get_details(app_mod):
     assert sizes["M"]["barcode"] == "22200000"
 
 
+def test_create_product_skips_empty_sizes(app_mod):
+    """create_product nie tworzy wiersza ProductSize dla rozmiarow bez
+    ilosci i bez kodu kreskowego (widmowe wiersze)."""
+    prod = _create("Prod", "Red", {"M": 2, "L": 0, "Uniwersalny": 0}, {"M": "33300000"})
+    with app_mod.get_session() as db:
+        sizes = {s.size for s in db.query(ProductSize).filter_by(product_id=prod.id).all()}
+        assert sizes == {"M"}
+
+
+def test_update_product_skips_empty_sizes(app_mod):
+    """update_product nie tworzy nowego pustego wiersza ProductSize dla
+    rozmiaru bez ilosci/kodu, ktory jeszcze nie istnieje w bazie."""
+    prod = _create("Prod", "Red", {"M": 1}, {"M": "11100000"})
+    update_product(
+        prod.id, category="Prod", brand="Truelove", series=None,
+        color="Red", quantities={"M": 1, "L": 0}, barcodes={"M": "11100000"},
+    )
+    with app_mod.get_session() as db:
+        sizes = {s.size for s in db.query(ProductSize).filter_by(product_id=prod.id).all()}
+        assert sizes == {"M"}
+
+
 def test_delete_product(app_mod):
     prod = _create("Prod", "Red", {"M": 1}, {"M": "11100000"})
     delete_product(prod.id)
