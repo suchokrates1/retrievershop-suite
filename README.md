@@ -159,7 +159,7 @@ PY
 ### Running synchronization
 
 1. Start the application.
-2. Navigate to the **Oferty Allegro** page at `/allegro/offers`.
+2. Navigate to the **Oferty Allegro** page at `/offers-and-prices`.
 3. Use the **Odśwież** button to launch offer synchronization.
 
 ## Real-time Discussions

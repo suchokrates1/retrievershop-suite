@@ -25,7 +25,6 @@ from .env_tokens import update_allegro_tokens
 from .auth import login_required
 from .services.allegro_offer_views import (
     build_offers_and_prices_context,
-    build_offers_context,
     get_ean_for_offer,
     new_request_id,
 )
@@ -274,23 +273,6 @@ def _get_ean_for_offer(offer_id: str) -> str:
     return get_ean_for_offer(offer_id, log=current_app.logger)
 
 
-@bp.route("/allegro/offers")
-@login_required
-def offers():
-    context = build_offers_context(
-        fetch_ean_for_offer=_get_ean_for_offer,
-        log=current_app.logger,
-    )
-    response = make_response(render_template(
-        "allegro/offers.html",
-        **context,
-    ))
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
-
-
 @bp.route("/offers-and-prices")
 @login_required
 def offers_and_prices():
@@ -336,7 +318,7 @@ def refresh():
         )
     except Exception as e:
         flash(f"Błąd synchronizacji ofert: {e}", "error")
-    return redirect(url_for("allegro.offers"))
+    return redirect(url_for("allegro.offers_and_prices"))
 
 
 @bp.route("/allegro/link/<offer_id>", methods=["GET", "POST"])
@@ -346,7 +328,7 @@ def link_offer(offer_id):
         offer = db.query(AllegroOffer).filter_by(offer_id=offer_id).first()
         if not offer:
             flash("Nie znaleziono aukcji", "error")
-            return redirect(url_for("allegro.offers"))
+            return redirect(url_for("allegro.offers_and_prices"))
 
         if request.method == "POST":
             product_size_id = request.form.get("product_size_id", type=int)
@@ -373,7 +355,7 @@ def link_offer(offer_id):
                 offer.product_size_id = None
                 offer.product_id = None
                 flash("Usunięto powiązanie z magazynem", "info")
-            return redirect(url_for("allegro.offers"))
+            return redirect(url_for("allegro.offers_and_prices"))
 
         offer_data = {
             "offer_id": offer.offer_id,

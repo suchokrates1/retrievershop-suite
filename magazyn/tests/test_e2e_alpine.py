@@ -25,7 +25,6 @@ READONLY_ROUTES = [
     "/settings",
     "/sales/settings",
     "/logs",
-    "/allegro/offers",
     "/offers-and-prices",
     "/discussions",
     "/add_item",

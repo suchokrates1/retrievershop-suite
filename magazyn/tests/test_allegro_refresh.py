@@ -847,7 +847,7 @@ def test_refresh_reports_counts_when_no_matches(client, login, monkeypatch):
         assert offer.product_id is None
         assert offer.product_size_id is None
 
-    response = client.get("/allegro/offers")
+    response = client.get("/offers-and-prices")
     assert response.status_code == 200
     body = response.data.decode("utf-8")
     assert "Unmatched offer" in body
