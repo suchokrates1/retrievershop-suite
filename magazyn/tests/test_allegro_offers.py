@@ -15,43 +15,6 @@ from magazyn.allegro_api import fetch_product_listing
 import magazyn.allegro as allegro_views
 
 
-def test_offers_page_shows_manual_mapping_dropdown(client, login):
-    with get_session() as session:
-        product = Product(name="Szelki spacerowe", color="Czerwone")
-        session.add(product)
-        session.flush()
-        size = ProductSize(
-            product_id=product.id,
-            size="M",
-            quantity=5,
-            barcode="1234567890123",
-        )
-        session.add(size)
-        session.flush()
-        session.add(
-            AllegroOffer(
-                offer_id="offer-1",
-                title="Szelki na spacery",
-                price=Decimal("129.99"),
-                product_id=product.id,
-                product_size_id=size.id,
-            )
-        )
-
-    response = client.get("/allegro/offers")
-
-    body = response.data.decode("utf-8")
-    assert body.count("<table") == 2
-    assert "Oferty wymagające przypięcia" in body
-    assert "Oferty powiązane z magazynem" in body
-    assert "data-search-input" in body or "x-ref=\"searchInput\"" in body
-    assert "Brak powiazania" in body
-    assert "Szelki spacerowe" in body
-    assert "EAN: 1234567890123" in body
-    assert 'name="product_id"' in body
-    assert "selectOption(" in body
-
-
 def test_offers_and_prices_page_shows_searchable_mapping_dropdown(client, login):
     with get_session() as session:
         product = Product(name="Szelki treningowe", color="Zielone")
@@ -161,17 +124,11 @@ def test_link_offer_to_product_size_updates_relation(client, login):
     )
 
     assert response.status_code == 200
+    assert response.request.path == "/offers-and-prices"
     body = response.data.decode("utf-8")
-    assert body.count("<table") == 2
-    unlinked_section = re.search(
-        r'id="unlinked-offers".*?<tbody>(.*?)</tbody>', body, re.S
-    )
-    linked_section = re.search(
-        r'id="linked-offers".*?<tbody>(.*?)</tbody>', body, re.S
-    )
-    assert unlinked_section and linked_section
-    assert "Oferta Smyczy" not in unlinked_section.group(1)
-    assert "Oferta Smyczy" in linked_section.group(1)
+    assert "Oferta Smyczy" in body
+    offer_row = body[body.index("Oferta Smyczy"):][:400]
+    assert "Powiązana" in offer_row
 
     with get_session() as session:
         updated = (
@@ -205,13 +162,12 @@ def test_link_offer_to_product_updates_relation(client, login):
     )
 
     assert response.status_code == 200
+    assert response.request.path == "/offers-and-prices"
     body = response.data.decode("utf-8")
-    linked_section = re.search(
-        r'id="linked-offers".*?<tbody>(.*?)</tbody>', body, re.S
-    )
-    assert linked_section
-    assert "Obroża bez rozmiaru" in linked_section.group(1)
-    assert "Obroża miejska" in linked_section.group(1)
+    assert "Obroża bez rozmiaru" in body
+    offer_row = body[body.index("Obroża bez rozmiaru"):][:600]
+    assert "Powiązana" in offer_row
+    assert "Obroża miejska" in offer_row
 
     with get_session() as session:
         updated = (
@@ -259,36 +215,20 @@ def test_offers_without_inventory_are_listed_first(client, login):
             ]
         )
 
-    response = client.get("/allegro/offers")
+    response = client.get("/offers-and-prices?per_page=100")
     body = response.data.decode("utf-8")
 
-    unlinked_section = re.search(
-        r'id="unlinked-offers".*?<tbody>(.*?)</tbody>', body, re.S
-    )
-    linked_section = re.search(
-        r'id="linked-offers".*?<tbody>(.*?)</tbody>', body, re.S
-    )
-    assert unlinked_section and linked_section
+    tbody_match = re.search(r"<tbody>(.*?)</tbody>", body, re.S)
+    assert tbody_match
 
-    unlinked_rows = re.findall(r"<tr>(.*?)</tr>", unlinked_section.group(1), re.S)
-    unlinked_titles = []
-    for row in unlinked_rows:
-        columns = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
-        # Table columns: 0=ID, 1=EAN, 2=Title, 3=Price, 4=Link
-        if len(columns) >= 3:
-            unlinked_titles.append(re.sub(r"\s+", " ", columns[2]).strip())
+    titles = re.findall(r'<div class="font-semibold">(.*?)</div>', tbody_match.group(1))
 
-    assert unlinked_titles == ["ZZZ Oferta bez przypisania"]
-
-    linked_rows = re.findall(r"<tr>(.*?)</tr>", linked_section.group(1), re.S)
-    linked_titles = []
-    for row in linked_rows:
-        columns = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
-        # Table columns: 0=ID, 1=EAN, 2=Title, 3=Price, 4=Link
-        if len(columns) >= 3:
-            linked_titles.append(re.sub(r"\s+", " ", columns[2]).strip())
-
-    assert linked_titles == sorted(linked_titles)
+    # Nieprzypisane oferty maja byc na poczatku, reszta posortowana po tytule.
+    assert titles == [
+        "ZZZ Oferta bez przypisania",
+        "AAA Oferta powiązana",
+        "OOO Oferta powiązana",
+    ]
 
 
 def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, allegro_tokens):

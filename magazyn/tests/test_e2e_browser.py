@@ -285,7 +285,6 @@ ROUTES_FORMS = [
 ]
 
 ROUTES_ALLEGRO = [
-    "/allegro/offers",
     "/offers-and-prices",
     "/discussions",
 ]

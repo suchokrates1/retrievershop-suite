@@ -50,41 +50,6 @@ def get_ean_for_offer(offer_id: str, *, log: logging.Logger | None = None) -> st
         return ""
 
 
-def build_offers_context(
-    *,
-    fetch_ean_for_offer: Callable[[str], str] = get_ean_for_offer,
-    log: logging.Logger | None = None,
-) -> dict:
-    """Zbuduj dane do widoku recznego mapowania ofert Allegro."""
-    active_logger = log or logger
-    with get_session() as db:
-        rows = _active_offer_rows(db).all()
-        linked_offers: list[dict] = []
-        unlinked_offers: list[dict] = []
-
-        for offer, size, product in rows:
-            ean = offer.ean or ""
-            if not ean and not (offer.product_size_id or offer.product_id):
-                ean = _fetch_and_store_ean(db, offer, fetch_ean_for_offer)
-
-            if ean and not offer.product_size_id:
-                linked = _link_offer_by_ean(db, offer, ean, active_logger)
-                if linked:
-                    size, product = linked
-
-            offer_data = _offer_payload(offer, size, product, ean)
-            if offer.product_size_id or offer.product_id:
-                linked_offers.append(offer_data)
-            else:
-                unlinked_offers.append(offer_data)
-
-        return {
-            "unlinked_offers": unlinked_offers,
-            "linked_offers": linked_offers,
-            "inventory": build_inventory_list(db),
-        }
-
-
 def build_offers_and_prices_context(
     args,
     *,
@@ -164,10 +129,6 @@ def _get_json(url: str, headers: dict) -> dict:
 
 def _active_offers_query(db):
     return db.query(AllegroOffer).filter(AllegroOffer.publication_status == "ACTIVE")
-
-
-def _active_offer_rows(db):
-    return _order_offer_rows(_offer_rows_query(db))
 
 
 def _offer_rows_query(db):
@@ -292,7 +253,6 @@ def _offer_label(product: Product | None, size: ProductSize | None) -> str | Non
 
 __all__ = [
     "build_offers_and_prices_context",
-    "build_offers_context",
     "get_ean_for_offer",
     "new_request_id",
 ]
