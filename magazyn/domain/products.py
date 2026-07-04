@@ -78,6 +78,20 @@ def validate_ean(ean: Optional[str]) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+UNIWERSALNY = "Uniwersalny"
+
+
+def has_mixed_sizing(quantities: Dict[str, int]) -> bool:
+    """Zwroc True, jesli produkt ma jednoczesnie stan na rozmiarze
+    "Uniwersalny" i na innym rozmiarze - to nietypowe, produkt powinien byc
+    albo rozmiarowy (XS-3XL), albo Uniwersalny, nigdy oba naraz."""
+    uniwersalny_qty = _to_int(quantities.get(UNIWERSALNY, 0))
+    other_qty = sum(
+        _to_int(qty) for size, qty in quantities.items() if size != UNIWERSALNY
+    )
+    return uniwersalny_qty > 0 and other_qty > 0
+
+
 def create_product(
     category: str,
     brand: str,
@@ -105,12 +119,19 @@ def create_product(
         db.flush()
         for size in ALL_SIZES:
             qty = _to_int(quantities.get(size, 0))
+            barcode = barcodes.get(size)
+            # Nie tworz "widmowego" wiersza dla rozmiaru, ktorego produkt w
+            # ogole nie uzywa (formularz zawsze wysyla wszystkie ALL_SIZES) -
+            # inaczej kazdy produkt dostaje 8 wierszy ProductSize, wiekszosc
+            # pustych, co lamie zalozenie "rozmiarowy albo Uniwersalny".
+            if qty <= 0 and not barcode:
+                continue
             db.add(
                 ProductSize(
                     product_id=product.id,
                     size=size,
                     quantity=qty,
-                    barcode=barcodes.get(size),
+                    barcode=barcode,
                 )
             )
     return product
@@ -166,6 +187,11 @@ def update_product(
                 .first()
             )
             if not ps:
+                # Nie tworz "widmowego" wiersza dla rozmiaru bez stanu i bez
+                # kodu kreskowego - produkt ma byc albo rozmiarowy (XS-3XL),
+                # albo Uniwersalny, nigdy oba jednoczesnie.
+                if qty <= 0 and not barcode:
+                    continue
                 ps = ProductSize(
                     product_id=product_id,
                     size=size,
@@ -316,6 +342,7 @@ __all__ = [
     "_to_decimal",
     "_clean_barcode",
     "validate_ean",
+    "has_mixed_sizing",
     "create_product",
     "update_product",
     "delete_product",
