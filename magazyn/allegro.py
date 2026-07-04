@@ -18,7 +18,7 @@ from flask import (
 
 from .db import get_session
 from .models.allegro import AllegroOffer
-from .models.products import Product, ProductSize
+from .models.products import ProductSize
 from .allegro_sync import sync_offers
 from .settings_store import SettingsPersistenceError, settings_store
 from .env_tokens import update_allegro_tokens
@@ -332,7 +332,6 @@ def link_offer(offer_id):
 
         if request.method == "POST":
             product_size_id = request.form.get("product_size_id", type=int)
-            product_id = request.form.get("product_id", type=int)
             if product_size_id:
                 product_size = (
                     db.query(ProductSize).filter_by(id=product_size_id).first()
@@ -343,14 +342,6 @@ def link_offer(offer_id):
                     flash("Powiązano ofertę z pozycją magazynową", "success")
                 else:
                     flash("Nie znaleziono rozmiaru produktu o podanym ID", "error")
-            elif product_id:
-                product = db.query(Product).filter_by(id=product_id).first()
-                if product:
-                    offer.product_id = product.id
-                    offer.product_size_id = None
-                    flash("Powiązano aukcję z produktem", "success")
-                else:
-                    flash("Nie znaleziono produktu o podanym ID", "error")
             else:
                 offer.product_size_id = None
                 offer.product_id = None
@@ -361,7 +352,6 @@ def link_offer(offer_id):
             "offer_id": offer.offer_id,
             "title": offer.title,
             "price": offer.price,
-            "product_id": offer.product_id or "",
             "product_size_id": offer.product_size_id or "",
         }
     return render_template("allegro/link.html", offer=offer_data)

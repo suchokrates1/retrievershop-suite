@@ -73,41 +73,18 @@ class TestBuildOfferLabel:
 
 
 class TestBuildInventoryList:
-    """Testy budowania listy inventory."""
+    """Testy budowania listy inventory (wylacznie warianty rozmiarowe/SKU)."""
 
     def test_returns_list(self):
         db = MagicMock()
         db.query.return_value.join.return_value.order_by.return_value.all.return_value = []
-        db.query.return_value.order_by.return_value.all.return_value = []
 
         result = build_inventory_list(db)
         assert isinstance(result, list)
 
-    def test_product_entry_has_required_keys(self):
-        """Wpisy produktowe musza zawierac wymagane klucze."""
-        product = MagicMock()
-        product.id = 1
-        product.name = "Szelki"
-        product.color = "Niebieski"
-        product.sizes = []
-
-        db = MagicMock()
-        db.query.return_value.join.return_value.order_by.return_value.all.return_value = []
-        db.query.return_value.order_by.return_value.all.return_value = [product]
-
-        result = build_inventory_list(db)
-
-        assert len(result) >= 1
-        entry = result[0]
-        assert "id" in entry
-        assert "label" in entry
-        assert "filter" in entry
-        assert "type" in entry
-        assert entry["type"] == "product"
-        assert entry["type_label"] == "Produkt"
-
     def test_size_entry_has_required_keys(self):
-        """Wpisy rozmiarowe musza zawierac wymagane klucze."""
+        """Wpisy rozmiarowe musza zawierac wymagane klucze (bez rozroznienia typu -
+        dopasowanie jest zawsze na poziomie rozmiaru/SKU)."""
         product = MagicMock()
         product.id = 1
         product.name = "Obroza"
@@ -121,38 +98,43 @@ class TestBuildInventoryList:
 
         db = MagicMock()
         db.query.return_value.join.return_value.order_by.return_value.all.return_value = [(size, product)]
-        db.query.return_value.order_by.return_value.all.return_value = []
 
         result = build_inventory_list(db)
 
-        assert len(result) >= 1
+        assert len(result) == 1
         entry = result[0]
-        assert entry["type"] == "size"
-        assert entry["type_label"] == "Rozmiar"
+        assert "id" in entry
+        assert "label" in entry
+        assert "filter" in entry
+        assert "type" not in entry
         assert "5901234567890" in entry["extra"]
         assert "5" in entry["extra"]
 
-    def test_products_before_sizes(self):
-        """Produkty powinny byc przed rozmiarami w liscie."""
+    def test_multiple_sizes_all_present(self):
+        """Wszystkie warianty rozmiarowe zwrocone przez zapytanie trafiaja na liste."""
         product = MagicMock()
         product.id = 1
         product.name = "Test"
         product.color = None
-        product.sizes = []
 
-        size = MagicMock()
-        size.id = 10
-        size.size = "M"
-        size.barcode = None
-        size.quantity = 3
+        size_m = MagicMock()
+        size_m.id = 10
+        size_m.size = "M"
+        size_m.barcode = None
+        size_m.quantity = 3
+
+        size_l = MagicMock()
+        size_l.id = 11
+        size_l.size = "L"
+        size_l.barcode = None
+        size_l.quantity = 0
 
         db = MagicMock()
-        db.query.return_value.join.return_value.order_by.return_value.all.return_value = [(size, product)]
-        db.query.return_value.order_by.return_value.all.return_value = [product]
+        db.query.return_value.join.return_value.order_by.return_value.all.return_value = [
+            (size_m, product),
+            (size_l, product),
+        ]
 
         result = build_inventory_list(db)
 
-        # Pierwszy wpis powinien byc produktem
-        assert result[0]["type"] == "product"
-        # Ostatni wpis powinien byc rozmiarem
-        assert result[-1]["type"] == "size"
+        assert [entry["id"] for entry in result] == [10, 11]

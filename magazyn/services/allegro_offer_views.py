@@ -88,7 +88,7 @@ def build_offers_and_prices_context(
                 include_link_flag=True,
             )
             ean_value = offer.ean or ""
-            if not ean_value and not (offer.product_size_id or offer.product_id):
+            if not ean_value and not offer.product_size_id:
                 ean_value = _fetch_and_store_ean(db, offer, fetch_ean_for_offer, active_logger)
 
             if ean_value and not offer.product_size_id:
@@ -152,10 +152,7 @@ def _filtered_offer_rows(db, search: str, status_filter: str):
     if status_filter == "linked":
         query = query.filter(_is_linked_filter())
     elif status_filter == "unlinked":
-        query = query.filter(
-            AllegroOffer.product_size_id.is_(None),
-            AllegroOffer.product_id.is_(None),
-        )
+        query = query.filter(AllegroOffer.product_size_id.is_(None))
 
     if search:
         search_lower = f"%{search.lower()}%"
@@ -171,7 +168,7 @@ def _filtered_offer_rows(db, search: str, status_filter: str):
 
 
 def _is_linked_filter():
-    return (AllegroOffer.product_size_id.isnot(None)) | (AllegroOffer.product_id.isnot(None))
+    return AllegroOffer.product_size_id.isnot(None)
 
 
 def _fetch_and_store_ean(db, offer: AllegroOffer, fetch_ean_for_offer, log: logging.Logger | None = None) -> str:
@@ -226,29 +223,28 @@ def _offer_payload(
         "title": offer.title,
         "price": offer.price,
         "product_size_id": offer.product_size_id,
-        "product_id": offer.product_id,
         "selected_label": _offer_label(product, size),
         "barcode": size.barcode if size else None,
         "ean": ean,
     }
     if include_link_flag:
-        payload["is_linked"] = bool(offer.product_size_id or offer.product_id)
+        payload["is_linked"] = bool(offer.product_size_id)
     return payload
 
 
 def _offer_label(product: Product | None, size: ProductSize | None) -> str | None:
-    product_for_label = product or (size.product if size else None)
-    if product_for_label and size:
-        parts = [product_for_label.name]
-        if product_for_label.color:
-            parts.append(product_for_label.color)
-        return " – ".join([" ".join(parts), size.size])
-    if product_for_label:
-        parts = [product_for_label.name]
-        if product_for_label.color:
-            parts.append(product_for_label.color)
-        return " ".join(parts)
-    return None
+    """Etykieta wybranego powiazania - zawsze na poziomie rozmiaru/SKU
+    (produkt sam w sobie to zestaw kilku rozmiarow, wiec bez rozmiaru nie ma
+    jednoznacznej etykiety)."""
+    if not size:
+        return None
+    product_for_label = product or size.product
+    if not product_for_label:
+        return None
+    parts = [product_for_label.name]
+    if product_for_label.color:
+        parts.append(product_for_label.color)
+    return " – ".join([" ".join(parts), size.size])
 
 
 __all__ = [
