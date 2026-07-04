@@ -22,6 +22,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY magazyn/ /app/magazyn/
 COPY alembic.ini /app/alembic.ini
 COPY migrations/ /app/migrations/
+COPY scripts/ops/refresh_allegro_token.py /app/scripts/ops/refresh_allegro_token.py
 
 
 FROM python:3.12-slim AS runtime
