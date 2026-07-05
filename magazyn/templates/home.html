@@ -209,74 +209,44 @@
             </div>
         </div>
         <div class="md:col-span-4">
-            <div class="home-module h-full" :class="{'border-warning border': promotions?.renewing_tomorrow_count > 0}">
-                <div class="module-header"
-                     :class="promotions?.renewing_tomorrow_count > 0 ? 'border-l-4 border-warning' : ''">
-                    <i class="bi bi-shop mr-2"></i>Allegro
-                    <span class="badge badge-success float-right ml-1">{{ dashboard.allegro.total_offers }} ofert</span>
-                    <template x-if="promotions && !promotions.error">
-                        <span class="badge badge-info float-right" x-text="promotions.active_count + ' wyróż.'"></span>
-                    </template>
+            <div class="home-module h-full">
+                <div class="module-header">
+                    <i class="bi bi-trophy mr-2"></i>Rekord sprzedaży
                 </div>
                 <div class="p-2">
-                    <!-- Statystyki ofert -->
                     <div class="flex justify-between items-center mb-1 px-1">
-                        <small>Aktywne oferty:</small>
-                        <span class="badge badge-success">{{ dashboard.allegro.total_offers }}</span>
+                        <small>Rekord dzienny:</small>
+                        <div class="flex items-center gap-1">
+                            {% if dashboard.sales_records.daily_date %}
+                            <span class="badge badge-neutral">{{ dashboard.sales_records.daily_date }}</span>
+                            <span class="badge badge-success">{{ dashboard.sales_records.daily_quantity }} szt.</span>
+                            {% else %}
+                            <span class="text-base-content/80 text-sm">Brak danych</span>
+                            {% endif %}
+                        </div>
                     </div>
+                    <div class="flex justify-between items-center mb-1 px-1">
+                        <small>Rekord miesięczny:</small>
+                        <div class="flex items-center gap-1">
+                            {% if dashboard.sales_records.monthly_label %}
+                            <span class="badge badge-neutral">{{ dashboard.sales_records.monthly_label }}</span>
+                            <span class="badge badge-success">{{ dashboard.sales_records.monthly_quantity }} szt.</span>
+                            {% else %}
+                            <span class="text-base-content/80 text-sm">Brak danych</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="divider my-2"></div>
                     <div class="flex justify-between items-center px-1">
-                        <small>Niepowiązane:</small>
-                        <span class="badge {% if dashboard.allegro.unlinked_offers > 0 %}badge-warning{% else %}badge-neutral{% endif %}">
-                            {{ dashboard.allegro.unlinked_offers }}
-                        </span>
-                    </div>
-                    {% if dashboard.allegro.unlinked_offers > 0 %}
-                    <div class="px-1 mt-1">
-                        <a href="{{ url_for('allegro.offers_and_prices') }}" class="btn btn-outline btn-warning btn-sm w-full">
-                            <i class="bi bi-link mr-1"></i>Powiąż oferty
-                        </a>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Wyroznienia - ladowane asynchronicznie -->
-                    <div id="promotions-section">
-                        <div class="divider my-2"></div>
-                        <template x-if="loading">
-                            <div class="text-center py-2">
-                                <span class="loading loading-spinner loading-sm text-base-content/80"></span>
-                                <small class="text-base-content/80 ml-1">Ładowanie wyróżnień...</small>
-                            </div>
-                        </template>
-                        <template x-if="!loading && promotions && !promotions.error && promotions.active_promotions && promotions.active_promotions.length > 0">
-                            <div>
-                                <div class="overflow-x-auto max-h-[300px] sm:max-h-[360px] overflow-y-auto">
-                                    <table class="table table-zebra table-sm mb-0" style="font-size: 0.78rem;">
-                                        <thead class="bg-base-200 sticky top-0"><tr><th>Oferta</th><th class="text-center">Typ</th><th class="text-right">Koszt</th><th class="text-right">Przedł.</th></tr></thead>
-                                        <tbody>
-                                            <template x-for="p in promotions.active_promotions" :key="p.offer_id">
-                                                <tr :class="p.days_to_renewal !== null && p.days_to_renewal <= 1 ? 'bg-warning/20' : ''">
-                                                    <td class="truncate max-w-[100px] sm:max-w-[180px]" :title="p.offer_name">
-                                                        <a :href="'https://allegro.pl/oferta/' + p.offer_id" target="_blank" class="no-underline" x-text="p.offer_name"></a>
-                                                    </td>
-                                                    <td class="text-center whitespace-nowrap">
-                                                        <span class="badge" :class="promoBadgeClass(p)" x-text="promoBadgeText(p)"></span>
-                                                    </td>
-                                                    <td class="text-right whitespace-nowrap" x-text="p.estimated_cost.toFixed(2) + ' zł'"></td>
-                                                    <td class="text-right whitespace-nowrap" x-html="renewalHtml(p)"></td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="flex justify-between items-center mt-1 px-1">
-                                    <small class="text-base-content/80">Szac. mies.:</small>
-                                    <span class="badge badge-neutral" x-text="promotions.estimated_monthly_cost.toFixed(2) + ' zł'"></span>
-                                </div>
-                            </div>
-                        </template>
-                        <template x-if="!loading && (!promotions || promotions.error || !promotions.active_promotions || promotions.active_promotions.length === 0)">
-                            <p class="text-base-content/80 text-center text-sm mb-0">Brak aktywnych wyróżnień</p>
-                        </template>
+                        <small>Największy realny zysk:</small>
+                        <div class="flex items-center gap-1">
+                            {% if dashboard.sales_records.max_profit_month %}
+                            <span class="badge badge-success">{{ "%.0f"|format(dashboard.sales_records.max_profit_amount) }} zł</span>
+                            <span class="badge badge-neutral">{{ dashboard.sales_records.max_profit_month }}</span>
+                            {% else %}
+                            <span class="text-base-content/80 text-sm">Brak danych</span>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -782,7 +752,6 @@ document.addEventListener('alpine:init', () => {
         loading: true,
         error: null,
         profit: null,
-        promotions: null,
         trends: null,
         bestsellers: null,
         slowMoving: [],
@@ -795,7 +764,6 @@ document.addEventListener('alpine:init', () => {
                 const r = await fetch('/api/dashboard/heavy');
                 const data = await r.json();
                 this.profit = data.profit;
-                this.promotions = data.promotions;
                 this.trends = data.trends;
                 this.bestsellers = data.bestsellers;
                 this.slowMoving = data.slow_moving || [];
@@ -825,34 +793,6 @@ document.addEventListener('alpine:init', () => {
                 });
             }
             return t;
-        },
-
-        promoBadgeClass(p) {
-            if (!p.package_name) return 'badge-neutral';
-            if (p.package_name.includes('10')) return 'badge-primary';
-            if (p.package_name.toLowerCase().includes('elast')) return 'badge-success';
-            if (p.package_name.toLowerCase().includes('dzia')) return 'badge-neutral';
-            return 'badge-neutral';
-        },
-
-        promoBadgeText(p) {
-            if (!p.package_name) return '';
-            if (p.package_name.includes('10')) return '10d';
-            if (p.package_name.toLowerCase().includes('elast')) return '1d';
-            if (p.package_name.toLowerCase().includes('dzia')) return 'dzial';
-            return p.package_name.substring(0, 8);
-        },
-
-        renewalHtml(p) {
-            if (p.next_cycle_date) {
-                if (p.days_to_renewal !== null && p.days_to_renewal <= 1)
-                    return '<span class="text-error font-bold">jutro</span>';
-                if (p.days_to_renewal !== null && p.days_to_renewal <= 3)
-                    return '<span class="text-warning">' + p.days_to_renewal + 'd</span>';
-                return '<span class="text-base-content/80">' + p.next_cycle_date.substring(0, 10) + '</span>';
-            }
-            if (p.will_renew) return '<span class="text-base-content/80">auto</span>';
-            return '-';
         },
 
         rankBadge(i) {
