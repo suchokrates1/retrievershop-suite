@@ -11,9 +11,10 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, desc
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from ..db import is_postgres
 from ..models.allegro import AllegroOffer
 from ..models.orders import Order, OrderProduct
 from ..models.products import Product, ProductSize, PurchaseBatch
@@ -115,6 +116,17 @@ class TrendStats:
     revenue_change: float = 0.0
     prev_week_orders: int = 0
     prev_week_revenue: float = 0.0
+
+
+@dataclass
+class SalesRecordsStats:
+    """Rekordy sprzedazy i najlepszy miesiac realnego zysku."""
+    daily_date: Optional[str] = None
+    daily_quantity: int = 0
+    monthly_label: Optional[str] = None
+    monthly_quantity: int = 0
+    max_profit_amount: float = 0.0
+    max_profit_month: Optional[str] = None
 
 
 class DashboardService:
@@ -639,6 +651,94 @@ class DashboardService:
             for name, color, size, qty, sold in slow_movers
         ]
     
+    def _paid_order_filter(self):
+        return or_(
+            Order.payment_done > 0,
+            Order.payment_method_cod.is_(True),
+        )
+
+    def _completed_return_order_ids(self):
+        return select(Return.order_id).where(Return.status == 'completed').distinct()
+
+    def _day_bucket_expr(self):
+        if is_postgres():
+            return func.to_char(func.to_timestamp(Order.date_add), 'YYYY-MM-DD')
+        return func.strftime('%Y-%m-%d', func.datetime(Order.date_add, 'unixepoch'))
+
+    def _month_bucket_expr(self):
+        if is_postgres():
+            return func.to_char(func.to_timestamp(Order.date_add), 'YYYY-MM')
+        return func.strftime('%Y-%m', func.datetime(Order.date_add, 'unixepoch'))
+
+    @staticmethod
+    def _format_day_label(day_key: str) -> str:
+        year, month, day = day_key.split('-')
+        return f"{day}.{month}.{year}"
+
+    @staticmethod
+    def _format_month_label(month_key: str) -> str:
+        year, month = month_key.split('-')
+        return f"{MONTH_NAMES[int(month) - 1]} {year}"
+
+    def get_sales_records(self) -> SalesRecordsStats:
+        """Pobiera rekordy sprzedazy dziennej i miesiecznej oraz najlepszy miesiac zysku."""
+        return_ids = self._completed_return_order_ids()
+        day_bucket = self._day_bucket_expr()
+        month_bucket = self._month_bucket_expr()
+
+        daily_row = self.db.query(
+            day_bucket.label('day_key'),
+            func.sum(OrderProduct.quantity).label('qty'),
+        ).join(
+            Order, Order.order_id == OrderProduct.order_id
+        ).filter(
+            Order.date_add.isnot(None),
+            self._paid_order_filter(),
+            ~Order.order_id.in_(return_ids),
+        ).group_by(
+            day_bucket
+        ).order_by(
+            func.sum(OrderProduct.quantity).desc()
+        ).first()
+
+        monthly_row = self.db.query(
+            month_bucket.label('month_key'),
+            func.sum(OrderProduct.quantity).label('qty'),
+        ).join(
+            Order, Order.order_id == OrderProduct.order_id
+        ).filter(
+            Order.date_add.isnot(None),
+            self._paid_order_filter(),
+            ~Order.order_id.in_(return_ids),
+        ).group_by(
+            month_bucket
+        ).order_by(
+            func.sum(OrderProduct.quantity).desc()
+        ).first()
+
+        profit_row = self.db.query(
+            month_bucket.label('month_key'),
+            func.sum(Order.real_profit_amount).label('profit'),
+        ).filter(
+            Order.date_add.isnot(None),
+            Order.real_profit_amount.isnot(None),
+            self._paid_order_filter(),
+            ~Order.order_id.in_(return_ids),
+        ).group_by(
+            month_bucket
+        ).order_by(
+            func.sum(Order.real_profit_amount).desc()
+        ).first()
+
+        return SalesRecordsStats(
+            daily_date=self._format_day_label(daily_row.day_key) if daily_row and daily_row.qty else None,
+            daily_quantity=int(daily_row.qty or 0) if daily_row else 0,
+            monthly_label=self._format_month_label(monthly_row.month_key) if monthly_row and monthly_row.qty else None,
+            monthly_quantity=int(monthly_row.qty or 0) if monthly_row else 0,
+            max_profit_amount=float(profit_row.profit or 0) if profit_row else 0.0,
+            max_profit_month=self._format_month_label(profit_row.month_key) if profit_row and profit_row.profit else None,
+        )
+
     def get_trends(self) -> TrendStats:
         """Pobiera trendy (porownanie z poprzednim tygodniem)."""
         tr = self.time_ranges
@@ -740,6 +840,7 @@ class DashboardService:
         
         latest_orders = self.get_latest_orders(10)
         latest_deliveries = self.get_latest_deliveries(5)
+        sales_records = self.get_sales_records()
         
         return {
             'orders': {
@@ -764,6 +865,14 @@ class DashboardService:
             'allegro': {
                 'total_offers': allegro_stats.total_offers,
                 'unlinked_offers': allegro_stats.unlinked_offers,
+            },
+            'sales_records': {
+                'daily_date': sales_records.daily_date,
+                'daily_quantity': sales_records.daily_quantity,
+                'monthly_label': sales_records.monthly_label,
+                'monthly_quantity': sales_records.monthly_quantity,
+                'max_profit_amount': sales_records.max_profit_amount,
+                'max_profit_month': sales_records.max_profit_month,
             },
             'promotions': None,  # ladowane asynchronicznie
             'latest_orders': latest_orders,
@@ -839,6 +948,7 @@ class DashboardService:
         bestsellers_week = self.get_bestsellers(self.time_ranges.week_start_ts, limit=5)
         
         slow_moving = self.get_slow_movers(10)
+        sales_records = self.get_sales_records()
         
         return {
             'orders': {
@@ -863,6 +973,14 @@ class DashboardService:
             'allegro': {
                 'total_offers': allegro_stats.total_offers,
                 'unlinked_offers': allegro_stats.unlinked_offers,
+            },
+            'sales_records': {
+                'daily_date': sales_records.daily_date,
+                'daily_quantity': sales_records.daily_quantity,
+                'monthly_label': sales_records.monthly_label,
+                'monthly_quantity': sales_records.monthly_quantity,
+                'max_profit_amount': sales_records.max_profit_amount,
+                'max_profit_month': sales_records.max_profit_month,
             },
             'promotions': {
                 'active_count': promo_stats.active_count,
