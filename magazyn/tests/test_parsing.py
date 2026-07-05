@@ -78,6 +78,17 @@ def test_parse_offer_title_resolves_amortyzator_alias_to_inventory_name():
     assert size == "Uniwersalny"
 
 
+def test_parse_offer_title_smycz_z_amortyzatorem_zachowuje_rozmiar():
+    """Smycz z wbudowanym amortyzatorem ma M/L - to nie osobny amortyzator."""
+    name, color, size = parse_offer_title(
+        "Smycz dla psa z amortyzatorem Truelove Adventure 160cm czarna L"
+    )
+
+    assert name == "Smycz dla psa Truelove Adventure"
+    assert color == "Czarny"
+    assert size == "L"
+
+
 def test_parse_offer_title_detects_kamizelka_chlodzaca():
     name, color, size = parse_offer_title(
         "Kamizelka chłodząca dla średniego psa Truelove M żółta"

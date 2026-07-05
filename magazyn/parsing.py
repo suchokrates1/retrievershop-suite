@@ -6,9 +6,15 @@ import unicodedata
 from .constants import (
     ALL_SIZES,
     KNOWN_COLORS,
-    SINGLE_SIZE_KEYWORDS,
     normalize_product_title_fragment,
     resolve_product_alias,
+)
+
+# Kanoniczne nazwy produktow bez wariantow rozmiarowych (jeden SKU / kolor).
+_SINGLE_SIZE_NAME_PREFIXES = (
+    "Amortyzator dla psa",
+    "Pas samochodowy dla psa",
+    "Pas trekkingowy dla psa",
 )
 
 COLOR_ALIASES = {
@@ -167,6 +173,23 @@ def _normalize_keyword_text(value: str) -> str:
     return normalized
 
 
+def _is_single_size_product(detected_name: str) -> bool:
+    """Czy wykryta nazwa produktu oznacza jeden rozmiar (Uniwersalny).
+
+    Decyzja opiera sie na kategorii z ``_detect_product_name``, a nie na
+    substringach w surowym tytule - np. smycz *z amortyzatorem* ma M/L.
+    """
+    if not detected_name:
+        return False
+    if detected_name.startswith(_SINGLE_SIZE_NAME_PREFIXES):
+        return True
+    # Smycz automatyczna (Handy) - jeden SKU na kolor.
+    return (
+        detected_name.startswith("Smycz dla psa")
+        and " Handy" in detected_name
+    )
+
+
 def _detect_product_name(title: str) -> str:
     """Rozpoznaj nazwe produktu z tytulu oferty: kategoria + seria.
 
@@ -309,19 +332,18 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
                 color = normalize_color(matched_color)
                 remaining_words.pop(index)
 
-    name = _detect_product_name(title)
-    if not name:
+    detected_name = _detect_product_name(title)
+    if detected_name:
+        name = resolve_product_alias(detected_name)
+    else:
         name = " ".join(remaining_words).strip()
         name = normalize_product_title_fragment(name)
-    name = resolve_product_alias(name)
+        name = resolve_product_alias(name)
 
     if not size:
         size = "Uniwersalny"
 
-    # Produkty z kategorii bez rozmiarów (pasy, amortyzatory, smycze Handy)
-    # zawsze mają 1 SKU - wymuszamy Uniwersalny niezależnie od tego co było w tytule
-    title_lower = title.lower()
-    if any(kw in title_lower for kw in SINGLE_SIZE_KEYWORDS):
+    if _is_single_size_product(detected_name or name):
         size = "Uniwersalny"
 
     return name, color, size
