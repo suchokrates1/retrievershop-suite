@@ -680,43 +680,64 @@ class DashboardService:
         year, month = month_key.split('-')
         return f"{MONTH_NAMES[int(month) - 1]} {year}"
 
+    @staticmethod
+    def _label_with_egzekwo(label: str, tie_count: int) -> str:
+        if tie_count > 1:
+            return f"{label} ({tie_count})"
+        return label
+
+    @classmethod
+    def _resolve_tied_record(
+        cls,
+        rows: List[tuple[str, Any]],
+        format_key,
+    ) -> tuple[Optional[str], Any]:
+        """Wybiera rekord: max wartosc, najblizsza data/miesiac w przeszlosci, (N) przy remisie."""
+        valid = [(key, value) for key, value in rows if key and value is not None and value > 0]
+        if not valid:
+            return None, 0
+
+        max_value = max(value for _, value in valid)
+        tied = [item for item in valid if item[1] == max_value]
+        tied.sort(key=lambda item: item[0], reverse=True)
+        nearest_key, best_value = tied[0]
+        label = cls._label_with_egzekwo(format_key(nearest_key), len(tied))
+        return label, best_value
+
     def get_sales_records(self) -> SalesRecordsStats:
         """Pobiera rekordy sprzedazy dziennej i miesiecznej oraz najlepszy miesiac zysku."""
         return_ids = self._completed_return_order_ids()
         day_bucket = self._day_bucket_expr()
         month_bucket = self._month_bucket_expr()
+        base_filters = (
+            Order.date_add.isnot(None),
+            self._paid_order_filter(),
+            ~Order.order_id.in_(return_ids),
+        )
 
-        daily_row = self.db.query(
+        daily_rows = self.db.query(
             day_bucket.label('day_key'),
             func.sum(OrderProduct.quantity).label('qty'),
         ).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
-            Order.date_add.isnot(None),
-            self._paid_order_filter(),
-            ~Order.order_id.in_(return_ids),
+            *base_filters
         ).group_by(
             day_bucket
-        ).order_by(
-            func.sum(OrderProduct.quantity).desc()
-        ).first()
+        ).all()
 
-        monthly_row = self.db.query(
+        monthly_rows = self.db.query(
             month_bucket.label('month_key'),
             func.sum(OrderProduct.quantity).label('qty'),
         ).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
-            Order.date_add.isnot(None),
-            self._paid_order_filter(),
-            ~Order.order_id.in_(return_ids),
+            *base_filters
         ).group_by(
             month_bucket
-        ).order_by(
-            func.sum(OrderProduct.quantity).desc()
-        ).first()
+        ).all()
 
-        profit_row = self.db.query(
+        profit_rows = self.db.query(
             month_bucket.label('month_key'),
             func.sum(Order.real_profit_amount).label('profit'),
         ).filter(
@@ -726,17 +747,28 @@ class DashboardService:
             ~Order.order_id.in_(return_ids),
         ).group_by(
             month_bucket
-        ).order_by(
-            func.sum(Order.real_profit_amount).desc()
-        ).first()
+        ).all()
+
+        daily_date, daily_quantity = self._resolve_tied_record(
+            [(row.day_key, int(row.qty or 0)) for row in daily_rows],
+            self._format_day_label,
+        )
+        monthly_label, monthly_quantity = self._resolve_tied_record(
+            [(row.month_key, int(row.qty or 0)) for row in monthly_rows],
+            self._format_month_label,
+        )
+        max_profit_month, max_profit_amount = self._resolve_tied_record(
+            [(row.month_key, float(row.profit or 0)) for row in profit_rows],
+            self._format_month_label,
+        )
 
         return SalesRecordsStats(
-            daily_date=self._format_day_label(daily_row.day_key) if daily_row and daily_row.qty else None,
-            daily_quantity=int(daily_row.qty or 0) if daily_row else 0,
-            monthly_label=self._format_month_label(monthly_row.month_key) if monthly_row and monthly_row.qty else None,
-            monthly_quantity=int(monthly_row.qty or 0) if monthly_row else 0,
-            max_profit_amount=float(profit_row.profit or 0) if profit_row else 0.0,
-            max_profit_month=self._format_month_label(profit_row.month_key) if profit_row and profit_row.profit else None,
+            daily_date=daily_date,
+            daily_quantity=int(daily_quantity or 0),
+            monthly_label=monthly_label,
+            monthly_quantity=int(monthly_quantity or 0),
+            max_profit_amount=float(max_profit_amount or 0),
+            max_profit_month=max_profit_month,
         )
 
     def get_trends(self) -> TrendStats:

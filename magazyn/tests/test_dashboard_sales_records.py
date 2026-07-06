@@ -55,6 +55,68 @@ def test_get_sales_records_returns_daily_monthly_and_profit_records(app):
     assert records.max_profit_month == "Styczen 2026"
 
 
+def test_get_sales_records_marks_tied_daily_record_with_egzekwo_count(app):
+    days = [
+        int(datetime(2026, 3, 1, 12, 0, 0).timestamp()),
+        int(datetime(2026, 3, 5, 12, 0, 0).timestamp()),
+        int(datetime(2026, 3, 9, 12, 0, 0).timestamp()),
+        int(datetime(2026, 3, 12, 12, 0, 0).timestamp()),
+        int(datetime(2026, 3, 20, 12, 0, 0).timestamp()),
+    ]
+
+    with app.app_context():
+        with get_session() as db:
+            for idx, day_ts in enumerate(days):
+                _add_order(db, f"ord_tie_{idx}", day_ts, 8, profit=Decimal("10.00"))
+            _add_order(db, "ord_lower", int(datetime(2026, 3, 21, 12, 0, 0).timestamp()), 3)
+
+        with get_session() as db:
+            service = DashboardService(db, settings_store)
+            records = service.get_sales_records()
+
+    assert records.daily_quantity == 8
+    assert records.daily_date == "20.03.2026 (5)"
+
+
+def test_get_sales_records_marks_tied_monthly_and_profit_records(app):
+    jan = int(datetime(2026, 1, 10, 12, 0, 0).timestamp())
+    mar = int(datetime(2026, 3, 10, 12, 0, 0).timestamp())
+    may = int(datetime(2026, 5, 10, 12, 0, 0).timestamp())
+    feb = int(datetime(2026, 2, 10, 12, 0, 0).timestamp())
+
+    with app.app_context():
+        with get_session() as db:
+            _add_order(db, "ord_jan", jan, 4, profit=Decimal("100.00"))
+            _add_order(db, "ord_mar", mar, 4, profit=Decimal("100.00"))
+            _add_order(db, "ord_may", may, 4, profit=Decimal("100.00"))
+            _add_order(db, "ord_feb", feb, 1, profit=Decimal("20.00"))
+
+        with get_session() as db:
+            service = DashboardService(db, settings_store)
+            records = service.get_sales_records()
+
+    assert records.monthly_quantity == 4
+    assert records.monthly_label == "Maj 2026 (3)"
+    assert records.max_profit_amount == 100.0
+    assert records.max_profit_month == "Maj 2026 (3)"
+
+
+def test_resolve_tied_record_helpers():
+    label, value = DashboardService._resolve_tied_record(
+        [("2026-03-01", 8), ("2026-03-20", 8), ("2026-03-10", 5)],
+        DashboardService._format_day_label,
+    )
+    assert value == 8
+    assert label == "20.03.2026 (2)"
+
+    single_label, single_value = DashboardService._resolve_tied_record(
+        [("2026-04-01", 7)],
+        DashboardService._format_day_label,
+    )
+    assert single_value == 7
+    assert single_label == "01.04.2026"
+
+
 def test_home_page_renders_sales_records_module(client, login, app):
     day_ts = int(datetime(2026, 4, 2, 10, 0, 0).timestamp())
     month_ts = int(datetime(2026, 4, 12, 10, 0, 0).timestamp())
