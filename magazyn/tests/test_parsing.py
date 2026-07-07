@@ -114,3 +114,34 @@ def test_parse_product_info_detects_kamizelka_chlodzaca():
     assert name == "Kamizelka dla psa Truelove Chłodząca"
     assert color == "Żółty"
     assert size == "M"
+
+
+@pytest.mark.parametrize(
+    "title, expected_name, expected_color, expected_size",
+    [
+        (
+            "Kapok dla psa Truelove Dive liliowy M",
+            "Kapok dla psa Truelove Dive",
+            "Liliowy",
+            "M",
+        ),
+        (
+            "Kapok kamizelka ratunkowa dla psa Truelove Dive S liliowy",
+            "Kapok dla psa Truelove Dive",
+            "Liliowy",
+            "S",
+        ),
+        (
+            "Kamizelka ratunkowa dla psa Truelove Dive bananowy L",
+            "Kapok dla psa Truelove Dive",
+            "Bananowy",
+            "L",
+        ),
+    ],
+)
+def test_parse_offer_title_detects_kapok_dive(title, expected_name, expected_color, expected_size):
+    name, color, size = parse_offer_title(title)
+
+    assert name == expected_name
+    assert color == expected_color
+    assert size == expected_size
