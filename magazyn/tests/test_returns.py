@@ -6,6 +6,80 @@ from unittest.mock import MagicMock
 # Importy modeli sa rozbite po modulach domenowych.
 
 
+class TestCustomerReturnsPagination:
+    """Zwroty Allegro sa sortowane od najstarszych - trzeba pobrac ostatnia strone."""
+
+    def test_fetch_recent_returns_the_newest_page(self, monkeypatch):
+        from magazyn.services import return_allegro
+
+        # Allegro zwraca count=103 i ignoruje sort - offset musi wskazac ogon listy.
+        newest = [{"id": f"new{i}"} for i in range(100)]
+        calls = []
+
+        def fake_get(url, headers=None, params=None, timeout=None):
+            calls.append(params)
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            if params.get("limit") == 1:
+                resp.json.return_value = {"count": 103, "customerReturns": [{"id": "probe"}]}
+            else:
+                resp.json.return_value = {"count": 103, "customerReturns": newest}
+            return resp
+
+        monkeypatch.setattr(return_allegro.requests, "get", fake_get)
+
+        result = return_allegro._fetch_recent_customer_returns(
+            {}, return_allegro.logger, limit=100
+        )
+
+        assert len(result) == 100
+        assert calls == [
+            {"limit": 1, "offset": 0},
+            {"limit": 100, "offset": 3},
+        ]
+
+    def test_fetch_recent_returns_fewer_than_limit(self, monkeypatch):
+        from magazyn.services import return_allegro
+
+        calls = []
+
+        def fake_get(url, headers=None, params=None, timeout=None):
+            calls.append(params)
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            if params.get("limit") == 1:
+                resp.json.return_value = {"count": 5, "customerReturns": [{"id": "probe"}]}
+            else:
+                resp.json.return_value = {
+                    "count": 5,
+                    "customerReturns": [{"id": f"r{i}"} for i in range(5)],
+                }
+            return resp
+
+        monkeypatch.setattr(return_allegro.requests, "get", fake_get)
+
+        result = return_allegro._fetch_recent_customer_returns(
+            {}, return_allegro.logger, limit=100
+        )
+
+        assert len(result) == 5
+        # Gdy count <= limit, druga strona idzie od offset=0.
+        assert calls == [
+            {"limit": 1, "offset": 0},
+            {"limit": 100, "offset": 0},
+        ]
+
+
+class TestReturnStatusMapping:
+    def test_dispatched_maps_to_in_transit(self):
+        from magazyn.domain.returns import (
+            RETURN_STATUS_IN_TRANSIT,
+            map_allegro_return_status,
+        )
+
+        assert map_allegro_return_status("DISPATCHED") == RETURN_STATUS_IN_TRANSIT
+
+
 class TestReturnsSystem:
     """Testy dla systemu zwrotow."""
 
