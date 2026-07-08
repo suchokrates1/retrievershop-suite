@@ -27,6 +27,51 @@ from .return_notifications import send_return_notification
 
 logger = logging.getLogger(__name__)
 
+# Ile najnowszych zwrotow pobieramy przy kazdej synchronizacji. Starsze i tak
+# sa juz w bazie, wiec nie ma sensu pobierac calej historii.
+_CUSTOMER_RETURNS_FETCH_LIMIT = 100
+_CUSTOMER_RETURNS_URL = "https://api.allegro.pl/order/customer-returns"
+
+
+def _fetch_recent_customer_returns(
+    headers: dict,
+    log: logging.Logger,
+    *,
+    limit: int = _CUSTOMER_RETURNS_FETCH_LIMIT,
+) -> list:
+    """Pobierz `limit` NAJNOWSZYCH zwrotow z Allegro Customer Returns API.
+
+    Allegro zwraca zwroty POSORTOWANE OD NAJSTARSZYCH i ignoruje parametr `sort`,
+    wiec zwykle `limit=100` gubi najnowsze zwroty gdy laczna liczba przekroczy
+    limit. Zeby dostac najnowsze, czytamy laczna liczbe zwrotow z pola `count`
+    i pobieramy ostatnia strone (`offset = count - limit`).
+    """
+    probe = requests.get(
+        _CUSTOMER_RETURNS_URL,
+        headers=headers,
+        params={"limit": 1, "offset": 0},
+        timeout=30,
+    )
+    probe.raise_for_status()
+    count = probe.json().get("count") or 0
+
+    offset = max(0, count - limit)
+    response = requests.get(
+        _CUSTOMER_RETURNS_URL,
+        headers=headers,
+        params={"limit": limit, "offset": offset},
+        timeout=30,
+    )
+    response.raise_for_status()
+    returns = response.json().get("customerReturns", [])
+    log.debug(
+        "Customer Returns: count=%s, pobrano %s najnowszych (offset=%s)",
+        count,
+        len(returns),
+        offset,
+    )
+    return returns
+
 
 def check_allegro_customer_returns(*, log: Optional[logging.Logger] = None) -> Dict[str, int]:
     """Synchronizuj zwroty z Allegro Customer Returns API."""
@@ -47,13 +92,7 @@ def check_allegro_customer_returns(*, log: Optional[logging.Logger] = None) -> D
             "Accept": "application/vnd.allegro.beta.v1+json",
             "User-Agent": ALLEGRO_USER_AGENT,
         }
-        response = requests.get(
-            "https://api.allegro.pl/order/customer-returns?limit=100",
-            headers=headers,
-            timeout=30,
-        )
-        response.raise_for_status()
-        customer_returns = response.json().get("customerReturns", [])
+        customer_returns = _fetch_recent_customer_returns(headers, active_logger)
         active_logger.info("Znaleziono %s zwrotow w Allegro Customer Returns API", len(customer_returns))
 
         with get_session() as db:
