@@ -22,6 +22,12 @@
 .chart-canvas-shell { position: relative; width: 100%; height: 300px; }
 .profit-positive { color: #4ade80; }
 .profit-negative { color: #f87171; }
+.ads-expand-chevron {
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+.ads-expand-chevron.rotated { transform: rotate(90deg); }
+.ads-order-lines td { border-top: none; }
 </style>
 {% endblock %}
 
@@ -114,6 +120,7 @@
             <table class="table table-sm table-zebra">
                 <thead>
                     <tr>
+                        <th class="w-8"></th>
                         <th x-show="isAllCampaigns">Kampania</th>
                         <th>Oferta</th>
                         <th>ID</th>
@@ -128,13 +135,25 @@
                         <th>POAS</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <template x-for="row in filteredAdSales" :key="row.campaign_entity_id + '-' + row.offer_id">
-                        <tr>
+                <template x-for="row in filteredAdSales" :key="row.campaign_entity_id + '-' + row.offer_id">
+                    <tbody>
+                        <tr class="cursor-pointer hover:bg-base-300/40" @click="toggleRow(row)">
+                            <td class="text-center">
+                                <i class="bi bi-chevron-right ads-expand-chevron" :class="{ rotated: isRowExpanded(row) }"></i>
+                            </td>
                             <td x-show="isAllCampaigns" x-text="row.campaign_name"></td>
-                            <td class="max-w-[14rem] truncate" :title="row.offer_name" x-text="row.offer_name"></td>
+                            <td class="max-w-[14rem] truncate" :title="row.offer_name">
+                                <a
+                                    x-show="row.product_id"
+                                    class="link"
+                                    :href="'/product/' + row.product_id"
+                                    @click.stop
+                                    x-text="row.offer_name"
+                                ></a>
+                                <span x-show="!row.product_id" x-text="row.offer_name"></span>
+                            </td>
                             <td>
-                                <a class="link" :href="'https://allegro.pl/oferta/' + row.offer_id" target="_blank" rel="noopener" x-text="row.offer_id"></a>
+                                <a class="link" :href="'https://allegro.pl/oferta/' + row.offer_id" target="_blank" rel="noopener" @click.stop x-text="row.offer_id"></a>
                             </td>
                             <td x-text="row.quantity"></td>
                             <td x-text="fmtMoney(row.sale_value)"></td>
@@ -146,9 +165,48 @@
                             <td :class="profitClass(row.net_profit_per_unit)" x-text="fmtMoney(row.net_profit_per_unit)"></td>
                             <td x-text="row.poas ?? '-'"></td>
                         </tr>
-                    </template>
-                    <tr x-show="!filteredAdSales.length">
-                        <td :colspan="isAllCampaigns ? 12 : 11" class="text-center opacity-60">Brak sprzedanych ofert w snapshotcie.</td>
+                        <tr class="ads-order-lines" x-show="isRowExpanded(row)" x-cloak>
+                            <td :colspan="isAllCampaigns ? 13 : 12" class="p-0 bg-base-200">
+                                <div class="p-2">
+                                    <p class="text-xs opacity-70 mb-2" x-show="row.orders_in_period > row.quantity">
+                                        W okresie znaleziono <span x-text="row.orders_in_period"></span> linii zamówień dla tej oferty;
+                                        zysk przeskalowany do <span x-text="row.quantity"></span> szt. z reklamy (<span x-text="fmtMoney(row.sale_value)"></span>).
+                                    </p>
+                                    <table class="table table-xs mb-0 bg-base-100 border border-base-300">
+                                        <thead class="bg-base-200">
+                                            <tr>
+                                                <th>Zamówienie</th>
+                                                <th>Data</th>
+                                                <th class="text-center">Szt.</th>
+                                                <th class="text-right">Wartość linii</th>
+                                                <th class="text-right">Zysk (udział)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="line in row.order_lines || []" :key="line.order_id">
+                                                <tr>
+                                                    <td>
+                                                        <a class="link" :href="'/order/' + line.order_id" x-text="shortOrderId(line.order_id)"></a>
+                                                    </td>
+                                                    <td x-text="fmtOrderDate(line.date_add)"></td>
+                                                    <td class="text-center" x-text="line.quantity"></td>
+                                                    <td class="text-right" x-text="fmtMoney(line.line_revenue)"></td>
+                                                    <td class="text-right" x-text="fmtMoney(line.attributed_profit)"></td>
+                                                </tr>
+                                            </template>
+                                            <tr x-show="!(row.order_lines || []).length">
+                                                <td colspan="5" class="text-center opacity-60">Brak dopasowanych zamówień w okresie.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </template>
+                <tbody x-show="!filteredAdSales.length">
+                    <tr>
+                        <td :colspan="isAllCampaigns ? 13 : 12" class="text-center opacity-60">Brak sprzedanych ofert w snapshotcie.</td>
                     </tr>
                 </tbody>
             </table>
@@ -210,6 +268,26 @@ function adsPanelStats() {
         meta: {},
         chart: null,
         selectedCampaignId: '',
+        expandedRows: {},
+        rowKey(row) {
+            return (row.campaign_entity_id || '') + '-' + (row.offer_id || '');
+        },
+        isRowExpanded(row) {
+            return !!this.expandedRows[this.rowKey(row)];
+        },
+        toggleRow(row) {
+            const key = this.rowKey(row);
+            this.expandedRows[key] = !this.expandedRows[key];
+        },
+        shortOrderId(orderId) {
+            if (!orderId) return '-';
+            const parts = String(orderId).split('_');
+            return parts.length > 1 ? parts.slice(1).join('_').slice(-12) : String(orderId).slice(-12);
+        },
+        fmtOrderDate(ts) {
+            if (!ts) return '-';
+            return new Date(Number(ts) * 1000).toLocaleDateString('pl-PL');
+        },
         get campaignOptions() {
             const rows = (this.data?.campaigns || []).slice().sort((a, b) => {
                 if (a.campaign_name === 'Wszystkie kampanie') return -1;

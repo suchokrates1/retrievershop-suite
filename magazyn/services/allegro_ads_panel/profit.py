@@ -34,7 +34,12 @@ def compute_profit_by_offer(
 ) -> dict[str, dict[str, Any]]:
     """Zwraca atrybuowany zysk i przychód per offer_id (proporcjonalnie do linii zamówienia)."""
     normalized = {str(offer_id) for offer_id in offer_ids if offer_id}
-    empty = {"real_profit": Decimal("0"), "real_revenue": Decimal("0"), "orders": 0}
+    empty = {
+        "real_profit": Decimal("0"),
+        "real_revenue": Decimal("0"),
+        "orders": 0,
+        "order_lines": [],
+    }
     if not normalized:
         return {}
 
@@ -64,7 +69,12 @@ def compute_profit_by_offer(
         products_by_order[product.order_id].append(product)
 
     result: dict[str, dict[str, Any]] = {
-        offer_id: {"real_profit": Decimal("0"), "real_revenue": Decimal("0"), "orders": set()}
+        offer_id: {
+            "real_profit": Decimal("0"),
+            "real_revenue": Decimal("0"),
+            "orders": set(),
+            "order_lines": [],
+        }
         for offer_id in normalized
     }
 
@@ -92,13 +102,24 @@ def compute_profit_by_offer(
             offer_id = str(product.auction_id)
             line_revenue = _line_revenue(product)
             share = line_revenue / matched_revenue
+            line_profit = attributed_profit * share
             bucket = result[offer_id]
-            bucket["real_profit"] += attributed_profit * share
+            bucket["real_profit"] += line_profit
             bucket["real_revenue"] += line_revenue
             bucket["orders"].add(order_id)
+            bucket["order_lines"].append(
+                {
+                    "order_id": order_id,
+                    "quantity": int(product.quantity or 0),
+                    "line_revenue": line_revenue,
+                    "attributed_profit": line_profit,
+                    "date_add": int(order.date_add or 0),
+                }
+            )
 
     for offer_id, bucket in result.items():
         bucket["orders"] = len(bucket["orders"])
+        bucket["order_lines"].sort(key=lambda line: line["date_add"], reverse=True)
 
     return result
 

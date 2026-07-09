@@ -8,11 +8,11 @@ from decimal import Decimal
 from flask import jsonify, request
 
 from ..db import get_session
+from ..models.allegro import AllegroOffer
 from ..models.allegro_ads_panel import AllegroAdsSnapshot
 from ..services.allegro_ads_panel.profit import (
     _ratio,
     compute_profit_by_offer,
-    summarize_offer_profit,
 )
 from ..services.stats_support import json_error as _json_error
 
@@ -66,12 +66,54 @@ def _profit_metrics(*, cost: Decimal | None, summary: dict) -> dict:
     }
 
 
+def _scale_offer_profit_to_ads_sale(
+    *,
+    ads_sale_value: Decimal | None,
+    offer_profit: dict,
+) -> tuple[Decimal, Decimal, list[dict]]:
+    """Skaluje zysk z zamówień do wartości sprzedaży atrybuowanej reklamie."""
+    matched_revenue = Decimal(str(offer_profit.get("real_revenue") or 0))
+    real_profit_raw = Decimal(str(offer_profit.get("real_profit") or 0))
+    ads_value = Decimal(str(ads_sale_value or 0))
+
+    if matched_revenue > 0 and ads_value > 0 and matched_revenue != ads_value:
+        scale = ads_value / matched_revenue
+        real_profit = real_profit_raw * scale
+        real_revenue = ads_value
+    elif ads_value > 0:
+        real_profit = real_profit_raw
+        real_revenue = ads_value
+    else:
+        real_profit = real_profit_raw
+        real_revenue = matched_revenue
+
+    order_lines = []
+    for line in offer_profit.get("order_lines") or []:
+        line_profit = Decimal(str(line.get("attributed_profit") or 0))
+        line_revenue = Decimal(str(line.get("line_revenue") or 0))
+        if matched_revenue > 0 and ads_value > 0 and matched_revenue != ads_value:
+            line_profit *= scale
+            line_revenue *= scale
+        order_lines.append(
+            {
+                "order_id": line.get("order_id"),
+                "quantity": int(line.get("quantity") or 0),
+                "line_revenue": _decimal(line_revenue),
+                "attributed_profit": _decimal(line_profit),
+                "date_add": int(line.get("date_add") or 0),
+            }
+        )
+
+    return real_profit, real_revenue, order_lines
+
+
 def _sold_item_metrics(
     *,
     item,
     campaign_cost: Decimal | None,
     campaign_sale_value: Decimal | None,
     offer_profit: dict,
+    product_id: int | None = None,
 ) -> dict:
     quantity = max(int(item.quantity or 0), 0)
     item_cost_share = Decimal("0")
@@ -80,8 +122,10 @@ def _sold_item_metrics(
             Decimal(str(item.sale_value)) / Decimal(str(campaign_sale_value))
         )
 
-    real_profit = Decimal(str(offer_profit.get("real_profit") or 0))
-    real_revenue = Decimal(str(offer_profit.get("real_revenue") or 0))
+    real_profit, real_revenue, order_lines = _scale_offer_profit_to_ads_sale(
+        ads_sale_value=item.sale_value,
+        offer_profit=offer_profit,
+    )
     net_profit = real_profit - item_cost_share
     qty_divisor = quantity if quantity > 0 else 1
     ad_cost_per_unit = item_cost_share / qty_divisor
@@ -91,6 +135,7 @@ def _sold_item_metrics(
     return {
         "offer_id": item.offer_id,
         "offer_name": item.offer_name,
+        "product_id": product_id,
         "quantity": quantity,
         "sale_value": _decimal(item.sale_value),
         "ad_cost": _decimal(item_cost_share),
@@ -99,10 +144,12 @@ def _sold_item_metrics(
         "real_profit_per_unit": _decimal(real_profit_per_unit),
         "real_revenue": _decimal(real_revenue),
         "orders_matched": int(offer_profit.get("orders") or 0),
+        "orders_in_period": len(order_lines),
         "net_profit": _decimal(net_profit),
         "net_profit_per_unit": _decimal(net_profit_per_unit),
         "poas": _ratio(real_profit, item_cost_share),
         "roas_real": _ratio(real_revenue, item_cost_share),
+        "order_lines": order_lines,
     }
 
 
@@ -150,22 +197,21 @@ def stats_ads_panel_overview():
             period_end=snapshot.period_end,
             offer_ids=all_offer_ids,
         )
+        product_by_offer = {
+            row.offer_id: row.product_id
+            for row in db.query(AllegroOffer.offer_id, AllegroOffer.product_id)
+            .filter(AllegroOffer.offer_id.in_(all_offer_ids))
+            .all()
+            if row.product_id
+        }
 
         campaigns = []
         ad_sales: list[dict] = []
         for row in sorted(snapshot.campaigns, key=lambda c: c.campaign_name.lower()):
-            campaign_offer_ids = {item.offer_id for item in row.sold_items if item.offer_id}
-            if row.campaign_name == AGGREGATE_CAMPAIGN_NAME:
-                campaign_profit_rows = profit_by_offer
-            else:
-                campaign_profit_rows = {
-                    offer_id: profit_by_offer.get(offer_id, {})
-                    for offer_id in campaign_offer_ids
-                }
-            campaign_summary = summarize_offer_profit(campaign_profit_rows)
-            campaign_profit = _profit_metrics(cost=row.cost, summary=campaign_summary)
-
             sold_items = []
+            campaign_scaled_profit = Decimal("0")
+            campaign_scaled_revenue = Decimal("0")
+            campaign_orders_matched = 0
             for item in sorted(row.sold_items, key=lambda i: i.sale_value, reverse=True):
                 offer_profit = profit_by_offer.get(item.offer_id, {})
                 item_metrics = _sold_item_metrics(
@@ -173,8 +219,12 @@ def stats_ads_panel_overview():
                     campaign_cost=row.cost,
                     campaign_sale_value=row.sale_value,
                     offer_profit=offer_profit,
+                    product_id=product_by_offer.get(item.offer_id),
                 )
                 sold_items.append(item_metrics)
+                campaign_scaled_profit += Decimal(str(item_metrics.get("real_profit") or 0))
+                campaign_scaled_revenue += Decimal(str(item_metrics.get("real_revenue") or 0))
+                campaign_orders_matched += int(item_metrics.get("orders_matched") or 0)
                 if row.campaign_name != AGGREGATE_CAMPAIGN_NAME:
                     ad_sales.append(
                         {
@@ -183,6 +233,15 @@ def stats_ads_panel_overview():
                             **item_metrics,
                         }
                     )
+
+            campaign_profit = _profit_metrics(
+                cost=row.cost,
+                summary={
+                    "real_profit": campaign_scaled_profit,
+                    "real_revenue": campaign_scaled_revenue,
+                    "orders_matched": campaign_orders_matched,
+                },
+            )
 
             campaigns.append(
                 {

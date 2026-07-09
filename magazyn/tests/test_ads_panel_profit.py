@@ -4,7 +4,11 @@ from decimal import Decimal
 from magazyn.db import get_session
 from magazyn.models.orders import Order, OrderProduct
 from magazyn.services.allegro_ads_panel.profit import compute_profit_by_offer
-from magazyn.services.stats_api_ads_panel import _charts_by_campaign, _sold_item_metrics
+from magazyn.services.stats_api_ads_panel import (
+    _charts_by_campaign,
+    _scale_offer_profit_to_ads_sale,
+    _sold_item_metrics,
+)
 
 
 def test_compute_profit_by_offer_splits_order_profit(app):
@@ -46,6 +50,40 @@ def test_compute_profit_by_offer_splits_order_profit(app):
     assert result["111"]["real_profit"] == Decimal("25.00")
     assert result["111"]["real_revenue"] == Decimal("100.00")
     assert result["111"]["orders"] == 1
+    assert len(result["111"]["order_lines"]) == 1
+    assert result["111"]["order_lines"][0]["order_id"] == "ADS-1"
+    assert result["111"]["order_lines"][0]["attributed_profit"] == Decimal("25.00")
+
+
+def test_scale_offer_profit_to_ads_sale_scales_when_revenues_differ():
+    offer_profit = {
+        "real_profit": Decimal("185.98"),
+        "real_revenue": Decimal("602.00"),
+        "orders": 6,
+        "order_lines": [
+            {
+                "order_id": "o1",
+                "quantity": 1,
+                "line_revenue": Decimal("86.00"),
+                "attributed_profit": Decimal("31.03"),
+                "date_add": 1,
+            },
+            {
+                "order_id": "o2",
+                "quantity": 3,
+                "line_revenue": Decimal("516.00"),
+                "attributed_profit": Decimal("154.95"),
+                "date_add": 2,
+            },
+        ],
+    }
+    real_profit, real_revenue, lines = _scale_offer_profit_to_ads_sale(
+        ads_sale_value=Decimal("344.00"),
+        offer_profit=offer_profit,
+    )
+    assert real_revenue == Decimal("344.00")
+    assert round(float(real_profit), 2) == 106.27
+    assert round(float(sum(Decimal(str(line["attributed_profit"])) for line in lines)), 2) == 106.27
 
 
 def test_charts_by_campaign_groups_points():
@@ -65,9 +103,16 @@ def test_sold_item_metrics_per_unit():
         item=item,
         campaign_cost=Decimal("100"),
         campaign_sale_value=Decimal("400"),
-        offer_profit={"real_profit": Decimal("80"), "real_revenue": Decimal("400"), "orders": 2},
+        offer_profit={
+            "real_profit": Decimal("80"),
+            "real_revenue": Decimal("400"),
+            "orders": 2,
+            "order_lines": [],
+        },
+        product_id=12,
     )
     assert metrics["ad_cost"] == 100.0
     assert metrics["ad_cost_per_unit"] == 25.0
     assert metrics["net_profit"] == -20.0
     assert metrics["net_profit_per_unit"] == -5.0
+    assert metrics["product_id"] == 12
