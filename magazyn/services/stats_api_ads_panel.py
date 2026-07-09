@@ -153,6 +153,77 @@ def _sold_item_metrics(
     }
 
 
+def _empty_profit_summary() -> dict[str, Decimal | int]:
+    return {
+        "real_profit": Decimal("0"),
+        "real_revenue": Decimal("0"),
+        "orders_matched": 0,
+    }
+
+
+def _add_profit_summaries(target: dict, source: dict) -> None:
+    target["real_profit"] += Decimal(str(source.get("real_profit") or 0))
+    target["real_revenue"] += Decimal(str(source.get("real_revenue") or 0))
+    target["orders_matched"] += int(source.get("orders_matched") or 0)
+
+
+def _serialize_campaign_row(
+    row,
+    *,
+    profit_by_offer: dict,
+    product_by_offer: dict,
+    profit_summary: dict | None = None,
+    collect_ad_sales: bool = False,
+) -> tuple[dict, list[dict], dict]:
+    sold_items: list[dict] = []
+    campaign_summary = _empty_profit_summary()
+    ad_sales_items: list[dict] = []
+
+    for item in sorted(row.sold_items, key=lambda i: i.sale_value, reverse=True):
+        offer_profit = profit_by_offer.get(item.offer_id, {})
+        item_metrics = _sold_item_metrics(
+            item=item,
+            campaign_cost=row.cost,
+            campaign_sale_value=row.sale_value,
+            offer_profit=offer_profit,
+            product_id=product_by_offer.get(item.offer_id),
+        )
+        sold_items.append(item_metrics)
+        campaign_summary["real_profit"] += Decimal(str(item_metrics.get("real_profit") or 0))
+        campaign_summary["real_revenue"] += Decimal(str(item_metrics.get("real_revenue") or 0))
+        campaign_summary["orders_matched"] += int(item_metrics.get("orders_matched") or 0)
+        if collect_ad_sales:
+            ad_sales_items.append(
+                {
+                    "campaign_name": row.campaign_name,
+                    "campaign_entity_id": row.campaign_entity_id,
+                    **item_metrics,
+                }
+            )
+
+    campaign_profit = _profit_metrics(
+        cost=row.cost,
+        summary=profit_summary if profit_summary is not None else campaign_summary,
+    )
+
+    payload = {
+        "campaign_name": row.campaign_name,
+        "campaign_entity_id": row.campaign_entity_id,
+        "clicks": row.clicks,
+        "impressions": row.impressions,
+        "ctr": _decimal(row.ctr),
+        "cpc": _decimal(row.cpc),
+        "cost": _decimal(row.cost),
+        "roi": _decimal(row.roi),
+        "interest": row.interest,
+        "sale_count": row.sale_count,
+        "sale_value": _decimal(row.sale_value),
+        **campaign_profit,
+        "sold_items": sold_items,
+    }
+    return payload, ad_sales_items, campaign_summary
+
+
 def stats_ads_panel_overview():
     snapshot_date_raw = (request.args.get("snapshot_date") or "").strip()
     with get_session() as db:
@@ -207,72 +278,37 @@ def stats_ads_panel_overview():
 
         campaigns = []
         ad_sales: list[dict] = []
-        aggregate_profit_summary = {
-            "real_profit": Decimal("0"),
-            "real_revenue": Decimal("0"),
-            "orders_matched": 0,
-        }
-        for row in sorted(snapshot.campaigns, key=lambda c: c.campaign_name.lower()):
-            sold_items = []
-            campaign_scaled_profit = Decimal("0")
-            campaign_scaled_revenue = Decimal("0")
-            campaign_orders_matched = 0
-            for item in sorted(row.sold_items, key=lambda i: i.sale_value, reverse=True):
-                offer_profit = profit_by_offer.get(item.offer_id, {})
-                item_metrics = _sold_item_metrics(
-                    item=item,
-                    campaign_cost=row.cost,
-                    campaign_sale_value=row.sale_value,
-                    offer_profit=offer_profit,
-                    product_id=product_by_offer.get(item.offer_id),
-                )
-                sold_items.append(item_metrics)
-                campaign_scaled_profit += Decimal(str(item_metrics.get("real_profit") or 0))
-                campaign_scaled_revenue += Decimal(str(item_metrics.get("real_revenue") or 0))
-                campaign_orders_matched += int(item_metrics.get("orders_matched") or 0)
-                if row.campaign_name != AGGREGATE_CAMPAIGN_NAME:
-                    ad_sales.append(
-                        {
-                            "campaign_name": row.campaign_name,
-                            "campaign_entity_id": row.campaign_entity_id,
-                            **item_metrics,
-                        }
-                    )
+        aggregate_profit_summary = _empty_profit_summary()
+        detail_rows = [
+            row for row in snapshot.campaigns if row.campaign_name != AGGREGATE_CAMPAIGN_NAME
+        ]
+        aggregate_row = next(
+            (row for row in snapshot.campaigns if row.campaign_name == AGGREGATE_CAMPAIGN_NAME),
+            None,
+        )
 
-            if row.campaign_name == AGGREGATE_CAMPAIGN_NAME:
-                campaign_summary = aggregate_profit_summary
-            else:
-                campaign_summary = {
-                    "real_profit": campaign_scaled_profit,
-                    "real_revenue": campaign_scaled_revenue,
-                    "orders_matched": campaign_orders_matched,
-                }
-                aggregate_profit_summary["real_profit"] += campaign_scaled_profit
-                aggregate_profit_summary["real_revenue"] += campaign_scaled_revenue
-                aggregate_profit_summary["orders_matched"] += campaign_orders_matched
-
-            campaign_profit = _profit_metrics(
-                cost=row.cost,
-                summary=campaign_summary,
+        for row in sorted(detail_rows, key=lambda c: c.campaign_name.lower()):
+            campaign_payload, ad_sales_items, campaign_summary = _serialize_campaign_row(
+                row,
+                profit_by_offer=profit_by_offer,
+                product_by_offer=product_by_offer,
+                collect_ad_sales=True,
             )
+            campaigns.append(campaign_payload)
+            ad_sales.extend(ad_sales_items)
+            _add_profit_summaries(aggregate_profit_summary, campaign_summary)
 
-            campaigns.append(
-                {
-                    "campaign_name": row.campaign_name,
-                    "campaign_entity_id": row.campaign_entity_id,
-                    "clicks": row.clicks,
-                    "impressions": row.impressions,
-                    "ctr": _decimal(row.ctr),
-                    "cpc": _decimal(row.cpc),
-                    "cost": _decimal(row.cost),
-                    "roi": _decimal(row.roi),
-                    "interest": row.interest,
-                    "sale_count": row.sale_count,
-                    "sale_value": _decimal(row.sale_value),
-                    **campaign_profit,
-                    "sold_items": sold_items,
-                }
+        if aggregate_row is not None:
+            campaign_payload, _, _ = _serialize_campaign_row(
+                aggregate_row,
+                profit_by_offer=profit_by_offer,
+                product_by_offer=product_by_offer,
+                profit_summary=aggregate_profit_summary,
+                collect_ad_sales=False,
             )
+            campaigns.append(campaign_payload)
+
+        campaigns.sort(key=lambda campaign: campaign["campaign_name"].lower())
 
         ad_sales.sort(
             key=lambda row: (
