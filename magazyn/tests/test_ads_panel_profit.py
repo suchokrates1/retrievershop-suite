@@ -5,8 +5,10 @@ from magazyn.db import get_session
 from magazyn.models.orders import Order, OrderProduct
 from magazyn.services.allegro_ads_panel.profit import compute_profit_by_offer
 from magazyn.services.stats_api_ads_panel import (
+    AGGREGATE_CAMPAIGN_NAME,
     _charts_by_campaign,
     _scale_offer_profit_to_ads_sale,
+    _serialize_campaign_row,
     _sold_item_metrics,
 )
 
@@ -116,3 +118,80 @@ def test_sold_item_metrics_per_unit():
     assert metrics["net_profit"] == -20.0
     assert metrics["net_profit_per_unit"] == -5.0
     assert metrics["product_id"] == 12
+
+
+def test_serialize_campaign_row_aggregate_uses_child_summary():
+    detail_row = type(
+        "Campaign",
+        (),
+        {
+            "campaign_name": "Ads Express",
+            "campaign_entity_id": "camp-a",
+            "clicks": 10,
+            "impressions": 100,
+            "ctr": None,
+            "cpc": None,
+            "cost": Decimal("50"),
+            "roi": None,
+            "interest": 0,
+            "sale_count": 2,
+            "sale_value": Decimal("200"),
+            "sold_items": [
+                type(
+                    "Item",
+                    (),
+                    {
+                        "offer_id": "111",
+                        "offer_name": "Produkt A",
+                        "quantity": 2,
+                        "sale_value": Decimal("200"),
+                    },
+                )()
+            ],
+        },
+    )()
+    aggregate_row = type(
+        "Campaign",
+        (),
+        {
+            "campaign_name": AGGREGATE_CAMPAIGN_NAME,
+            "campaign_entity_id": "",
+            "clicks": 10,
+            "impressions": 100,
+            "ctr": None,
+            "cpc": None,
+            "cost": Decimal("50"),
+            "roi": None,
+            "interest": 0,
+            "sale_count": 2,
+            "sale_value": Decimal("200"),
+            "sold_items": [],
+        },
+    )()
+    profit_by_offer = {
+        "111": {
+            "real_profit": Decimal("80"),
+            "real_revenue": Decimal("200"),
+            "orders": 1,
+            "order_lines": [],
+        }
+    }
+
+    detail_payload, ad_sales_items, detail_summary = _serialize_campaign_row(
+        detail_row,
+        profit_by_offer=profit_by_offer,
+        product_by_offer={"111": 7},
+        collect_ad_sales=True,
+    )
+    aggregate_payload, _, _ = _serialize_campaign_row(
+        aggregate_row,
+        profit_by_offer=profit_by_offer,
+        product_by_offer={"111": 7},
+        profit_summary=detail_summary,
+        collect_ad_sales=False,
+    )
+
+    assert detail_payload["real_profit"] == 80.0
+    assert len(ad_sales_items) == 1
+    assert aggregate_payload["real_profit"] == 80.0
+    assert aggregate_payload["sold_items"] == []
