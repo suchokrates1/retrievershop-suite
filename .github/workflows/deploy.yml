@@ -171,16 +171,28 @@ jobs:
           host: 100.110.194.46
           username: suchokrates1
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 2m
+          command_timeout: 3m
           script: |
-            sleep 30
-            STATUS=$(docker inspect --format='{{.State.Health.Status}}' retrievershop-magazyn 2>/dev/null || echo "unknown")
-            echo "Health status: $STATUS"
-            if [ "$STATUS" != "healthy" ]; then
-              echo "UWAGA: kontener nie jest healthy po 30s, sprawdzam logi..."
-              docker logs --tail 30 retrievershop-magazyn
-              exit 1
-            fi
+            check_container_health() {
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' retrievershop-magazyn 2>/dev/null || echo "unknown")
+              echo "Health status: $STATUS"
+              [ "$STATUS" = "healthy" ]
+            }
+
+            for attempt in 1 2 3; do
+              echo "Health check attempt ${attempt}/3..."
+              sleep 30
+              if check_container_health; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "UWAGA: kontener nie jest healthy po 3 probach, sprawdzam logi..."
+                docker logs --tail 30 retrievershop-magazyn
+                exit 1
+              fi
+              echo "Ponawiam za 30s..."
+            done
+
             echo "Sprawdzam /healthz i /login..."
             curl -fsS http://127.0.0.1:8000/healthz
             LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/login)
