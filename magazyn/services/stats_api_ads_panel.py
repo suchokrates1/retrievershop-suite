@@ -207,6 +207,11 @@ def stats_ads_panel_overview():
 
         campaigns = []
         ad_sales: list[dict] = []
+        aggregate_profit_summary = {
+            "real_profit": Decimal("0"),
+            "real_revenue": Decimal("0"),
+            "orders_matched": 0,
+        }
         for row in sorted(snapshot.campaigns, key=lambda c: c.campaign_name.lower()):
             sold_items = []
             campaign_scaled_profit = Decimal("0")
@@ -234,13 +239,21 @@ def stats_ads_panel_overview():
                         }
                     )
 
-            campaign_profit = _profit_metrics(
-                cost=row.cost,
-                summary={
+            if row.campaign_name == AGGREGATE_CAMPAIGN_NAME:
+                campaign_summary = aggregate_profit_summary
+            else:
+                campaign_summary = {
                     "real_profit": campaign_scaled_profit,
                     "real_revenue": campaign_scaled_revenue,
                     "orders_matched": campaign_orders_matched,
-                },
+                }
+                aggregate_profit_summary["real_profit"] += campaign_scaled_profit
+                aggregate_profit_summary["real_revenue"] += campaign_scaled_revenue
+                aggregate_profit_summary["orders_matched"] += campaign_orders_matched
+
+            campaign_profit = _profit_metrics(
+                cost=row.cost,
+                summary=campaign_summary,
             )
 
             campaigns.append(
