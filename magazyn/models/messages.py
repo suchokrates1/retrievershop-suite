@@ -26,6 +26,7 @@ class Message(Base):
     author = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+    messenger_notified = Column(Boolean, default=False, nullable=False)
 
     thread = relationship("Thread", back_populates="messages")
 

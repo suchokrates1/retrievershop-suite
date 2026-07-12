@@ -13,8 +13,9 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-# Stale API
-MESSENGER_API_URL = "https://graph.facebook.com/v17.0/me/messages"
+# Graph API v17 wygaslo 2025-09-12; utrzymuj aktualna wersje w jednym miejscu.
+MESSENGER_GRAPH_API_VERSION = "v25.0"
+MESSENGER_API_URL = f"https://graph.facebook.com/{MESSENGER_GRAPH_API_VERSION}/me/messages"
 DEFAULT_TIMEOUT = 10
 
 
@@ -74,7 +75,12 @@ class MessengerClient:
                 logger.debug("Wiadomosc wyslana pomyslnie")
                 return True
             else:
-                logger.error(f"Blad wysylania: {response.status_code} - {response.text}")
+                logger.error(
+                    "Blad wysylania Messenger (%s): %s - %s",
+                    MESSENGER_GRAPH_API_VERSION,
+                    response.status_code,
+                    response.text,
+                )
                 return False
                 
         except requests.exceptions.Timeout:
@@ -178,7 +184,12 @@ def send_messenger(message: str) -> bool:
             logger.debug("Wiadomosc wyslana pomyslnie (via settings)")
             return True
         else:
-            logger.error(f"Blad wysylania: {response.status_code} - {response.text}")
+            logger.error(
+                "Blad wysylania Messenger (%s): %s - %s",
+                MESSENGER_GRAPH_API_VERSION,
+                response.status_code,
+                response.text,
+            )
             return False
             
     except Exception as e:

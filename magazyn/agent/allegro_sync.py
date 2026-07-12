@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Callable
 from sqlalchemy import text
 
 from ..db import db_connect
-from ..notifications import send_messenger
+from ..notifications.messenger_delivery import notify_allegro_message_once
 from ..utils import short_preview
 from ..allegro_api import (
     fetch_discussions,
@@ -66,6 +66,21 @@ class AllegroSyncService:
             None,
         ) or "Dziękujemy za wiadomość. Postaramy się odpowiedzieć jak najszybciej."
         return auto_enabled, auto_reply_text
+
+    def _notify_buyer_message(
+        self,
+        conn,
+        message_id: str,
+        login: str,
+        preview: str,
+        *,
+        kind: str,
+    ) -> None:
+        if kind == "discussion":
+            text = f'Użytkownik {login} napisał w dyskusji: "{preview}"'
+        else:
+            text = f'Użytkownik {login} napisał wiadomość: "{preview}"'
+        notify_allegro_message_once(conn, message_id, text)
     
     def check_discussions(self, access_token: str) -> None:
         """
@@ -136,22 +151,32 @@ class AllegroSyncService:
         chat_messages.sort(key=lambda entry: entry.get("date") or "")
         
         latest_timestamp = None
-        last_buyer_message = None
+        new_buyer_message = False
         
         for msg in chat_messages:
             msg_id_raw = msg.get("id")
             if msg_id_raw is None:
                 continue
             msg_id = str(msg_id_raw)
-            
-            if conn.execute(text("SELECT 1 FROM messages WHERE id = :mid"), {"mid": msg_id}).fetchone():
-                latest_timestamp = msg.get("date") or latest_timestamp
-                continue
-            
+
             author_info = msg.get("author") or {}
             author_login = author_info.get("login") or buyer
             content = html_mod.unescape(msg.get("text", ""))
             created_at = msg.get("date") or datetime.now(timezone.utc).isoformat()
+            is_buyer = (author_info.get("role") or "").upper() == "BUYER"
+            preview = short_preview(content, normalize_whitespace=True)
+
+            existing = conn.execute(
+                text("SELECT messenger_notified FROM messages WHERE id = :mid"),
+                {"mid": msg_id},
+            ).fetchone()
+            if existing:
+                latest_timestamp = msg.get("date") or latest_timestamp
+                if is_buyer:
+                    self._notify_buyer_message(
+                        conn, msg_id, author_login, preview, kind="discussion"
+                    )
+                continue
             
             conn.execute(
                 text("INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (:id, :tid, :author, :content, :cat)"),
@@ -159,12 +184,11 @@ class AllegroSyncService:
             )
             latest_timestamp = created_at
             
-            if (author_info.get("role") or "").upper() == "BUYER":
-                last_buyer_message = {
-                    "login": author_login,
-                    "text": content,
-                    "created_at": created_at,
-                }
+            if is_buyer:
+                self._notify_buyer_message(
+                    conn, msg_id, author_login, preview, kind="discussion"
+                )
+                new_buyer_message = True
                 conn.execute(text("UPDATE threads SET read = :val WHERE id = :tid"), {"tid": discussion_id, "val": False})
         
         if latest_timestamp:
@@ -173,17 +197,10 @@ class AllegroSyncService:
                 {"ts": latest_timestamp, "tid": discussion_id},
             )
         
-        # Powiadomienie i autoresponder
-        if last_buyer_message:
-            preview = short_preview(last_buyer_message["text"], normalize_whitespace=True)
-            send_messenger(
-                f"Użytkownik {last_buyer_message['login']} napisał w dyskusji: \"{preview}\""
+        if new_buyer_message and auto_enabled:
+            self._send_auto_reply_discussion(
+                conn, access_token, discussion_id, auto_reply_text
             )
-            
-            if auto_enabled:
-                self._send_auto_reply_discussion(
-                    conn, access_token, discussion_id, auto_reply_text
-                )
     
     def _send_auto_reply_discussion(
         self, 
@@ -285,22 +302,32 @@ class AllegroSyncService:
         messages.sort(key=lambda entry: entry.get("createdAt") or "")
         
         latest_timestamp = None
-        last_interlocutor_message = None
+        new_interlocutor_message = False
         
         for msg in messages:
             msg_id_raw = msg.get("id")
             if msg_id_raw is None:
                 continue
             msg_id = str(msg_id_raw)
-            
-            if conn.execute(text("SELECT 1 FROM messages WHERE id = :mid"), {"mid": msg_id}).fetchone():
-                latest_timestamp = msg.get("createdAt") or latest_timestamp
-                continue
-            
+
             author_info = msg.get("author") or {}
             author_login = author_info.get("login") or interlocutor
             content = html_mod.unescape(msg.get("text", ""))
             created_at = msg.get("createdAt") or datetime.now(timezone.utc).isoformat()
+            is_interlocutor = bool(author_info.get("isInterlocutor"))
+            preview = short_preview(content, normalize_whitespace=True)
+
+            existing = conn.execute(
+                text("SELECT messenger_notified FROM messages WHERE id = :mid"),
+                {"mid": msg_id},
+            ).fetchone()
+            if existing:
+                latest_timestamp = msg.get("createdAt") or latest_timestamp
+                if is_interlocutor:
+                    self._notify_buyer_message(
+                        conn, msg_id, author_login, preview, kind="message"
+                    )
+                continue
             
             conn.execute(
                 text("INSERT INTO messages (id, thread_id, author, content, created_at) VALUES (:id, :tid, :author, :content, :cat)"),
@@ -308,12 +335,11 @@ class AllegroSyncService:
             )
             latest_timestamp = created_at
             
-            if author_info.get("isInterlocutor"):
-                last_interlocutor_message = {
-                    "login": author_login,
-                    "text": content,
-                    "created_at": created_at,
-                }
+            if is_interlocutor:
+                self._notify_buyer_message(
+                    conn, msg_id, author_login, preview, kind="message"
+                )
+                new_interlocutor_message = True
                 conn.execute(text("UPDATE threads SET read = :val WHERE id = :tid"), {"tid": thread_id, "val": False})
         
         if latest_timestamp:
@@ -322,17 +348,10 @@ class AllegroSyncService:
                 {"ts": latest_timestamp, "tid": thread_id},
             )
         
-        # Powiadomienie i autoresponder
-        if last_interlocutor_message:
-            preview = short_preview(last_interlocutor_message["text"], normalize_whitespace=True)
-            send_messenger(
-                f"Użytkownik {last_interlocutor_message['login']} napisał wiadomość: \"{preview}\""
+        if new_interlocutor_message and auto_enabled:
+            self._send_auto_reply_thread(
+                conn, access_token, thread_id, auto_reply_text
             )
-            
-            if auto_enabled:
-                self._send_auto_reply_thread(
-                    conn, access_token, thread_id, auto_reply_text
-                )
     
     def _send_auto_reply_thread(
         self,
