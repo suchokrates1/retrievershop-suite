@@ -73,11 +73,45 @@ def resolve_optional_series(selected: Optional[str], custom: Optional[str]) -> O
     return selected_value or None
 
 
+def parse_product_form_taxonomy(form_data) -> tuple[str, str, Optional[str]]:
+    """Rozwiaz kategorie, marke i serie z pol formularza add/edit item."""
+    category = resolve_taxonomy_value(
+        form_data.get("category"),
+        form_data.get("custom_category"),
+        field_label="kategorię",
+    )
+    brand = resolve_taxonomy_value(
+        form_data.get("brand"),
+        form_data.get("custom_brand"),
+        required=False,
+        field_label="markę",
+    ) or "Truelove"
+    series = resolve_optional_series(
+        form_data.get("series"),
+        form_data.get("custom_series"),
+    )
+    return category, brand, series
+
+
+def edit_item_taxonomy_context(product: dict) -> dict:
+    """Kontekst szablonu edit_item: listy taxonomy z bazy + aktualne wartosci."""
+    return {
+        "product_categories": taxonomy_options(
+            distinct_categories(), product.get("category")
+        ),
+        "product_brands": taxonomy_options(distinct_brands(), product.get("brand")),
+        "product_series": taxonomy_options(distinct_series(), product.get("series")),
+        "new_taxonomy_value": NEW_TAXONOMY_VALUE,
+    }
+
+
 __all__ = [
     "NEW_TAXONOMY_VALUE",
     "distinct_brands",
     "distinct_categories",
     "distinct_series",
+    "edit_item_taxonomy_context",
+    "parse_product_form_taxonomy",
     "resolve_optional_series",
     "resolve_taxonomy_value",
     "taxonomy_options",

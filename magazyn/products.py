@@ -44,53 +44,22 @@ from .services.product_detail import (
     build_product_history_payload,
 )
 from .services.product_listing import build_items_context
-from .services.product_taxonomy import (
-    NEW_TAXONOMY_VALUE,
-    resolve_optional_series,
-    resolve_taxonomy_value,
-    taxonomy_options,
-    distinct_brands,
-    distinct_categories,
-    distinct_series,
-)
+from .services.product_taxonomy import edit_item_taxonomy_context, parse_product_form_taxonomy
 
 bp = Blueprint("products", __name__)
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_product_form_taxonomy():
-    try:
-        category = resolve_taxonomy_value(
-            request.form.get("category"),
-            request.form.get("custom_category"),
-            field_label="kategorię",
-        )
-        brand = resolve_taxonomy_value(
-            request.form.get("brand"),
-            request.form.get("custom_brand"),
-            required=False,
-            field_label="markę",
-        ) or "Truelove"
-        series = resolve_optional_series(
-            request.form.get("series"),
-            request.form.get("custom_series"),
-        )
-    except ValueError as exc:
-        flash(str(exc), "error")
-        return None
-    return category, brand, series
-
 
 @bp.route("/add_item", methods=["GET", "POST"])
 @login_required
 def add_item():
     form = AddItemForm()
     if form.validate_on_submit():
-        taxonomy = _parse_product_form_taxonomy()
-        if taxonomy is None:
+        try:
+            category, brand, series = parse_product_form_taxonomy(request.form)
+        except ValueError as exc:
+            flash(str(exc), "error")
             return render_template("add_item.html", form=form)
-        category, brand, series = taxonomy
         color = form.color.data
         sizing_mode = form.sizing_mode.data or "sized"
         
@@ -159,10 +128,11 @@ def edit_item(product_id):
             flash("Nieprawidlowe dane formularza produktu.", "error")
             return redirect(url_for("products.edit_item", product_id=product_id))
 
-        taxonomy = _parse_product_form_taxonomy()
-        if taxonomy is None:
+        try:
+            category, brand, series = parse_product_form_taxonomy(request.form)
+        except ValueError as exc:
+            flash(str(exc), "error")
             return redirect(url_for("products.edit_item", product_id=product_id))
-        category, brand, series = taxonomy
         color = form.color.data.strip()
         sizing_mode = form.sizing_mode.data
         sizes = ALL_SIZES
@@ -206,10 +176,7 @@ def edit_item(product_id):
         "edit_item.html",
         product=product,
         product_sizes=product_sizes,
-        product_categories=taxonomy_options(distinct_categories(), product.get("category")),
-        product_brands=taxonomy_options(distinct_brands(), product.get("brand")),
-        product_series=taxonomy_options(distinct_series(), product.get("series")),
-        new_taxonomy_value=NEW_TAXONOMY_VALUE,
+        **edit_item_taxonomy_context(product),
     )
 
 
