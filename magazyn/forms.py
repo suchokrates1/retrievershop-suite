@@ -1,8 +1,8 @@
 from flask_wtf import FlaskForm
-from wtforms import DecimalField, IntegerField, PasswordField, SelectField, StringField
+from wtforms import DecimalField, IntegerField, PasswordField, StringField
 from wtforms.validators import DataRequired, InputRequired, NumberRange, Optional
 
-from .constants import ALL_SIZES, PRODUCT_CATEGORIES, PRODUCT_BRANDS, PRODUCT_SERIES
+from .constants import ALL_SIZES
 
 
 class LoginForm(FlaskForm):
@@ -11,85 +11,19 @@ class LoginForm(FlaskForm):
 
 
 class AddItemForm(FlaskForm):
-    sizing_mode = SelectField(
-        "Typ rozmiarów",
-        choices=[
-            ("sized", "Rozmiarowy (XS–3XL)"),
-            ("universal", "Jeden rozmiar (Uniwersalny)"),
-        ],
-        default="sized",
-        validators=[DataRequired()],
-    )
-    category = SelectField(
-        "category",
-        choices=[(c, c) for c in PRODUCT_CATEGORIES],
-        validators=[DataRequired()],
-    )
-    brand = SelectField(
-        "brand",
-        choices=[(b, b) for b in PRODUCT_BRANDS] + [("Inna", "Inna marka")],
-        default="Truelove",
-    )
-    series = SelectField(
-        "series",
-        choices=[("", "-- Brak serii --")] + [(s, s) for s in PRODUCT_SERIES],
-        validators=[Optional()],
-    )
-    color = SelectField(
-        "color",
-        choices=[
-            ("Czerwony", "Czerwony"),
-            ("Niebieski", "Niebieski"),
-            ("Zielony", "Zielony"),
-            ("Czarny", "Czarny"),
-            ("Biały", "Biały"),
-            ("Brązowy", "Brązowy"),
-            ("Różowy", "Różowy"),
-            ("Fioletowy", "Fioletowy"),
-            ("Srebrny", "Srebrny"),
-            ("Pomarańczowy", "Pomarańczowy"),
-            ("Turkusowy", "Turkusowy"),
-            ("Żółty", "Żółty"),
-            ("Szary", "Szary"),
-            ("Bananowy", "Bananowy"),
-            ("Liliowy", "Liliowy"),
-            ("Złoty", "Złoty"),
-            ("Beżowy", "Beżowy"),
-            ("Khaki", "Khaki"),
-            ("Bordowy", "Bordowy"),
-            ("Granatowy", "Granatowy"),
-            ("Kremowy", "Kremowy"),
-            ("Inny", "Inny (wpisz poniżej)"),
-        ],
-        validators=[DataRequired()],
-    )
+    sizing_mode = StringField("sizing_mode", default="sized")
+    category = StringField("category", validators=[DataRequired()])
+    brand = StringField("brand", validators=[Optional()])
+    series = StringField("series", validators=[Optional()])
+    color = StringField("color", validators=[DataRequired()])
     custom_color = StringField("custom_color")
 
 
 class ProductEditForm(FlaskForm):
-    sizing_mode = SelectField(
-        "Typ rozmiarów",
-        choices=[
-            ("sized", "Rozmiarowy (XS–3XL)"),
-            ("universal", "Jeden rozmiar (Uniwersalny)"),
-        ],
-        validators=[DataRequired()],
-    )
-    category = SelectField(
-        "category",
-        choices=[(c, c) for c in PRODUCT_CATEGORIES],
-        validators=[DataRequired()],
-    )
-    brand = SelectField(
-        "brand",
-        choices=[(b, b) for b in PRODUCT_BRANDS] + [("Inna", "Inna marka")],
-        default="Truelove",
-    )
-    series = SelectField(
-        "series",
-        choices=[("", "-- Brak serii --")] + [(s, s) for s in PRODUCT_SERIES],
-        validators=[Optional()],
-    )
+    sizing_mode = StringField("sizing_mode", validators=[DataRequired()])
+    category = StringField("category", validators=[DataRequired()])
+    brand = StringField("brand", validators=[Optional()])
+    series = StringField("series", validators=[Optional()])
     color = StringField("color", validators=[DataRequired()])
 
 
