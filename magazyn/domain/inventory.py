@@ -164,9 +164,12 @@ def import_from_dataframe(df: pd.DataFrame):
             product.sizing_mode = "universal" if universal_active else "sized"
             allowed_sizes = [UNIWERSALNY] if universal_active else SIZED_SIZES
             for size in allowed_sizes:
-                quantity = quantities[size]
-                size_barcode = barcodes[size]
-                if quantity <= 0 and not size_barcode:
+                qty_col = f"Ilość ({size})"
+                barcode_col = f"Barcode ({size})"
+                quantity = _to_int(row.get(qty_col, 0))
+                size_barcode = _clean_barcode(row.get(barcode_col))
+                column_present = qty_col in row.index or barcode_col in row.index
+                if quantity <= 0 and not size_barcode and not column_present:
                     continue
                 ps = (
                     db.query(ProductSize)
