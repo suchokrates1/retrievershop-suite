@@ -27,6 +27,9 @@ class Product(Base):
     brand = Column(String, nullable=True, default="Truelove")
     series = Column(String, nullable=True)
     color = Column(String)
+    # Explicitly distinguishes single-SKU products from products with
+    # XS–3XL variants.  ProductSize rows must conform to this mode.
+    sizing_mode = Column(String(16), nullable=True)
     sizes = relationship(
         "ProductSize",
         back_populates="product",

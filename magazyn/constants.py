@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 import unicodedata
 
-ALL_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "Uniwersalny"]
+SIZED_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"]
+UNIWERSALNY = "Uniwersalny"
+ALL_SIZES = [*SIZED_SIZES, UNIWERSALNY]
 
 # Product categories
 PRODUCT_CATEGORIES = [

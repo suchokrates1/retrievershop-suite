@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from ..constants import ALL_SIZES
+from ..constants import ALL_SIZES, SIZED_SIZES, UNIWERSALNY
 from ..db import get_session
 from ..models.products import Product, ProductSize
 
@@ -78,18 +78,70 @@ def validate_ean(ean: Optional[str]) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-UNIWERSALNY = "Uniwersalny"
+SIZING_MODE_UNIVERSAL = "universal"
+SIZING_MODE_SIZED = "sized"
+SIZING_MODES = {SIZING_MODE_UNIVERSAL, SIZING_MODE_SIZED}
 
 
-def has_mixed_sizing(quantities: Dict[str, int]) -> bool:
-    """Zwroc True, jesli produkt ma jednoczesnie stan na rozmiarze
-    "Uniwersalny" i na innym rozmiarze - to nietypowe, produkt powinien byc
-    albo rozmiarowy (XS-3XL), albo Uniwersalny, nigdy oba naraz."""
-    uniwersalny_qty = _to_int(quantities.get(UNIWERSALNY, 0))
-    other_qty = sum(
-        _to_int(qty) for size, qty in quantities.items() if size != UNIWERSALNY
+def applicable_sizes(sizing_mode: str) -> list[str]:
+    if sizing_mode == SIZING_MODE_UNIVERSAL:
+        return [UNIWERSALNY]
+    if sizing_mode == SIZING_MODE_SIZED:
+        return list(SIZED_SIZES)
+    raise ValueError("Wybierz typ rozmiarów: Uniwersalny albo rozmiarowy.")
+
+
+def infer_sizing_mode(product_sizes) -> str:
+    """Infer a mode for legacy products when no explicit mode is stored."""
+    active_sizes = {
+        size.size
+        for size in product_sizes
+        if _to_int(getattr(size, "quantity", 0)) > 0 or getattr(size, "barcode", None)
+    }
+    if active_sizes == {UNIWERSALNY}:
+        return SIZING_MODE_UNIVERSAL
+    # Empty legacy products and conflicted products are intentionally shown as
+    # sized: it is the non-destructive default and the UI will expose the
+    # actual rows only after an explicit cleanup.
+    return SIZING_MODE_SIZED
+
+
+def _is_populated(quantity, barcode) -> bool:
+    return _to_int(quantity) > 0 or bool((barcode or "").strip())
+
+
+def validate_sizing(
+    sizing_mode: str,
+    quantities: Dict[str, int],
+    barcodes: Dict[str, Optional[str]],
+) -> None:
+    """Reject any value or barcode outside the selected product size family."""
+    allowed = set(applicable_sizes(sizing_mode))
+    invalid = [
+        size for size in ALL_SIZES
+        if size not in allowed and _is_populated(quantities.get(size, 0), barcodes.get(size))
+    ]
+    if invalid:
+        names = ", ".join(invalid)
+        raise ValueError(
+            f"Produkt typu {'uniwersalnego' if sizing_mode == SIZING_MODE_UNIVERSAL else 'rozmiarowego'} "
+            f"nie może mieć danych dla rozmiarów: {names}."
+        )
+
+
+def has_mixed_sizing(
+    quantities: Dict[str, int],
+    barcodes: Optional[Dict[str, Optional[str]]] = None,
+) -> bool:
+    """Compatibility helper used by legacy callers."""
+    barcodes = barcodes or {}
+    return (
+        _is_populated(quantities.get(UNIWERSALNY, 0), barcodes.get(UNIWERSALNY))
+        and any(
+            _is_populated(quantities.get(size, 0), barcodes.get(size))
+            for size in SIZED_SIZES
+        )
     )
-    return uniwersalny_qty > 0 and other_qty > 0
 
 
 def create_product(
@@ -99,8 +151,10 @@ def create_product(
     color: str,
     quantities: Dict[str, int],
     barcodes: Dict[str, Optional[str]],
+    sizing_mode: str = SIZING_MODE_SIZED,
 ):
     """Create a product with sizes and return the Product instance."""
+    validate_sizing(sizing_mode, quantities, barcodes)
     # Walidacja wszystkich EAN przed utworzeniem produktu
     for size, barcode in barcodes.items():
         if barcode:
@@ -113,11 +167,12 @@ def create_product(
             category=category,
             brand=brand,
             series=series or None,
-            color=color
+            color=color,
+            sizing_mode=sizing_mode,
         )
         db.add(product)
         db.flush()
-        for size in ALL_SIZES:
+        for size in applicable_sizes(sizing_mode):
             qty = _to_int(quantities.get(size, 0))
             barcode = barcodes.get(size)
             # Nie tworz "widmowego" wiersza dla rozmiaru, ktorego produkt w
@@ -146,8 +201,11 @@ def update_product(
     quantities: Dict[str, int],
     barcodes: Dict[str, Optional[str]],
     purchase_prices: Optional[Dict[str, Optional[float]]] = None,
+    sizing_mode: Optional[str] = None,
 ):
     """Update product details and size information."""
+    sizing_mode = sizing_mode or SIZING_MODE_SIZED
+    validate_sizing(sizing_mode, quantities, barcodes)
     # Walidacja wszystkich EAN przed aktualizacją produktu
     for size, barcode in barcodes.items():
         if barcode:
@@ -168,7 +226,20 @@ def update_product(
         product.brand = brand
         product.series = series or None
         product.color = color
-        for size in ALL_SIZES:
+        current_mode = product.sizing_mode or infer_sizing_mode(product.sizes)
+        if current_mode != sizing_mode:
+            wrong_sizes = set(applicable_sizes(current_mode)) - set(applicable_sizes(sizing_mode))
+            populated = [
+                ps.size for ps in product.sizes
+                if ps.size in wrong_sizes and _is_populated(ps.quantity, ps.barcode)
+            ]
+            if populated:
+                raise ValueError(
+                    "Nie można zmienić typu rozmiarów z aktywnym stanem lub kodem: "
+                    + ", ".join(populated)
+                )
+        product.sizing_mode = sizing_mode
+        for size in applicable_sizes(sizing_mode):
             qty = _to_int(quantities.get(size, 0))
             barcode = barcodes.get(size)
 
@@ -260,7 +331,8 @@ def get_product_details(
                 "category": row.category,
                 "brand": row.brand,
                 "series": row.series,
-                "color": row.color
+                "color": row.color,
+                "sizing_mode": row.sizing_mode or infer_sizing_mode(row.sizes),
             }
         sizes_rows = db.query(ProductSize).filter_by(product_id=product_id).all()
         product_sizes = {

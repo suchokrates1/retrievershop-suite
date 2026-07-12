@@ -11,6 +11,15 @@ class LoginForm(FlaskForm):
 
 
 class AddItemForm(FlaskForm):
+    sizing_mode = SelectField(
+        "Typ rozmiarów",
+        choices=[
+            ("sized", "Rozmiarowy (XS–3XL)"),
+            ("universal", "Jeden rozmiar (Uniwersalny)"),
+        ],
+        default="sized",
+        validators=[DataRequired()],
+    )
     category = SelectField(
         "category",
         choices=[(c, c) for c in PRODUCT_CATEGORIES],
@@ -58,6 +67,14 @@ class AddItemForm(FlaskForm):
 
 
 class ProductEditForm(FlaskForm):
+    sizing_mode = SelectField(
+        "Typ rozmiarów",
+        choices=[
+            ("sized", "Rozmiarowy (XS–3XL)"),
+            ("universal", "Jeden rozmiar (Uniwersalny)"),
+        ],
+        validators=[DataRequired()],
+    )
     category = SelectField(
         "category",
         choices=[(c, c) for c in PRODUCT_CATEGORIES],

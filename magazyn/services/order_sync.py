@@ -133,6 +133,14 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
     size_upper = size.upper() if size else size
     parsed_name_keys = _normalized_name_keys(name)
 
+    def valid_mode(product_size: ProductSize) -> bool:
+        # A legacy phantom "Uniwersalny" row must never capture an item of a
+        # product that is explicitly configured as sized.
+        return not (
+            size_upper == "UNIWERSALNY"
+            and getattr(product_size.product, "sizing_mode", None) == "sized"
+        )
+
     if name and size:
         exact_candidates = (
             db.query(ProductSize)
@@ -142,6 +150,8 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
         )
         for product_size in exact_candidates:
             product = product_size.product
+            if not valid_mode(product_size):
+                continue
             if not parsed_name_keys & _product_name_keys(product):
                 continue
             if not _color_matches(product.color or "", color_norm):
@@ -160,6 +170,8 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
     if series_norm:
         for product_size in candidates:
             product = product_size.product
+            if not valid_mode(product_size):
+                continue
             db_series = _strip_diacritics_ord(product.series or "").lower()
 
             if series_norm == db_series and _color_matches(product.color or "", color_norm):
@@ -167,6 +179,8 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
 
         for product_size in candidates:
             product = product_size.product
+            if not valid_mode(product_size):
+                continue
             db_series = _strip_diacritics_ord(product.series or "").lower()
 
             if (
@@ -180,6 +194,8 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
             series_matches = []
             for product_size in candidates:
                 product = product_size.product
+                if not valid_mode(product_size):
+                    continue
                 db_series = _strip_diacritics_ord(product.series or "").lower()
                 if db_series and (
                     series_norm == db_series
@@ -196,6 +212,7 @@ def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional
         smycz_matches = [
             ps
             for ps in candidates
+            if valid_mode(ps)
             if _color_matches(ps.product.color or "", color_norm)
             and (ps.product.category or "").lower() == "smycz"
         ]

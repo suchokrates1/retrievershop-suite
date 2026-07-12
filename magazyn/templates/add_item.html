@@ -2,7 +2,7 @@
 
 {% block content %}
 <h2 class="mb-3 text-center">Dodaj nowy przedmiot</h2>
-    <form action="{{ url_for('products.add_item') }}" method="post" class="grid grid-cols-12 gap-3 w-full" x-data="{ selectedColor: 'Czerwony' }">
+    <form action="{{ url_for('products.add_item') }}" method="post" class="grid grid-cols-12 gap-3 w-full" x-data="{ selectedColor: 'Czerwony', sizingMode: 'sized' }">
         {{ form.csrf_token }}
         
         <div class="col-span-12 md:col-span-4">
@@ -65,9 +65,17 @@
             <input type="text" id="custom_color" name="custom_color" class="input input-bordered w-full" placeholder="Wpisz kolor" :required="selectedColor === 'Inny'">
         </div>
 
+        <div class="col-span-12 md:col-span-4">
+            <label for="sizing_mode" class="label-text">Typ rozmiarów:</label>
+            <select id="sizing_mode" name="sizing_mode" class="select select-bordered w-full" x-model="sizingMode">
+                <option value="sized">Rozmiarowy (XS–3XL)</option>
+                <option value="universal">Jeden rozmiar (Uniwersalny)</option>
+            </select>
+        </div>
+
 
         {% for size in ALL_SIZES %}
-            <div class="col-span-12">
+            <div class="col-span-12" x-show="sizingMode === '{{ 'universal' if size == 'Uniwersalny' else 'sized' }}'" x-cloak>
                 <label class="label-text">Rozmiar: {{ size }}</label>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
