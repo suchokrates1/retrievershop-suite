@@ -97,32 +97,33 @@ def get_customer_return(access_token: str, return_id: str) -> Tuple[Optional[Dic
 def validate_return_for_refund(return_data: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Sprawdz czy zwrot kwalifikuje sie do zwrotu pieniedzy.
-    
+
     Args:
         return_data: Dane zwrotu z Allegro API
-    
+
     Returns:
         Tuple (czy_mozna_zwrocic, komunikat)
     """
     if not return_data:
         return False, "Brak danych zwrotu"
-    
+
     status = return_data.get("status")
-    
+
     if status in {ALLEGRO_RETURN_STATUS_COMMISSION_REFUNDED, ALLEGRO_RETURN_STATUS_FINISHED}:
         return False, f"Zwrot juz zostal rozliczony (status: {status})"
-    
+
     if status not in REFUNDABLE_STATUSES:
-        return False, f"Zwrot nie kwalifikuje sie do zwrotu pieniedzy (status: {status}). Wymagany status: DELIVERED lub ACCEPTED"
-    
-    # Oblicz kwote do zwrotu - z totalValue lub z items
+        return False, (
+            f"Zwrot nie kwalifikuje sie do zwrotu pieniedzy (status: {status}). "
+            "Wymagany status: DELIVERED lub ACCEPTED"
+        )
+
     refund = return_data.get("refund") or {}
     total_value = refund.get("totalValue") or {}
     amount = float(total_value.get("amount", 0))
     currency = total_value.get("currency", "PLN")
-    
+
     if amount <= 0:
-        # Oblicz z items jesli brak totalValue
         items = return_data.get("items", [])
         for item in items:
             price = item.get("price", {})
@@ -131,10 +132,10 @@ def validate_return_for_refund(return_data: Dict[str, Any]) -> Tuple[bool, str]:
             amount += item_amount * qty
             if not currency or currency == "PLN":
                 currency = price.get("currency", "PLN")
-    
+
     if amount <= 0:
         return False, "Brak kwoty do zwrotu"
-    
+
     return True, f"Zwrot gotowy do realizacji: {amount:.2f} {currency}"
 
 
@@ -157,6 +158,92 @@ def get_checkout_form(access_token: str, order_external_id: str) -> Tuple[Option
         return None, f"Blad pobierania checkout-form ({response.status_code}): {response.text[:200]}"
     except requests.RequestException as e:
         return None, f"Blad polaczenia: {e}"
+
+
+def get_payment_operations(
+    access_token: str,
+    payment_id: str,
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Pobierz historie operacji platnosci (np. zaksiegowanie pobrania na wallet)."""
+    if not access_token:
+        return [], "Brak tokenu dostepu Allegro"
+    if not payment_id:
+        return [], "Brak payment.id"
+
+    url = f"{API_BASE_URL}/payments/payment-operations"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.allegro.public.v1+json",
+    }
+    try:
+        response = _request_with_retry(
+            requests.get,
+            url,
+            endpoint="payment-operations",
+            headers=headers,
+            params={"payment.id": payment_id},
+            timeout=DEFAULT_TIMEOUT,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("paymentOperations") or [], None
+        return [], f"Blad pobierania payment-operations ({response.status_code}): {response.text[:200]}"
+    except requests.RequestException as e:
+        return [], f"Blad polaczenia: {e}"
+
+
+def get_cod_settlement_status(
+    access_token: str,
+    checkout_data: Dict[str, Any],
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """
+    Sprawdz status zaksiegowania pobrania na koncie Allegro.
+
+    Returns:
+        ("not_cod", None) | ("pending", details) | ("settled", details)
+    """
+    payment = checkout_data.get("payment") or {}
+    if payment.get("type") != "CASH_ON_DELIVERY":
+        return "not_cod", None
+
+    payment_id = payment.get("id")
+    summary = checkout_data.get("summary") or {}
+    total_to_pay = summary.get("totalToPay") or {}
+    base_details = {
+        "payment_id": payment_id,
+        "total_amount": float(total_to_pay.get("amount", 0) or 0),
+        "currency": total_to_pay.get("currency", "PLN"),
+    }
+
+    if not payment_id:
+        return "pending", {**base_details, "reason": "missing_payment_id"}
+
+    operations, error = get_payment_operations(access_token, payment_id)
+    if error:
+        return "pending", {**base_details, "reason": error}
+
+    contributions = [op for op in operations if op.get("type") == "CONTRIBUTION"]
+    if contributions:
+        latest = contributions[0]
+        value = latest.get("value") or {}
+        return "settled", {
+            **base_details,
+            "settled_at": latest.get("occurredAt"),
+            "settled_amount": float(value.get("amount", 0) or 0),
+            "settled_currency": value.get("currency", base_details["currency"]),
+        }
+
+    return "pending", base_details
+
+
+def is_cod_not_paid_error(message: str) -> bool:
+    normalized = (message or "").lower()
+    return (
+        "cod_not_paid" in normalized
+        or "not been paid" in normalized
+        or "nie zostalo jeszcze oplacone" in normalized
+        or "nie zostało jeszcze opłacone" in normalized
+    )
 
 
 def _normalize_offer_id(value: Any) -> str:

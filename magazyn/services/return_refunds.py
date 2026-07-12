@@ -21,9 +21,68 @@ from ..settings_store import settings_store
 
 logger = logging.getLogger(__name__)
 
+COD_PENDING_NOTE = (
+    "Pobranie niezaksiegowane przez Allegro — zwrot API zablokowany do wplywu srodkow na konto Allegro"
+)
+COD_PENDING_MESSAGE = (
+    "Pobranie nie zostalo jeszcze zaksiegowane przez Allegro. "
+    "Zwrot przez API bedzie mozliwy po wplynieciu srodkow na konto Allegro."
+)
+
 
 def _is_manual_return(return_record: Return) -> bool:
     return not return_record.allegro_return_id
+
+
+def _is_cod_order(order: Order) -> bool:
+    method = (order.payment_method or "").lower()
+    return bool(order.payment_method_cod) or ("pobranie" in method)
+
+
+def _cod_pending_details(settlement_details: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    details = {
+        "cod_settlement_pending": True,
+        "allegro_status": "COD_PENDING_SETTLEMENT",
+    }
+    if settlement_details:
+        details.update(settlement_details)
+    return details
+
+
+def _check_cod_settlement(
+    access_token: str,
+    order: Order,
+) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """Zwraca (pending_message, pending_details) gdy pobranie nie jest jeszcze zaksiegowane."""
+    if not _is_cod_order(order) or not order.external_order_id:
+        return None, None
+
+    checkout_data, cf_error = allegro_api.get_checkout_form(access_token, order.external_order_id)
+    if cf_error:
+        return f"Blad pobierania danych platnosci: {cf_error}", None
+
+    settlement_status, settlement_details = allegro_api.get_cod_settlement_status(
+        access_token,
+        checkout_data,
+    )
+    if settlement_status == "pending":
+        return COD_PENDING_MESSAGE, _cod_pending_details(settlement_details)
+    return None, None
+
+
+def _log_cod_pending_once(db, return_record: Return) -> None:
+    existing = (
+        db.query(ReturnStatusLog)
+        .filter(
+            ReturnStatusLog.return_id == return_record.id,
+            ReturnStatusLog.notes == COD_PENDING_NOTE,
+        )
+        .first()
+    )
+    if existing:
+        return
+    _add_return_status_log(db, return_record.id, return_record.status, COD_PENDING_NOTE)
+    db.commit()
 
 
 def _is_stock_restored_refund_override(return_record: Return) -> bool:
@@ -151,16 +210,21 @@ def process_refund(
                 f"Aktualny status: {return_record.status}"
             )
 
-        if not return_record.allegro_return_id and not _is_manual_return(return_record):
-            return False, "Brak ID zwrotu Allegro - zwrot nie pochodzi z Allegro lub nie zostal zsynchronizowany"
+        order_record = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order_record or not order_record.external_order_id:
+            return False, "Brak external_order_id zamowienia - nie mozna zrealizowac zwrotu"
 
         access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
         if not access_token:
             return False, "Brak tokenu Allegro - zaloguj sie do Allegro"
 
-        order_record = db.query(Order).filter(Order.order_id == order_id).first()
-        if not order_record or not order_record.external_order_id:
-            return False, "Brak external_order_id zamowienia - nie mozna zrealizowac zwrotu"
+        pending_message, pending_details = _check_cod_settlement(access_token, order_record)
+        if pending_message:
+            _log_cod_pending_once(db, return_record)
+            return False, pending_message
+
+        if not return_record.allegro_return_id and not _is_manual_return(return_record):
+            return False, "Brak ID zwrotu Allegro - zwrot nie pochodzi z Allegro lub nie zostal zsynchronizowany"
 
         effective_reason = reason
         if not effective_reason and return_record.status == RETURN_STATUS_NOT_COLLECTED:
@@ -235,6 +299,9 @@ def process_refund(
             except Exception as exc:
                 logger.error("Blad wystawiania korekty dla zamowienia %s: %s", order_id, exc)
         else:
+            if allegro_api.is_cod_not_paid_error(message):
+                message = COD_PENDING_MESSAGE
+                _log_cod_pending_once(db, return_record)
             logger.error("Blad zwrotu pieniedzy dla zamowienia %s: %s", order_id, message)
 
         return success, message
@@ -269,6 +336,13 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
         if not access_token:
             return False, "Brak tokenu Allegro", None
+
+        order_record = db.query(Order).filter(Order.order_id == order_id).first()
+        pending_message, pending_details = (
+            _check_cod_settlement(access_token, order_record) if order_record else (None, None)
+        )
+        if pending_message:
+            return False, pending_message, pending_details
 
         if _is_manual_return(return_record) or _is_stock_restored_refund_override(return_record):
             if return_record.status == RETURN_STATUS_NOT_COLLECTED:

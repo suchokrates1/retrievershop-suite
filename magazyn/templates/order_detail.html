@@ -312,15 +312,38 @@
                             <span class="badge badge-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
                         </div>
                         {% elif return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed'] %}
-                        <div class="mt-3 pt-3 border-t border-base-300">
-                            <h6 class="text-error mb-2 font-semibold"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
-                            <button type="button" class="btn btn-error btn-sm" id="refundBtn"
-                                    onclick="document.getElementById('refundModal').showModal()">
-                                <i class="bi bi-currency-exchange"></i> Zwroc pieniadze klientowi
-                            </button>
-                            <span class="block text-sm text-base-content/60 mt-1">
-                                Ta operacja jest NIEODWRACALNA. Upewnij sie, ze paczka dotarla i produkty sa sprawdzone.
-                            </span>
+                        <div class="mt-3 pt-3 border-t border-base-300" x-data="refundActionPanel()" x-init="load()">
+                            <template x-if="loading">
+                                <div class="text-sm text-base-content/60">
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                    Sprawdzanie mozliwosci zwrotu...
+                                </div>
+                            </template>
+                            <template x-if="!loading && codPending">
+                                <div>
+                                    <h6 class="text-warning mb-2 font-semibold">
+                                        <i class="bi bi-hourglass-split"></i> Zwrot — oczekuje na pobranie
+                                    </h6>
+                                    <div class="alert alert-warning text-sm">
+                                        <p class="mb-2" x-text="message"></p>
+                                        <p class="mb-0 text-base-content/70">
+                                            Gdy Allegro zaksieguje pobranie na Twoim koncie, przycisk zwrotu stanie sie aktywny.
+                                        </p>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="!loading && eligible">
+                                <div>
+                                    <h6 class="text-error mb-2 font-semibold"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
+                                    <button type="button" class="btn btn-error btn-sm" id="refundBtn"
+                                            onclick="document.getElementById('refundModal').showModal()">
+                                        <i class="bi bi-currency-exchange"></i> Zwroc pieniadze klientowi
+                                    </button>
+                                    <span class="block text-sm text-base-content/60 mt-1">
+                                        Ta operacja jest NIEODWRACALNA. Upewnij sie, ze paczka dotarla i produkty sa sprawdzone.
+                                    </span>
+                                </div>
+                            </template>
                         </div>
                         {% endif %}
                     </div>
@@ -1068,7 +1091,7 @@ details[open] summary::before {
                 <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id or '' }}">
                 <input type="hidden" name="delivery_cost_covered" :value="deliveryCostCovered ? 'true' : 'false'">
                 <input type="hidden" name="reason" :value="reason">
-                <button type="submit" class="btn btn-error" :disabled="!confirmed">
+                <button type="submit" class="btn btn-error" :disabled="!confirmed || !eligible">
                     <i class="bi bi-currency-exchange"></i> Zwroc pieniadze
                 </button>
             </form>
@@ -1131,6 +1154,9 @@ document.addEventListener('alpine:init', () => {
                     this.details.isPartial = !!data.details.is_partial;
                     this.details.returnedItems = data.details.returned_items || [];
                     this.deliveryCostCovered = !this.details.isPartial;
+                } else if (data.details && data.details.cod_settlement_pending) {
+                    this.eligible = false;
+                    this.notEligibleReason = data.message;
                 } else {
                     this.eligible = false;
                     this.notEligibleReason = data.message;
@@ -1151,6 +1177,36 @@ document.addEventListener('alpine:init', () => {
             }
             if (!confirm('Czy na pewno chcesz zwrócić ' + this.details.totalAmount + ' klientowi?\n\nTa operacja jest NIEODWRACALNA!')) {
                 e.preventDefault();
+            }
+        }
+    }));
+});
+</script>
+{% endif %}
+
+{% if return_info and return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed'] %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('refundActionPanel', () => ({
+        loading: true,
+        eligible: false,
+        codPending: false,
+        message: '',
+
+        async load() {
+            try {
+                const response = await fetch('{{ url_for("orders.check_refund_eligibility", order_id=order.order_id) }}');
+                const data = await response.json();
+                if (data.eligible) {
+                    this.eligible = true;
+                } else if (data.details && data.details.cod_settlement_pending) {
+                    this.codPending = true;
+                    this.message = data.message;
+                }
+            } catch (error) {
+                console.warn('Nie udalo sie sprawdzic kwalifikowalnosci zwrotu:', error);
+            } finally {
+                this.loading = false;
             }
         }
     }));

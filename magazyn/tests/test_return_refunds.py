@@ -439,3 +439,175 @@ def test_initiate_refund_includes_delivery_when_requested(monkeypatch):
 
     assert success is True
     assert captured["payload"]["delivery"]["value"]["amount"] == "12.99"
+
+
+def test_check_refund_eligibility_blocks_cod_pending_settlement(app, monkeypatch):
+    order_id = "allegro_test_cod_pending_settlement"
+
+    checkout_form = {
+        "summary": {"totalToPay": {"amount": "214.39", "currency": "PLN"}},
+        "payment": {
+            "id": "payment-cod-pending",
+            "type": "CASH_ON_DELIVERY",
+            "paidAmount": None,
+        },
+        "delivery": {"cost": {"amount": "15.39", "currency": "PLN"}},
+        "lineItems": [{"id": "line-1", "quantity": 1, "price": {"amount": "199.00", "currency": "PLN"}}],
+    }
+
+    with app.app_context():
+        from magazyn.db import get_session
+
+        with get_session() as db:
+            db.add(
+                Order(
+                    order_id=order_id,
+                    external_order_id="cf-test-cod-pending",
+                    platform="allegro",
+                    customer_name="Jan Testowy",
+                    payment_method="Pobranie",
+                    payment_method_cod=True,
+                    payment_done=214.39,
+                )
+            )
+            db.add(
+                Return(
+                    order_id=order_id,
+                    status="delivered",
+                    customer_name="Jan Testowy",
+                    allegro_return_id="return-cod-pending",
+                    stock_restored=True,
+                    items_json="[]",
+                )
+            )
+            db.commit()
+
+        monkeypatch.setattr("magazyn.services.return_refunds.settings_store.settings.ALLEGRO_ACCESS_TOKEN", "token")
+        monkeypatch.setattr(
+            "magazyn.services.return_refunds.allegro_api.get_checkout_form",
+            lambda token, external_id: (checkout_form, None),
+        )
+        monkeypatch.setattr(
+            "magazyn.services.return_refunds.allegro_api.get_cod_settlement_status",
+            lambda token, checkout: ("pending", {"payment_id": "payment-cod-pending", "total_amount": 214.39, "currency": "PLN"}),
+        )
+
+        eligible, message, details = check_refund_eligibility(order_id)
+
+    assert eligible is False
+    assert "zaksiegowane" in message.lower()
+    assert details["cod_settlement_pending"] is True
+    assert details["allegro_status"] == "COD_PENDING_SETTLEMENT"
+
+
+def test_check_refund_eligibility_allows_cod_after_settlement(app, monkeypatch):
+    order_id = "allegro_test_cod_settled"
+
+    checkout_form = {
+        "summary": {"totalToPay": {"amount": "214.39", "currency": "PLN"}},
+        "delivery": {"cost": {"amount": "15.39", "currency": "PLN"}},
+        "lineItems": [{"id": "line-1", "quantity": 1, "price": {"amount": "199.00", "currency": "PLN"}}],
+    }
+
+    with app.app_context():
+        from magazyn.db import get_session
+
+        with get_session() as db:
+            db.add(
+                Order(
+                    order_id=order_id,
+                    external_order_id="cf-test-cod-settled",
+                    platform="allegro",
+                    customer_name="Jan Testowy",
+                    payment_method="Pobranie",
+                    payment_method_cod=True,
+                    payment_done=214.39,
+                )
+            )
+            db.add(
+                Return(
+                    order_id=order_id,
+                    status="delivered",
+                    customer_name="Jan Testowy",
+                    allegro_return_id="return-cod-settled",
+                    stock_restored=True,
+                    items_json="[]",
+                )
+            )
+            db.commit()
+
+        monkeypatch.setattr("magazyn.services.return_refunds.settings_store.settings.ALLEGRO_ACCESS_TOKEN", "token")
+        monkeypatch.setattr(
+            "magazyn.services.return_refunds.allegro_api.get_checkout_form",
+            lambda token, external_id: (checkout_form, None),
+        )
+        monkeypatch.setattr(
+            "magazyn.services.return_refunds.allegro_api.get_cod_settlement_status",
+            lambda token, checkout: ("settled", {"settled_at": "2026-07-10T10:00:00Z"}),
+        )
+        monkeypatch.setattr(
+            "magazyn.services.return_refunds.allegro_api.get_customer_return",
+            lambda token, return_id: (_ for _ in ()).throw(AssertionError("get_customer_return nie powinno byc wywolane")),
+        )
+
+        eligible, message, details = check_refund_eligibility(order_id)
+
+    assert eligible is True
+    assert "przywrocenie stanu" in message.lower()
+    assert details["allegro_status"] == "STOCK_RESTORED"
+
+
+def test_process_refund_blocks_cod_pending_settlement(app, monkeypatch):
+    order_id = "allegro_test_process_cod_pending"
+
+    with app.app_context():
+        from magazyn.db import get_session
+
+        with get_session() as db:
+            db.add(
+                Order(
+                    order_id=order_id,
+                    external_order_id="cf-test-process-cod-pending",
+                    platform="allegro",
+                    customer_name="Jan Testowy",
+                    payment_method="Pobranie",
+                    payment_method_cod=True,
+                    payment_done=214.39,
+                )
+            )
+            db.add(
+                Return(
+                    order_id=order_id,
+                    status="delivered",
+                    customer_name="Jan Testowy",
+                    allegro_return_id="return-cod-process",
+                    stock_restored=True,
+                    items_json="[]",
+                )
+            )
+            db.commit()
+
+    monkeypatch.setattr("magazyn.services.return_refunds.settings_store.settings.ALLEGRO_ACCESS_TOKEN", "token")
+    monkeypatch.setattr(
+        "magazyn.services.return_refunds.allegro_api.get_checkout_form",
+        lambda token, external_id: (
+            {
+                "payment": {"id": "payment-cod-pending", "type": "CASH_ON_DELIVERY"},
+                "summary": {"totalToPay": {"amount": "214.39", "currency": "PLN"}},
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        "magazyn.services.return_refunds.allegro_api.get_cod_settlement_status",
+        lambda token, checkout: ("pending", {"payment_id": "payment-cod-pending"}),
+    )
+    monkeypatch.setattr(
+        "magazyn.services.return_refunds.allegro_api.initiate_refund",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("initiate_refund nie powinno byc wywolane")),
+    )
+
+    success, message = process_refund(order_id)
+
+    assert success is False
+    assert "zaksiegowane" in message.lower()
