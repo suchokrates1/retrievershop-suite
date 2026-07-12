@@ -1,8 +1,16 @@
 import json
 from decimal import Decimal
 
-from magazyn.constants import ALL_SIZES
-from magazyn.domain.products import _to_int, create_product, get_product_details
+import pytest
+
+from magazyn.constants import ALL_SIZES, SIZED_SIZES, UNIWERSALNY
+from magazyn.domain.products import (
+    _to_int,
+    create_product,
+    get_product_details,
+    SIZING_MODE_SIZED,
+    SIZING_MODE_UNIVERSAL,
+)
 from magazyn.models.printing import PrintedOrder
 from magazyn.models.products import Product, ProductSize, PurchaseBatch
 from magazyn.services.product_detail import build_product_detail_context, build_product_history_payload
@@ -11,6 +19,7 @@ from magazyn.tests.conftest import make_product
 
 def test_add_and_edit_item(app_mod, client, login):
     data_add = {
+        "sizing_mode": "sized",
         "category": "Szelki",
         "brand": "Truelove",
         "series": "Front Line",
@@ -34,6 +43,7 @@ def test_add_and_edit_item(app_mod, client, login):
         assert ps.barcode == "11100000"
 
     data_edit = {
+        "sizing_mode": "sized",
         "category": "Szelki",
         "brand": "Truelove",
         "series": "Front Line Premium",
@@ -374,7 +384,7 @@ def test_edit_item_does_not_create_phantom_sizes(app_mod, client, login):
         assert {s.size for s in sizes} == {"M"}
 
 
-def test_add_item_warns_on_mixed_uniwersalny_and_sized(app_mod, client, login):
+def test_add_item_rejects_mixed_uniwersalny_and_sized(app_mod, client, login):
     data_add = {
         "category": "Szelki",
         "brand": "Truelove",
@@ -385,14 +395,13 @@ def test_add_item_warns_on_mixed_uniwersalny_and_sized(app_mod, client, login):
     }
     resp = client.post("/add_item", data=data_add)
     assert resp.status_code == 302
-    with client.session_transaction() as sess:
-        msgs = sess.get("_flashes")
-    assert any("jednocze" in m for _, m in msgs)
+    with app_mod.get_session() as db:
+        assert db.query(Product).filter_by(color="Kremowy").first() is None
 
 
 def test_domain_create_product_persists_sizes(app_mod):
-    quantities = {size: idx for idx, size in enumerate(ALL_SIZES, start=1)}
-    barcodes = {size: f"{10000000 + idx:08d}" for idx, size in enumerate(ALL_SIZES, start=1)}
+    quantities = {size: idx for idx, size in enumerate(SIZED_SIZES, start=1)}
+    barcodes = {size: f"{10000000 + idx:08d}" for idx, size in enumerate(SIZED_SIZES, start=1)}
 
     product = create_product(
         category="Szelki",
@@ -400,7 +409,8 @@ def test_domain_create_product_persists_sizes(app_mod):
         series="Front Line",
         color="Niebieski",
         quantities=quantities,
-        barcodes=barcodes
+        barcodes=barcodes,
+        sizing_mode=SIZING_MODE_SIZED,
     )
 
     assert product.id is not None
@@ -411,9 +421,37 @@ def test_domain_create_product_persists_sizes(app_mod):
     assert details["brand"] == "Truelove"
     assert details["series"] == "Front Line"
     assert details["color"] == "Niebieski"
-    for size in ALL_SIZES:
+    for size in SIZED_SIZES:
         assert sizes[size]["quantity"] == quantities[size]
         assert sizes[size]["barcode"] == barcodes[size]
+
+
+def test_domain_rejects_mixed_sizing_including_barcodes(app_mod):
+    with pytest.raises(ValueError, match="nie może mieć danych"):
+        create_product(
+            category="Szelki",
+            brand="Truelove",
+            series="Front Line",
+            color="Czarny",
+            quantities={"M": 1, UNIWERSALNY: 0},
+            barcodes={"M": None, UNIWERSALNY: "5901234123457"},
+            sizing_mode=SIZING_MODE_SIZED,
+        )
+
+
+def test_domain_creates_universal_product_with_one_size_row(app_mod):
+    product = create_product(
+        category="Pas bezpieczeństwa",
+        brand="Truelove",
+        series=None,
+        color="Czarny",
+        quantities={UNIWERSALNY: 2},
+        barcodes={UNIWERSALNY: "5901234123457"},
+        sizing_mode=SIZING_MODE_UNIVERSAL,
+    )
+    with app_mod.get_session() as db:
+        sizes = db.query(ProductSize).filter_by(product_id=product.id).all()
+        assert {size.size for size in sizes} == {UNIWERSALNY}
 
 
 def test_to_int_handles_strings_with_spaces():

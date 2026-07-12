@@ -32,7 +32,6 @@ from .domain.products import (
     create_product,
     delete_product,
     get_product_details,
-    has_mixed_sizing,
     update_product,
 )
 from .forms import AddItemForm, ProductEditForm
@@ -51,9 +50,6 @@ bp = Blueprint("products", __name__)
 logger = logging.getLogger(__name__)
 
 
-_MIXED_SIZING_WARNING = "Uwaga: produkt ma jednocześnie stan na rozmiarze \"Uniwersalny\" i na innym rozmiarze - sprawdź czy dane są poprawne."
-
-
 @bp.route("/add_item", methods=["GET", "POST"])
 @login_required
 def add_item():
@@ -63,6 +59,7 @@ def add_item():
         brand = form.brand.data or "Truelove"
         series = form.series.data or None
         color = form.color.data
+        sizing_mode = form.sizing_mode.data
         
         # If user selected "Inny" (Other), use custom color field
         if color == "Inny":
@@ -82,11 +79,8 @@ def add_item():
             size: getattr(form, f"barcode_{size}").data or None
             for size in sizes
         }
-        if has_mixed_sizing(quantities):
-            flash(_MIXED_SIZING_WARNING, "warning")
-
         try:
-            create_product(category, brand, series, color, quantities, barcodes)
+            create_product(category, brand, series, color, quantities, barcodes, sizing_mode)
         except Exception as exc:
             logger.exception("Blad podczas dodawania produktu")
             flash(f"Błąd podczas dodawania przedmiotu: {exc}", "error")
@@ -136,6 +130,7 @@ def edit_item(product_id):
         brand = form.brand.data or "Truelove"
         series = form.series.data or None
         color = form.color.data.strip()
+        sizing_mode = form.sizing_mode.data
         sizes = ALL_SIZES
         quantities = {
             size: _to_int(getattr(form, f"quantity_{size}").data or 0) for size in sizes
@@ -147,8 +142,6 @@ def edit_item(product_id):
         purchase_prices = {
             size: getattr(form, f"purchase_price_{size}").data for size in sizes
         }
-        if has_mixed_sizing(quantities):
-            flash(_MIXED_SIZING_WARNING, "warning")
         try:
             updated = update_product(
                 product_id,
@@ -159,6 +152,7 @@ def edit_item(product_id):
                 quantities,
                 barcodes,
                 purchase_prices,
+                sizing_mode,
             )
         except Exception as exc:
             logger.exception("Blad podczas aktualizacji produktu")

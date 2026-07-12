@@ -7,7 +7,7 @@ from typing import List
 import pandas as pd
 
 from ..config import settings
-from ..constants import ALL_SIZES
+from ..constants import ALL_SIZES, SIZED_SIZES, UNIWERSALNY
 from ..db import TWOPLACES, consume_stock, get_session, record_purchase, record_sale
 from ..models.products import Product, ProductSize
 from ..parsing import parse_product_info
@@ -145,9 +145,29 @@ def import_from_dataframe(df: pd.DataFrame):
                 product = Product(name=name, color=color)
                 db.add(product)
                 db.flush()
-            for size in ALL_SIZES:
-                quantity = _to_int(row.get(f"Ilość ({size})", 0))
-                size_barcode = _clean_barcode(row.get(f"Barcode ({size})"))
+            quantities = {
+                size: _to_int(row.get(f"Ilość ({size})", 0))
+                for size in ALL_SIZES
+            }
+            barcodes = {
+                size: _clean_barcode(row.get(f"Barcode ({size})"))
+                for size in ALL_SIZES
+            }
+            universal_active = bool(quantities[UNIWERSALNY]) or bool(barcodes[UNIWERSALNY])
+            sized_active = any(
+                bool(quantities[size]) or bool(barcodes[size]) for size in SIZED_SIZES
+            )
+            if universal_active and sized_active:
+                raise ValueError(
+                    f"Import produktu {name!r}: jednocześnie podano Uniwersalny i rozmiary XS–3XL."
+                )
+            product.sizing_mode = "universal" if universal_active else "sized"
+            allowed_sizes = [UNIWERSALNY] if universal_active else SIZED_SIZES
+            for size in allowed_sizes:
+                quantity = quantities[size]
+                size_barcode = barcodes[size]
+                if quantity <= 0 and not size_barcode:
+                    continue
                 ps = (
                     db.query(ProductSize)
                     .filter_by(product_id=product.id, size=size)
