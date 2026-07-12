@@ -1,4 +1,13 @@
-from magazyn.services.product_listing import filter_products
+from magazyn.services.product_listing import filter_products, listing_category
+
+
+def test_listing_category_prefers_legacy_name_over_misleading_category():
+    product = {
+        "category": "Szelki",
+        "legacy_name": "Pasy samochodowe",
+        "series": None,
+    }
+    assert listing_category(product) == "Pas samochodowe"
 
 
 def test_filter_products_matches_legacy_name():
@@ -7,6 +16,7 @@ def test_filter_products_matches_legacy_name():
             "id": 45,
             "name": "Szelki dla psa Truelove",
             "legacy_name": "Pasy samochodowe",
+            "listing_category": "Pas samochodowe",
             "display_name": "Truelove Szelki",
             "category": "Szelki",
             "brand": "Truelove",

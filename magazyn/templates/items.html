@@ -63,7 +63,7 @@
             <div class="flex justify-between items-center">
                 <div class="min-w-0">
                     <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="font-semibold no-underline">{{ product['series'] or '-' }}</a>
-                    <span class="text-sm text-base-content/60 ml-1">{{ product['category'] }}</span>
+                    <span class="text-sm text-base-content/60 ml-1">{{ product['listing_category'] }}</span>
                     <span class="text-sm text-base-content/60 ml-1">{{ product['color'] }}</span>
                 </div>
                 <div class="flex gap-1 flex-none">
@@ -109,7 +109,7 @@
     <tbody>
         {% for product in products %}
         <tr>
-            <td>{{ product['category'] }}</td>
+            <td>{{ product['listing_category'] }}</td>
             <td>
                 <a href="{{ url_for('products.product_detail', product_id=product['id']) }}" class="no-underline">
                     {{ product['series'] or '-' }}

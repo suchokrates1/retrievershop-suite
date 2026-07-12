@@ -10,13 +10,38 @@ ALLOWED_PER_PAGE = {25, 50, 100, 200}
 DEFAULT_PER_PAGE = 50
 
 
+def listing_category(product: MutableMapping) -> str:
+    """Etykieta kategorii na liscie - preferuj legacy_name gdy kategoria jest mylaca."""
+    category = (product.get("category") or "").strip()
+    legacy = (product.get("legacy_name") or "").strip()
+    if not legacy:
+        return category or "-"
+
+    legacy_lower = legacy.lower()
+    category_lower = category.lower()
+    if legacy_lower in category_lower or category_lower in legacy_lower:
+        return category or "-"
+
+    if legacy_lower.startswith("pasy "):
+        return f"Pas {legacy[5:]}"
+    if legacy_lower.startswith("pas "):
+        return legacy.split(" dla psa", 1)[0].strip()
+    return legacy
+
+
+def enrich_product_for_listing(product: MutableMapping) -> MutableMapping:
+    enriched = dict(product)
+    enriched["listing_category"] = listing_category(product)
+    return enriched
+
+
 def filter_products(products: Sequence[MutableMapping], search: str) -> List[MutableMapping]:
     """Przefiltruj produkty po polach widocznych na liscie."""
     if not search:
         return list(products)
 
     normalized_search = search.lower()
-    fields = ("category", "series", "color", "brand", "name", "display_name", "legacy_name")
+    fields = ("category", "series", "color", "brand", "name", "display_name", "legacy_name", "listing_category")
     return [
         product
         for product in products
@@ -35,7 +60,8 @@ def build_items_context(
     if per_page not in ALLOWED_PER_PAGE:
         per_page = DEFAULT_PER_PAGE
 
-    products = filter_products(products_provider(), search)
+    all_products = [enrich_product_for_listing(product) for product in products_provider()]
+    products = filter_products(all_products, search)
     total = len(products)
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = min(max(page, 1), total_pages)
