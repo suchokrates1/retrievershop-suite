@@ -1,7 +1,7 @@
 """Add explicit product sizing mode.
 
 Revision ID: o6p7q8r9s0t1
-Revises: m5n6o7p8q9r0
+Revises: n1o2p3q4r5s6
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "o6p7q8r9s0t1"
-down_revision = "m5n6o7p8q9r0"
+down_revision = "n1o2p3q4r5s6"
 branch_labels = None
 depends_on = None
 
