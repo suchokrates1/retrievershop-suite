@@ -134,6 +134,23 @@ def audit_and_repair(start: date, end: date, *, apply_changes: bool) -> dict[str
                     calculator.refresh_order_profit_cache(line.order, trace_label="repair-size-mismatch")
                 stats["metadata_only"] += 1
                 continue
+            if linked.product_id != expected.product_id:
+                stats["skipped"] += 1
+                logger.warning(
+                    "POMIJAM %s: oczekiwany produkt %s różni się od obecnego %s",
+                    line.order_id,
+                    expected.product_id,
+                    linked.product_id,
+                )
+                continue
+            if linked.size == expected.size:
+                stats["skipped"] += 1
+                logger.warning(
+                    "POMIJAM %s: inny ProductSize, ale ten sam rozmiar %s",
+                    line.order_id,
+                    linked.size,
+                )
+                continue
 
             sales = (
                 db.query(Sale)
