@@ -189,6 +189,9 @@ def audit_and_repair(start: date, end: date, *, apply_changes: bool) -> dict[str
                 logger.warning("POMIJAM %s: %s", line.order_id, reason)
                 continue
             line.product_size_id = expected.id
+            # Flush the repaired Sale and OrderProduct before the calculator
+            # aggregates them through independent SQL queries.
+            db.flush()
             calculator.refresh_order_profit_cache(line.order, trace_label="repair-size-mismatch")
             stats["repaired"] += 1
             logger.info("NAPRAWIONO %s; %s", line.order_id, reason)
