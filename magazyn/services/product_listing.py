@@ -16,7 +16,7 @@ def filter_products(products: Sequence[MutableMapping], search: str) -> List[Mut
         return list(products)
 
     normalized_search = search.lower()
-    fields = ("category", "series", "color", "brand", "name")
+    fields = ("category", "series", "color", "brand", "name", "display_name", "legacy_name")
     return [
         product
         for product in products

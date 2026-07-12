@@ -305,6 +305,7 @@ def list_products() -> List[dict]:
                 {
                     "id": p.id,
                     "name": p.name,  # Full name via property
+                    "legacy_name": p._name or "",
                     "display_name": p.display_name,  # Short display name
                     "category": p.category,
                     "brand": p.brand,
