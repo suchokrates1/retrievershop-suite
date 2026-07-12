@@ -141,16 +141,22 @@ def _make_error_notifier():
 
 @bp.app_context_processor
 def inject_current_year():
-    from .constants import PRODUCT_CATEGORIES, PRODUCT_BRANDS, PRODUCT_SERIES
+    from .services.product_taxonomy import (
+        NEW_TAXONOMY_VALUE,
+        distinct_brands,
+        distinct_categories,
+        distinct_series,
+    )
     with get_session() as db:
         unread_count = db.query(Thread).filter_by(read=False).count()
     return {
         "current_year": datetime.now().year,
         "unread_count": unread_count,
-        "now": datetime.now,  # Function to get current time in templates
-        "PRODUCT_CATEGORIES": PRODUCT_CATEGORIES,
-        "PRODUCT_BRANDS": PRODUCT_BRANDS,
-        "PRODUCT_SERIES": PRODUCT_SERIES,
+        "now": datetime.now,
+        "product_categories": distinct_categories(),
+        "product_brands": distinct_brands(),
+        "product_series": distinct_series(),
+        "new_taxonomy_value": NEW_TAXONOMY_VALUE,
     }
 
 

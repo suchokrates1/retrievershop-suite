@@ -2,36 +2,47 @@
 
 {% block content %}
 <h2 class="mb-3 text-center">Dodaj nowy przedmiot</h2>
-    <form action="{{ url_for('products.add_item') }}" method="post" class="grid grid-cols-12 gap-3 w-full" x-data="{ selectedColor: 'Czerwony', sizingMode: 'sized' }">
+    <form action="{{ url_for('products.add_item') }}" method="post" class="grid grid-cols-12 gap-3 w-full" x-data="{ selectedColor: 'Czerwony', sizingMode: 'sized', categoryChoice: '{{ product_categories[0] if product_categories else '' }}', brandChoice: {% if 'Truelove' in product_brands %}'Truelove'{% elif product_brands %}'{{ product_brands[0]|e }}'{% else %}''{% endif %}, seriesChoice: '' }">
         {{ form.csrf_token }}
         
         <div class="col-span-12 md:col-span-4">
             <label for="category" class="label-text">Kategoria:</label>
-            <select id="category" name="category" required class="select select-bordered w-full">
-                {% for cat in PRODUCT_CATEGORIES %}
+            <select id="category" name="category" required class="select select-bordered w-full" x-model="categoryChoice">
+                {% for cat in product_categories %}
                 <option value="{{ cat }}">{{ cat }}</option>
                 {% endfor %}
+                <option value="{{ new_taxonomy_value }}">+ Nowa kategoria...</option>
             </select>
+            <div class="mt-2" x-show="categoryChoice === '{{ new_taxonomy_value }}'" x-cloak>
+                <input type="text" name="custom_category" class="input input-bordered w-full" placeholder="Wpisz nową kategorię" :required="categoryChoice === '{{ new_taxonomy_value }}'">
+            </div>
         </div>
 
         <div class="col-span-12 md:col-span-4">
             <label for="brand" class="label-text">Marka:</label>
-            <select id="brand" name="brand" class="select select-bordered w-full">
-                {% for brand in PRODUCT_BRANDS %}
-                <option value="{{ brand }}" {% if brand == "Truelove" %}selected{% endif %}>{{ brand }}</option>
+            <select id="brand" name="brand" class="select select-bordered w-full" x-model="brandChoice">
+                {% for brand in product_brands %}
+                <option value="{{ brand }}">{{ brand }}</option>
                 {% endfor %}
-                <option value="Inna">Inna marka</option>
+                <option value="{{ new_taxonomy_value }}">+ Nowa marka...</option>
             </select>
+            <div class="mt-2" x-show="brandChoice === '{{ new_taxonomy_value }}'" x-cloak>
+                <input type="text" name="custom_brand" class="input input-bordered w-full" placeholder="Wpisz nową markę" :required="brandChoice === '{{ new_taxonomy_value }}'">
+            </div>
         </div>
 
         <div class="col-span-12 md:col-span-4">
             <label for="series" class="label-text">Seria:</label>
-            <select id="series" name="series" class="select select-bordered w-full">
+            <select id="series" name="series" class="select select-bordered w-full" x-model="seriesChoice">
                 <option value="">-- Brak serii --</option>
-                {% for ser in PRODUCT_SERIES %}
+                {% for ser in product_series %}
                 <option value="{{ ser }}">{{ ser }}</option>
                 {% endfor %}
+                <option value="{{ new_taxonomy_value }}">+ Nowa seria...</option>
             </select>
+            <div class="mt-2" x-show="seriesChoice === '{{ new_taxonomy_value }}'" x-cloak>
+                <input type="text" name="custom_series" class="input input-bordered w-full" placeholder="Wpisz nową serię" :required="seriesChoice === '{{ new_taxonomy_value }}'">
+            </div>
         </div>
 
         <div class="col-span-12 md:col-span-6">
