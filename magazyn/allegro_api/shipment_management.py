@@ -121,6 +121,7 @@ def create_shipment(
     receiver: dict,
     packages: list[dict],
     cash_on_delivery: Optional[dict] = None,
+    insurance: Optional[dict] = None,
     reference_number: Optional[str] = None,
     label_format: str = "PDF",
     additional_services: Optional[list[str]] = None,
@@ -151,6 +152,10 @@ def create_shipment(
     cash_on_delivery : dict, optional
         Dane pobrania (COD), np. {"amount": "216.99", "currency": "PLN"}
         lub dodatkowo z "iban" i "ownerName" gdy wymagane przez usluge.
+    insurance : dict, optional
+        Ubezpieczenie, np. {"amount": "216.99", "currency": "PLN"}.
+        Przy COD, jesli nie podano, ustawiane automatycznie na kwote pobrania
+        (Allegro wymaga insurance >= COD).
     reference_number : str, optional
         Zewnetrzny ID / sygnatura przesylki.
     label_format : str
@@ -188,6 +193,14 @@ def create_shipment(
         )
     if cash_on_delivery:
         input_data["cashOnDelivery"] = cash_on_delivery
+        # Allegro: insurance.amount musi byc >= COD amount.
+        if insurance is None:
+            insurance = {
+                "amount": str(cash_on_delivery.get("amount") or "0"),
+                "currency": cash_on_delivery.get("currency") or "PLN",
+            }
+    if insurance:
+        input_data["insurance"] = insurance
     if reference_number:
         input_data["referenceNumber"] = reference_number
     if additional_services:

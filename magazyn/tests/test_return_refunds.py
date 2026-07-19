@@ -9,7 +9,12 @@ from magazyn.allegro_api.refunds import (
     build_refund_line_items,
     initiate_refund,
 )
-from magazyn.services.return_refunds import check_refund_eligibility, process_refund
+from magazyn.allegro_api.refunds import extract_return_bank_account
+from magazyn.services.return_refunds import (
+    check_refund_eligibility,
+    process_bank_transfer_refund,
+    process_refund,
+)
 
 
 PARTIAL_CHECKOUT_FORM = {
@@ -202,7 +207,7 @@ def test_check_refund_eligibility_allows_stock_restored_allegro_return(app, monk
         monkeypatch.setattr("magazyn.services.return_refunds.allegro_api.get_checkout_form", lambda token, external_id: (checkout_form, None))
         monkeypatch.setattr(
             "magazyn.services.return_refunds.allegro_api.get_customer_return",
-            lambda token, return_id: (_ for _ in ()).throw(AssertionError("get_customer_return nie powinno byc wywolane")),
+            lambda token, return_id: ({"status": "DELIVERED", "refund": {}}, None),
         )
 
         eligible, message, details = check_refund_eligibility(order_id)
@@ -212,6 +217,7 @@ def test_check_refund_eligibility_allows_stock_restored_allegro_return(app, monk
     assert details["allegro_status"] == "STOCK_RESTORED"
     assert details["total_amount"] == 229.0
     assert details["allegro_return_id"] == "return-123"
+    assert details["bank_transfer_available"] is True
 
 
 def test_process_refund_uses_checkout_form_path_for_stock_restored_allegro_return(app, monkeypatch):
@@ -491,13 +497,32 @@ def test_check_refund_eligibility_blocks_cod_pending_settlement(app, monkeypatch
             "magazyn.services.return_refunds.allegro_api.get_cod_settlement_status",
             lambda token, checkout: ("pending", {"payment_id": "payment-cod-pending", "total_amount": 214.39, "currency": "PLN"}),
         )
+        monkeypatch.setattr(
+            "magazyn.services.return_refunds.allegro_api.get_customer_return",
+            lambda token, return_id: (
+                {
+                    "status": "DELIVERED",
+                    "refund": {
+                        "bankAccount": {
+                            "owner": "Jan Testowy",
+                            "iban": "PL58114020040000370278525164",
+                            "accountNumber": "58114020040000370278525164",
+                        }
+                    },
+                },
+                None,
+            ),
+        )
 
         eligible, message, details = check_refund_eligibility(order_id)
 
     assert eligible is False
-    assert "zaksiegowane" in message.lower()
+    assert "przelewem" in message.lower() or "zaksiegowane" in message.lower()
     assert details["cod_settlement_pending"] is True
     assert details["allegro_status"] == "COD_PENDING_SETTLEMENT"
+    assert details["bank_transfer_available"] is True
+    assert details["iban"] == "PL58114020040000370278525164"
+    assert details["recipient"] == "Jan Testowy"
 
 
 def test_check_refund_eligibility_allows_cod_after_settlement(app, monkeypatch):
@@ -547,7 +572,7 @@ def test_check_refund_eligibility_allows_cod_after_settlement(app, monkeypatch):
         )
         monkeypatch.setattr(
             "magazyn.services.return_refunds.allegro_api.get_customer_return",
-            lambda token, return_id: (_ for _ in ()).throw(AssertionError("get_customer_return nie powinno byc wywolane")),
+            lambda token, return_id: ({"status": "DELIVERED", "refund": {}}, None),
         )
 
         eligible, message, details = check_refund_eligibility(order_id)
@@ -555,6 +580,7 @@ def test_check_refund_eligibility_allows_cod_after_settlement(app, monkeypatch):
     assert eligible is True
     assert "przywrocenie stanu" in message.lower()
     assert details["allegro_status"] == "STOCK_RESTORED"
+    assert details["bank_transfer_available"] is True
 
 
 def test_process_refund_blocks_cod_pending_settlement(app, monkeypatch):
@@ -610,4 +636,79 @@ def test_process_refund_blocks_cod_pending_settlement(app, monkeypatch):
     success, message = process_refund(order_id)
 
     assert success is False
-    assert "zaksiegowane" in message.lower()
+    assert "zaksiegowane" in message.lower() or "przelewem" in message.lower()
+
+
+def test_extract_return_bank_account_normalizes_pl_iban():
+    bank = extract_return_bank_account(
+        {
+            "refund": {
+                "bankAccount": {
+                    "owner": "Kacper Czaplicki",
+                    "accountNumber": "58114020040000370278525164",
+                    "iban": None,
+                }
+            }
+        }
+    )
+    assert bank["iban"] == "PL58114020040000370278525164"
+    assert bank["owner"] == "Kacper Czaplicki"
+
+
+def test_process_bank_transfer_refund_marks_completed_and_correction(app, monkeypatch):
+    order_id = "allegro_test_bank_transfer_refund"
+
+    with app.app_context():
+        from magazyn.db import get_session
+
+        with get_session() as db:
+            db.add(
+                Order(
+                    order_id=order_id,
+                    external_order_id="cf-bank-transfer",
+                    platform="allegro",
+                    customer_name="Kacper Czaplicki",
+                    payment_method="Pobranie",
+                    payment_method_cod=True,
+                    payment_done=214.39,
+                    delivery_price=15.39,
+                    wfirma_invoice_id=123,
+                )
+            )
+            db.add(
+                Return(
+                    order_id=order_id,
+                    status="completed",
+                    customer_name="Kacper Czaplicki",
+                    allegro_return_id="return-bank-transfer",
+                    stock_restored=True,
+                    items_json='[{"name": "Szelki", "quantity": 1, "price": {"amount": "199", "currency": "PLN"}}]',
+                    notes="Allegro ref: X5J3/2026",
+                )
+            )
+            db.commit()
+
+        monkeypatch.setattr(
+            "magazyn.services.invoice_service.generate_correction_invoice",
+            lambda **kwargs: {"success": True, "invoice_number": "KOR 1/2026", "errors": []},
+        )
+
+        success, message, payload = process_bank_transfer_refund(
+            order_id,
+            iban="58114020040000370278525164",
+            recipient="Kacper Czaplicki",
+            amount="214.39",
+            title="Zwrot X5J3/2026",
+            already_sent=True,
+            delivery_cost_covered=True,
+        )
+
+        assert success is True
+        assert "214.39" in message
+        assert payload["iban"] == "PL58114020040000370278525164"
+        assert payload["correction_number"] == "KOR 1/2026"
+
+        with get_session() as db:
+            ret = db.query(Return).filter(Return.order_id == order_id).first()
+            assert ret.refund_processed is True
+            assert ret.status == "completed"

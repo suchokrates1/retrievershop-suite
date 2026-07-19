@@ -94,6 +94,26 @@ def get_customer_return(access_token: str, return_id: str) -> Tuple[Optional[Dic
         return None, f"Nieoczekiwany blad: {str(e)}"
 
 
+def extract_return_bank_account(return_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+    """Wyciagnij dane konta bankowego klienta ze zwrotu Allegro (refund.bankAccount)."""
+    if not return_data:
+        return None
+    refund = return_data.get("refund") or {}
+    bank = refund.get("bankAccount") or {}
+    iban = (bank.get("iban") or bank.get("accountNumber") or "").replace(" ", "").upper()
+    owner = (bank.get("owner") or "").strip()
+    if not iban:
+        return None
+    if not iban.startswith("PL") and iban.isdigit() and len(iban) == 26:
+        iban = f"PL{iban}"
+    return {
+        "iban": iban,
+        "account_number": iban[2:] if iban.startswith("PL") else iban,
+        "owner": owner,
+        "swift": (bank.get("swift") or "") or "",
+    }
+
+
 def validate_return_for_refund(return_data: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Sprawdz czy zwrot kwalifikuje sie do zwrotu pieniedzy.
