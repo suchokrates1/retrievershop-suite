@@ -20,6 +20,7 @@ from .services.manual_order_actions import apply_manual_tracking, finalize_manua
 from .services.order_return_actions import (
     create_manual_return_for_order,
     mark_return_delivered_for_order,
+    process_bank_transfer_refund_for_order,
     process_refund_for_order,
     refund_eligibility_for_order,
     restore_return_stock_for_order,
@@ -232,6 +233,17 @@ def process_refund(order_id: str):
     2. Pole allegro_return_id musi zgadzac sie z baza
     """
     result = process_refund_for_order(order_id, request.form, request.get_json(silent=True))
+    flash(result.message, result.category)
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
+@bp.route("/order/<order_id>/process_bank_transfer_refund", methods=["POST"])
+@login_required
+def process_bank_transfer_refund(order_id: str):
+    """Oznacz zwrot przelewem bankowym (np. pobranie) i wystaw korekte."""
+    result = process_bank_transfer_refund_for_order(
+        order_id, request.form, request.get_json(silent=True)
+    )
     flash(result.message, result.category)
     return redirect(url_for(".order_detail", order_id=order_id))
 

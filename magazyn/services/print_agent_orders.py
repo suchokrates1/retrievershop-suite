@@ -33,6 +33,10 @@ def collect_printable_orders(
             if order.order_id.startswith("manual_"):
                 continue
 
+            # Reczna etykieta z Allegro / juz nadana paczka — nie tworzyc kolejnej.
+            if order.delivery_package_nr:
+                continue
+
             latest = (
                 db.query(OrderStatusLog)
                 .filter(OrderStatusLog.order_id == order.order_id)

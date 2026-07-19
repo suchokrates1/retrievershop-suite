@@ -11,7 +11,11 @@ from ..models.orders import Order
 from ..models.returns import Return
 from .order_status import add_order_status
 from .return_core import create_return_from_order, mark_return_as_delivered
-from .return_refunds import check_refund_eligibility, process_refund
+from .return_refunds import (
+    check_refund_eligibility,
+    process_bank_transfer_refund,
+    process_refund,
+)
 from .return_stock import restore_stock_for_return
 
 
@@ -179,10 +183,57 @@ def process_refund_for_order(
     return OrderReturnActionResult(f"Blad zwrotu pieniedzy: {message}", "error")
 
 
+def process_bank_transfer_refund_for_order(
+    order_id: str,
+    form_data: Mapping[str, Any],
+    json_data: Mapping[str, Any] | None,
+) -> OrderReturnActionResult:
+    json_payload = json_data or {}
+    confirm = form_data.get("confirm") == "true" or json_payload.get("confirm") is True
+    if not confirm:
+        return OrderReturnActionResult("Operacja wymaga potwierdzenia", "error")
+
+    expected_return_id = form_data.get("allegro_return_id") or json_payload.get("allegro_return_id")
+    with get_session() as db:
+        return_record = db.query(Return).filter(Return.order_id == order_id).first()
+        if not return_record:
+            return OrderReturnActionResult(
+                "Nie znaleziono zwrotu dla tego zamowienia",
+                "error",
+            )
+        if return_record.allegro_return_id and expected_return_id and (
+            return_record.allegro_return_id != expected_return_id
+        ):
+            return OrderReturnActionResult(
+                "Blad walidacji - ID zwrotu Allegro nie zgadza sie",
+                "error",
+            )
+
+    delivery_raw = form_data.get("delivery_cost_covered", json_payload.get("delivery_cost_covered", "true"))
+    delivery_cost_covered = str(delivery_raw).lower() in {"1", "true", "yes", "on"}
+    already_raw = form_data.get("already_sent", json_payload.get("already_sent", "true"))
+    already_sent = str(already_raw).lower() in {"1", "true", "yes", "on"}
+
+    success, message, payload = process_bank_transfer_refund(
+        order_id,
+        iban=form_data.get("iban") or json_payload.get("iban") or "",
+        recipient=form_data.get("recipient") or json_payload.get("recipient") or "",
+        amount=form_data.get("amount") or json_payload.get("amount"),
+        title=form_data.get("title") or json_payload.get("title") or "",
+        reason=form_data.get("reason") or json_payload.get("reason") or "",
+        delivery_cost_covered=delivery_cost_covered,
+        already_sent=already_sent,
+    )
+    if success:
+        return OrderReturnActionResult(message, "success", payload=payload or {})
+    return OrderReturnActionResult(message, "error", payload=payload or {})
+
+
 __all__ = [
     "OrderReturnActionResult",
     "create_manual_return_for_order",
     "mark_return_delivered_for_order",
+    "process_bank_transfer_refund_for_order",
     "process_refund_for_order",
     "refund_eligibility_for_order",
     "restore_return_stock_for_order",

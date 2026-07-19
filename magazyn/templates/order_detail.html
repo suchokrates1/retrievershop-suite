@@ -322,26 +322,47 @@
                             <template x-if="!loading && codPending">
                                 <div>
                                     <h6 class="text-warning mb-2 font-semibold">
-                                        <i class="bi bi-hourglass-split"></i> Zwrot — oczekuje na pobranie
+                                        <i class="bi bi-hourglass-split"></i> Zwrot Allegro zablokowany (pobranie)
                                     </h6>
-                                    <div class="alert alert-warning text-sm">
-                                        <p class="mb-2" x-text="message"></p>
-                                        <p class="mb-0 text-base-content/70">
-                                            Gdy Allegro zaksieguje pobranie na Twoim koncie, przycisk zwrotu stanie sie aktywny.
-                                        </p>
+                                    <div class="alert alert-warning text-sm mb-3">
+                                        <p class="mb-0" x-text="message"></p>
                                     </div>
+                                    <button type="button" class="btn btn-primary btn-sm"
+                                            onclick="document.getElementById('bankTransferRefundModal').showModal()">
+                                        <i class="bi bi-bank"></i> Zwrot przelewem bankowym
+                                    </button>
                                 </div>
                             </template>
                             <template x-if="!loading && eligible">
                                 <div>
                                     <h6 class="text-error mb-2 font-semibold"><i class="bi bi-cash-coin"></i> Zwrot pieniedzy</h6>
-                                    <button type="button" class="btn btn-error btn-sm" id="refundBtn"
-                                            onclick="document.getElementById('refundModal').showModal()">
-                                        <i class="bi bi-currency-exchange"></i> Zwroc pieniadze klientowi
-                                    </button>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-error btn-sm" id="refundBtn"
+                                                onclick="document.getElementById('refundModal').showModal()">
+                                            <i class="bi bi-currency-exchange"></i> Zwroc przez Allegro
+                                        </button>
+                                        <button type="button" class="btn btn-outline btn-primary btn-sm"
+                                                onclick="document.getElementById('bankTransferRefundModal').showModal()">
+                                            <i class="bi bi-bank"></i> Zwrot przelewem
+                                        </button>
+                                    </div>
                                     <span class="block text-sm text-base-content/60 mt-1">
-                                        Ta operacja jest NIEODWRACALNA. Upewnij sie, ze paczka dotarla i produkty sa sprawdzone.
+                                        Allegro — zwrot API. Przelew — gdy pobranie / przelew juz wykonany poza Allegro.
                                     </span>
+                                </div>
+                            </template>
+                            <template x-if="!loading && !eligible && !codPending && bankTransferAvailable">
+                                <div>
+                                    <h6 class="text-primary mb-2 font-semibold">
+                                        <i class="bi bi-bank"></i> Zwrot przelewem bankowym
+                                    </h6>
+                                    <div class="alert alert-info text-sm mb-3">
+                                        <p class="mb-0" x-text="message"></p>
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-sm"
+                                            onclick="document.getElementById('bankTransferRefundModal').showModal()">
+                                        <i class="bi bi-bank"></i> Zwrot przelewem / oznacz wykonany
+                                    </button>
                                 </div>
                             </template>
                         </div>
@@ -1101,6 +1122,108 @@ details[open] summary::before {
 </dialog>
 </div>
 
+{# Modal zwrotu przelewem bankowym (pobranie / offline) #}
+<div x-data="bankTransferRefundModal()" x-cloak>
+<dialog id="bankTransferRefundModal" class="modal" x-ref="modal">
+    <div class="modal-box max-w-xl">
+        <h3 class="font-bold text-lg text-primary mb-4">
+            <i class="bi bi-bank mr-2"></i>
+            Zwrot przelewem bankowym
+        </h3>
+        <div class="alert alert-info mb-3 text-sm">
+            <div>
+                PKO BP nie udostepnia publicznego linku z wypelnionym formularzem.
+                Otworz iPKO, wklej skopiowane dane albo oznacz przelew juz wykonany —
+                system wystawi korekte i oznaczy zwrot jako rozliczony.
+            </div>
+        </div>
+
+        <div x-show="loading" class="text-center py-3">
+            <span class="loading loading-spinner loading-md"></span>
+            <p class="mt-2 mb-0">Pobieranie danych konta z Allegro...</p>
+        </div>
+
+        <div x-show="!loading && checked" class="space-y-3">
+            <p class="text-sm text-base-content/70" x-show="infoMessage" x-text="infoMessage"></p>
+
+            <div class="form-control">
+                <label class="label"><span class="label-text">Odbiorca</span></label>
+                <input type="text" class="input input-bordered" x-model="form.recipient" @input="refreshClipboard()">
+            </div>
+            <div class="form-control">
+                <label class="label"><span class="label-text">IBAN</span></label>
+                <input type="text" class="input input-bordered font-mono" x-model="form.iban" @input="refreshClipboard()"
+                       placeholder="PL................................">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Kwota (PLN)</span></label>
+                    <input type="text" class="input input-bordered" x-model="form.amount" @input="refreshClipboard()">
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Tytul przelewu</span></label>
+                    <input type="text" class="input input-bordered" x-model="form.title" @input="refreshClipboard()">
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <button type="button" class="btn btn-outline btn-sm" @click="copyTransferData()">
+                    <i class="bi bi-clipboard"></i> Kopiuj dane
+                </button>
+                <button type="button" class="btn btn-outline btn-primary btn-sm" @click="openBank()">
+                    <i class="bi bi-box-arrow-up-right"></i> Otworz iPKO
+                </button>
+            </div>
+
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" class="checkbox" x-model="deliveryCostCovered">
+                    <span class="label-text">Uwzglednij koszt dostawy w korekcie</span>
+                </label>
+            </div>
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" class="checkbox" x-model="alreadySent">
+                    <span class="label-text">Przelew juz zostal wykonany (tylko oznacz + korekta)</span>
+                </label>
+            </div>
+            <div class="form-control">
+                <label class="label"><span class="label-text">Komentarz / powod korekty</span></label>
+                <textarea class="textarea textarea-bordered" rows="2" x-model="reason" maxlength="500"></textarea>
+            </div>
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" class="checkbox checkbox-primary" x-model="confirmed" required>
+                    <span class="label-text font-bold">Potwierdzam rozliczenie zwrotu przelewem</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="modal-action">
+            <form method="dialog"><button class="btn">Anuluj</button></form>
+            <form action="{{ url_for('orders.process_bank_transfer_refund', order_id=order.order_id) }}" method="POST"
+                  @submit="handleSubmit($event)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="confirm" value="true">
+                <input type="hidden" name="allegro_return_id" value="{{ return_info.allegro_return_id or '' }}">
+                <input type="hidden" name="iban" :value="form.iban">
+                <input type="hidden" name="recipient" :value="form.recipient">
+                <input type="hidden" name="amount" :value="form.amount">
+                <input type="hidden" name="title" :value="form.title">
+                <input type="hidden" name="reason" :value="reason">
+                <input type="hidden" name="delivery_cost_covered" :value="deliveryCostCovered ? 'true' : 'false'">
+                <input type="hidden" name="already_sent" :value="alreadySent ? 'true' : 'false'">
+                <button type="submit" class="btn btn-primary" :disabled="!confirmed || loading">
+                    <i class="bi bi-check2-circle"></i>
+                    <span x-text="alreadySent ? 'Oznacz wykonany + korekta' : 'Zapisz zwrot przelewem'"></span>
+                </button>
+            </form>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+</div>
+
 <script>
 document.addEventListener('alpine:init', () => {
     Alpine.data('refundModal', () => ({
@@ -1191,22 +1314,113 @@ document.addEventListener('alpine:init', () => {
         loading: true,
         eligible: false,
         codPending: false,
+        bankTransferAvailable: false,
         message: '',
 
         async load() {
             try {
                 const response = await fetch('{{ url_for("orders.check_refund_eligibility", order_id=order.order_id) }}');
                 const data = await response.json();
+                this.message = data.message || '';
+                this.bankTransferAvailable = !!(data.details && data.details.bank_transfer_available);
                 if (data.eligible) {
                     this.eligible = true;
                 } else if (data.details && data.details.cod_settlement_pending) {
                     this.codPending = true;
-                    this.message = data.message;
                 }
             } catch (error) {
                 console.warn('Nie udalo sie sprawdzic kwalifikowalnosci zwrotu:', error);
             } finally {
                 this.loading = false;
+            }
+        }
+    }));
+
+    Alpine.data('bankTransferRefundModal', () => ({
+        loading: false,
+        checked: false,
+        confirmed: false,
+        alreadySent: true,
+        deliveryCostCovered: true,
+        reason: '',
+        form: {
+            iban: '',
+            recipient: '',
+            amount: '',
+            title: '',
+            bankUrl: 'https://www.ipko.pl/',
+            clipboardText: ''
+        },
+        infoMessage: '',
+
+        init() {
+            const modalEl = this.$refs.modal;
+            if (!modalEl) return;
+            const observer = new MutationObserver(() => {
+                if (modalEl.open) this.loadDetails();
+            });
+            observer.observe(modalEl, { attributes: true, attributeFilter: ['open'] });
+        },
+
+        async loadDetails() {
+            this.loading = true;
+            this.checked = false;
+            this.confirmed = false;
+            try {
+                const response = await fetch('{{ url_for("orders.check_refund_eligibility", order_id=order.order_id) }}');
+                const data = await response.json();
+                const d = data.details || {};
+                this.infoMessage = data.message || '';
+                this.form.iban = d.iban || '';
+                this.form.recipient = d.recipient || '';
+                this.form.amount = (d.amount != null) ? Number(d.amount).toFixed(2) : '';
+                this.form.title = d.title || '';
+                this.form.bankUrl = d.bank_url || 'https://www.ipko.pl/';
+                this.form.clipboardText = d.clipboard_text || '';
+                this.reason = d.suggested_reason || 'Zwrot pobrania przelewem bankowym';
+                this.refreshClipboard();
+            } catch (error) {
+                this.infoMessage = 'Blad pobierania danych: ' + error.message;
+            } finally {
+                this.loading = false;
+                this.checked = true;
+            }
+        },
+
+        refreshClipboard() {
+            this.form.clipboardText = [
+                'Odbiorca: ' + (this.form.recipient || ''),
+                'IBAN: ' + (this.form.iban || ''),
+                'Kwota: ' + (this.form.amount || '') + ' PLN',
+                'Tytul: ' + (this.form.title || ''),
+            ].join('\n');
+        },
+
+        async copyTransferData() {
+            this.refreshClipboard();
+            try {
+                await navigator.clipboard.writeText(this.form.clipboardText);
+                alert('Skopiowano dane przelewu do schowka');
+            } catch (error) {
+                prompt('Skopiuj dane przelewu:', this.form.clipboardText);
+            }
+        },
+
+        openBank() {
+            window.open(this.form.bankUrl || 'https://www.ipko.pl/', '_blank', 'noopener');
+        },
+
+        handleSubmit(e) {
+            if (!this.confirmed) {
+                e.preventDefault();
+                alert('Musisz potwierdzic operacje!');
+                return;
+            }
+            const verb = this.alreadySent
+                ? 'oznaczyc zwrot jako wykonany przelewem'
+                : 'zapisac zwrot przelewem';
+            if (!confirm('Czy na pewno chcesz ' + verb + ' na kwote ' + this.form.amount + ' PLN?\n\nZostanie wystawiona korekta (jesli jest faktura).')) {
+                e.preventDefault();
             }
         }
     }));

@@ -180,6 +180,7 @@ def test_create_shipment_with_cash_on_delivery(mock_call):
 
     body = mock_call.call_args.kwargs["json"]
     assert body["input"]["cashOnDelivery"] == {"amount": "216.99", "currency": "PLN"}
+    assert body["input"]["insurance"] == {"amount": "216.99", "currency": "PLN"}
 
 
 def test_calculate_cod_amount_includes_delivery_price():
