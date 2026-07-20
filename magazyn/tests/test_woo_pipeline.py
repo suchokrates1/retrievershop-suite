@@ -102,7 +102,7 @@ def test_catalog_reuses_existing_product_images():
     from magazyn.services import woo_catalog_sync as sync_mod
 
     client = MagicMock()
-    product = SimpleNamespace(id=1, name="Szelki", woo_product_id=55)
+    product = SimpleNamespace(id=1, name="Szelki", woo_product_id=55, category=None, brand=None, series=None, color=None)
     size = SimpleNamespace(
         id=10,
         product_id=1,
@@ -136,6 +136,8 @@ def test_catalog_reuses_existing_product_images():
     with (
         patch.object(sync_mod, "get_product_image_ids", return_value=[777]) as get_imgs,
         patch.object(sync_mod, "upload_product_image_from_url") as upload,
+        patch.object(sync_mod, "build_product_attributes", return_value=[{"name": "Rozmiar", "options": ["L"]}]),
+        patch.object(sync_mod, "ensure_product_category", return_value=None),
         patch.object(
             sync_mod,
             "create_or_update_variable_product",

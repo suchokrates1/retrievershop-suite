@@ -140,6 +140,7 @@ def create_or_update_variable_product(
     image_ids: Optional[list[int]] = None,
     image_urls: Optional[list[str]] = None,
     attributes: list[dict],
+    category_ids: Optional[list[int]] = None,
     status: str = "publish",
 ) -> dict:
     payload: dict[str, Any] = {
@@ -150,6 +151,8 @@ def create_or_update_variable_product(
         "short_description": (description_html or "")[:400],
         "attributes": attributes,
     }
+    if category_ids:
+        payload["categories"] = [{"id": int(cid)} for cid in category_ids if cid]
     images: list[dict[str, Any]] = []
     for image_id in image_ids or []:
         images.append({"id": image_id})

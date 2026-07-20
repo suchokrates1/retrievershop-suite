@@ -11,6 +11,8 @@ from ..db import get_session
 from ..models.allegro import AllegroOffer
 from ..models.products import Product, ProductSize
 from ..woocommerce_api import WooClient, WooClientError
+from ..woocommerce_api.attributes import build_product_attributes
+from ..woocommerce_api.categories import ensure_product_category
 from ..woocommerce_api.products import (
     create_or_update_variable_product,
     find_product_by_ean,
@@ -106,14 +108,13 @@ def _sync_one_product(
             image_urls = []
 
     size_options = sorted({size.size for size, _ in variants})
-    attributes = [
-        {
-            "name": "Rozmiar",
-            "visible": True,
-            "variation": True,
-            "options": size_options,
-        }
-    ]
+    attributes = build_product_attributes(
+        client,
+        brand=product.brand,
+        series=product.series,
+        color=product.color,
+        size_options=size_options,
+    )
     name = primary_offer.title or product.name
     # Usun rozmiar z konca tytulu Allegro jesli obecny
     for size_opt in size_options:
@@ -130,6 +131,11 @@ def _sync_one_product(
             matched_var = matched.get("_matched_variation")
             if matched_var and not variants[0][0].woo_variation_id:
                 variants[0][0].woo_variation_id = int(matched_var["id"])
+
+    category_ids: list[int] = []
+    cat_id = ensure_product_category(client, product.category)
+    if cat_id:
+        category_ids.append(cat_id)
 
     # Nie re-uploaduj zdjec gdy produkt Woo juz je ma
     image_ids: list[int] = []
@@ -153,6 +159,7 @@ def _sync_one_product(
         image_ids=image_ids,
         image_urls=None if image_ids else image_urls[:8],
         attributes=attributes,
+        category_ids=category_ids or None,
         status="publish",
     )
     woo_product_id = int(product_payload["id"])
