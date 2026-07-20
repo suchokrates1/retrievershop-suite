@@ -14,6 +14,7 @@ from ..woocommerce_api import WooClient, WooClientError
 from ..woocommerce_api.products import (
     create_or_update_variable_product,
     find_product_by_ean,
+    upload_product_image_from_url,
     upsert_variation,
 )
 from .allegro_offer_content import sync_offer_content
@@ -103,6 +104,16 @@ def _sync_one_product(
         except json.JSONDecodeError:
             image_urls = []
 
+    image_ids: list[int] = []
+    for idx, url in enumerate(image_urls[:8]):
+        media_id = upload_product_image_from_url(
+            client,
+            url,
+            filename=f"allegro_{primary_offer.offer_id}_{idx}.jpg",
+        )
+        if media_id:
+            image_ids.append(media_id)
+
     size_options = sorted({size.size for size, _ in variants})
     attributes = [
         {
@@ -134,7 +145,8 @@ def _sync_one_product(
         woo_product_id=woo_product_id,
         name=name,
         description_html=description,
-        image_urls=image_urls[:8],
+        image_ids=image_ids,
+        image_urls=None if image_ids else image_urls[:8],
         attributes=attributes,
         status="publish",
     )

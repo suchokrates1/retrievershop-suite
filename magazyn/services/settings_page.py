@@ -32,6 +32,8 @@ SETTINGS_GROUPS = {
     "WOO_CONSUMER_KEY": ("WooCommerce", "bi-bag"),
     "WOO_CONSUMER_SECRET": ("WooCommerce", "bi-bag"),
     "WOO_WEBHOOK_SECRET": ("WooCommerce", "bi-bag"),
+    "WP_APP_USER": ("WooCommerce", "bi-bag"),
+    "WP_APP_PASSWORD": ("WooCommerce", "bi-bag"),
     "INPOST_TOKEN": ("InPost ShipX", "bi-truck"),
     "INPOST_ORGANIZATION_ID": ("InPost ShipX", "bi-truck"),
     "INPOST_SENDING_METHOD": ("InPost ShipX", "bi-truck"),
