@@ -69,12 +69,9 @@ def parse_woo_order_to_data(order: dict) -> dict[str, Any]:
 
     address = shipping.get("address_1") or billing.get("address_1") or ""
     address2 = (shipping.get("address_2") or billing.get("address_2") or "").strip()
-    # address_2 czesto jest numerem budynku/mieszkania (InPost ShipX)
-    building_number = address2
-    if address2 and not any(ch.isdigit() for ch in address2[:1] + address2):
-        # Jesli to nie wyglada na numer — dolacz do ulicy
+    # Zachowaj numer budynku w delivery_address (ShipX pozniej go rozdzieli)
+    if address2:
         address = f"{address} {address2}".strip()
-        building_number = ""
 
     # InPost paczkomat — meta z pluginu (inpost-for-woocommerce / easypack)
     point_id = ""
@@ -163,7 +160,6 @@ def parse_woo_order_to_data(order: dict) -> dict[str, Any]:
         "phone": billing.get("phone") or shipping.get("phone") or None,
         "delivery_company": shipping.get("company") or billing.get("company") or None,
         "delivery_address": address,
-        "delivery_building_number": building_number or None,
         "delivery_postcode": shipping.get("postcode") or billing.get("postcode") or None,
         "delivery_city": shipping.get("city") or billing.get("city") or None,
         "delivery_country": shipping.get("country") or billing.get("country") or "PL",
