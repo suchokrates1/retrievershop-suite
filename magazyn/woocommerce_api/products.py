@@ -208,4 +208,16 @@ def upsert_variation(
         except WooClientError as exc:
             if exc.status_code != 404:
                 raise
-    return client.post(f"wp-json/wc/v3/products/{product_id}/variations", json=payload)
+    try:
+        return client.post(f"wp-json/wc/v3/products/{product_id}/variations", json=payload)
+    except WooClientError as exc:
+        # SKU juz zajete przez istniejacy wariant — zaktualizuj go
+        resource_id = None
+        if isinstance(exc.payload, dict):
+            resource_id = (exc.payload.get("data") or {}).get("resource_id")
+        if resource_id and "product_invalid_sku" in str(exc):
+            return client.put(
+                f"wp-json/wc/v3/products/{product_id}/variations/{int(resource_id)}",
+                json=payload,
+            )
+        raise
