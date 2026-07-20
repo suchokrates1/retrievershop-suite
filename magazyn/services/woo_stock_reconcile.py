@@ -289,6 +289,32 @@ def reconcile_woo_stock(*, dry_run: bool = False) -> dict[str, int]:
                     logger.exception("Woo reconcile dedupe failed sku=%s hit=%s", sku, hit)
                     stats["errors"] += 1
 
+        # Wyczysc zduplikowane / osierocone mapowania variation:
+        # zostaw woo_variation_id tylko na rozmiarze z matching barcode.
+        owned_vids: dict[int, int] = {}
+        for size in sizes:
+            sku = (size.barcode or "").strip()
+            if not sku or not size.woo_variation_id:
+                continue
+            owned_vids[int(size.woo_variation_id)] = int(size.id)
+
+        stale = (
+            db.query(ProductSize)
+            .filter(ProductSize.woo_variation_id.isnot(None))
+            .all()
+        )
+        for size in stale:
+            vid = int(size.woo_variation_id)
+            owner_id = owned_vids.get(vid)
+            sku = (size.barcode or "").strip()
+            if owner_id is not None and int(size.id) != owner_id:
+                size.woo_variation_id = None
+                stats["remapped"] += 1
+            elif owner_id is None and not sku:
+                # Brak barcode i nikt nie posiada tego vid po EAN
+                size.woo_variation_id = None
+                stats["remapped"] += 1
+
         db.commit()
 
     # Woo SKU bez odpowiednika w magazynie
