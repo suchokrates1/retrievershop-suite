@@ -1,4 +1,9 @@
-from magazyn.inpost_api.shipx import build_shipment_payload
+from magazyn.inpost_api.shipx import _normalize_pl_phone, build_shipment_payload
+
+
+def test_normalize_pl_phone_strips_country_code():
+    assert _normalize_pl_phone("+48 502 533 332") == "502533332"
+    assert _normalize_pl_phone("48502533332") == "502533332"
 
 
 def test_build_shipment_payload_locker():
@@ -16,6 +21,7 @@ def test_build_shipment_payload_locker():
     )
     assert payload["service"] == "inpost_locker_standard"
     assert payload["custom_attributes"]["target_point"] == "WAW01A"
+    assert payload["custom_attributes"]["sending_method"] == "parcel_locker"
     assert "cod" not in payload
 
 
@@ -37,4 +43,5 @@ def test_build_shipment_payload_courier_from_shipping_key():
     )
     assert payload["service"] == "inpost_courier_c2c"
     assert payload["receiver"]["address"]["city"] == "Krakow"
+    assert payload["custom_attributes"]["sending_method"] == "parcel_locker"
     assert payload["cod"]["amount"] == 55.5
