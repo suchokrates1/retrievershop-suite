@@ -26,6 +26,9 @@ class AllegroOffer(Base):
     )
     synced_at = Column(String)
     publication_status = Column(String, default="ACTIVE")
+    description_html = Column(Text, nullable=True)
+    image_urls = Column(Text, nullable=True)  # JSON list[str]
+    content_synced_at = Column(String, nullable=True)
 
     product = relationship("Product")
     product_size = relationship("ProductSize", back_populates="allegro_offers")

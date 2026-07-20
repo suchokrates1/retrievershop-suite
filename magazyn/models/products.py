@@ -30,6 +30,7 @@ class Product(Base):
     # Explicitly distinguishes single-SKU products from products with
     # XS–3XL variants.  ProductSize rows must conform to this mode.
     sizing_mode = Column(String(16), nullable=True)
+    woo_product_id = Column(Integer, nullable=True)
     sizes = relationship(
         "ProductSize",
         back_populates="product",
@@ -115,6 +116,7 @@ class ProductSize(Base):
     # Inwariant: stock_value >= 0 oraz quantity == 0 => stock_value == 0.
     stock_value = Column(Numeric(12, 2), nullable=False, default=0)
     barcode = Column(String, unique=True)
+    woo_variation_id = Column(Integer, nullable=True)
     product = relationship("Product", back_populates="sizes")
     allegro_offers = relationship("AllegroOffer", back_populates="product_size")
     price_history = relationship(

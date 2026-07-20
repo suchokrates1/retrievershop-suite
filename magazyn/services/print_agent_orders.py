@@ -32,8 +32,14 @@ def collect_printable_orders(
         for order in recent_orders:
             if order.order_id.startswith("manual_"):
                 continue
+            # Woo i Allegro w kolejce; inne platformy reczne pomijamy
+            if not (
+                order.order_id.startswith("allegro_")
+                or order.order_id.startswith("woo_")
+            ):
+                continue
 
-            # Reczna etykieta z Allegro / juz nadana paczka — nie tworzyc kolejnej.
+            # Reczna etykieta / juz nadana paczka — nie tworzyc kolejnej.
             if order.delivery_package_nr:
                 continue
 
