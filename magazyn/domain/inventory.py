@@ -243,7 +243,6 @@ def consume_order_stock(products: List[dict], order_id: str | None = None):
                     db.commit()
 
             if ps:
-                size_id = ps.id
                 consume_stock(
                     ps.product_id,
                     ps.size,
@@ -253,17 +252,7 @@ def consume_order_stock(products: List[dict], order_id: str | None = None):
                     commission_fee=commission_fee,
                     order_id=order_id,
                 )
-                # Po zuzyciu stanu wypchnij qty do Woo (jesli wariant zmapowany)
-                if getattr(ps, "woo_variation_id", None):
-                    try:
-                        from ..services.woo_catalog_sync import push_stock_for_product_size
-
-                        push_stock_for_product_size(size_id)
-                    except Exception:
-                        logger.exception(
-                            "Nie zaktualizowano stanu Woo dla product_size_id=%s",
-                            size_id,
-                        )
+                # Push Woo jest w consume_stock (maybe_push_woo_stock)
             else:
                 logger.warning(
                     "Unable to match product for order item: %s", item

@@ -53,6 +53,18 @@ def record_purchase(
             product_size.quantity += quantity
             current_value = Decimal(str(product_size.stock_value or 0))
             product_size.stock_value = current_value + Decimal(quantity) * price
+            size_id = product_size.id
+            new_qty = product_size.quantity
+            woo_vid = product_size.woo_variation_id
+        else:
+            size_id = None
+            new_qty = None
+            woo_vid = None
+
+    if size_id and woo_vid:
+        from .woo_catalog_sync import maybe_push_woo_stock
+
+        maybe_push_woo_stock(size_id, quantity=new_qty)
 
 
 def record_sale(
@@ -128,6 +140,10 @@ def consume_stock(
         purchase_cost = Decimal("0.00")
         consumed = 0
 
+        size_id = product_size.id if product_size else None
+        woo_vid = product_size.woo_variation_id if product_size else None
+        new_qty = None
+
         if to_consume > 0 and product_size:
             stock_value = Decimal(str(product_size.stock_value or 0))
             # Proporcjonalny udzial wartosci - zdjecie calego stanu (to_consume
@@ -139,6 +155,7 @@ def consume_stock(
                 remaining_value if product_size.quantity > 0 else Decimal("0.00")
             )
             consumed = to_consume
+            new_qty = product_size.quantity
             _send_low_stock_alert(
                 session,
                 product_id,
@@ -171,6 +188,11 @@ def consume_stock(
             order_id=order_id,
         )
         _log_consumed_stock(session, product_id, size, consumed, log)
+
+    if size_id and woo_vid and new_qty is not None:
+        from .woo_catalog_sync import maybe_push_woo_stock
+
+        maybe_push_woo_stock(size_id, quantity=new_qty)
     return consumed
 
 

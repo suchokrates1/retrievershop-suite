@@ -36,3 +36,20 @@ def sync_woo_catalog_route():
         "success" if not catalog.get("errors") else "warning",
     )
     return redirect(url_for("orders.orders_list"))
+
+
+@bp.route("/orders/reconcile-woo-stock", methods=["POST"])
+@login_required
+def reconcile_woo_stock_route():
+    """Reconcile stanow Woo z magazynem + dedupe SKU."""
+    from ..services.woo_stock_reconcile import reconcile_woo_stock
+
+    dry_run = False
+    stats = reconcile_woo_stock(dry_run=dry_run)
+    flash(
+        f"Woo reconcile: updated={stats.get('updated')} deduped={stats.get('deduped')} "
+        f"orphaned={stats.get('orphaned')} remapped={stats.get('remapped')} "
+        f"errors={stats.get('errors')}",
+        "success" if not stats.get("errors") else "warning",
+    )
+    return redirect(url_for("orders.orders_list"))
