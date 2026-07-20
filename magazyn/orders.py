@@ -327,37 +327,6 @@ def api_product_search():
     return jsonify(results)
 
 
-@bp.route("/orders/sync-woo", methods=["POST"])
-@login_required
-def sync_woo_orders_route():
-    """Reczna synchronizacja zamowien WooCommerce."""
-    from .services.woo_order_sync import sync_woo_orders
-
-    stats = sync_woo_orders()
-    flash(
-        f"Woo sync: fetched={stats.get('fetched')} imported={stats.get('imported')} "
-        f"skipped={stats.get('skipped')} errors={stats.get('errors')}",
-        "success" if not stats.get("errors") else "warning",
-    )
-    return redirect(url_for(".orders_list"))
-
-
-@bp.route("/orders/sync-woo-catalog", methods=["POST"])
-@login_required
-def sync_woo_catalog_route():
-    """Reczna synchronizacja katalogu do WooCommerce."""
-    from .services.allegro_offer_content import sync_linked_offers_content
-    from .services.woo_catalog_sync import sync_catalog_to_woo
-
-    content = sync_linked_offers_content(limit=60)
-    catalog = sync_catalog_to_woo(limit=200, refresh_content=False)
-    flash(
-        f"Tresc Allegro: {content}; Katalog Woo: {catalog}",
-        "success" if not catalog.get("errors") else "warning",
-    )
-    return redirect(url_for(".orders_list"))
-
-
 @bp.route("/orders/add", methods=["GET", "POST"])
 @login_required
 def add_order():
