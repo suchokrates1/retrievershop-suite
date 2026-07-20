@@ -7,13 +7,13 @@
 <div class="flex justify-between items-center mb-3 gap-2 flex-wrap">
     <h2 class="mb-0">Zamowienia</h2>
     <div class="flex flex-wrap gap-2">
-        <form method="post" action="{{ url_for('orders.sync_woo_orders_route') }}">
+        <form method="post" action="{{ url_for('woo_admin.sync_woo_orders_route') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline btn-sm" title="Import zamowien WooCommerce">
                 <i class="bi bi-bag-check"></i> <span class="hidden sm:inline">Sync Woo</span>
             </button>
         </form>
-        <form method="post" action="{{ url_for('orders.sync_woo_catalog_route') }}">
+        <form method="post" action="{{ url_for('woo_admin.sync_woo_catalog_route') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline btn-sm" title="Sync katalogu do WooCommerce">
                 <i class="bi bi-shop"></i> <span class="hidden sm:inline">Katalog Woo</span>
