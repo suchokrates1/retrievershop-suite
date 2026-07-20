@@ -243,17 +243,12 @@ def _resolve_variable_parent_id(
             product.woo_product_id = parent_id
             var_id = int(existing["id"])
             var_sku = (existing.get("sku") or "").strip()
-            matched = False
             for size in product.sizes or []:
                 if var_sku and (size.barcode or "").strip() == var_sku:
                     size.woo_variation_id = var_id
-                    matched = True
                     break
-            if not matched:
-                for size in product.sizes or []:
-                    if not size.woo_variation_id:
-                        size.woo_variation_id = var_id
-                        break
+            # Bez trafienia po EAN nie przypisuj variation do pierwszego pustego
+            # rozmiaru — to tworzylo duplikaty mapowan (np. XS bez barcode).
             logger.info(
                 "Woo product %s: variation %s -> parent %s",
                 product.id,

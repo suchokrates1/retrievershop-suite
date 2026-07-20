@@ -99,3 +99,65 @@ def test_reconcile_dedupes_duplicate_sku():
     put_paths = [c.args[0] for c in client.put.call_args_list]
     assert any("variations/201" in p for p in put_paths)
     assert any("variations/202" in p for p in put_paths)
+
+
+def test_reconcile_clears_stale_duplicate_variation_mapping():
+    client = MagicMock()
+    woo_index = {
+        "5901234567890": [
+            {
+                "parent_id": 100,
+                "variation_id": 201,
+                "product_id": 201,
+                "type": "variation",
+                "status": "publish",
+                "qty": 2,
+                "orphan": False,
+            }
+        ]
+    }
+    owner = SimpleNamespace(
+        id=1,
+        barcode="5901234567890",
+        quantity=2,
+        size="M",
+        woo_variation_id=201,
+        product=SimpleNamespace(woo_product_id=100),
+    )
+    stale = SimpleNamespace(
+        id=2,
+        barcode=None,
+        quantity=0,
+        size="XS",
+        woo_variation_id=201,
+        product=SimpleNamespace(woo_product_id=100),
+    )
+
+    sizes_q = MagicMock()
+    sizes_q.filter.return_value.all.return_value = [owner]
+    stale_q = MagicMock()
+    stale_q.filter.return_value.all.return_value = [owner, stale]
+    barcodes_q = MagicMock()
+    barcodes_q.filter.return_value = [("5901234567890",)]
+
+    db1 = MagicMock()
+    # first query: sizes with barcode; second: stale mappings cleanup
+    db1.query.side_effect = [sizes_q, stale_q]
+    db2 = MagicMock()
+    db2.query.return_value = barcodes_q
+
+    sessions = [
+        MagicMock(__enter__=MagicMock(return_value=db1), __exit__=MagicMock(return_value=False)),
+        MagicMock(__enter__=MagicMock(return_value=db2), __exit__=MagicMock(return_value=False)),
+    ]
+
+    with (
+        patch("magazyn.services.woo_stock_reconcile.WooClient", return_value=client),
+        patch("magazyn.services.woo_stock_reconcile._index_woo_by_sku", return_value=woo_index),
+        patch("magazyn.services.woo_stock_reconcile.get_session", side_effect=sessions),
+    ):
+        stats = reconcile_woo_stock(dry_run=False)
+
+    assert stale.woo_variation_id is None
+    assert owner.woo_variation_id == 201
+    assert stats["remapped"] >= 1
