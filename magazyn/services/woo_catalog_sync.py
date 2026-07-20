@@ -132,6 +132,9 @@ def _sync_one_product(
             if matched_var and not variants[0][0].woo_variation_id:
                 variants[0][0].woo_variation_id = int(matched_var["id"])
 
+    # Stare mapowania czasem wskazuja na variation zamiast parent variable
+    woo_product_id = _resolve_variable_parent_id(client, product, woo_product_id)
+
     category_ids: list[int] = []
     cat_id = ensure_product_category(client, product.category)
     if cat_id:
@@ -180,6 +183,58 @@ def _sync_one_product(
         )
         size.woo_variation_id = int(variation["id"])
         stats["variations"] += 1
+
+
+def _resolve_variable_parent_id(
+    client: WooClient,
+    product: Product,
+    woo_product_id: Optional[int],
+) -> Optional[int]:
+    """Jesli zapisane ID to variation, przepnij na parent variable (albo wyczysc)."""
+    if not woo_product_id:
+        return None
+    try:
+        existing = client.get(f"wp-json/wc/v3/products/{woo_product_id}")
+    except WooClientError as exc:
+        if exc.status_code == 404:
+            product.woo_product_id = None
+            return None
+        raise
+    if not existing:
+        product.woo_product_id = None
+        return None
+
+    ptype = (existing.get("type") or "").lower()
+    if ptype == "variable":
+        return int(existing["id"])
+    if ptype == "variation":
+        parent_id = existing.get("parent_id") or existing.get("parent")
+        if parent_id:
+            parent_id = int(parent_id)
+            product.woo_product_id = parent_id
+            # Zachowaj to ID jako variation, jesli brak
+            for size in product.sizes or []:
+                if not size.woo_variation_id:
+                    size.woo_variation_id = int(existing["id"])
+                    break
+            logger.info(
+                "Woo product %s: variation %s -> parent %s",
+                product.id,
+                woo_product_id,
+                parent_id,
+            )
+            return parent_id
+        product.woo_product_id = None
+        return None
+    # simple / inne — utworzymy nowy variable przy upsert bez id
+    logger.warning(
+        "Woo product %s id=%s type=%s — tworze nowy variable",
+        product.id,
+        woo_product_id,
+        ptype,
+    )
+    product.woo_product_id = None
+    return None
 
 
 def push_stock_for_product_size(product_size_id: int) -> bool:
