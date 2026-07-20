@@ -90,9 +90,19 @@ def create_or_update_variable_product(
     if images:
         payload["images"] = images
 
-    if woo_product_id:
-        return client.put(f"wp-json/wc/v3/products/{woo_product_id}", json=payload)
-    return client.post("wp-json/wc/v3/products", json=payload)
+    try:
+        if woo_product_id:
+            return client.put(f"wp-json/wc/v3/products/{woo_product_id}", json=payload)
+        return client.post("wp-json/wc/v3/products", json=payload)
+    except WooClientError as exc:
+        # Allegro CDN / MIME bywa odrzucane przez WP — zapisz produkt bez zdjec
+        if payload.get("images") and "image" in str(exc).lower():
+            logger.warning("Woo product image rejected, retry without images: %s", exc)
+            payload = {k: v for k, v in payload.items() if k != "images"}
+            if woo_product_id:
+                return client.put(f"wp-json/wc/v3/products/{woo_product_id}", json=payload)
+            return client.post("wp-json/wc/v3/products", json=payload)
+        raise
 
 
 def upsert_variation(

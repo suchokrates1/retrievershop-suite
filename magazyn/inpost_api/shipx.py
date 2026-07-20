@@ -138,7 +138,8 @@ def build_shipment_payload(order_data: dict) -> dict:
         "phone": (order_data.get("phone") or "").replace(" ", "") or "500000000",
     }
 
-    service = "inpost_locker_standard" if is_locker else "inpost_courier_standard"
+    # Konto Woo/InPost ma typowo locker + courier C2C (nie B2B courier_standard)
+    service = "inpost_locker_standard" if is_locker else "inpost_courier_c2c"
     payload: dict[str, Any] = {
         "receiver": receiver,
         "sender": _sender_payload(),
@@ -150,9 +151,15 @@ def build_shipment_payload(order_data: dict) -> dict:
     if is_locker and point_id:
         payload["custom_attributes"] = {"target_point": point_id}
     else:
+        street = order_data.get("delivery_address") or ""
+        building = order_data.get("delivery_building_number") or ""
+        if not building and street:
+            parts = street.rsplit(" ", 1)
+            if len(parts) == 2 and any(ch.isdigit() for ch in parts[1]):
+                street, building = parts[0], parts[1]
         receiver["address"] = {
-            "street": order_data.get("delivery_address") or "",
-            "building_number": "",
+            "street": street,
+            "building_number": building or "1",
             "city": order_data.get("delivery_city") or "",
             "post_code": order_data.get("delivery_postcode") or "",
             "country_code": order_data.get("delivery_country_code") or "PL",
