@@ -189,10 +189,24 @@ def build_shipment_payload(order_data: dict) -> dict:
     return payload
 
 
+def _buy_offer_if_needed(client: InpostShipxClient, shipment_id: str | int, details: dict) -> dict:
+    """C2C: wykup oferte gdy jeszcze nie bought."""
+    offers = details.get("offers") or []
+    if not offers:
+        return details
+    if any((offer.get("status") or "").lower() == "bought" for offer in offers):
+        return details
+    offer_id = offers[0].get("id")
+    if not offer_id:
+        return details
+    client.request("POST", f"/v1/shipments/{shipment_id}/buy", json={"offer_id": offer_id})
+    return client.get_shipment(shipment_id)
+
+
 def create_shipment_and_label(
     order_data: dict,
     *,
-    wait_seconds: float = 8.0,
+    wait_seconds: float = 20.0,
 ) -> dict[str, Any]:
     """Utworz przesylke ShipX i zwroc waybill + PDF bytes."""
     client = InpostShipxClient()
@@ -201,23 +215,42 @@ def create_shipment_and_label(
     if not shipment_id:
         raise InpostShipxError(f"Brak id przesylki w odpowiedzi: {shipment}")
 
-    # Poczekaj na nadanie numeru
+    # C2C / locker: poczekaj na oferte, wykup, potwierdzenie i numer
     waybill = ""
+    details: dict[str, Any] = shipment
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
         details = client.get_shipment(shipment_id)
+        details = _buy_offer_if_needed(client, shipment_id, details)
         waybill = details.get("tracking_number") or ""
         status = (details.get("status") or "").lower()
-        if waybill or status in {"confirmed", "dispatched", "offers_prepared"}:
-            if not waybill:
-                waybill = str(shipment_id)
+        if waybill and status in {"confirmed", "dispatched", "dispatched_by_sender"}:
+            break
+        if status in {"confirmed", "dispatched", "dispatched_by_sender"} and not waybill:
+            waybill = str(shipment_id)
             break
         time.sleep(1.0)
     else:
         details = client.get_shipment(shipment_id)
         waybill = details.get("tracking_number") or str(shipment_id)
 
-    label_pdf = client.get_label_pdf(shipment_id)
+    # Label bywa dostepny dopiero po confirmed
+    label_pdf = b""
+    label_deadline = time.time() + 15.0
+    last_err: Exception | None = None
+    while time.time() < label_deadline:
+        try:
+            label_pdf = client.get_label_pdf(shipment_id)
+            if label_pdf:
+                break
+        except InpostShipxError as exc:
+            last_err = exc
+            time.sleep(1.0)
+    if not label_pdf:
+        raise InpostShipxError(
+            f"Brak etykiety ShipX dla {shipment_id}: {last_err or 'empty'}"
+        )
+
     return {
         "shipment_id": str(shipment_id),
         "waybill": waybill,
