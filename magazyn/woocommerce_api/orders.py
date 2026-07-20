@@ -68,22 +68,46 @@ def parse_woo_order_to_data(order: dict) -> dict[str, Any]:
     ).strip()
 
     address = shipping.get("address_1") or billing.get("address_1") or ""
-    address2 = shipping.get("address_2") or billing.get("address_2") or ""
-    if address2:
+    address2 = (shipping.get("address_2") or billing.get("address_2") or "").strip()
+    # address_2 czesto jest numerem budynku/mieszkania (InPost ShipX)
+    building_number = address2
+    if address2 and not any(ch.isdigit() for ch in address2[:1] + address2):
+        # Jesli to nie wyglada na numer — dolacz do ulicy
         address = f"{address} {address2}".strip()
+        building_number = ""
 
-    # InPost paczkomat — meta z pluginu
+    # InPost paczkomat — meta z pluginu (inpost-for-woocommerce / easypack)
     point_id = ""
     point_name = ""
+    point_keys = {
+        "_parcel_locker",
+        "parcel_locker",
+        "easypack_parcel_locker",
+        "paczkomat",
+        "_easypack_target_point",
+        "easypack_target_point",
+        "_billing_easypack_point_name",
+        "parcel_machine_id",
+        "_parcel_machine_id",
+        "inpost_locker",
+        "_inpost_locker",
+    }
     for meta in order.get("meta_data") or []:
         key = (meta.get("key") or "").lower()
-        value = str(meta.get("value") or "")
-        if key in {"_parcel_locker", "parcel_locker", "easypack_parcel_locker", "paczkomat"}:
-            point_id = value
-        if "parcel_machine" in key or "paczkomat" in key:
-            if not point_id:
+        value = meta.get("value")
+        if isinstance(value, dict):
+            value = value.get("name") or value.get("id") or value.get("point") or ""
+        value = str(value or "").strip()
+        if not value:
+            continue
+        if key in point_keys or "parcel_machine" in key or "paczkomat" in key or "target_point" in key:
+            # Prefer krotki kod paczkomatu (np. WAW123A) nad dlugim opisem
+            if not point_id or (len(value) < len(point_id) and " " not in value):
                 point_id = value
-            point_name = value
+            if " " in value or len(value) > 12:
+                point_name = value
+            elif not point_name:
+                point_name = value
 
     shipping_lines = order.get("shipping_lines") or []
     delivery_method = ""
@@ -139,6 +163,7 @@ def parse_woo_order_to_data(order: dict) -> dict[str, Any]:
         "phone": billing.get("phone") or shipping.get("phone") or None,
         "delivery_company": shipping.get("company") or billing.get("company") or None,
         "delivery_address": address,
+        "delivery_building_number": building_number or None,
         "delivery_postcode": shipping.get("postcode") or billing.get("postcode") or None,
         "delivery_city": shipping.get("city") or billing.get("city") or None,
         "delivery_country": shipping.get("country") or billing.get("country") or "PL",

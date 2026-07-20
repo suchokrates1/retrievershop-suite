@@ -67,7 +67,8 @@ def create_or_update_variable_product(
     woo_product_id: Optional[int],
     name: str,
     description_html: str,
-    image_ids: list[int],
+    image_ids: Optional[list[int]] = None,
+    image_urls: Optional[list[str]] = None,
     attributes: list[dict],
     status: str = "publish",
 ) -> dict:
@@ -79,8 +80,15 @@ def create_or_update_variable_product(
         "short_description": (description_html or "")[:400],
         "attributes": attributes,
     }
-    if image_ids:
-        payload["images"] = [{"id": image_id} for image_id in image_ids]
+    images: list[dict[str, Any]] = []
+    for image_id in image_ids or []:
+        images.append({"id": image_id})
+    # WC REST potrafi pobrac obraz z URL (nie wymaga WP Media auth)
+    for url in image_urls or []:
+        if url:
+            images.append({"src": url})
+    if images:
+        payload["images"] = images
 
     if woo_product_id:
         return client.put(f"wp-json/wc/v3/products/{woo_product_id}", json=payload)
