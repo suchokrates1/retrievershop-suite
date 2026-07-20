@@ -163,8 +163,12 @@ def generate_and_send_invoice(order_id: str) -> dict:
             result["errors"].append(f"Blad pobierania PDF faktury: {exc}")
             # Kontynuuj - faktura wystawiona, ale PDF niedostepny
 
-        # 4. Upload do Allegro (jesli zamowienie z Allegro i mamy PDF)
-        if pdf_data and order.external_order_id:
+        # 4. Upload do Allegro (tylko zamowienia allegro_*)
+        if (
+            pdf_data
+            and order.external_order_id
+            and str(order.order_id or "").startswith("allegro_")
+        ):
             try:
                 upload_invoice_to_allegro(
                     checkout_form_id=order.external_order_id,

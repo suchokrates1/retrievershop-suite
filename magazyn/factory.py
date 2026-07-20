@@ -15,6 +15,7 @@ from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
 from .orders import bp as orders_bp
+from .blueprints.woocommerce_webhooks import bp as woocommerce_webhooks_bp
 from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import promo_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import billing_types_scheduler  # noqa: F401 - publiczny import kompatybilnosci
@@ -121,6 +122,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(stats_bp)
     app.register_blueprint(integration_proxy_bp)
     app.register_blueprint(orders_bp)
+    app.register_blueprint(woocommerce_webhooks_bp)
     app.register_blueprint(discussions_bp)
     app.register_blueprint(scanning_bp)
     app.register_blueprint(stocktake_bp)

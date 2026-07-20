@@ -28,6 +28,7 @@ class OrderSyncCycle:
         with app.app_context():
             self.run_data_integrity_canary()
             self.run_allegro_events_sync(app)
+            self.run_woo_orders_sync()
             self.run_parcel_tracking_sync()
             self.run_profit_cache_refresh(app)
             self.run_allegro_fulfillment_sync(app)
@@ -62,6 +63,16 @@ class OrderSyncCycle:
             f"synced={ev_stats['orders_synced']}, cancelled={ev_stats['orders_cancelled']}, "
             f"errors={ev_stats['errors']}"
         )
+
+    def run_woo_orders_sync(self) -> None:
+        from .woo_order_sync import sync_woo_orders
+
+        self.logger.info("Starting WooCommerce orders sync")
+        try:
+            stats = sync_woo_orders()
+            self.logger.info("WooCommerce orders sync completed: %s", stats)
+        except Exception as exc:
+            self.logger.error("WooCommerce orders sync failed: %s", exc, exc_info=True)
 
     def run_parcel_tracking_sync(self) -> None:
         from ..parcel_tracking import sync_parcel_statuses
@@ -137,10 +148,22 @@ class OrderSyncCycle:
 
     def run_daily_allegro_offer_sync(self) -> None:
         from ..allegro_sync import sync_offers
+        from .allegro_offer_content import sync_linked_offers_content
+        from .woo_catalog_sync import sync_catalog_to_woo
 
         self.logger.info("Starting daily Allegro offer sync")
         offer_stats = sync_offers()
         self.logger.info(f"Daily offer sync completed: {offer_stats}")
+        try:
+            content_stats = sync_linked_offers_content(limit=80)
+            self.logger.info("Allegro offer content sync: %s", content_stats)
+        except Exception as exc:
+            self.logger.error("Allegro content sync failed: %s", exc, exc_info=True)
+        try:
+            woo_stats = sync_catalog_to_woo(limit=300, refresh_content=False)
+            self.logger.info("Woo catalog sync: %s", woo_stats)
+        except Exception as exc:
+            self.logger.error("Woo catalog sync failed: %s", exc, exc_info=True)
 
     def run_daily_promo_sync(self) -> None:
         from .allegro_promotions import get_promotions_summary

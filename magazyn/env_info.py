@@ -125,4 +125,28 @@ ENV_INFO = {
         "Tresc autorespondera",
         "Tresc automatycznej odpowiedzi wysylanej do kupujacych",
     ),
+    "WOO_URL": (
+        "URL sklepu WooCommerce",
+        "Np. https://retrievershop.pl/",
+    ),
+    "WOO_CONSUMER_KEY": (
+        "WooCommerce Consumer Key",
+        "Klucz REST API (ck_...)",
+    ),
+    "WOO_CONSUMER_SECRET": (
+        "WooCommerce Consumer Secret",
+        "Sekret REST API (cs_...)",
+    ),
+    "WOO_WEBHOOK_SECRET": (
+        "WooCommerce Webhook Secret",
+        "Secret do weryfikacji podpisu X-WC-Webhook-Signature",
+    ),
+    "INPOST_TOKEN": (
+        "InPost ShipX Token",
+        "Bearer token API ShipX (etykiety Woo)",
+    ),
+    "INPOST_ORGANIZATION_ID": (
+        "InPost Organization ID",
+        "ID organizacji w panelu InPost / ShipX",
+    ),
 }

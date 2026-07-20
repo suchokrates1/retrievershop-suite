@@ -177,6 +177,12 @@ class PrintLabelService:
                 self.logger.warning("  Brak shipment_id dla zamowienia %s", order_id)
                 continue
 
+            # InPost ShipX (Woo) — etykieta juz w payloadzie
+            embedded = package.get("label_pdf_b64")
+            if embedded:
+                labels.append((str(embedded), package.get("label_ext") or "pdf"))
+                continue
+
             label_data, extension = self._fetch_package_label(
                 order_id,
                 str(shipment_id),

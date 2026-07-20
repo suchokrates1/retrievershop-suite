@@ -132,12 +132,14 @@ def _process_pending_invoices():
     cutoff = int(time.time()) - 7 * 24 * 3600
 
     with get_session() as db:
+        from sqlalchemy import or_
+
         orders = (
             db.query(Order)
             .filter(
                 Order.wfirma_invoice_id.is_(None),
                 Order.date_add >= cutoff,
-                Order.order_id.like("allegro_%"),
+                or_(Order.order_id.like("allegro_%"), Order.order_id.like("woo_%")),
             )
             .all()
         )
