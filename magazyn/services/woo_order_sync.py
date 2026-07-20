@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+
+from sqlalchemy import desc
 
 from ..db import get_session
 from ..models.orders import Order, OrderStatusLog
@@ -41,6 +44,21 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
 
     with get_session() as db:
         existing = db.query(Order).filter(Order.order_id == order_data["order_id"]).first()
+        if existing:
+            latest = (
+                db.query(OrderStatusLog)
+                .filter(OrderStatusLog.order_id == existing.order_id)
+                .order_by(desc(OrderStatusLog.timestamp))
+                .first()
+            )
+            # Nie wskrzeszaj zamowien anulowanych w magazynie (stare processing z Woo)
+            if latest and latest.status == "anulowano":
+                return {
+                    "skipped": True,
+                    "reason": "anulowano_w_magazynie",
+                    "order_id": order_data["order_id"],
+                }
+
         is_new = existing is None
         sync_order_from_data(db, order_data)
 
@@ -68,7 +86,7 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
 
 
 def sync_woo_orders(*, days: int = 14) -> dict[str, int]:
-    """Poll Woo API i zaimportuj zamowienia processing/completed."""
+    """Poll Woo API i zaimportuj zamowienia processing/completed z ostatnich N dni."""
     stats = {"fetched": 0, "imported": 0, "skipped": 0, "errors": 0}
     try:
         client = WooClient()
@@ -76,8 +94,14 @@ def sync_woo_orders(*, days: int = 14) -> dict[str, int]:
         logger.error("Woo order sync: %s", exc)
         return {**stats, "errors": 1}
 
+    after = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
     try:
-        orders = fetch_orders(client, status="processing,completed", per_page=50)
+        orders = fetch_orders(
+            client,
+            status="processing,completed",
+            after=after,
+            per_page=50,
+        )
     except Exception:
         logger.exception("Blad pobierania zamowien Woo")
         return {**stats, "errors": 1}
