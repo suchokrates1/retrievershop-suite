@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
+from ..domain.order_platform import is_allegro_order
 from .print_agent_delivery import resolve_delivery_service_id
 from .shipment_waybills import extract_waybills_from_shipment_details
 
@@ -18,7 +19,7 @@ def get_order_packages_from_shipment_management(
     logger,
 ) -> List[Dict[str, Any]]:
     """Zwroc zapisane albo nowo utworzone przesylki Shipment Management dla zamowienia."""
-    checkout_form_id = order_id[len("allegro_"):] if order_id.startswith("allegro_") else order_id
+    checkout_form_id = order_id[len("allegro_"):] if is_allegro_order(order_id) else order_id
     state_key = f"sm_shipment:{order_id}"
 
     stored_shipment_id = load_state_value(state_key)

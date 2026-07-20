@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import requests
 
@@ -207,13 +207,20 @@ def create_shipment_and_label(
     order_data: dict,
     *,
     wait_seconds: float = 20.0,
+    on_shipment_created: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    """Utworz przesylke ShipX i zwroc waybill + PDF bytes."""
+    """Utworz przesylke ShipX i zwroc waybill + PDF bytes.
+
+    ``on_shipment_created`` wywolywany zaraz po otrzymaniu id (przed waitem
+    na confirmed/label) — pozwala zapisac id i uniknac duplikatow przy retry.
+    """
     client = InpostShipxClient()
     shipment = client.create_shipment(build_shipment_payload(order_data))
     shipment_id = shipment.get("id")
     if not shipment_id:
         raise InpostShipxError(f"Brak id przesylki w odpowiedzi: {shipment}")
+    if on_shipment_created:
+        on_shipment_created(str(shipment_id))
 
     # C2C / locker: poczekaj na oferte, wykup, potwierdzenie i numer
     waybill = ""

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..allegro_api import fetch_allegro_order_detail
+from ..domain.order_platform import is_woo_order
 from ..settings_store import settings_store
 from .print_agent_errors import ApiError, PrintError
 from .print_agent_labels import CollectedLabels, PrintLabelService
@@ -17,6 +18,7 @@ from .print_agent_runtime_shipments import (
 from .print_agent_shipment_creation import PrintShipmentCreator
 from .print_agent_shipments import resolve_carrier_id
 from .printing import PrintCommandError
+from .woo_inpost_labels import get_woo_inpost_packages
 
 
 def maybe_log_api_summary(agent) -> None:
@@ -41,8 +43,8 @@ def get_orders(agent) -> List[Dict[str, Any]]:
 
 
 def get_order_packages(agent, order_id: str, *, get_shipment_details, create_allegro_shipment):
-    if str(order_id).startswith("woo_"):
-        return _get_woo_inpost_packages(agent, order_id)
+    if is_woo_order(order_id):
+        return get_woo_inpost_packages(agent, order_id)
 
     return get_order_packages_from_shipment_management(
         order_id,
@@ -52,75 +54,6 @@ def get_order_packages(agent, order_id: str, *, get_shipment_details, create_all
         create_allegro_shipment=create_allegro_shipment,
         logger=agent.logger,
     )
-
-
-def _get_woo_inpost_packages(agent, order_id: str) -> List[Dict[str, Any]]:
-    """Utworz etykiete InPost ShipX dla zamowienia WooCommerce."""
-    import base64
-
-    from ..inpost_api import InpostShipxError, create_shipment_and_label
-    from ..woocommerce_api import WooClient, WooClientError
-    from ..woocommerce_api.orders import update_order_tracking
-
-    state_key = f"inpost_shipment:{order_id}"
-    stored = agent._load_state_value(state_key)
-    order_data = getattr(agent, "last_order_data", None) or {}
-    if order_data.get("order_id") != order_id:
-        order_data = {"order_id": order_id, **order_data}
-
-    from ..inpost_api.shipx import InpostShipxClient
-
-    if stored:
-        agent.logger.info("Woo %s: pobieram etykiete InPost %s", order_id, stored)
-        try:
-            label_pdf = InpostShipxClient().get_label_pdf(stored)
-        except InpostShipxError as exc:
-            raise ApiError(str(exc)) from exc
-        return [
-            {
-                "shipment_id": stored,
-                "waybill": order_data.get("delivery_package_nr") or stored,
-                "carrier_id": "INPOST",
-                "courier_code": "INPOST",
-                "courier_package_nr": order_data.get("delivery_package_nr") or stored,
-                "label_pdf_b64": base64.b64encode(label_pdf).decode("ascii"),
-                "label_ext": "pdf",
-            }
-        ]
-
-    try:
-        result = create_shipment_and_label(order_data)
-    except InpostShipxError as exc:
-        agent.logger.error("InPost ShipX blad dla %s: %s", order_id, exc)
-        raise ApiError(str(exc)) from exc
-
-    agent._save_state_value(state_key, result["shipment_id"])
-    label_b64 = base64.b64encode(result["label_pdf"]).decode("ascii")
-
-    # Tracking z powrotem do Woo
-    woo_numeric = str(order_id).removeprefix("woo_")
-    try:
-        update_order_tracking(
-            WooClient(),
-            woo_numeric,
-            tracking_number=result["waybill"],
-            carrier="InPost",
-        )
-    except (WooClientError, Exception) as exc:
-        agent.logger.warning("Nie zaktualizowano trackingu Woo dla %s: %s", order_id, exc)
-
-    return [
-        {
-            "shipment_id": result["shipment_id"],
-            "waybill": result["waybill"],
-            "waybills": [result["waybill"]],
-            "carrier_id": "INPOST",
-            "courier_code": "INPOST",
-            "courier_package_nr": result["waybill"],
-            "label_pdf_b64": label_b64,
-            "label_ext": "pdf",
-        }
-    ]
 
 
 def create_allegro_shipment(agent, order_id: str, checkout_form_id: str) -> List[Dict[str, Any]]:

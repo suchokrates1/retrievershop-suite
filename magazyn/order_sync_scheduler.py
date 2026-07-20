@@ -45,8 +45,10 @@ def _refresh_order_profit_cache(app):
         access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
 
         with get_session() as db:
+            # Billing Allegro dotyczy wylacznie zamowien allegro_* (nie woo_/manual_)
             orders = (
                 db.query(Order)
+                .filter(Order.order_id.like("allegro_%"))
                 .filter(
                     db_or(
                         Order.real_profit_amount.is_(None),
