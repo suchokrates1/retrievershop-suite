@@ -7,6 +7,8 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import or_
+
 from ..db import get_session
 from ..models.allegro import AllegroOffer
 from ..models.products import Product, ProductSize
@@ -31,7 +33,10 @@ def sync_catalog_to_woo(
     limit: int = 200,
     refresh_content: bool = True,
 ) -> dict[str, int]:
-    """Upsert produktow variable + wariantow po EAN do Woo."""
+    """Upsert produktow variable + wariantow po EAN do Woo.
+
+    Bierze produkty z barcode oraz (ACTIVE Allegro LUB stock>0 LUB juz zmapowane).
+    """
     stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
     try:
         client = WooClient()
@@ -43,8 +48,16 @@ def sync_catalog_to_woo(
         q = (
             db.query(Product)
             .join(ProductSize)
-            .join(AllegroOffer, AllegroOffer.product_size_id == ProductSize.id)
-            .filter(AllegroOffer.publication_status == "ACTIVE")
+            .outerjoin(AllegroOffer, AllegroOffer.product_size_id == ProductSize.id)
+            .filter(
+                ProductSize.barcode.isnot(None),
+                ProductSize.barcode != "",
+                or_(
+                    AllegroOffer.publication_status == "ACTIVE",
+                    ProductSize.quantity > 0,
+                    Product.woo_product_id.isnot(None),
+                ),
+            )
             .distinct()
         )
         if product_ids:
@@ -74,9 +87,11 @@ def _sync_one_product(
         .filter(ProductSize.product_id == product.id)
         .all()
     )
-    # Tylko rozmiary z EAN i aktywna oferta
-    variants: list[tuple[ProductSize, AllegroOffer]] = []
+    # Rozmiary z EAN: ACTIVE oferta, albo stock/zmapowane (cena z ostatniej oferty)
+    variants: list[tuple[ProductSize, AllegroOffer | None]] = []
     for size in sizes:
+        if not size.barcode:
+            continue
         offer = (
             db.query(AllegroOffer)
             .filter(
@@ -86,22 +101,28 @@ def _sync_one_product(
             .order_by(AllegroOffer.synced_at.desc().nullslast())
             .first()
         )
-        if not offer or not size.barcode:
-            continue
-        variants.append((size, offer))
+        if not offer:
+            offer = (
+                db.query(AllegroOffer)
+                .filter(AllegroOffer.product_size_id == size.id)
+                .order_by(AllegroOffer.synced_at.desc().nullslast())
+                .first()
+            )
+        if offer or size.quantity > 0 or size.woo_variation_id or product.woo_product_id:
+            variants.append((size, offer))
 
     if not variants:
         stats["skipped"] += 1
         return
 
-    primary_offer = variants[0][1]
-    if refresh_content:
+    primary_offer = next((o for _, o in variants if o is not None), None)
+    if primary_offer and refresh_content:
         sync_offer_content(primary_offer.offer_id)
         db.refresh(primary_offer)
 
-    description = primary_offer.description_html or ""
+    description = (primary_offer.description_html if primary_offer else None) or ""
     image_urls = []
-    if primary_offer.image_urls:
+    if primary_offer and primary_offer.image_urls:
         try:
             image_urls = json.loads(primary_offer.image_urls)
         except json.JSONDecodeError:
@@ -115,7 +136,7 @@ def _sync_one_product(
         color=product.color,
         size_options=size_options,
     )
-    name = primary_offer.title or product.name
+    name = (primary_offer.title if primary_offer else None) or product.name
     # Usun rozmiar z konca tytulu Allegro jesli obecny
     for size_opt in size_options:
         if name.endswith(f" {size_opt}"):
@@ -149,7 +170,9 @@ def _sync_one_product(
             media_id = upload_product_image_from_url(
                 client,
                 url,
-                filename=f"allegro_{primary_offer.offer_id}_{idx}.jpg",
+                filename=f"allegro_{primary_offer.offer_id}_{idx}.jpg"
+                if primary_offer
+                else f"mag_{product.id}_{idx}.jpg",
             )
             if media_id:
                 image_ids.append(media_id)
@@ -170,7 +193,8 @@ def _sync_one_product(
     stats["products"] += 1
 
     for size, offer in variants:
-        price = str(Decimal(str(offer.price)).quantize(Decimal("0.01")))
+        price_src = offer.price if offer is not None else "0.00"
+        price = str(Decimal(str(price_src)).quantize(Decimal("0.01")))
         variation = upsert_variation(
             client,
             woo_product_id,
@@ -183,6 +207,11 @@ def _sync_one_product(
         )
         size.woo_variation_id = int(variation["id"])
         stats["variations"] += 1
+
+    # Dopchnij stany wszystkich zmapowanych rozmiarow produktu (takze poza variants)
+    for size in sizes:
+        if size.woo_variation_id and size.barcode:
+            maybe_push_woo_stock(size.id, quantity=int(size.quantity or 0))
 
 
 def _resolve_variable_parent_id(
@@ -245,8 +274,16 @@ def _resolve_variable_parent_id(
     return None
 
 
-def push_stock_for_product_size(product_size_id: int) -> bool:
-    """Wypchnij stan jednego wariantu do Woo."""
+def push_stock_for_product_size(
+    product_size_id: int,
+    *,
+    quantity: Optional[int] = None,
+) -> bool:
+    """Wypchnij stan jednego wariantu do Woo.
+
+    ``quantity`` — opcjonalnie podaj jawnie (np. przed commit sesji zrodlowej),
+    inaczej odczyt z DB.
+    """
     try:
         client = WooClient()
     except WooClientError:
@@ -262,16 +299,27 @@ def push_stock_for_product_size(product_size_id: int) -> bool:
             .first()
         )
         price = str(offer.price) if offer else "0.00"
+        stock_qty = int(size.quantity or 0) if quantity is None else max(0, int(quantity))
         upsert_variation(
             client,
             size.product.woo_product_id,
             variation_id=size.woo_variation_id,
             sku=size.barcode or "",
             regular_price=price,
-            stock_quantity=size.quantity or 0,
+            stock_quantity=stock_qty,
             size=size.size,
         )
         return True
 
 
-__all__ = ["push_stock_for_product_size", "sync_catalog_to_woo"]
+def maybe_push_woo_stock(product_size_id: int | None, *, quantity: Optional[int] = None) -> None:
+    """Best-effort push stanu do Woo; nigdy nie rzuca do callera."""
+    if not product_size_id:
+        return
+    try:
+        push_stock_for_product_size(int(product_size_id), quantity=quantity)
+    except Exception:
+        logger.exception("Nie zaktualizowano stanu Woo dla product_size_id=%s", product_size_id)
+
+
+__all__ = ["maybe_push_woo_stock", "push_stock_for_product_size", "sync_catalog_to_woo"]

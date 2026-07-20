@@ -164,6 +164,13 @@ class OrderSyncCycle:
             self.logger.info("Woo catalog sync: %s", woo_stats)
         except Exception as exc:
             self.logger.error("Woo catalog sync failed: %s", exc, exc_info=True)
+        try:
+            from .woo_stock_reconcile import reconcile_woo_stock
+
+            recon = reconcile_woo_stock(dry_run=False)
+            self.logger.info("Woo stock reconcile: %s", recon)
+        except Exception as exc:
+            self.logger.error("Woo stock reconcile failed: %s", exc, exc_info=True)
 
     def run_daily_promo_sync(self) -> None:
         from .allegro_promotions import get_promotions_summary
