@@ -13,6 +13,7 @@ import json
 import logging
 
 from ..db import get_session
+from ..domain.order_platform import is_allegro_order
 from ..models.orders import Order
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,7 @@ def generate_and_send_invoice(order_id: str) -> dict:
         if (
             pdf_data
             and order.external_order_id
-            and str(order.order_id or "").startswith("allegro_")
+            and is_allegro_order(order)
         ):
             try:
                 upload_invoice_to_allegro(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from ..domain.order_platform import is_manual_order
 from .order_detail_builder import build_order_detail_context
 from .order_presentation import _unix_to_datetime
 from .tracking import get_tracking_url
@@ -38,7 +39,7 @@ def build_order_detail_view_context(db, order, *, app_base_url: str = "") -> dic
         }
     )
     context.update(_email_context(order.emails_sent))
-    context["is_manual_order"] = order.order_id.startswith("manual_")
+    context["is_manual_order"] = is_manual_order(order)
     return context
 
 

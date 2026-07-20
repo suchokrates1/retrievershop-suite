@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy import desc, func
 
 from ..db import get_session
+from ..domain.order_platform import is_allegro_order, is_manual_order, is_woo_order
 from ..models.orders import Order, OrderStatusLog
 
 logger = logging.getLogger(__name__)
@@ -30,13 +31,10 @@ def collect_printable_orders(
         recent_orders = db.query(Order).filter(Order.date_add >= week_ago).all()
 
         for order in recent_orders:
-            if order.order_id.startswith("manual_"):
+            if is_manual_order(order):
                 continue
             # Woo i Allegro w kolejce; inne platformy reczne pomijamy
-            if not (
-                order.order_id.startswith("allegro_")
-                or order.order_id.startswith("woo_")
-            ):
+            if not (is_allegro_order(order) or is_woo_order(order)):
                 continue
 
             # Reczna etykieta / juz nadana paczka — nie tworzyc kolejnej.

@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple
 
+from ..domain.order_platform import is_allegro_order
 from .label_barcode_extract import (
     extract_dhl_box_barcodes_from_label_pdf,
     needs_dhl_box_label_barcode_extraction,
@@ -86,7 +87,7 @@ class PrintLabelService:
     ) -> Tuple[str, str]:
         """Anuluj wygasla przesylke, utworz nowa i pobierz etykiete."""
         checkout_form_id = order_id
-        if order_id.startswith("allegro_"):
+        if is_allegro_order(order_id):
             checkout_form_id = order_id[len("allegro_"):]
 
         try:

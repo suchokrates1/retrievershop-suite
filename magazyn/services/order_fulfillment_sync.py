@@ -13,6 +13,7 @@ from ..allegro_api.orders import (
     parse_allegro_order_to_data,
 )
 from ..db import get_session
+from ..domain.order_platform import is_allegro_order
 from ..models.orders import Order, OrderStatusLog
 from .order_status import add_order_status
 
@@ -61,6 +62,7 @@ def sync_allegro_fulfillment(app=None, *, log: logging.Logger | None = None) -> 
                 )
                 .filter(
                     OrderStatusLog.status.in_(ACTIVE_FULFILLMENT_STATUSES),
+                    Order.order_id.like("allegro_%"),
                     Order.external_order_id.isnot(None),
                     Order.external_order_id != "",
                 )
@@ -100,6 +102,9 @@ def sync_allegro_fulfillment(app=None, *, log: logging.Logger | None = None) -> 
 
 
 def _sync_order_fulfillment(db, order: Order, log: logging.Logger) -> str:
+    if not is_allegro_order(order):
+        return "skipped"
+
     detail = fetch_allegro_order_detail(order.external_order_id)
 
     parsed = parse_allegro_order_to_data(detail)

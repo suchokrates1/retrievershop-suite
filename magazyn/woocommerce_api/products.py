@@ -34,6 +34,57 @@ def find_product_by_ean(client: WooClient, ean: str) -> Optional[dict]:
     return None
 
 
+def _wp_media_auth(client: WooClient):
+    from ..settings_store import settings_store
+
+    wp_user = settings_store.get("WP_APP_USER") or ""
+    wp_pass = settings_store.get("WP_APP_PASSWORD") or ""
+    if wp_user and wp_pass:
+        return (wp_user, wp_pass)
+    return (client.consumer_key, client.consumer_secret)
+
+
+def find_media_id_by_filename(client: WooClient, filename: str) -> Optional[int]:
+    """Szukaj istniejacego attachmentu WP po nazwie pliku (idempotencja syncu)."""
+    if not filename:
+        return None
+    media_url = client.base_url + "wp-json/wp/v2/media"
+    try:
+        response = requests.get(
+            media_url,
+            auth=_wp_media_auth(client),
+            params={"search": filename, "per_page": 20},
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            return None
+        for item in response.json() or []:
+            source = (item.get("source_url") or "").rsplit("/", 1)[-1]
+            slug = item.get("slug") or ""
+            title = ((item.get("title") or {}).get("rendered") or "")
+            if filename in {source, f"{slug}.jpg", title, f"{title}.jpg"}:
+                return int(item["id"])
+            if filename.rsplit(".", 1)[0] == slug:
+                return int(item["id"])
+    except Exception as exc:
+        logger.debug("Media search failed for %s: %s", filename, exc)
+    return None
+
+
+def get_product_image_ids(client: WooClient, woo_product_id: int) -> list[int]:
+    """Zwraca ID zdjec juz podpietych do produktu Woo."""
+    try:
+        product = client.get(f"wp-json/wc/v3/products/{woo_product_id}")
+    except WooClientError:
+        return []
+    ids: list[int] = []
+    for image in product.get("images") or []:
+        image_id = image.get("id")
+        if image_id:
+            ids.append(int(image_id))
+    return ids
+
+
 def upload_product_image_from_url(client: WooClient, image_url: str, filename: str) -> Optional[int]:
     """Pobierz obraz z URL i wgraj do WP Media Library. Zwraca attachment ID.
 
@@ -41,7 +92,12 @@ def upload_product_image_from_url(client: WooClient, image_url: str, filename: s
     Auth: Application Password (``WP_APP_USER`` / ``WP_APP_PASSWORD``), bo
     klucze WooCommerce REST nie maja prawa do ``wp/v2/media``.
     """
-    from ..settings_store import settings_store
+    if not filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+        filename = f"{filename}.jpg"
+
+    existing_id = find_media_id_by_filename(client, filename)
+    if existing_id:
+        return existing_id
 
     try:
         img = requests.get(
@@ -54,20 +110,14 @@ def upload_product_image_from_url(client: WooClient, image_url: str, filename: s
         logger.warning("Nie pobrano obrazu %s: %s", image_url, exc)
         return None
 
-    if not filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
-        filename = f"{filename}.jpg"
     content_type = img.headers.get("Content-Type") or "image/jpeg"
     if "octet-stream" in content_type or not content_type.startswith("image/"):
         content_type = "image/jpeg"
 
     media_url = client.base_url + "wp-json/wp/v2/media"
-    wp_user = settings_store.get("WP_APP_USER") or ""
-    wp_pass = settings_store.get("WP_APP_PASSWORD") or ""
-    auth = (wp_user, wp_pass) if wp_user and wp_pass else (client.consumer_key, client.consumer_secret)
-
     response = requests.post(
         media_url,
-        auth=auth,
+        auth=_wp_media_auth(client),
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Type": content_type,

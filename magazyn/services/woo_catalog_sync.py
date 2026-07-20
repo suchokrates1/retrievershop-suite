@@ -14,6 +14,7 @@ from ..woocommerce_api import WooClient, WooClientError
 from ..woocommerce_api.products import (
     create_or_update_variable_product,
     find_product_by_ean,
+    get_product_image_ids,
     upload_product_image_from_url,
     upsert_variation,
 )
@@ -104,16 +105,6 @@ def _sync_one_product(
         except json.JSONDecodeError:
             image_urls = []
 
-    image_ids: list[int] = []
-    for idx, url in enumerate(image_urls[:8]):
-        media_id = upload_product_image_from_url(
-            client,
-            url,
-            filename=f"allegro_{primary_offer.offer_id}_{idx}.jpg",
-        )
-        if media_id:
-            image_ids.append(media_id)
-
     size_options = sorted({size.size for size, _ in variants})
     attributes = [
         {
@@ -139,6 +130,20 @@ def _sync_one_product(
             matched_var = matched.get("_matched_variation")
             if matched_var and not variants[0][0].woo_variation_id:
                 variants[0][0].woo_variation_id = int(matched_var["id"])
+
+    # Nie re-uploaduj zdjec gdy produkt Woo juz je ma
+    image_ids: list[int] = []
+    if woo_product_id:
+        image_ids = get_product_image_ids(client, woo_product_id)
+    if not image_ids:
+        for idx, url in enumerate(image_urls[:8]):
+            media_id = upload_product_image_from_url(
+                client,
+                url,
+                filename=f"allegro_{primary_offer.offer_id}_{idx}.jpg",
+            )
+            if media_id:
+                image_ids.append(media_id)
 
     product_payload = create_or_update_variable_product(
         client,
