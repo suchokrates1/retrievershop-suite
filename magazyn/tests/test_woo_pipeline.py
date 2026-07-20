@@ -134,6 +134,7 @@ def test_catalog_reuses_existing_product_images():
     stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
 
     with (
+        patch.object(sync_mod, "_resolve_variable_parent_id", return_value=55),
         patch.object(sync_mod, "get_product_image_ids", return_value=[777]) as get_imgs,
         patch.object(sync_mod, "upload_product_image_from_url") as upload,
         patch.object(sync_mod, "build_product_attributes", return_value=[{"name": "Rozmiar", "options": ["L"]}]),
