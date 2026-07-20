@@ -14,12 +14,29 @@ def test_resolve_keeps_variable_parent():
 
 def test_resolve_variation_to_parent():
     client = MagicMock()
-    client.get.return_value = {"id": 100, "type": "variation", "parent_id": 50}
-    size = SimpleNamespace(woo_variation_id=None)
+    client.get.return_value = {
+        "id": 100,
+        "type": "variation",
+        "parent_id": 50,
+        "sku": "5901234567890",
+    }
+    matched = SimpleNamespace(woo_variation_id=None, barcode="5901234567890")
+    empty = SimpleNamespace(woo_variation_id=None, barcode=None)
+    product = SimpleNamespace(id=1, woo_product_id=100, sizes=[empty, matched])
+    assert _resolve_variable_parent_id(client, product, 100) == 50
+    assert product.woo_product_id == 50
+    assert matched.woo_variation_id == 100
+    assert empty.woo_variation_id is None
+
+
+def test_resolve_variation_without_sku_match_does_not_guess_size():
+    client = MagicMock()
+    client.get.return_value = {"id": 100, "type": "variation", "parent_id": 50, "sku": ""}
+    size = SimpleNamespace(woo_variation_id=None, barcode=None)
     product = SimpleNamespace(id=1, woo_product_id=100, sizes=[size])
     assert _resolve_variable_parent_id(client, product, 100) == 50
     assert product.woo_product_id == 50
-    assert size.woo_variation_id == 100
+    assert size.woo_variation_id is None
 
 
 def test_resolve_orphan_variation_clears_id():
