@@ -34,6 +34,7 @@ SETTINGS_GROUPS = {
     "WOO_WEBHOOK_SECRET": ("WooCommerce", "bi-bag"),
     "INPOST_TOKEN": ("InPost ShipX", "bi-truck"),
     "INPOST_ORGANIZATION_ID": ("InPost ShipX", "bi-truck"),
+    "INPOST_SENDING_METHOD": ("InPost ShipX", "bi-truck"),
     "WFIRMA_ACCESS_KEY": ("wFirma", "bi-receipt"),
     "WFIRMA_SECRET_KEY": ("wFirma", "bi-receipt"),
     "WFIRMA_APP_KEY": ("wFirma", "bi-receipt"),

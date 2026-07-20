@@ -116,6 +116,16 @@ def _sender_payload() -> dict:
     }
 
 
+def _normalize_pl_phone(raw: str) -> str:
+    """ShipX oczekuje 9 cyfr PL (bez +48)."""
+    digits = "".join(ch for ch in (raw or "") if ch.isdigit())
+    if digits.startswith("48") and len(digits) >= 11:
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) == 10:
+        digits = digits[1:]
+    return digits or "500000000"
+
+
 def build_shipment_payload(order_data: dict) -> dict:
     """Zbuduj payload ShipX z danych zamowienia magazynu."""
     point_id = (order_data.get("delivery_point_id") or "").strip()
@@ -135,21 +145,26 @@ def build_shipment_payload(order_data: dict) -> dict:
         "first_name": first,
         "last_name": last,
         "email": order_data.get("email") or settings_store.get("SENDER_EMAIL"),
-        "phone": (order_data.get("phone") or "").replace(" ", "") or "500000000",
+        "phone": _normalize_pl_phone(order_data.get("phone") or ""),
     }
 
     # Konto Woo/InPost ma typowo locker + courier C2C (nie B2B courier_standard)
     service = "inpost_locker_standard" if is_locker else "inpost_courier_c2c"
+    # C2C wymaga sending_method (nadanie w paczkomacie / zlecenie odbioru)
+    sending_method = (
+        settings_store.get("INPOST_SENDING_METHOD") or "parcel_locker"
+    ).strip()
     payload: dict[str, Any] = {
         "receiver": receiver,
         "sender": _sender_payload(),
         "parcels": {"template": "small"},
         "service": service,
         "reference": order_data.get("order_id") or "",
+        "custom_attributes": {"sending_method": sending_method},
     }
 
     if is_locker and point_id:
-        payload["custom_attributes"] = {"target_point": point_id}
+        payload["custom_attributes"]["target_point"] = point_id
     else:
         street = order_data.get("delivery_address") or ""
         building = order_data.get("delivery_building_number") or ""

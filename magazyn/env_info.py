@@ -149,4 +149,8 @@ ENV_INFO = {
         "InPost Organization ID",
         "ID organizacji w panelu InPost / ShipX",
     ),
+    "INPOST_SENDING_METHOD": (
+        "InPost sending_method",
+        "Sposob nadania C2C: parcel_locker lub dispatch_order",
+    ),
 }
