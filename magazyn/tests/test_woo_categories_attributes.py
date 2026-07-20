@@ -129,6 +129,7 @@ def test_sync_one_product_sends_categories_and_attributes():
     stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
 
     with (
+        patch.object(sync_mod, "_resolve_variable_parent_id", return_value=55),
         patch.object(sync_mod, "build_product_attributes", return_value=[{"id": 2, "options": ["L"]}]) as build_attrs,
         patch.object(sync_mod, "ensure_product_category", return_value=53) as ensure_cat,
         patch.object(sync_mod, "get_product_image_ids", return_value=[777]),
