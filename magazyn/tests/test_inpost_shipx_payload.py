@@ -35,6 +35,6 @@ def test_build_shipment_payload_courier_from_shipping_key():
             "payment_done": 55.5,
         }
     )
-    assert payload["service"] == "inpost_courier_standard"
+    assert payload["service"] == "inpost_courier_c2c"
     assert payload["receiver"]["address"]["city"] == "Krakow"
     assert payload["cod"]["amount"] == 55.5
