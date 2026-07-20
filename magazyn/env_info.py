@@ -141,6 +141,14 @@ ENV_INFO = {
         "WooCommerce Webhook Secret",
         "Secret do weryfikacji podpisu X-WC-Webhook-Signature",
     ),
+    "WP_APP_USER": (
+        "WordPress Application User",
+        "Login admina WP do uploadu mediow (np. retrievershop)",
+    ),
+    "WP_APP_PASSWORD": (
+        "WordPress Application Password",
+        "Haslo aplikacji WP (Uzytkownicy → Profil → Hasla aplikacji)",
+    ),
     "INPOST_TOKEN": (
         "InPost ShipX Token",
         "Bearer token API ShipX (etykiety Woo)",
