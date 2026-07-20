@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from html import escape
 from typing import Any, Optional
 
-from .. import allegro_api
+from ..allegro_api.offers import get_offer_details
 from ..db import get_session
 from ..models.allegro import AllegroOffer
 
@@ -86,7 +86,7 @@ def sync_offer_content(
             except ValueError:
                 pass
 
-        details = allegro_api.get_offer_details(str(offer_id))
+        details = get_offer_details(str(offer_id))
         if not details.get("success"):
             logger.warning(
                 "Nie udalo sie pobrac tresci oferty %s: %s",
