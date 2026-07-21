@@ -1,0 +1,20 @@
+Cześć{% if first_name %} {{ first_name }}{% endif %}!
+
+Twój rabat {{ discount_percent }}% już na Ciebie czeka.
+
+Dzięki za zapis do newslettera Retriever Shop. Oto jednorazowy kupon na pierwsze zamówienie:
+
+{{ coupon_code }}
+
+Kod jest przypisany do {{ email }}, ważny {{ valid_days }} dni i działa jednorazowo.
+
+Odbierz rabat w sklepie: {{ shop_url }}
+
+Gwarancja najniższej ceny — jeśli znajdziesz ten sam produkt taniej w innym sklepie w ciągu 14 dni od zakupu, zwrócimy różnicę.
+
+Facebook: https://www.facebook.com/retrievershop
+Instagram: https://www.instagram.com/retrievershop.pl
+
+kontakt@retrievershop.pl
+782 865 895
+https://retrievershop.pl/

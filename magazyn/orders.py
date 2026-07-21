@@ -248,6 +248,64 @@ def process_bank_transfer_refund(order_id: str):
     return redirect(url_for(".order_detail", order_id=order_id))
 
 
+@bp.route("/order/<order_id>/cancel", methods=["POST"])
+@login_required
+def cancel_order_route(order_id: str):
+    """Anuluj zamowienie (korekta, status, Allegro CANCELLED, opcjonalnie refund)."""
+    from .services.order_cancel import cancel_order
+
+    money_already_refunded = request.form.get("money_already_refunded") in (
+        "1", "true", "on", "yes",
+    )
+    reason = (request.form.get("reason") or "").strip()
+    result = cancel_order(
+        order_id,
+        money_already_refunded=money_already_refunded,
+        reason=reason,
+    )
+    if result.not_found:
+        abort(404)
+    flash(result.message, result.category)
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
+@bp.route("/order/<order_id>/item/<int:order_product_id>/variant_options", methods=["GET"])
+@login_required
+def order_item_variant_options(order_id: str, order_product_id: int):
+    """JSON: dostepne warianty koloru/rozmiaru dla pozycji."""
+    from .services.order_item_edit import list_variant_options
+
+    return jsonify(list_variant_options(order_id, order_product_id))
+
+
+@bp.route("/order/<order_id>/edit_item", methods=["POST"])
+@login_required
+def edit_order_item(order_id: str):
+    """Zmien kolor/rozmiar pozycji zamowienia."""
+    from .services.order_item_edit import edit_order_item_variant
+
+    try:
+        order_product_id = int(request.form.get("order_product_id") or 0)
+        new_product_size_id = int(request.form.get("new_product_size_id") or 0)
+    except (TypeError, ValueError):
+        flash("Nieprawidlowe dane edycji wariantu", "error")
+        return redirect(url_for(".order_detail", order_id=order_id))
+
+    restore_previous_stock = request.form.get("restore_previous_stock") in (
+        "1", "true", "on", "yes",
+    )
+    result = edit_order_item_variant(
+        order_id,
+        order_product_id,
+        new_product_size_id,
+        restore_previous_stock=restore_previous_stock,
+    )
+    if result.not_found:
+        abort(404)
+    flash(result.message, result.category)
+    return redirect(url_for(".order_detail", order_id=order_id))
+
+
 @bp.route("/order/<order_id>/download_label", methods=["GET"])
 @login_required
 def download_label(order_id: str):

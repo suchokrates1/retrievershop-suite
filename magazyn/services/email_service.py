@@ -397,6 +397,47 @@ def send_invoice_correction(
     )
 
 
+def send_newsletter_welcome(
+    *,
+    to_email: str,
+    first_name: str = "",
+    coupon_code: str,
+    discount_percent: int = 10,
+    valid_days: int = 30,
+    shop_url: str = "https://retrievershop.pl/produkty/",
+) -> bool:
+    """Wyslij welcome newsletter z kodem rabatowym (SMTP, poza WP/MailPoet)."""
+    email = (to_email or "").strip()
+    if not email or not coupon_code:
+        logger.warning("newsletter_welcome: brak email lub kodu kuponu")
+        return False
+
+    ctx = {
+        "email": email,
+        "first_name": (first_name or "").strip(),
+        "coupon_code": coupon_code,
+        "discount_percent": int(discount_percent),
+        "valid_days": int(valid_days),
+        "shop_url": shop_url or "https://retrievershop.pl/produkty/",
+        "hero_image_url": (
+            "https://retrievershop.pl/wp-content/uploads/2021/11/"
+            "newsletter_dog_optimized-1.webp"
+        ),
+        "order_page_url": "",
+    }
+    html = render_template("emails/newsletter_welcome.html", **ctx)
+    text = _render_message_text("newsletter_welcome.txt", **ctx)
+    subject = f"Twoj rabat {ctx['discount_percent']}% do Retriever Shop!"
+    # Newsletter nie jest powiazany z Order — zawsze SMTP.
+    ok = _send_html_email(to_email=email, subject=subject, html_body=html)
+    if ok:
+        logger.info("Newsletter welcome wyslany do %s (kupon %s)", email, coupon_code)
+    else:
+        # Zachowaj plain text w logu dla diagnostyki (bez wysylki ponownie)
+        logger.debug("newsletter_welcome plain preview: %s", text[:200])
+    return ok
+
+
 def send_refund_notification(
     order,
     reason: str = "",

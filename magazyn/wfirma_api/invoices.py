@@ -267,8 +267,9 @@ def create_correction_invoice(
         ID oryginalnej faktury do skorygowania.
     corrected_items : list[dict], optional
         Lista skorygowanych pozycji. Kazdy element:
-        {"original_content_id": int, "count": int/float}
+        {"original_content_id": int, "count": int/float, "name": str (opcjonalnie)}
         count = nowa ilosc po korekcie (0 = pelny zwrot pozycji).
+        name = opcjonalna nowa nazwa pozycji (np. zmiana wariantu).
         Jesli None - korekta zerujaca (count=0 dla WSZYSTKICH pozycji).
     description : str
         Opis korekty (np. "Zwrot pelny zamowienia #12345").
@@ -301,11 +302,15 @@ def create_correction_invoice(
             f"Faktura id={original_invoice_id} nie ma pozycji do korekty"
         )
 
-    # Mapowanie zmian: original_content_id -> nowy count
+    # Mapowanie zmian: original_content_id -> nowy count / opcjonalna nazwa
     count_map = {}
+    name_map = {}
     if corrected_items is not None:
         for item in corrected_items:
-            count_map[int(item["original_content_id"])] = item["count"]
+            content_key = int(item["original_content_id"])
+            count_map[content_key] = item["count"]
+            if item.get("name"):
+                name_map[content_key] = item["name"]
 
     invoice_contents = []
     for content in original_contents:
@@ -321,7 +326,7 @@ def create_correction_invoice(
             new_count = 0
 
         ic = {
-            "name": content["name"],
+            "name": name_map.get(content_id, content["name"]),
             "count": new_count,
             "price": content["price"],
             "unit": content.get("unit", "szt."),

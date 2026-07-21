@@ -67,6 +67,7 @@ class Order(Base):
     wfirma_invoice_number = Column(String, nullable=True)
     wfirma_correction_id = Column(Integer, nullable=True)
     wfirma_correction_number = Column(String, nullable=True)
+    items_locally_edited = Column(Boolean, default=False, nullable=False)
     emails_sent = Column(Text, nullable=True)
     real_profit_sale_price = Column(Numeric(10, 2), nullable=True)
     real_profit_purchase_cost = Column(Numeric(10, 2), nullable=True)

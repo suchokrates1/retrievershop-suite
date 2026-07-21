@@ -475,3 +475,136 @@ def _match_return_to_invoice(
                 break
 
     return corrected_items, errors
+
+
+def generate_variant_correction_invoice(
+    order_id: str,
+    old_name: str,
+    new_name: str,
+) -> dict:
+    """Korekta dokumentujaca zmiane wariantu (ta sama ilosc/cena, nowa nazwa).
+
+    Jesli brak faktury — skipped. Jesli zamowienie ma juz korekte — blad.
+    """
+    from ..wfirma_api import WFirmaClient
+    from ..wfirma_api.invoices import (
+        create_correction_invoice,
+        download_invoice_pdf,
+        get_invoice,
+    )
+    from .email_service import send_invoice_correction
+
+    result = {
+        "success": False,
+        "skipped": False,
+        "invoice_number": None,
+        "errors": [],
+    }
+
+    with get_session() as db:
+        order = db.query(Order).filter(Order.order_id == order_id).first()
+        if not order:
+            result["errors"].append(f"Zamowienie {order_id} nie znalezione")
+            return result
+
+        if not order.wfirma_invoice_id:
+            result["skipped"] = True
+            result["success"] = True
+            return result
+
+        if order.wfirma_correction_id:
+            result["errors"].append(
+                f"Zamowienie {order_id} ma juz korekte "
+                f"{order.wfirma_correction_number}"
+            )
+            return result
+
+        try:
+            client = WFirmaClient.from_settings()
+        except Exception as exc:
+            result["errors"].append(f"Blad inicjalizacji klienta wFirma: {exc}")
+            return result
+
+        original_invoice_id = int(order.wfirma_invoice_id)
+        try:
+            original = get_invoice(client, original_invoice_id)
+        except Exception as exc:
+            result["errors"].append(f"Blad pobrania oryginalnej faktury: {exc}")
+            return result
+
+        contents_data = original.get("invoicecontents", {})
+        invoice_contents = []
+        for k in sorted(contents_data):
+            if k == "parameters":
+                continue
+            content = contents_data[k].get("invoicecontent", {})
+            if content:
+                invoice_contents.append(content)
+
+        old_lower = (old_name or "").strip().lower()
+        matched = None
+        for content in invoice_contents:
+            name_lower = (content.get("name") or "").strip().lower()
+            if not name_lower:
+                continue
+            if name_lower == old_lower or old_lower in name_lower or name_lower in old_lower:
+                matched = content
+                break
+
+        if not matched:
+            result["errors"].append(
+                f"Nie dopasowano pozycji faktury do wariantu „{old_name}”"
+            )
+            return result
+
+        reason = f"Zmiana wariantu: {old_name} → {new_name}"
+        corrected_items = [{
+            "original_content_id": int(matched["id"]),
+            "count": float(matched.get("count", 1)),
+            "name": new_name,
+        }]
+
+        try:
+            inv = create_correction_invoice(
+                client,
+                original_invoice_id=original_invoice_id,
+                corrected_items=corrected_items,
+                description=reason,
+            )
+            invoice_id = inv["invoice_id"]
+            invoice_number = inv["invoice_number"]
+            result["invoice_number"] = invoice_number
+        except Exception as exc:
+            result["errors"].append(f"Blad wystawienia korekty wFirma: {exc}")
+            return result
+
+        order.wfirma_correction_id = invoice_id
+        order.wfirma_correction_number = invoice_number
+        db.commit()
+
+        pdf_data = None
+        try:
+            pdf_data = download_invoice_pdf(client, invoice_id)
+        except Exception as exc:
+            result["errors"].append(f"Blad pobierania PDF korekty: {exc}")
+
+        if pdf_data:
+            safe_nr = invoice_number.replace("/", "_").replace("\\", "_")
+            pdf_filename = f"{safe_nr}.pdf"
+            try:
+                delivery = send_invoice_correction(
+                    order,
+                    reason=reason,
+                    pdf_data=pdf_data,
+                    pdf_filename=pdf_filename,
+                    invoice_number=invoice_number,
+                )
+                if delivery and not delivery.success:
+                    result["errors"].append(
+                        f"Nie udalo sie wyslac korekty: {delivery.error}"
+                    )
+            except Exception as exc:
+                result["errors"].append(f"Blad wysylki korekty emailem: {exc}")
+
+        result["success"] = True
+        return result
