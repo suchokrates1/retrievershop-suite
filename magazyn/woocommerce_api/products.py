@@ -227,11 +227,22 @@ def upsert_variation(
     color: Optional[str] = None,
     image_id: Optional[int] = None,
 ) -> dict:
-    attrs: list[dict[str, str]] = []
+    from .attributes import ensure_attribute
+
+    attrs: list[dict[str, Any]] = []
     color_opt = (color or "").strip()
     if color_opt:
-        attrs.append({"name": "Kolor", "option": color_opt})
-    attrs.append({"name": "Rozmiar", "option": size})
+        color_id = ensure_attribute(client, "Kolor")
+        if color_id:
+            attrs.append({"id": int(color_id), "option": color_opt})
+        else:
+            attrs.append({"name": "Kolor", "option": color_opt})
+    size_id = ensure_attribute(client, "Rozmiar")
+    size_opt = (size or "").strip()
+    if size_id:
+        attrs.append({"id": int(size_id), "option": size_opt})
+    else:
+        attrs.append({"name": "Rozmiar", "option": size_opt})
     payload: dict[str, Any] = {
         "sku": sku,
         "regular_price": regular_price,
@@ -254,13 +265,33 @@ def upsert_variation(
     try:
         return client.post(f"wp-json/wc/v3/products/{product_id}/variations", json=payload)
     except WooClientError as exc:
-        # SKU juz zajete przez istniejacy wariant — zaktualizuj go
+        # SKU juz zajete — zaktualizuj istniejacy wariant (ten sam parent)
         resource_id = None
         if isinstance(exc.payload, dict):
             resource_id = (exc.payload.get("data") or {}).get("resource_id")
         if resource_id and "product_invalid_sku" in str(exc):
-            return client.put(
-                f"wp-json/wc/v3/products/{product_id}/variations/{int(resource_id)}",
-                json=payload,
-            )
+            rid = int(resource_id)
+            try:
+                return client.put(
+                    f"wp-json/wc/v3/products/{product_id}/variations/{rid}",
+                    json=payload,
+                )
+            except WooClientError as put_exc:
+                # resource_id moze byc na innym parentcie — wyczysc SKU i utworz nowy
+                if put_exc.status_code in (400, 404):
+                    try:
+                        foreign = client.get(f"wp-json/wc/v3/products/{rid}")
+                        foreign_parent = foreign.get("parent_id") or foreign.get("parent")
+                        if foreign_parent:
+                            client.put(
+                                f"wp-json/wc/v3/products/{int(foreign_parent)}/variations/{rid}",
+                                json={"sku": ""},
+                            )
+                    except WooClientError:
+                        pass
+                    return client.post(
+                        f"wp-json/wc/v3/products/{product_id}/variations",
+                        json=payload,
+                    )
+                raise
         raise

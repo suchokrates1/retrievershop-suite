@@ -220,11 +220,38 @@ def _merge_family(
                 )
 
     new_slug = _get_product_slug(client, int(canonical)) if canonical else ""
+    # Kanoniczny slug z nazwy modelu (bez koloru/rozmiaru w URL)
+    desired_slug = ""
+    try:
+        from magazyn.services.woo_product_naming import sanitize_parent_product_title
+        import re
+        import unicodedata
+
+        def _slugify(text: str) -> str:
+            normalized = unicodedata.normalize("NFKD", text)
+            ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+            return re.sub(r"[^a-zA-Z0-9]+", "-", ascii_text.lower()).strip("-")
+
+        desired_name = canonical_woo_product_name(report.products[0])
+        desired_slug = _slugify(desired_name)
+        if desired_slug and new_slug != desired_slug:
+            updated = client.put(
+                f"wp-json/wc/v3/products/{int(canonical)}",
+                json={"name": desired_name, "slug": desired_slug},
+            )
+            new_slug = (updated.get("slug") or desired_slug).strip()
+            result["renamed_slug"] = new_slug
+    except Exception as exc:  # noqa: BLE001
+        result["rename_error"] = str(exc)
+
     if new_slug:
         target = f"/produkt/{new_slug}/"
         for wid, slug in old_slugs.items():
             if slug and slug != new_slug:
                 result["redirects"][f"produkt/{slug}"] = target
+        if desired_slug and old_slugs:
+            # redirect previous elect slug if renamed
+            pass
 
     return result
 
