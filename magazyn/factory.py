@@ -17,6 +17,7 @@ from .allegro import bp as allegro_bp
 from .orders import bp as orders_bp
 from .blueprints.woocommerce_webhooks import bp as woocommerce_webhooks_bp
 from .blueprints.shop_mail_api import bp as shop_mail_api_bp
+from .blueprints.shop_trust_api import bp as shop_trust_api_bp
 from .blueprints.woo_admin import bp as woo_admin_bp
 from .blueprints.order_sync_admin import bp as order_sync_admin_bp
 from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
@@ -127,6 +128,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(orders_bp)
     app.register_blueprint(woocommerce_webhooks_bp)
     app.register_blueprint(shop_mail_api_bp)
+    app.register_blueprint(shop_trust_api_bp)
     app.register_blueprint(woo_admin_bp)
     app.register_blueprint(order_sync_admin_bp)
     app.register_blueprint(discussions_bp)

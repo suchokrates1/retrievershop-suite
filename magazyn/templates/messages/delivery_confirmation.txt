@@ -5,11 +5,16 @@ RETRIEVER SHOP — Zamówienie dostarczone
 Zamówienie #{{ order_id }} zostało dostarczone.
 Mamy nadzieję, że produkty spełnią oczekiwania Twojego pupila!
 
+Jeśli możesz — wystaw proszę krótką opinię:
+• Google: https://search.google.com/local/writereview?placeid=ChIJY9XiFVYTD0cRYsHwKUQSRwc
+• Allegro: oceń zakup w Allegro (profil Retriever_Shop)
+• Sklep: https://retrievershop.pl/moje-konto/zamowienia/
+
 {% if order_page_url %}
 ▶ Szczegóły zamówienia:
 {{ order_page_url }}
 {% endif %}
-Jeśli masz pytania, odpowiedz na tę wiadomość.
+Pytania? Odpowiedz na tę wiadomość lub zadzwoń 782 865 895.
 
 Pozdrawiamy,
 Retriever Shop
