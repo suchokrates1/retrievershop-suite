@@ -1,0 +1,80 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Twoj rabat {{ discount_percent }}% - Retriever Shop{% endblock %}
+{% block content %}
+{# Hero image — to samo zdjęcie co w dawnym MailPoecie #}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+    <tr>
+        <td style="text-align:center;">
+            <img src="{{ hero_image_url }}"
+                 alt="Retriever Shop"
+                 width="540"
+                 style="display:block;width:100%;max-width:540px;height:auto;border-radius:8px;margin:0 auto;">
+        </td>
+    </tr>
+</table>
+
+<p style="margin:0 0 8px;font-size:12px;color:#C45C3E;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;">
+    Witaj w Retriever Shop
+</p>
+<h2 style="margin:0 0 12px;font-size:26px;color:#1a1a2e;line-height:1.25;">
+    Cześć{% if first_name %} {{ first_name }}{% endif %}!<br>
+    Twój rabat {{ discount_percent }}% już na Ciebie czeka
+</h2>
+<p style="margin:0 0 22px;font-size:15px;color:#555;line-height:1.65;">
+    Dzięki za zapis do newslettera. Oto jednorazowy kupon na pierwsze zamówienie —
+    szelki, smycze, obroże i inne akcesoria Truelove w jednym miejscu.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+    <tr>
+        <td style="background:linear-gradient(135deg,#F3F0EB 0%,#EDE7DF 100%);border:1px solid #E5E1DA;border-radius:10px;padding:22px 20px;text-align:center;">
+            <p style="margin:0 0 6px;font-size:12px;color:#5A6B6B;text-transform:uppercase;letter-spacing:0.08em;">
+                Twój kod −{{ discount_percent }}%
+            </p>
+            <p style="margin:0;font-size:30px;font-weight:bold;color:#1a1a2e;letter-spacing:0.08em;">
+                {{ coupon_code }}
+            </p>
+            <p style="margin:12px 0 0;font-size:12px;color:#5A6B6B;line-height:1.5;">
+                Jednorazowy · tylko dla {{ email }} · ważny {{ valid_days }} dni
+            </p>
+        </td>
+    </tr>
+</table>
+
+<p style="margin:0 0 26px;text-align:center;">
+    <a href="{{ shop_url }}" style="display:inline-block;padding:14px 32px;background-color:#C45C3E;color:#ffffff;text-decoration:none;font-weight:bold;border-radius:6px;font-size:15px;">
+        Odbierz rabat w sklepie
+    </a>
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border-top:1px solid #eee;">
+    <tr>
+        <td style="padding-top:20px;">
+            <p style="margin:0 0 8px;font-size:14px;color:#1a1a2e;font-weight:bold;">
+                Gwarancja najniższej ceny
+            </p>
+            <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">
+                Znajdziesz ten sam produkt taniej w innym sklepie w ciągu 14 dni od zakupu?
+                Zwrócimy różnicę — napisz na
+                <a href="mailto:kontakt@retrievershop.pl" style="color:#C45C3E;text-decoration:none;">kontakt@retrievershop.pl</a>
+                lub zadzwoń: <strong>782&nbsp;865&nbsp;895</strong>.
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}
+{% block order_link %}{% endblock %}
+{% block footer_note %}
+Dołącz do nas w social mediach — nowości i inspiracje spacerowe.
+{% endblock %}
+{% block footer_extra %}
+<p style="margin:10px 0 0;">
+    <a href="https://www.facebook.com/retrievershop" style="color:#C45C3E;text-decoration:none;font-size:12px;margin:0 8px;">Facebook</a>
+    <span style="color:#ccc;">·</span>
+    <a href="https://www.instagram.com/retrievershop.pl" style="color:#C45C3E;text-decoration:none;font-size:12px;margin:0 8px;">Instagram</a>
+</p>
+<p style="margin:10px 0 0;font-size:11px;color:#bbb;">
+    kontakt@retrievershop.pl · 782 865 895 ·
+    <a href="https://retrievershop.pl/" style="color:#bbb;">retrievershop.pl</a>
+</p>
+{% endblock %}

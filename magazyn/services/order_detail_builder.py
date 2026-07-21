@@ -388,7 +388,12 @@ class OrderDetailBuilder:
         
         # Informacje o zwrocie
         return_info, return_status_history, return_stage_index = self.build_return_info(order.order_id)
-        
+
+        from .order_cancel import can_cancel_order
+        from .order_item_edit import can_edit_order_items
+
+        status_key = current_status.get("status", "pobrano")
+
         return {
             "order": order,
             "products": products,
@@ -417,6 +422,8 @@ class OrderDetailBuilder:
             "return_status_history": return_status_history,
             "return_stages": RETURN_STAGES,
             "return_stage_index": return_stage_index,
+            "can_cancel_order": can_cancel_order(status_key),
+            "can_edit_order_items": can_edit_order_items(status_key),
         }
 
 

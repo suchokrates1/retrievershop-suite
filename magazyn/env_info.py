@@ -141,6 +141,10 @@ ENV_INFO = {
         "WooCommerce Webhook Secret",
         "Secret do weryfikacji podpisu X-WC-Webhook-Signature",
     ),
+    "NEWSLETTER_MAIL_SECRET": (
+        "Newsletter Mail Secret",
+        "Bearer/HMAC secret dla WP → magazyn (welcome z kuponem). Puste = WOO_WEBHOOK_SECRET",
+    ),
     "WP_APP_USER": (
         "WordPress Application User",
         "Login admina WP do uploadu mediow (np. retrievershop)",

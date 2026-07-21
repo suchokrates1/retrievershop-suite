@@ -44,8 +44,11 @@
                         <td style="background-color:#f4f4f7;padding:20px 30px;text-align:center;border-radius:0 0 8px 8px;">
                             <p style="margin:0 0 4px;font-size:12px;color:#9b9b9b;">Retriever Shop</p>
                             <p style="margin:0;font-size:11px;color:#bbb;">
-                                Masz pytania? Napisz do nas przez wiadomosci na Allegro.
+                                {% block footer_note %}
+                                Masz pytania? Napisz: kontakt@retrievershop.pl · tel. 782 865 895
+                                {% endblock %}
                             </p>
+                            {% block footer_extra %}{% endblock %}
                         </td>
                     </tr>
                 </table>

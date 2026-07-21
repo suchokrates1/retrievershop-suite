@@ -398,70 +398,76 @@ def sync_order_from_data(
         db.flush()
         db.query(Order).filter(Order.order_id == order_id).with_for_update().first()
 
-    db.query(OrderProduct).filter(OrderProduct.order_id == order_id).delete(
-        synchronize_session=False
-    )
+    if order.items_locally_edited:
+        logger.info(
+            "Pomijam nadpisanie OrderProduct dla %s (items_locally_edited=True)",
+            order_id,
+        )
+    else:
+        db.query(OrderProduct).filter(OrderProduct.order_id == order_id).delete(
+            synchronize_session=False
+        )
 
-    for product in products_list:
-        ean = product.get("ean", "").strip() or None
-        product_size_id = None
+        for product in products_list:
+            ean = product.get("ean", "").strip() or None
+            product_size_id = None
 
-        if ean:
-            product_size = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
-            if product_size:
-                product_size_id = product_size.id
-
-        if not product_size_id:
-            from ..parsing import parse_product_info
-
-            name, size, color = parse_product_info(product)
-
-            if name and size:
-                product_size = match_product_to_warehouse(db, name, color, size)
+            if ean:
+                product_size = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
                 if product_size:
                     product_size_id = product_size.id
-                    logger.info(
-                        "Matched: %s -> %s/%s/%s -> product_size_id=%s",
-                        product.get("name"),
-                        name,
-                        color,
-                        size,
-                        product_size.id,
-                    )
+
+            if not product_size_id:
+                from ..parsing import parse_product_info
+
+                name, size, color = parse_product_info(product)
+
+                if name and size:
+                    product_size = match_product_to_warehouse(db, name, color, size)
+                    if product_size:
+                        product_size_id = product_size.id
+                        logger.info(
+                            "Matched: %s -> %s/%s/%s -> product_size_id=%s",
+                            product.get("name"),
+                            name,
+                            color,
+                            size,
+                            product_size.id,
+                        )
+                    else:
+                        logger.warning(
+                            "NOT MATCHED: %s -> parsed: %s/%s/%s",
+                            product.get("name"),
+                            name,
+                            color or "(brak)",
+                            size,
+                        )
                 else:
                     logger.warning(
-                        "NOT MATCHED: %s -> parsed: %s/%s/%s",
+                        "NOT MATCHED (parse failed): %s -> name=%s, size=%s, color=%s",
                         product.get("name"),
                         name,
-                        color or "(brak)",
                         size,
+                        color,
                     )
-            else:
-                logger.warning(
-                    "NOT MATCHED (parse failed): %s -> name=%s, size=%s, color=%s",
-                    product.get("name"),
-                    name,
-                    size,
-                    color,
-                )
 
-        db.add(
-            OrderProduct(
-                order_id=order_id,
-                order_product_id=product.get("order_product_id"),
-                product_id=product.get("product_id"),
-                variant_id=product.get("variant_id"),
-                sku=product.get("sku"),
-                ean=ean,
-                name=product.get("name"),
-                quantity=product.get("quantity", 1),
-                price_brutto=product.get("price_brutto"),
-                auction_id=product.get("auction_id"),
-                attributes=product.get("attributes"),
-                location=product.get("location"),
-                product_size_id=product_size_id,
+            db.add(
+                OrderProduct(
+                    order_id=order_id,
+                    order_product_id=product.get("order_product_id"),
+                    product_id=product.get("product_id"),
+                    variant_id=product.get("variant_id"),
+                    sku=product.get("sku"),
+                    ean=ean,
+                    name=product.get("name"),
+                    quantity=product.get("quantity", 1),
+                    price_brutto=product.get("price_brutto"),
+                    auction_id=product.get("auction_id"),
+                    attributes=product.get("attributes"),
+                    location=product.get("location"),
+                    product_size_id=product_size_id,
+                )
             )
-        )
 
     db.flush()
 
