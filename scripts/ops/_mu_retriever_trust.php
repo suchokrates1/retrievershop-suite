@@ -240,25 +240,7 @@ add_shortcode('rs_trust_stats', function () {
     return rs_trust_stats_html();
 });
 
-/** Insert big trust stats above "Opinie klientów" in homepage Elementor section. */
-add_action('elementor/frontend/widget/before_render', function ($widget) {
-    if (!is_front_page() || !is_object($widget) || !method_exists($widget, 'get_name')) {
-        return;
-    }
-    if ($widget->get_name() !== 'heading') {
-        return;
-    }
-    $title = (string) ($widget->get_settings_for_display('title') ?? '');
-    if (stripos($title, 'Opinie klientów') === false) {
-        return;
-    }
-    static $done = false;
-    if ($done) {
-        return;
-    }
-    $done = true;
-    echo rs_trust_stats_html();
-}, 5);
+/** Homepage Elementor hosts [rs_trust_stats] above "Opinie klientów". */
 
 /** Sticky phone / WhatsApp on mobile */
 add_action('wp_footer', function () {
