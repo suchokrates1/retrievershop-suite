@@ -1,9 +1,10 @@
-"""Synchronizacja katalogu magazyn/Allegro → WooCommerce."""
+"""Synchronizacja katalogu magazyn/Allegro → WooCommerce (1 parent na rodzine kolorow)."""
 
 from __future__ import annotations
 
 import json
 import logging
+from collections import defaultdict
 from decimal import Decimal
 from typing import Optional
 
@@ -23,9 +24,15 @@ from ..woocommerce_api.products import (
     upsert_variation,
 )
 from .allegro_offer_content import sync_offer_content
-from .woo_product_naming import canonical_woo_product_name, short_description_plain
+from .woo_product_naming import (
+    canonical_woo_product_name,
+    product_family_key,
+    short_description_plain,
+)
 
 logger = logging.getLogger(__name__)
+
+VariantRow = tuple[Product, ProductSize, AllegroOffer | None]
 
 
 def sync_catalog_to_woo(
@@ -34,11 +41,12 @@ def sync_catalog_to_woo(
     limit: int = 200,
     refresh_content: bool = True,
 ) -> dict[str, int]:
-    """Upsert produktow variable + wariantow po EAN do Woo.
+    """Upsert produktow variable + wariantow (kolor x rozmiar) po EAN do Woo.
 
-    Bierze produkty z barcode oraz (ACTIVE Allegro LUB stock>0 LUB juz zmapowane).
+    Grupuje Magazyn Product (1 kolor) w rodziny (category+brand+series) i tworzy
+    jeden parent Woo na rodzine.
     """
-    stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
+    stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0, "families": 0}
     try:
         client = WooClient()
     except WooClientError as exc:
@@ -65,11 +73,22 @@ def sync_catalog_to_woo(
             q = q.filter(Product.id.in_(product_ids))
         products = q.limit(limit).all()
 
+        families: dict[tuple[str, str, str], list[Product]] = defaultdict(list)
         for product in products:
+            families[product_family_key(product)].append(product)
+
+        for key, members in families.items():
             try:
-                _sync_one_product(db, client, product, refresh_content=refresh_content, stats=stats)
+                _sync_one_family(
+                    db,
+                    client,
+                    members,
+                    refresh_content=refresh_content,
+                    stats=stats,
+                )
+                stats["families"] += 1
             except Exception:
-                logger.exception("Blad sync produktu id=%s do Woo", product.id)
+                logger.exception("Blad sync rodziny %s do Woo", key)
                 stats["errors"] += 1
         db.commit()
     return stats
@@ -119,47 +138,122 @@ def _collect_image_ids(
     return image_ids
 
 
-def _sync_one_product(
+def _offer_for_size(db, size: ProductSize) -> AllegroOffer | None:
+    offer = (
+        db.query(AllegroOffer)
+        .filter(
+            AllegroOffer.product_size_id == size.id,
+            AllegroOffer.publication_status == "ACTIVE",
+        )
+        .order_by(AllegroOffer.synced_at.desc().nullslast())
+        .first()
+    )
+    if offer:
+        return offer
+    return (
+        db.query(AllegroOffer)
+        .filter(AllegroOffer.product_size_id == size.id)
+        .order_by(AllegroOffer.synced_at.desc().nullslast())
+        .first()
+    )
+
+
+def _collect_family_variants(db, products: list[Product]) -> list[VariantRow]:
+    rows: list[VariantRow] = []
+    for product in products:
+        sizes = (
+            db.query(ProductSize)
+            .filter(ProductSize.product_id == product.id)
+            .all()
+        )
+        for size in sizes:
+            if not size.barcode:
+                continue
+            offer = _offer_for_size(db, size)
+            if offer or size.quantity > 0 or size.woo_variation_id or product.woo_product_id:
+                rows.append((product, size, offer))
+    return rows
+
+
+def _pick_primary_offer(variants: list[VariantRow]) -> AllegroOffer | None:
+    """Najbogatszy ACTIVE (desc+zdjecia), inaczej dowolny z trescia."""
+    best: AllegroOffer | None = None
+    best_score = -1
+    for _, _, offer in variants:
+        if offer is None:
+            continue
+        desc_len = len((offer.description_html or "").strip())
+        try:
+            imgs = json.loads(offer.image_urls or "[]")
+        except json.JSONDecodeError:
+            imgs = []
+        score = desc_len + 50 * len(imgs)
+        if (offer.publication_status or "").upper() == "ACTIVE":
+            score += 10_000
+        if score > best_score:
+            best_score = score
+            best = offer
+    return best
+
+
+def _merge_image_urls(variants: list[VariantRow], primary: AllegroOffer | None) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+
+    def _add_from(offer: AllegroOffer | None) -> None:
+        if not offer or not offer.image_urls:
+            return
+        try:
+            items = json.loads(offer.image_urls)
+        except json.JSONDecodeError:
+            return
+        for url in items:
+            u = (url or "").strip()
+            if u and u not in seen:
+                seen.add(u)
+                urls.append(u)
+
+    _add_from(primary)
+    for _, _, offer in variants:
+        if offer is not primary:
+            _add_from(offer)
+        if len(urls) >= 16:
+            break
+    return urls
+
+
+def _elect_shared_parent_id(
+    products: list[Product],
+    variants: list[VariantRow],
+) -> Optional[int]:
+    """Wybierz wspolne woo_product_id: najczestsze sposrod siblingow, inaczej pierwsze EAN."""
+    counts: dict[int, int] = defaultdict(int)
+    for product in products:
+        if product.woo_product_id:
+            counts[int(product.woo_product_id)] += 1
+    if counts:
+        return max(counts.items(), key=lambda kv: (kv[1], kv[0]))[0]
+    return None
+
+
+def _sync_one_family(
     db,
     client: WooClient,
-    product: Product,
+    products: list[Product],
     *,
     refresh_content: bool,
     stats: dict[str, int],
 ) -> None:
-    sizes = (
-        db.query(ProductSize)
-        .filter(ProductSize.product_id == product.id)
-        .all()
-    )
-    variants: list[tuple[ProductSize, AllegroOffer | None]] = []
-    for size in sizes:
-        if not size.barcode:
-            continue
-        offer = (
-            db.query(AllegroOffer)
-            .filter(
-                AllegroOffer.product_size_id == size.id,
-                AllegroOffer.publication_status == "ACTIVE",
-            )
-            .order_by(AllegroOffer.synced_at.desc().nullslast())
-            .first()
-        )
-        if not offer:
-            offer = (
-                db.query(AllegroOffer)
-                .filter(AllegroOffer.product_size_id == size.id)
-                .order_by(AllegroOffer.synced_at.desc().nullslast())
-                .first()
-            )
-        if offer or size.quantity > 0 or size.woo_variation_id or product.woo_product_id:
-            variants.append((size, offer))
+    if not products:
+        stats["skipped"] += 1
+        return
 
+    variants = _collect_family_variants(db, products)
     if not variants:
         stats["skipped"] += 1
         return
 
-    primary_offer = next((o for _, o in variants if o is not None), None)
+    primary_offer = _pick_primary_offer(variants)
     if primary_offer:
         if refresh_content:
             sync_offer_content(primary_offer.offer_id)
@@ -167,37 +261,40 @@ def _sync_one_product(
         _ensure_offer_content(db, primary_offer)
 
     description = (primary_offer.description_html if primary_offer else None) or ""
-    image_urls: list[str] = []
-    if primary_offer and primary_offer.image_urls:
-        try:
-            image_urls = json.loads(primary_offer.image_urls)
-        except json.JSONDecodeError:
-            image_urls = []
+    image_urls = _merge_image_urls(variants, primary_offer)
 
-    size_options = sorted({size.size for size, _ in variants})
+    colors = sorted(
+        {
+            (p.color or "").strip()
+            for p, _, _ in variants
+            if (p.color or "").strip()
+        }
+    )
+    size_options = sorted({(s.size or "").strip() for _, s, _ in variants if (s.size or "").strip()})
+    seed = products[0]
     attributes = build_product_attributes(
         client,
-        brand=product.brand,
-        series=product.series,
-        color=product.color,
+        brand=seed.brand,
+        series=seed.series,
+        colors=colors,
         size_options=size_options,
     )
-    name = canonical_woo_product_name(product)
+    name = canonical_woo_product_name(seed)
 
-    woo_product_id = product.woo_product_id
+    woo_product_id = _elect_shared_parent_id(products, variants)
     if not woo_product_id:
-        matched = find_product_by_ean(client, variants[0][0].barcode)
+        matched = find_product_by_ean(client, variants[0][1].barcode)
         if matched:
             woo_product_id = int(matched["id"])
-            product.woo_product_id = woo_product_id
             matched_var = matched.get("_matched_variation")
-            if matched_var and not variants[0][0].woo_variation_id:
-                variants[0][0].woo_variation_id = int(matched_var["id"])
+            if matched_var and not variants[0][1].woo_variation_id:
+                variants[0][1].woo_variation_id = int(matched_var["id"])
 
-    woo_product_id = _resolve_variable_parent_id(client, product, woo_product_id)
+    # Resolve against first product; then apply to all siblings
+    woo_product_id = _resolve_variable_parent_id(client, seed, woo_product_id)
 
     category_ids: list[int] = []
-    cat_id = ensure_product_category(client, product.category)
+    cat_id = ensure_product_category(client, seed.category)
     if cat_id:
         category_ids.append(cat_id)
 
@@ -206,7 +303,7 @@ def _sync_one_product(
         woo_product_id=woo_product_id,
         image_urls=image_urls,
         offer_id=primary_offer.offer_id if primary_offer else None,
-        product_id=int(product.id),
+        product_id=int(seed.id),
         alt_text=name,
     )
 
@@ -223,12 +320,14 @@ def _sync_one_product(
         status="publish",
     )
     woo_product_id = int(product_payload["id"])
-    product.woo_product_id = woo_product_id
+    for product in products:
+        product.woo_product_id = woo_product_id
     stats["products"] += 1
 
-    for size, offer in variants:
+    for product, size, offer in variants:
         price_src = offer.price if offer is not None else "0.00"
         price = str(Decimal(str(price_src)).quantize(Decimal("0.01")))
+        color = (product.color or "").strip() or None
         variation = upsert_variation(
             client,
             woo_product_id,
@@ -237,14 +336,31 @@ def _sync_one_product(
             regular_price=price,
             stock_quantity=size.quantity or 0,
             size=size.size,
+            color=color,
             image_id=None,
         )
         size.woo_variation_id = int(variation["id"])
         stats["variations"] += 1
-
-    for size in sizes:
         if size.woo_variation_id and size.barcode:
             maybe_push_woo_stock(size.id, quantity=int(size.quantity or 0))
+
+
+def _sync_one_product(
+    db,
+    client: WooClient,
+    product: Product,
+    *,
+    refresh_content: bool,
+    stats: dict[str, int],
+) -> None:
+    """Kompatybilnosc: sync pojedynczego produktu = sync jego rodziny (1 czlonek)."""
+    _sync_one_family(
+        db,
+        client,
+        [product],
+        refresh_content=refresh_content,
+        stats=stats,
+    )
 
 
 def _resolve_variable_parent_id(
@@ -280,8 +396,6 @@ def _resolve_variable_parent_id(
                 if var_sku and (size.barcode or "").strip() == var_sku:
                     size.woo_variation_id = var_id
                     break
-            # Bez trafienia po EAN nie przypisuj variation do pierwszego pustego
-            # rozmiaru — to tworzylo duplikaty mapowan (np. XS bez barcode).
             logger.info(
                 "Woo product %s: variation %s -> parent %s",
                 product.id,
@@ -291,7 +405,6 @@ def _resolve_variable_parent_id(
             return parent_id
         product.woo_product_id = None
         return None
-    # simple / inne — utworzymy nowy variable przy upsert bez id
     logger.warning(
         "Woo product %s id=%s type=%s — tworze nowy variable",
         product.id,
@@ -307,11 +420,7 @@ def push_stock_for_product_size(
     *,
     quantity: Optional[int] = None,
 ) -> bool:
-    """Wypchnij stan jednego wariantu do Woo.
-
-    ``quantity`` — opcjonalnie podaj jawnie (np. przed commit sesji zrodlowej),
-    inaczej odczyt z DB.
-    """
+    """Wypchnij stan jednego wariantu do Woo."""
     try:
         client = WooClient()
     except WooClientError:
@@ -328,6 +437,7 @@ def push_stock_for_product_size(
         )
         price = str(offer.price) if offer else "0.00"
         stock_qty = int(size.quantity or 0) if quantity is None else max(0, int(quantity))
+        color = (size.product.color or "").strip() or None
         upsert_variation(
             client,
             size.product.woo_product_id,
@@ -336,6 +446,7 @@ def push_stock_for_product_size(
             regular_price=price,
             stock_quantity=stock_qty,
             size=size.size,
+            color=color,
         )
         return True
 
@@ -350,4 +461,8 @@ def maybe_push_woo_stock(product_size_id: int | None, *, quantity: Optional[int]
         logger.exception("Nie zaktualizowano stanu Woo dla product_size_id=%s", product_size_id)
 
 
-__all__ = ["maybe_push_woo_stock", "push_stock_for_product_size", "sync_catalog_to_woo"]
+__all__ = [
+    "maybe_push_woo_stock",
+    "push_stock_for_product_size",
+    "sync_catalog_to_woo",
+]

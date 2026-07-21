@@ -20,12 +20,6 @@ _SIZE_TOKENS = {
     "4xl",
     "uniwersalny",
 }
-_COLOR_SUFFIXES = (
-    "e",
-    "a",
-    "y",
-    "i",
-)  # czarne/czarny/czarna — uproszczone odcinanie na koncu
 
 
 def _strip_html(text: str) -> str:
@@ -42,14 +36,20 @@ def short_description_plain(description_html: str, *, max_len: int = 160) -> str
     return (cut or plain[: max_len - 1]).rstrip(".,;:") + "…"
 
 
+def product_family_key(product: Any) -> tuple[str, str, str]:
+    """Klucz rodziny Woo: category + brand + series (bez koloru)."""
+    return (
+        (getattr(product, "category", None) or "").strip().lower(),
+        (getattr(product, "brand", None) or "").strip().lower(),
+        (getattr(product, "series", None) or "").strip().lower(),
+    )
+
+
 def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = None) -> str:
-    """Nazwa rodzica variable: kategoria + marka + model — bez rozmiaru.
+    """Nazwa rodzica variable: kategoria + marka + model — bez rozmiaru i koloru.
 
-    Kolor (``Product.color``) jest dopisywany po em dash, bo w Woo jeden parent
-    = jeden kolor (osobne oferty Allegro). Bez koloru tytuły się kanibalizują.
-
-    Preferuje ``Product.name`` z magazynu. ``fallback_title`` (np. Allegro) tylko
-    gdy name puste — i wtedy i tak strip size/color z bazy, zanim dodamy color.
+    Kolor jest atrybutem wariantu (scalanie kolorow w 1 parent). Preferuje
+    ``Product.name``; ``fallback_title`` tylko gdy name puste.
     """
     name = (getattr(product, "name", None) or "").strip()
     if not name and fallback_title:
@@ -74,18 +74,11 @@ def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = 
             )
             name = f"{cat} dla psa {rest}".strip()
 
-    base = sanitize_parent_product_title(name)
-    color = (getattr(product, "color", None) or "").strip()
-    if not color:
-        return base
-    color_l = color.lower()
-    if color_l and color_l not in base.lower():
-        return f"{base} — {color}"
-    return base
+    return sanitize_parent_product_title(name)
 
 
 def sanitize_parent_product_title(title: str) -> str:
-    """Usun trailing rozmiar/kolor i znane literowki marki."""
+    """Usun trailing rozmiar/kolor, em-dash color suffix i znane literowki marki."""
     name = (title or "").strip()
     if not name:
         return name
@@ -103,6 +96,9 @@ def sanitize_parent_product_title(title: str) -> str:
     for bad, good in replacements:
         name = name.replace(bad, good)
 
+    # Sufiks „ — kolor” / „ - kolor”
+    name = re.sub(r"\s+[—–-]\s+\S+\s*$", "", name).strip()
+
     # Odcinaj z konca: rozmiar, potem kolor (jedno slowo)
     tokens = name.split()
     while tokens:
@@ -111,12 +107,11 @@ def sanitize_parent_product_title(title: str) -> str:
         if last_l in _SIZE_TOKENS:
             tokens.pop()
             continue
-        # proste kolory PL (przymiotniki na koncu)
         if _looks_like_color_token(last_l):
             tokens.pop()
             continue
         break
-    return " ".join(tokens).strip(" -")
+    return " ".join(tokens).strip(" -—–")
 
 
 def _looks_like_color_token(token: str) -> bool:
@@ -185,6 +180,7 @@ def _looks_like_color_token(token: str) -> bool:
 
 __all__ = [
     "canonical_woo_product_name",
+    "product_family_key",
     "sanitize_parent_product_title",
     "short_description_plain",
 ]

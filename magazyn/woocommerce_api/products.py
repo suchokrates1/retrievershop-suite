@@ -224,14 +224,20 @@ def upsert_variation(
     regular_price: str,
     stock_quantity: int,
     size: str,
+    color: Optional[str] = None,
     image_id: Optional[int] = None,
 ) -> dict:
+    attrs: list[dict[str, str]] = []
+    color_opt = (color or "").strip()
+    if color_opt:
+        attrs.append({"name": "Kolor", "option": color_opt})
+    attrs.append({"name": "Rozmiar", "option": size})
     payload: dict[str, Any] = {
         "sku": sku,
         "regular_price": regular_price,
         "manage_stock": True,
         "stock_quantity": max(0, int(stock_quantity)),
-        "attributes": [{"name": "Rozmiar", "option": size}],
+        "attributes": attrs,
     }
     if image_id:
         payload["image"] = {"id": image_id}
