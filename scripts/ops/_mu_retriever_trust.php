@@ -84,7 +84,7 @@ add_shortcode('rs_faq', function ($atts = []) {
         ],
         [
             'q' => 'Czy mogę zwrócić produkt?',
-            'a' => 'Tak — masz <strong>14 dni</strong> na odstąpienie od umowy przy zakupie na odległość (produkt nieużywany, w stanie pozwalającym na odsprzedaż). Szczegóły na stronie <a href="/zwroty/">Zwroty</a>.',
+            'a' => 'Tak — masz <strong>14 dni</strong> na odstąpienie. Wniosek składasz <strong>jednym kliknięciem</strong> na stronie <a href="/wniosek-o-odstapienie/">Odstąpienie od umowy</a> (albo z Moje konto). Instrukcja odesłania: <a href="/zwroty/">Zwroty</a>.',
         ],
         [
             'q' => 'Jakie formy płatności i dostawy oferujecie?',
@@ -134,6 +134,8 @@ add_action('wp_head', function () {
 .rs-footer-trust{padding:16px 0;border-top:1px solid #e5e1da;font-size:14px}
 .rs-footer-trust-links{display:flex;flex-wrap:wrap;gap:10px 18px;list-style:none;margin:0;padding:0}
 .rs-footer-trust-links a{color:#1A3333;text-decoration:underline}
+.rs-woo-lead{margin:0 0 16px;padding:12px 14px;background:#F3F0EB;border-radius:8px;color:#1A3333;font-size:15px;line-height:1.5}
+.rs-woo-lead p{margin:0}
 .rs-allegro-badge{margin:14px 0;padding:12px 14px;border:1px solid #e5e1da;border-radius:8px;background:#fff;font-size:14px;color:#5A6B6B;line-height:1.45}
 .rs-allegro-badge strong{color:#1A3333}
 .rs-allegro-badge a{color:#C45C3E;font-weight:600}

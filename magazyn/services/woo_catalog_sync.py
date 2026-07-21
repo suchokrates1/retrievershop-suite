@@ -25,6 +25,8 @@ from ..woocommerce_api.products import (
 )
 from .allegro_offer_content import sync_offer_content
 from .woo_product_naming import (
+    apply_woo_lead_to_description,
+    build_woo_lead,
     canonical_woo_product_name,
     product_family_key,
     short_description_plain,
@@ -280,6 +282,16 @@ def _sync_one_family(
         size_options=size_options,
     )
     name = canonical_woo_product_name(seed)
+    lead = build_woo_lead(
+        seed,
+        description,
+        colors=colors,
+        sizes=size_options,
+    )
+    description = apply_woo_lead_to_description(description, lead)
+    short_desc = lead if lead else (
+        short_description_plain(description) if description else None
+    )
 
     woo_product_id = _elect_shared_parent_id(products, variants)
     if not woo_product_id:
@@ -312,7 +324,7 @@ def _sync_one_family(
         woo_product_id=woo_product_id,
         name=name,
         description_html=description,
-        short_description=short_description_plain(description) if description else None,
+        short_description=short_desc,
         image_ids=image_ids,
         image_urls=None if image_ids else image_urls[:8],
         attributes=attributes,

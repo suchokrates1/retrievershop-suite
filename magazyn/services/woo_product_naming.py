@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from html import unescape
+from html import escape, unescape
 from typing import Any, Optional
 
 # Tokeny rozmiaru / koloru — nie powinny trafic do nazwy rodzica variable
@@ -34,6 +34,124 @@ def short_description_plain(description_html: str, *, max_len: int = 160) -> str
         return plain
     cut = plain[: max_len - 1].rsplit(" ", 1)[0]
     return (cut or plain[: max_len - 1]).rstrip(".,;:") + "…"
+
+
+_LEAD_START = "<!-- rs-woo-lead -->"
+_LEAD_END = "<!-- /rs-woo-lead -->"
+
+_CATEGORY_BLURB = {
+    "szelki": "wygodne szelki na codzienne spacery i trening",
+    "smycz": "smycz do codziennych spacerów i treningu",
+    "smycze": "smycz do codziennych spacerów i treningu",
+    "obroza": "obroża dopasowana do stylu spaceru",
+    "obroże": "obroża dopasowana do stylu spaceru",
+    "pasy bezpieczeństwa": "pas bezpieczeństwa do przewozu psa w aucie",
+    "pas bezpieczeństwa": "pas bezpieczeństwa do przewozu psa w aucie",
+    "saszetki": "saszetka na smakołyki i akcesoria",
+    "pas trekkingowy": "pas biodrowy do biegania i dogtrekkingu",
+    "kapok": "kamizelka / kapok dla psa",
+    "kamizelka": "kamizelka dla psa",
+    "amortyzator": "amortyzator do smyczy — mniej szarpnięć",
+    "linka": "linka treningowa dla psa",
+}
+
+_SKIP_SENTENCE = re.compile(
+    r"(kup teraz|allegro smart|darmowa dostawa od|raty |odwiedz|kliknij|"
+    r"zobacz inne|najniższa cena|promocja|gratis|kod rabat)",
+    re.I,
+)
+
+
+def _split_sentences(plain: str) -> list[str]:
+    parts = re.split(r"(?<=[.!?…])\s+", plain)
+    out: list[str] = []
+    for part in parts:
+        s = part.strip()
+        if len(s) < 40 or len(s) > 220:
+            continue
+        if _SKIP_SENTENCE.search(s):
+            continue
+        if s.count(" ") < 5:
+            continue
+        out.append(s.rstrip())
+    return out
+
+
+def build_woo_lead(
+    product: Any,
+    description_html: str = "",
+    *,
+    colors: Optional[list[str]] = None,
+    sizes: Optional[list[str]] = None,
+) -> str:
+    """Krotki lead PL (2–4 zdania) z faktow produktu + fragmentu opisu Allegro.
+
+    Nie wymysla parametrow technicznych — tylko nazwa/kategoria/warianty
+    oraz wyciagniete zdania z istniejacego opisu.
+    """
+    name = canonical_woo_product_name(product)
+    category = (getattr(product, "category", None) or "").strip()
+    brand = (getattr(product, "brand", None) or "").strip() or "Truelove"
+    blurb = _CATEGORY_BLURB.get(category.lower(), "")
+
+    sentences: list[str] = []
+    if blurb:
+        sentences.append(f"{name} — {blurb} marki {brand}.")
+    else:
+        sentences.append(f"{name} marki {brand}.")
+
+    color_list = [c for c in (colors or []) if c]
+    size_list = [s for s in (sizes or []) if s]
+    variant_bits: list[str] = []
+    if color_list:
+        shown = ", ".join(color_list[:6])
+        more = f" (+{len(color_list) - 6})" if len(color_list) > 6 else ""
+        variant_bits.append(f"kolory: {shown}{more}")
+    if size_list:
+        variant_bits.append("rozmiary: " + ", ".join(size_list))
+    if variant_bits:
+        sentences.append("Dostępne " + "; ".join(variant_bits) + ".")
+
+    for extracted in _split_sentences(_strip_html(description_html))[:2]:
+        # unikaj duplikatu nazwy
+        if name.lower()[:20] in extracted.lower() and len(sentences) >= 2:
+            continue
+        sentences.append(extracted)
+        if len(sentences) >= 4:
+            break
+
+    if len(sentences) < 3:
+        sentences.append(
+            "Wysyłka z Legnicy — zamów do 16:00, zwykle paczka jutro (InPost, dostawa 0 zł)."
+        )
+
+    return " ".join(sentences[:4])
+
+
+def strip_woo_lead(description_html: str) -> str:
+    """Usun poprzedni blok leada z opisu Woo/Allegro."""
+    html = description_html or ""
+    if _LEAD_START not in html:
+        return html
+    pattern = re.compile(
+        re.escape(_LEAD_START) + r".*?" + re.escape(_LEAD_END),
+        re.I | re.S,
+    )
+    return pattern.sub("", html).lstrip()
+
+
+def apply_woo_lead_to_description(description_html: str, lead_plain: str) -> str:
+    """Wstaw lead HTML nad opisem Allegro (z markerem idempotentnym)."""
+    body = strip_woo_lead(description_html or "")
+    lead = (lead_plain or "").strip()
+    if not lead:
+        return body
+    block = (
+        f'{_LEAD_START}<div class="rs-woo-lead"><p>{escape(lead)}</p></div>{_LEAD_END}\n'
+    )
+    if body.strip():
+        return block + body
+    return block
 
 
 def product_family_key(product: Any) -> tuple[str, str, str]:
@@ -179,8 +297,11 @@ def _looks_like_color_token(token: str) -> bool:
 
 
 __all__ = [
+    "apply_woo_lead_to_description",
+    "build_woo_lead",
     "canonical_woo_product_name",
     "product_family_key",
     "sanitize_parent_product_title",
     "short_description_plain",
+    "strip_woo_lead",
 ]
