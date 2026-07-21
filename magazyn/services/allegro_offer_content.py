@@ -95,6 +95,11 @@ def sync_offer_content(
                 offer_id,
                 details.get("error"),
             )
+            # Oznacz probe, zeby batch nie spamowal 404 w nieskonczonosc
+            err = str(details.get("error") or "")
+            if "404" in err and not offer.content_synced_at:
+                offer.content_synced_at = datetime.now(timezone.utc).isoformat()
+                db.commit()
             return False
 
         data = details.get("data") or {}
