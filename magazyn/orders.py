@@ -8,13 +8,11 @@ from .auth import login_required
 from .config import settings
 from .db import get_session
 from .models.orders import Order, OrderStatusLog
-from .services.order_allegro_sync import sync_orders_from_allegro_api
 from .services.order_creation import build_manual_order_payload
 from .services.order_detail_view import build_order_detail_view_context
 from .services.order_label_download import prepare_order_label_download
 from .services.order_list import build_orders_list_context
 from .services.order_sync import sync_order_from_data
-from .services.order_status import add_order_status
 from .services.order_labels import reprint_order_labels
 from .services.manual_order_actions import apply_manual_tracking, finalize_manual_order_creation, is_manual_order
 from .services.order_return_actions import (
@@ -343,48 +341,6 @@ def download_label(order_id: str):
 
 
 
-@bp.route("/orders/api/products/search")
-@login_required
-def api_product_search():
-    """API wyszukiwania produktow do formularza recznego zamowienia."""
-    q = request.args.get("q", "").strip()
-    if len(q) < 2:
-        return jsonify([])
-
-    with get_session() as db:
-        from .models.products import Product, ProductSize
-        query = (
-            db.query(ProductSize)
-            .join(Product, Product.id == ProductSize.product_id)
-            .filter(ProductSize.quantity > 0)
-        )
-
-        # Szukaj po barcode, nazwie, kolorze, serii
-        like_q = f"%{q}%"
-        query = query.filter(
-            (ProductSize.barcode.ilike(like_q))
-            | (Product._name.ilike(like_q))
-            | (Product.color.ilike(like_q))
-            | (Product.series.ilike(like_q))
-            | (Product.category.ilike(like_q))
-            | (Product.brand.ilike(like_q))
-        )
-
-        results = []
-        for ps in query.limit(20).all():
-            product = ps.product
-            label = f"{product.name} | {product.color or '-'} | {ps.size} | EAN: {ps.barcode or '-'} | Stan: {ps.quantity}"
-            results.append({
-                "name": f"{product.name} - {product.color or ''} - {ps.size}".strip(" -"),
-                "ean": ps.barcode or "",
-                "size": ps.size,
-                "stock": ps.quantity,
-                "label": label,
-            })
-
-    return jsonify(results)
-
-
 @bp.route("/orders/add", methods=["GET", "POST"])
 @login_required
 def add_order():
@@ -438,63 +394,6 @@ def update_manual_tracking(order_id: str):
             flash(str(exc), "danger")
 
     return redirect(url_for(".order_detail", order_id=order_id))
-
-
-@bp.route("/orders/sync-all", methods=["POST"])
-@login_required
-def sync_all_orders():
-    """Reczne uruchomienie syncu zamowien z Allegro Events API."""
-    try:
-        from .order_sync_scheduler import _sync_from_allegro_events
-        from flask import current_app as app
-
-        current_app.logger.info("Reczny sync zamowien z Allegro Events API")
-        ev_stats = _sync_from_allegro_events(app._get_current_object())
-        
-        synced = ev_stats.get("orders_synced", 0)
-        cancelled = ev_stats.get("orders_cancelled", 0)
-        current_app.logger.info(
-            "Reczny sync zakonczony: %d zsynchronizowanych, %d anulowanych",
-            synced, cancelled,
-        )
-        flash(
-            f"Zsynchronizowano {synced} zamowien z Allegro (anulowane: {cancelled})",
-            "success",
-        )
-    except Exception as exc:
-        current_app.logger.error("Blad recznego syncu zamowien: %s", exc)
-        flash(f"Blad synchronizacji: {exc}", "error")
-    
-    return redirect(url_for(".orders_list"))
-
-
-@bp.route("/orders/sync-allegro", methods=["POST"])
-@login_required
-def sync_allegro_orders():
-    """
-    Synchronizacja zamowien bezposrednio z Allegro REST API.
-    
-    Allegro zwraca zamowienia z ostatnich 12 miesiecy (max).
-    Paginacja: offset/limit, max offset+limit = 10000.
-    Uzywa GET /order/checkout-forms.
-    """
-    try:
-        current_app.logger.info("Rozpoczynam sync zamowien z Allegro API...")
-        with get_session() as db:
-            result = sync_orders_from_allegro_api(
-                db,
-                sync_order_from_data=sync_order_from_data,
-                add_order_status=add_order_status,
-                logger=current_app.logger,
-            )
-        current_app.logger.info(result.message)
-        flash(result.message, "success")
-
-    except Exception as exc:
-        current_app.logger.error("Blad sync zamowien z Allegro API: %s", exc)
-        flash(f"Blad synchronizacji z Allegro: {exc}", "error")
-
-    return redirect(url_for(".orders_list"))
 
 
 # Synchronizacja statusów przesyłek jest automatyczna (co godzinę w schedulerze)
