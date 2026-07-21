@@ -228,7 +228,31 @@ def _merge_family(
         import unicodedata
 
         def _slugify(text: str) -> str:
-            normalized = unicodedata.normalize("NFKD", text)
+            # Polskie znaki → ASCII (ł→l), nie strip jak NFKD+ignore
+            repl = str.maketrans(
+                {
+                    "ą": "a",
+                    "ć": "c",
+                    "ę": "e",
+                    "ł": "l",
+                    "ń": "n",
+                    "ó": "o",
+                    "ś": "s",
+                    "ź": "z",
+                    "ż": "z",
+                    "Ą": "a",
+                    "Ć": "c",
+                    "Ę": "e",
+                    "Ł": "l",
+                    "Ń": "n",
+                    "Ó": "o",
+                    "Ś": "s",
+                    "Ź": "z",
+                    "Ż": "z",
+                }
+            )
+            ascii_text = text.translate(repl)
+            normalized = unicodedata.normalize("NFKD", ascii_text)
             ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
             return re.sub(r"[^a-zA-Z0-9]+", "-", ascii_text.lower()).strip("-")
 
