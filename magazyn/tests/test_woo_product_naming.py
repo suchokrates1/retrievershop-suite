@@ -15,10 +15,22 @@ def test_canonical_uses_product_name_not_allegro_size_color():
         category="Szelki",
         brand="Truelove",
         series="Front Line Premium",
+        color="fioletowe",
     )
     assert canonical_woo_product_name(
         product, fallback_title="Szelki guard L fioletowe"
-    ) == "Szelki dla psa Truelove Front Line Premium"
+    ) == "Szelki dla psa Truelove Front Line Premium — fioletowe"
+
+
+def test_canonical_without_color_stays_base():
+    product = SimpleNamespace(
+        name="Smycz dla psa Truelove Handy",
+        category="Smycze",
+        brand="Truelove",
+        series="Handy",
+        color="",
+    )
+    assert canonical_woo_product_name(product) == "Smycz dla psa Truelove Handy"
 
 
 def test_sanitize_strips_size_color_and_typos():

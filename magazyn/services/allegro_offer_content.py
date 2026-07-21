@@ -97,8 +97,11 @@ def sync_offer_content(
             )
             # Oznacz probe, zeby batch nie spamowal 404 w nieskonczonosc
             err = str(details.get("error") or "")
-            if "404" in err and not offer.content_synced_at:
+            if "404" in err:
                 offer.content_synced_at = datetime.now(timezone.utc).isoformat()
+                # Placeholder, zeby ENDED backfill nie dobijal w nieskonczonosc
+                if not (offer.description_html or "").strip():
+                    offer.description_html = "<!-- allegro-404 -->"
                 db.commit()
             return False
 

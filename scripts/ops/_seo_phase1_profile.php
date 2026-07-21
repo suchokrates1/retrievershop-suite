@@ -58,15 +58,15 @@ if (!is_array($opts)) {
         $opts['social']['facebook'] = [];
     }
     $logo = 'https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png';
-    $opts['social']['facebook']['defaultImageSource'] = 'default';
+    $opts['social']['facebook']['defaultImageSource'] = 'custom';
     $opts['social']['facebook']['defaultImageCustomFields'] = $logo;
-    $opts['social']['facebook']['homePageImageSource'] = 'default';
+    $opts['social']['facebook']['homePageImageSource'] = 'custom';
     $opts['social']['facebook']['homePageImageCustomFields'] = $logo;
     if (!isset($opts['social']['twitter'])) {
         $opts['social']['twitter'] = [];
     }
     $opts['social']['twitter']['defaultCardType'] = 'summary_large_image';
-    $opts['social']['twitter']['defaultImageSource'] = 'default';
+    $opts['social']['twitter']['defaultImageSource'] = 'custom';
     $opts['social']['twitter']['defaultImageCustomFields'] = $logo;
 
     update_option('aioseo_options', wp_json_encode($opts));
