@@ -134,15 +134,18 @@ $dostawa = <<<'HTML'
 HTML;
 
 $zwroty = <<<'HTML'
-<h2>Zwroty i reklamacje</h2>
-<p>Przy zakupie na odległość masz <strong>14 dni</strong> na odstąpienie od umowy (produkt kompletny, nieużywany w sposób wykraczający poza sprawdzenie).</p>
+<div class="rs-zwroty">
+<p><strong>Zwrot zamówienia załatwisz jednym kliknięciem</strong> — bez mailowania i szukania formularzy PDF. Zgodnie z prawem UE masz u nas elektroniczny wniosek online.</p>
+<p><a class="button" href="/wniosek-o-odstapienie/">Złóż wniosek o odstąpienie →</a></p>
+<h2>Jak to działa</h2>
 <ol>
-<li>Napisz na <a href="mailto:kontakt@retrievershop.pl">kontakt@retrievershop.pl</a> lub zadzwoń <a href="tel:+48782865895">782 865 895</a>.</li>
-<li>Wyślij produkt z numerem zamówienia na adres, który podamy w odpowiedzi.</li>
-<li>Po otrzymaniu zwrotu oddamy środki tą samą metodą płatności.</li>
+<li>Wejdź na <a href="/wniosek-o-odstapienie/"><strong>Odstąpienie od umowy</strong></a> albo w Moje konto → zamówienie → odstąpienie.</li>
+<li>Wypełnij krótki formularz i wyślij wniosek <strong>jednym kliknięciem</strong>.</li>
+<li>Dostaniesz potwierdzenie i instrukcję odesłania paczki.</li>
+<li>Po otrzymaniu paczki oddamy pieniądze tą samą metodą płatności.</li>
 </ol>
-<p>Reklamacje jakościowe rozpatrujemy indywidualnie — jesteśmy sklepem z magazynem w Legnicy, nie anonimowym dropshippingiem.</p>
-<p>Szczegóły prawne: zobacz też <a href="/regulamin/">Regulamin</a>.</p>
+<p>Termin: <strong>14 dni</strong>. Reklamacje: <a href="mailto:kontakt@retrievershop.pl">kontakt@retrievershop.pl</a>, tel. <a href="tel:+48782865895">782 865 895</a>. <a href="/regulamin/">Regulamin</a>.</p>
+</div>
 HTML;
 
 $regulamin = <<<'HTML'
@@ -257,7 +260,7 @@ rs_log("footer_menu #$menu_id assigned");
 $sidebars = wp_get_sidebars_widgets();
 $html_links = '<ul class="rs-footer-trust-links">'
     . '<li><a href="/dostawa/">Dostawa (do 16:00 → jutro)</a></li>'
-    . '<li><a href="/zwroty/">Zwroty 14 dni</a></li>'
+    . '<li><a href="/zwroty/">Zwroty (1 klik)</a></li>'
     . '<li><a href="/faq/">FAQ</a></li>'
     . '<li><a href="/regulamin/">Regulamin</a></li>'
     . '<li><a href="/polityka-prywatnosci/">Polityka prywatności</a></li>'
