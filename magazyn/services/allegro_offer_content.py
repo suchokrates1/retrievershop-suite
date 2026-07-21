@@ -39,7 +39,9 @@ def allegro_description_to_html(description: Any) -> str:
             elif item_type == "IMAGE":
                 url = item.get("url")
                 if url:
-                    parts.append(f'<p><img src="{escape(url)}" alt="" /></p>')
+                    parts.append(
+                        f'<p><img src="{escape(url)}" alt="{escape("zdjęcie produktu")}" /></p>'
+                    )
     return "\n".join(parts)
 
 
@@ -108,16 +110,33 @@ def sync_linked_offers_content(
     limit: int = 40,
     force: bool = False,
     sleep_s: float = 0.35,
+    include_ended_without_content: bool = True,
 ) -> dict[str, int]:
-    """Batch: dociagnij tresc dla ACTIVE ofert powiazanych z magazynem."""
+    """Batch: tresc dla powiazanych ofert (ACTIVE + ENDED bez cache)."""
     stats = {"updated": 0, "skipped": 0, "errors": 0}
     with get_session() as db:
+        from sqlalchemy import or_, and_
+
+        filters = [AllegroOffer.product_size_id.isnot(None)]
+        if include_ended_without_content:
+            filters.append(
+                or_(
+                    AllegroOffer.publication_status == "ACTIVE",
+                    and_(
+                        AllegroOffer.publication_status == "ENDED",
+                        or_(
+                            AllegroOffer.description_html.is_(None),
+                            AllegroOffer.description_html == "",
+                            AllegroOffer.content_synced_at.is_(None),
+                        ),
+                    ),
+                )
+            )
+        else:
+            filters.append(AllegroOffer.publication_status == "ACTIVE")
         query = (
             db.query(AllegroOffer)
-            .filter(
-                AllegroOffer.product_size_id.isnot(None),
-                AllegroOffer.publication_status == "ACTIVE",
-            )
+            .filter(*filters)
             .order_by(AllegroOffer.content_synced_at.asc().nullsfirst())
             .limit(limit)
         )

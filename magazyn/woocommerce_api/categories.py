@@ -16,6 +16,9 @@ CATEGORY_ALIASES: dict[str, str] = {
     "Szelki": "Szelki",
     "Smycz": "Smycze",
     "Pas bezpieczeństwa": "Pasy bezpieczeństwa",
+    "Pasy bezpieczeństwa": "Pasy bezpieczeństwa",
+    "Pas samochodowy": "Pasy bezpieczeństwa",
+    "Pasy samochodowe": "Pasy bezpieczeństwa",
 }
 
 _category_cache: dict[str, int] = {}

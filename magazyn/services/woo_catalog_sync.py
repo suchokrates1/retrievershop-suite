@@ -23,6 +23,7 @@ from ..woocommerce_api.products import (
     upsert_variation,
 )
 from .allegro_offer_content import sync_offer_content
+from .woo_product_naming import canonical_woo_product_name, short_description_plain
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,50 @@ def sync_catalog_to_woo(
     return stats
 
 
+def _ensure_offer_content(db, offer: AllegroOffer, *, force: bool = False) -> None:
+    """Dociagnij opis/zdjecia gdy cache pusty (takze ENDED)."""
+    needs = force or not (offer.description_html or "").strip()
+    if not needs:
+        try:
+            imgs = json.loads(offer.image_urls or "[]")
+            needs = not imgs
+        except json.JSONDecodeError:
+            needs = True
+    if not needs:
+        return
+    sync_offer_content(offer.offer_id, force=True)
+    db.refresh(offer)
+
+
+def _collect_image_ids(
+    client: WooClient,
+    *,
+    woo_product_id: Optional[int],
+    image_urls: list[str],
+    offer_id: Optional[str],
+    product_id: int,
+    alt_text: str,
+) -> list[int]:
+    """Istniejace ID + dograj brakujace z Allegro (max 8)."""
+    image_ids: list[int] = []
+    if woo_product_id:
+        image_ids = get_product_image_ids(client, woo_product_id)
+    target = 8
+    if len(image_ids) >= target or not image_urls:
+        return image_ids[:target]
+    start_idx = len(image_ids)
+    for idx, url in enumerate(image_urls[start_idx:target], start=start_idx):
+        filename = (
+            f"allegro_{offer_id}_{idx}.jpg" if offer_id else f"mag_{product_id}_{idx}.jpg"
+        )
+        media_id = upload_product_image_from_url(
+            client, url, filename=filename, alt_text=alt_text
+        )
+        if media_id and int(media_id) not in image_ids:
+            image_ids.append(int(media_id))
+    return image_ids
+
+
 def _sync_one_product(
     db,
     client: WooClient,
@@ -87,7 +132,6 @@ def _sync_one_product(
         .filter(ProductSize.product_id == product.id)
         .all()
     )
-    # Rozmiary z EAN: ACTIVE oferta, albo stock/zmapowane (cena z ostatniej oferty)
     variants: list[tuple[ProductSize, AllegroOffer | None]] = []
     for size in sizes:
         if not size.barcode:
@@ -116,12 +160,14 @@ def _sync_one_product(
         return
 
     primary_offer = next((o for _, o in variants if o is not None), None)
-    if primary_offer and refresh_content:
-        sync_offer_content(primary_offer.offer_id)
-        db.refresh(primary_offer)
+    if primary_offer:
+        if refresh_content:
+            sync_offer_content(primary_offer.offer_id)
+            db.refresh(primary_offer)
+        _ensure_offer_content(db, primary_offer)
 
     description = (primary_offer.description_html if primary_offer else None) or ""
-    image_urls = []
+    image_urls: list[str] = []
     if primary_offer and primary_offer.image_urls:
         try:
             image_urls = json.loads(primary_offer.image_urls)
@@ -136,15 +182,10 @@ def _sync_one_product(
         color=product.color,
         size_options=size_options,
     )
-    name = (primary_offer.title if primary_offer else None) or product.name
-    # Usun rozmiar z konca tytulu Allegro jesli obecny
-    for size_opt in size_options:
-        if name.endswith(f" {size_opt}"):
-            name = name[: -(len(size_opt) + 1)].rstrip(" -")
+    name = canonical_woo_product_name(product)
 
     woo_product_id = product.woo_product_id
     if not woo_product_id:
-        # Match istniejacego produktu Woo po EAN pierwszego wariantu (bez duplikatow)
         matched = find_product_by_ean(client, variants[0][0].barcode)
         if matched:
             woo_product_id = int(matched["id"])
@@ -153,7 +194,6 @@ def _sync_one_product(
             if matched_var and not variants[0][0].woo_variation_id:
                 variants[0][0].woo_variation_id = int(matched_var["id"])
 
-    # Stare mapowania czasem wskazuja na variation zamiast parent variable
     woo_product_id = _resolve_variable_parent_id(client, product, woo_product_id)
 
     category_ids: list[int] = []
@@ -161,27 +201,21 @@ def _sync_one_product(
     if cat_id:
         category_ids.append(cat_id)
 
-    # Nie re-uploaduj zdjec gdy produkt Woo juz je ma
-    image_ids: list[int] = []
-    if woo_product_id:
-        image_ids = get_product_image_ids(client, woo_product_id)
-    if not image_ids:
-        for idx, url in enumerate(image_urls[:8]):
-            media_id = upload_product_image_from_url(
-                client,
-                url,
-                filename=f"allegro_{primary_offer.offer_id}_{idx}.jpg"
-                if primary_offer
-                else f"mag_{product.id}_{idx}.jpg",
-            )
-            if media_id:
-                image_ids.append(media_id)
+    image_ids = _collect_image_ids(
+        client,
+        woo_product_id=woo_product_id,
+        image_urls=image_urls,
+        offer_id=primary_offer.offer_id if primary_offer else None,
+        product_id=int(product.id),
+        alt_text=name,
+    )
 
     product_payload = create_or_update_variable_product(
         client,
         woo_product_id=woo_product_id,
         name=name,
         description_html=description,
+        short_description=short_description_plain(description) if description else None,
         image_ids=image_ids,
         image_urls=None if image_ids else image_urls[:8],
         attributes=attributes,
@@ -208,7 +242,6 @@ def _sync_one_product(
         size.woo_variation_id = int(variation["id"])
         stats["variations"] += 1
 
-    # Dopchnij stany wszystkich zmapowanych rozmiarow produktu (takze poza variants)
     for size in sizes:
         if size.woo_variation_id and size.barcode:
             maybe_push_woo_stock(size.id, quantity=int(size.quantity or 0))

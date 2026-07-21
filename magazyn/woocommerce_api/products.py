@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
 import requests
@@ -85,7 +86,13 @@ def get_product_image_ids(client: WooClient, woo_product_id: int) -> list[int]:
     return ids
 
 
-def upload_product_image_from_url(client: WooClient, image_url: str, filename: str) -> Optional[int]:
+def upload_product_image_from_url(
+    client: WooClient,
+    image_url: str,
+    filename: str,
+    *,
+    alt_text: str = "",
+) -> Optional[int]:
     """Pobierz obraz z URL i wgraj do WP Media Library. Zwraca attachment ID.
 
     Allegro CDN nie ma rozszerzenia pliku — wymuszamy ``.jpg`` i ``image/jpeg``.
@@ -97,6 +104,8 @@ def upload_product_image_from_url(client: WooClient, image_url: str, filename: s
 
     existing_id = find_media_id_by_filename(client, filename)
     if existing_id:
+        if alt_text:
+            _set_media_alt(client, int(existing_id), alt_text)
         return existing_id
 
     try:
@@ -128,7 +137,22 @@ def upload_product_image_from_url(client: WooClient, image_url: str, filename: s
     if response.status_code >= 400:
         logger.warning("Upload mediow WP failed %s: %s", response.status_code, response.text[:300])
         return None
-    return response.json().get("id")
+    media_id = response.json().get("id")
+    if media_id and alt_text:
+        _set_media_alt(client, int(media_id), alt_text)
+    return media_id
+
+
+def _set_media_alt(client: WooClient, media_id: int, alt_text: str) -> None:
+    try:
+        requests.post(
+            client.base_url + f"wp-json/wp/v2/media/{media_id}",
+            auth=_wp_media_auth(client),
+            json={"alt_text": alt_text},
+            timeout=30,
+        )
+    except Exception as exc:
+        logger.debug("Nie ustawiono alt dla media %s: %s", media_id, exc)
 
 
 def create_or_update_variable_product(
@@ -142,21 +166,35 @@ def create_or_update_variable_product(
     attributes: list[dict],
     category_ids: Optional[list[int]] = None,
     status: str = "publish",
+    short_description: Optional[str] = None,
 ) -> dict:
     payload: dict[str, Any] = {
         "name": name,
         "type": "variable",
         "status": status,
-        "description": description_html or "",
-        "short_description": (description_html or "")[:400],
         "attributes": attributes,
     }
+    # Nie nadpisuj istniejacego opisu pustym stringiem
+    if description_html and description_html.strip():
+        payload["description"] = description_html
+        if short_description is not None:
+            payload["short_description"] = short_description
+        else:
+            # Fallback: plain cut bez zaleznosci od services.*
+            plain = re.sub(r"<[^>]+>", " ", description_html)
+            plain = re.sub(r"\s+", " ", plain).strip()
+            payload["short_description"] = (plain[:159] + "…") if len(plain) > 160 else plain
+    elif short_description:
+        payload["short_description"] = short_description
+    elif not woo_product_id:
+        payload["description"] = ""
+        payload["short_description"] = ""
+
     if category_ids:
         payload["categories"] = [{"id": int(cid)} for cid in category_ids if cid]
     images: list[dict[str, Any]] = []
     for image_id in image_ids or []:
         images.append({"id": image_id})
-    # WC REST potrafi pobrac obraz z URL (nie wymaga WP Media auth)
     for url in image_urls or []:
         if url:
             images.append({"src": url})
@@ -168,7 +206,6 @@ def create_or_update_variable_product(
             return client.put(f"wp-json/wc/v3/products/{woo_product_id}", json=payload)
         return client.post("wp-json/wc/v3/products", json=payload)
     except WooClientError as exc:
-        # Allegro CDN / MIME bywa odrzucane przez WP — zapisz produkt bez zdjec
         if payload.get("images") and "image" in str(exc).lower():
             logger.warning("Woo product image rejected, retry without images: %s", exc)
             payload = {k: v for k, v in payload.items() if k != "images"}

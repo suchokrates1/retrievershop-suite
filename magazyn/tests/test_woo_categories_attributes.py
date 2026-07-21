@@ -16,6 +16,8 @@ from magazyn.woocommerce_api.categories import (
 def test_resolve_category_name_aliases():
     assert resolve_category_name("Smycz") == "Smycze"
     assert resolve_category_name("Pas bezpieczeństwa") == "Pasy bezpieczeństwa"
+    assert resolve_category_name("Pas samochodowy") == "Pasy bezpieczeństwa"
+    assert resolve_category_name("Pasy samochodowe") == "Pasy bezpieczeństwa"
     assert resolve_category_name("Szelki") == "Szelki"
     assert resolve_category_name("Obroża") == "Obroża"
     assert resolve_category_name(None) is None
