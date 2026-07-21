@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Retriever SEO
- * Description: Slug 301 redirects + homepage H1 + OG safety helpers.
+ * Description: Slug 301 redirects (static + option rs_seo_slug_redirects) + homepage H1 + OG safety.
  */
 if (!defined('ABSPATH')) {
     exit;
@@ -13,17 +13,28 @@ add_action('template_redirect', function () {
     }
     $uri = trim((string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
     $map = [
-        'produkt/szelki-dla-psa-trelove-front-line-premium-xs-czarne' => '/produkt/szelki-dla-psa-truelove-front-line-premium-czarne/',
-        'produkt/szelki-dla-psa-truelove-fronr-line-premium-czerwonw' => '/produkt/szelki-dla-psa-truelove-front-line-premium-czerwone/',
-        'produkt/szelki-dla-psa-truelve-front-line-ptemium-s-granatowe' => '/produkt/szelki-dla-psa-truelove-front-line-premium-granatowe/',
+        'produkt/szelki-dla-psa-trelove-front-line-premium-xs-czarne' => '/produkt/szelki-dla-psa-truelove-front-line-premium/',
+        'produkt/szelki-dla-psa-truelove-fronr-line-premium-czerwonw' => '/produkt/szelki-dla-psa-truelove-front-line-premium/',
+        'produkt/szelki-dla-psa-truelve-front-line-ptemium-s-granatowe' => '/produkt/szelki-dla-psa-truelove-front-line-premium/',
     ];
+    $extra = get_option('rs_seo_slug_redirects', []);
+    if (is_string($extra)) {
+        $decoded = json_decode($extra, true);
+        if (is_array($decoded)) {
+            $extra = $decoded;
+        } else {
+            $extra = [];
+        }
+    }
+    if (is_array($extra)) {
+        $map = array_merge($map, $extra);
+    }
     if (isset($map[$uri])) {
         wp_redirect(home_url($map[$uri]), 301);
         exit;
     }
 }, 0);
 
-// H1 na homepage (Elementor często nie wystawia h1)
 add_action('wp_body_open', function () {
     if (!is_front_page()) {
         return;
@@ -35,7 +46,6 @@ add_action('wp_body_open', function () {
         . '</h1></div>';
 }, 5);
 
-// Prefer featured image for product OG; never emit fbcdn via late filter if somehow injected
 add_filter('aioseo_facebook_tags', function ($tags) {
     if (!is_array($tags)) {
         return $tags;

@@ -72,7 +72,6 @@ def ensure_attribute(
         return attr_id
     except WooClientError as exc:
         logger.warning("Woo attribute create failed for %s: %s", name, exc)
-        # Refresh list in case of race / already exists
         try:
             existing = client.get("wp-json/wc/v3/products/attributes", params={"per_page": 100}) or []
             for item in existing:
@@ -133,69 +132,80 @@ def ensure_attribute_term(client: WooClient, attribute_id: int, term_name: str) 
         return None
 
 
+def _add_attribute(
+    attributes: list[dict[str, Any]],
+    client: WooClient,
+    name: str,
+    options: list[str],
+    *,
+    variation: bool,
+) -> None:
+    opts = []
+    seen: set[str] = set()
+    for raw in options:
+        value = (raw or "").strip()
+        if not value:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        opts.append(value)
+    if not opts:
+        return
+    attr_id = ensure_attribute(client, name)
+    if attr_id:
+        for value in opts:
+            ensure_attribute_term(client, attr_id, value)
+        attributes.append(
+            {
+                "id": attr_id,
+                "visible": True,
+                "variation": variation,
+                "options": opts,
+            }
+        )
+    else:
+        attributes.append(
+            {
+                "name": name,
+                "visible": True,
+                "variation": variation,
+                "options": opts,
+            }
+        )
+
+
 def build_product_attributes(
     client: WooClient,
     *,
     brand: str | None,
     series: str | None,
-    color: str | None,
     size_options: list[str],
+    color: str | None = None,
+    colors: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Zbuduj liste atrybutow payloadu produktu variable (globalne ID gdy dostepne)."""
+    """Zbuduj atrybuty variable product.
+
+    Kolor i Rozmiar sa osiami wariacji (``variation=True``). Marka/Seria stale.
+    ``colors`` (union) ma pierwszenstwo; ``color`` zostaje dla kompatybilnosci.
+    """
     attributes: list[dict[str, Any]] = []
 
-    def _add_fixed(name: str, value: str | None, *, variation: bool = False) -> None:
-        value = (value or "").strip()
-        if not value:
-            return
-        attr_id = ensure_attribute(client, name)
-        if attr_id:
-            ensure_attribute_term(client, attr_id, value)
-            attributes.append(
-                {
-                    "id": attr_id,
-                    "visible": True,
-                    "variation": variation,
-                    "options": [value],
-                }
-            )
-        else:
-            attributes.append(
-                {
-                    "name": name,
-                    "visible": True,
-                    "variation": variation,
-                    "options": [value],
-                }
-            )
+    if brand and str(brand).strip():
+        _add_attribute(attributes, client, "Marka", [str(brand)], variation=False)
+    if series and str(series).strip():
+        _add_attribute(attributes, client, "Seria", [str(series)], variation=False)
 
-    _add_fixed("Marka", brand)
-    _add_fixed("Seria", series)
-    _add_fixed("Kolor", color)
+    color_opts: list[str] = []
+    if colors:
+        color_opts = list(colors)
+    elif color and str(color).strip():
+        color_opts = [str(color)]
+    _add_attribute(attributes, client, "Kolor", color_opts, variation=True)
 
     sizes = [s.strip() for s in size_options if s and str(s).strip()]
-    if sizes:
-        attr_id = ensure_attribute(client, "Rozmiar")
-        if attr_id:
-            for size in sizes:
-                ensure_attribute_term(client, attr_id, size)
-            attributes.append(
-                {
-                    "id": attr_id,
-                    "visible": True,
-                    "variation": True,
-                    "options": sizes,
-                }
-            )
-        else:
-            attributes.append(
-                {
-                    "name": "Rozmiar",
-                    "visible": True,
-                    "variation": True,
-                    "options": sizes,
-                }
-            )
+    _add_attribute(attributes, client, "Rozmiar", sizes, variation=True)
 
     return attributes
 

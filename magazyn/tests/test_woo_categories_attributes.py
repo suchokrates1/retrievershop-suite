@@ -75,15 +75,15 @@ def test_build_product_attributes_includes_brand_series_color_size():
         client,
         brand="Truelove",
         series="Front Line",
-        color="Czarny",
+        colors=["Czarny", "Czerwony"],
         size_options=["L", "XL"],
     )
     by_key = {(a.get("id") or a.get("name")): a for a in attrs}
     assert by_key[10]["options"] == ["Truelove"]
     assert by_key[10]["variation"] is False
     assert by_key[11]["options"] == ["Front Line"]
-    assert by_key[1]["options"] == ["Czarny"]
-    assert by_key[1]["variation"] is False
+    assert by_key[1]["options"] == ["Czarny", "Czerwony"]
+    assert by_key[1]["variation"] is True
     assert by_key[2]["options"] == ["L", "XL"]
     assert by_key[2]["variation"] is True
 
@@ -126,6 +126,7 @@ def test_sync_one_product_sends_categories_and_attributes():
     offer_query = MagicMock()
     offer_query.filter.return_value.order_by.return_value.first.return_value = offer
     db = MagicMock()
+    # _collect_family_variants: sizes query, then ACTIVE offer, (no fallback if found)
     db.query.side_effect = [size_query, offer_query]
 
     stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
@@ -141,8 +142,9 @@ def test_sync_one_product_sends_categories_and_attributes():
             "create_or_update_variable_product",
             return_value={"id": 55},
         ) as upsert_product,
-        patch.object(sync_mod, "upsert_variation", return_value={"id": 100}),
+        patch.object(sync_mod, "upsert_variation", return_value={"id": 100}) as upsert_var,
         patch.object(sync_mod, "sync_offer_content"),
+        patch.object(sync_mod, "maybe_push_woo_stock"),
     ):
         sync_mod._sync_one_product(
             db,
@@ -154,6 +156,114 @@ def test_sync_one_product_sends_categories_and_attributes():
 
     ensure_cat.assert_called_once_with(client, "Szelki")
     build_attrs.assert_called_once()
+    ba_kwargs = build_attrs.call_args.kwargs
+    assert ba_kwargs["colors"] == ["Czarny"]
     assert upsert_product.call_args.kwargs["category_ids"] == [53]
     assert upsert_product.call_args.kwargs["attributes"] == [{"id": 2, "options": ["L"]}]
+    assert upsert_var.call_args.kwargs["color"] == "Czarny"
+    assert upsert_var.call_args.kwargs["size"] == "L"
     upload.assert_not_called()
+
+
+def test_sync_one_family_shares_parent_across_colors():
+    from magazyn.services import woo_catalog_sync as sync_mod
+
+    client = MagicMock()
+    black = SimpleNamespace(
+        id=1,
+        name="Szelki dla psa Truelove Front Line",
+        woo_product_id=10,
+        category="Szelki",
+        brand="Truelove",
+        series="Front Line",
+        color="czarne",
+    )
+    orange = SimpleNamespace(
+        id=2,
+        name="Szelki dla psa Truelove Front Line",
+        woo_product_id=20,
+        category="Szelki",
+        brand="Truelove",
+        series="Front Line",
+        color="pomarańczowe",
+    )
+    size_b = SimpleNamespace(
+        id=11, product_id=1, barcode="EAN-B", size="L", quantity=1, woo_variation_id=101, product=black
+    )
+    size_o = SimpleNamespace(
+        id=12, product_id=2, barcode="EAN-O", size="L", quantity=2, woo_variation_id=102, product=orange
+    )
+    offer_b = SimpleNamespace(
+        offer_id="OB",
+        publication_status="ACTIVE",
+        synced_at=None,
+        description_html="<p>desc black</p>",
+        image_urls='["https://img/b.jpg"]',
+        price="100",
+    )
+    offer_o = SimpleNamespace(
+        offer_id="OO",
+        publication_status="ACTIVE",
+        synced_at=None,
+        description_html="<p>x</p>",
+        image_urls="[]",
+        price="110",
+    )
+
+    size_q1 = MagicMock()
+    size_q1.filter.return_value.all.return_value = [size_b]
+    offer_q1 = MagicMock()
+    offer_q1.filter.return_value.order_by.return_value.first.return_value = offer_b
+    size_q2 = MagicMock()
+    size_q2.filter.return_value.all.return_value = [size_o]
+    offer_q2 = MagicMock()
+    offer_q2.filter.return_value.order_by.return_value.first.return_value = offer_o
+
+    db = MagicMock()
+    db.query.side_effect = [size_q1, offer_q1, size_q2, offer_q2]
+
+    stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
+    upsert_calls = []
+
+    def _upsert_var(*args, **kwargs):
+        upsert_calls.append(kwargs)
+        return {"id": kwargs.get("variation_id") or 999}
+
+    with (
+        patch.object(sync_mod, "_resolve_variable_parent_id", return_value=10),
+        patch.object(sync_mod, "build_product_attributes", return_value=[]) as build_attrs,
+        patch.object(sync_mod, "ensure_product_category", return_value=53),
+        patch.object(sync_mod, "get_product_image_ids", return_value=[]),
+        patch.object(sync_mod, "upload_product_image_from_url", return_value=None),
+        patch.object(
+            sync_mod,
+            "create_or_update_variable_product",
+            return_value={"id": 10},
+        ) as upsert_product,
+        patch.object(sync_mod, "upsert_variation", side_effect=_upsert_var),
+        patch.object(sync_mod, "sync_offer_content"),
+        patch.object(sync_mod, "maybe_push_woo_stock"),
+        patch.object(
+            sync_mod,
+            "canonical_woo_product_name",
+            return_value="Szelki dla psa Truelove Front Line",
+        ),
+    ):
+        sync_mod._sync_one_family(
+            db,
+            client,
+            [black, orange],
+            refresh_content=False,
+            stats=stats,
+        )
+
+    assert black.woo_product_id == 10
+    assert orange.woo_product_id == 10
+    assert stats["products"] == 1
+    assert stats["variations"] == 2
+    ba = build_attrs.call_args.kwargs
+    assert set(ba["colors"]) == {"czarne", "pomarańczowe"}
+    assert ba["size_options"] == ["L"]
+    assert upsert_product.call_args.kwargs["name"] == "Szelki dla psa Truelove Front Line"
+    colors_sent = {c["color"] for c in upsert_calls}
+    assert colors_sent == {"czarne", "pomarańczowe"}
