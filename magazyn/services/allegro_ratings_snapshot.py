@@ -83,8 +83,9 @@ def _count_orders() -> int:
     try:
         from sqlalchemy import text
 
-        from ..db import get_session
+        from ..db import configure_engine, get_session
 
+        configure_engine()
         with get_session() as db:
             total = db.execute(text("SELECT COUNT(*) FROM orders")).scalar()
             return int(total or 0)

@@ -197,7 +197,7 @@ function rs_trust_stats_html(): string {
     $ratings = (int) ($d['ratings_received_total'] ?? 0);
     $orders = (int) ($d['orders_rounded_100'] ?? 0);
     if ($orders < 100 && !empty($d['orders_total'])) {
-        $orders = ((int) $d['orders_total'] // 100) * 100;
+        $orders = intdiv((int) $d['orders_total'], 100) * 100;
     }
     $since = (string) ($d['seller_since'] ?? '');
     $year = $since !== '' ? substr($since, 0, 4) : '2017';
