@@ -311,10 +311,12 @@ foreach (['pa_kolor', 'pa_rozmiar', 'pa_marka', 'product_tag', 'product_brand'] 
 }
 
 line('=== REDIRECTS MU ===');
-$redir_file = WP_CONTENT_DIR . '/mu-plugins/retriever-seo-slug-redirects.php';
-line('slug_redirects_mu', file_exists($redir_file) ? 'present' : 'MISSING');
-if (!file_exists($redir_file)) {
-    $warns[] = 'brak MU slug redirects';
+$seo_mu = WP_CONTENT_DIR . '/mu-plugins/retriever-seo.php';
+$redir_legacy = WP_CONTENT_DIR . '/mu-plugins/retriever-seo-slug-redirects.php';
+line('seo_mu', file_exists($seo_mu) ? 'present' : 'MISSING');
+line('slug_redirects_legacy', file_exists($redir_legacy) ? 'present' : 'absent');
+if (!file_exists($seo_mu) && !file_exists($redir_legacy)) {
+    $warns[] = 'brak MU SEO redirects';
 }
 $nl_file = WP_CONTENT_DIR . '/mu-plugins/retriever-newsletter.php';
 line('newsletter_mu', file_exists($nl_file) ? 'present' : 'MISSING');

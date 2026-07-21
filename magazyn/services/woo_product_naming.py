@@ -43,10 +43,13 @@ def short_description_plain(description_html: str, *, max_len: int = 160) -> str
 
 
 def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = None) -> str:
-    """Nazwa rodzica variable: kategoria + marka + model — bez rozmiaru/koloru.
+    """Nazwa rodzica variable: kategoria + marka + model — bez rozmiaru.
+
+    Kolor (``Product.color``) jest dopisywany po em dash, bo w Woo jeden parent
+    = jeden kolor (osobne oferty Allegro). Bez koloru tytuły się kanibalizują.
 
     Preferuje ``Product.name`` z magazynu. ``fallback_title`` (np. Allegro) tylko
-    gdy name puste — i wtedy i tak strip size/color.
+    gdy name puste — i wtedy i tak strip size/color z bazy, zanim dodamy color.
     """
     name = (getattr(product, "name", None) or "").strip()
     if not name and fallback_title:
@@ -71,7 +74,14 @@ def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = 
             )
             name = f"{cat} dla psa {rest}".strip()
 
-    return sanitize_parent_product_title(name)
+    base = sanitize_parent_product_title(name)
+    color = (getattr(product, "color", None) or "").strip()
+    if not color:
+        return base
+    color_l = color.lower()
+    if color_l and color_l not in base.lower():
+        return f"{base} — {color}"
+    return base
 
 
 def sanitize_parent_product_title(title: str) -> str:
