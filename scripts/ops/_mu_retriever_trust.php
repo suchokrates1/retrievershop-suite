@@ -136,9 +136,15 @@ add_action('wp_head', function () {
 .rs-footer-trust-links a{color:#1A3333;text-decoration:underline}
 .rs-woo-lead{margin:0 0 16px;padding:12px 14px;background:#F3F0EB;border-radius:8px;color:#1A3333;font-size:15px;line-height:1.5}
 .rs-woo-lead p{margin:0}
-.rs-allegro-badge{margin:14px 0;padding:12px 14px;border:1px solid #e5e1da;border-radius:8px;background:#fff;font-size:14px;color:#5A6B6B;line-height:1.45}
-.rs-allegro-badge strong{color:#1A3333}
-.rs-allegro-badge a{color:#C45C3E;font-weight:600}
+.rs-trust-stats{margin:8px auto 28px;max-width:1100px;padding:0 20px}
+.rs-trust-stats__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.rs-trust-stat{background:#F3F0EB;border-radius:12px;padding:22px 16px;text-align:center;min-height:140px;display:flex;flex-direction:column;justify-content:center}
+.rs-trust-stat__value{font-size:clamp(28px,4vw,40px);line-height:1.1;font-weight:700;color:#C45C3E;margin:0 0 8px}
+.rs-trust-stat__label{font-size:14px;line-height:1.35;color:#1A3333;margin:0}
+.rs-trust-stats__note{margin:12px 0 0;font-size:12px;color:#5A6B6B;text-align:center}
+.rs-trust-stats__note a{color:#C45C3E}
+@media (max-width:900px){.rs-trust-stats__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.rs-trust-stats__grid{grid-template-columns:1fr}.rs-trust-stat{min-height:110px}}
 .rs-sticky-contact{display:none}
 @media (max-width:781px){
 body{padding-bottom:64px}
@@ -152,7 +158,11 @@ body{padding-bottom:64px}
 /** Allegro ratings snapshot helpers (magazyn API + WP option cache). */
 function rs_allegro_trust_data(): array {
     $cached = get_transient('rs_allegro_trust');
-    if (is_array($cached) && !empty($cached['recommended_percentage'])) {
+    if (
+        is_array($cached)
+        && !empty($cached['recommended_percentage'])
+        && isset($cached['orders_rounded_100'])
+    ) {
         return $cached;
     }
     $url = (string) get_option('rs_magazyn_trust_url', 'https://magazyn.retrievershop.pl/api/shop-trust/allegro');
@@ -178,46 +188,77 @@ function rs_allegro_trust_data(): array {
     return $data;
 }
 
-function rs_allegro_badge_html(): string {
+function rs_trust_stats_html(): string {
     $d = rs_allegro_trust_data();
     if (!$d) {
         return '';
     }
-    $pct = esc_html((string) ($d['recommended_percentage'] ?? ''));
-    $total = (int) ($d['ratings_received_total'] ?? 0);
-    $since = esc_html((string) ($d['seller_since'] ?? ''));
-    $url = esc_url((string) ($d['profile_url'] ?? 'https://allegro.pl/uzytkownik/Retriever_Shop'));
+    $pct = (string) ($d['recommended_percentage'] ?? '');
+    $ratings = (int) ($d['ratings_received_total'] ?? 0);
+    $orders = (int) ($d['orders_rounded_100'] ?? 0);
+    if ($orders < 100 && !empty($d['orders_total'])) {
+        $orders = ((int) $d['orders_total'] // 100) * 100;
+    }
+    $since = (string) ($d['seller_since'] ?? '');
     $year = $since !== '' ? substr($since, 0, 4) : '2017';
-    if ($pct === '' || $total < 1) {
+    $url = esc_url((string) ($d['profile_url'] ?? 'https://allegro.pl/uzytkownik/Retriever_Shop'));
+    if ($pct === '' || $ratings < 1) {
         return '';
     }
-    return '<div class="rs-allegro-badge" aria-label="Oceny Allegro">'
-        . '<strong>' . $pct . '% poleceń</strong> · '
-        . $total . ' ocen na Allegro'
-        . ($year ? ' · sprzedajemy od ' . esc_html($year) : '')
-        . ' — <a href="' . $url . '" target="_blank" rel="noopener">Retriever_Shop</a>'
-        . '<br><span style="font-size:12px">Oceny ze sklepu Allegro (nie są to opinie produktów w tym sklepie).</span>'
+    $pct_show = esc_html(str_replace(',0', '', $pct));
+    $cards = [
+        ['value' => $pct_show . '%', 'label' => 'poleceń na Allegro'],
+        ['value' => (string) $ratings, 'label' => 'ocen sprzedawcy Allegro'],
+        ['value' => $orders >= 100 ? ($orders . '+') : (string) max($orders, 0), 'label' => 'zrealizowanych zamówień'],
+        ['value' => 'od ' . esc_html($year), 'label' => 'prowadzimy sklep'],
+    ];
+    $html = '<div class="rs-trust-stats" aria-label="Statystyki zaufania">'
+        . '<div class="rs-trust-stats__grid">';
+    foreach ($cards as $card) {
+        $html .= '<div class="rs-trust-stat">'
+            . '<p class="rs-trust-stat__value">' . esc_html($card['value']) . '</p>'
+            . '<p class="rs-trust-stat__label">' . esc_html($card['label']) . '</p>'
+            . '</div>';
+    }
+    $html .= '</div>'
+        . '<p class="rs-trust-stats__note">Oceny pochodzą ze sklepu Allegro '
+        . '<a href="' . $url . '" target="_blank" rel="noopener">Retriever_Shop</a>'
+        . ' — nie są to opinie produktów w tym sklepie. Liczba zamówień z magazynu, zaokrąglona w dół do 100.</p>'
         . '</div>';
+    return $html;
+}
+
+/** Backward-compatible shortcode alias. */
+function rs_allegro_badge_html(): string {
+    return rs_trust_stats_html();
 }
 
 add_shortcode('rs_allegro_trust', function () {
-    return rs_allegro_badge_html();
+    return rs_trust_stats_html();
+});
+add_shortcode('rs_trust_stats', function () {
+    return rs_trust_stats_html();
 });
 
-add_action('woocommerce_single_product_summary', function () {
-    echo rs_allegro_badge_html();
-}, 25);
-
-add_filter('the_content', function ($content) {
-    if (!is_front_page() || !in_the_loop() || !is_main_query() || is_admin()) {
-        return $content;
+/** Insert big trust stats above "Opinie klientów" in homepage Elementor section. */
+add_action('elementor/frontend/widget/before_render', function ($widget) {
+    if (!is_front_page() || !is_object($widget) || !method_exists($widget, 'get_name')) {
+        return;
     }
-    if (strpos($content, 'rs-allegro-badge') !== false) {
-        return $content;
+    if ($widget->get_name() !== 'heading') {
+        return;
     }
-    $badge = rs_allegro_badge_html();
-    return $badge ? ($content . '<div class="rs-faq-wrap">' . $badge . '</div>') : $content;
-}, 28);
+    $title = (string) ($widget->get_settings_for_display('title') ?? '');
+    if (stripos($title, 'Opinie klientów') === false) {
+        return;
+    }
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    echo rs_trust_stats_html();
+}, 5);
 
 /** Sticky phone / WhatsApp on mobile */
 add_action('wp_footer', function () {

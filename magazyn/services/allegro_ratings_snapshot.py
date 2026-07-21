@@ -56,6 +56,9 @@ def fetch_ratings_snapshot(access_token: str | None = None) -> dict[str, Any]:
     received = (stats.get("received") or {}).get("total")
     user_meta = data.get("user") or {}
 
+    orders_total = _count_orders()
+    orders_rounded = (orders_total // 100) * 100
+
     snapshot = {
         "user_id": user_id,
         "login": login,
@@ -67,10 +70,27 @@ def fetch_ratings_snapshot(access_token: str | None = None) -> dict[str, Any]:
         "not_recommended_total": int(not_recommended.get("total") or 0),
         "ratings_received_total": int(received or 0),
         "seller_since": str(user_meta.get("createdAt") or "")[:10],
+        "orders_total": orders_total,
+        "orders_rounded_100": orders_rounded,
         "synced_at": datetime.now(timezone.utc).isoformat(),
         "source": "allegro_api",
     }
     return snapshot
+
+
+def _count_orders() -> int:
+    """Liczba zamówień w magazynie (Allegro + Woo + manual)."""
+    try:
+        from sqlalchemy import text
+
+        from ..db import get_session
+
+        with get_session() as db:
+            total = db.execute(text("SELECT COUNT(*) FROM orders")).scalar()
+            return int(total or 0)
+    except Exception as exc:
+        logger.warning("orders count for trust snapshot failed: %s", exc)
+        return 0
 
 
 def save_snapshot(snapshot: dict[str, Any]) -> None:

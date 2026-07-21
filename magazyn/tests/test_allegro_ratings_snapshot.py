@@ -35,6 +35,7 @@ def test_fetch_and_save_snapshot(monkeypatch):
     stored = {}
 
     monkeypatch.setattr(mod.requests, "get", fake_get)
+    monkeypatch.setattr(mod, "_count_orders", lambda: 762)
     monkeypatch.setattr(
         mod.settings_store,
         "get",
@@ -50,6 +51,8 @@ def test_fetch_and_save_snapshot(monkeypatch):
     assert snap["login"] == "Retriever_Shop"
     assert snap["recommended_percentage"] == "100,0"
     assert snap["ratings_received_total"] == 73
+    assert snap["orders_total"] == 762
+    assert snap["orders_rounded_100"] == 700
     assert "allegro.pl/uzytkownik/Retriever_Shop" in snap["profile_url"]
     assert mod.SETTING_KEY in stored
 
