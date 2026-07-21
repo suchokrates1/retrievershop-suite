@@ -36,6 +36,7 @@ class OrderSyncCycle:
             self.run_invoice_processing()
             self.run_notification_retry()
             self.run_unpaid_auto_cancel()
+            self.run_allegro_ratings_snapshot()
             self.run_daily_offer_and_promo_sync()
 
     def run_data_integrity_canary(self) -> None:
@@ -134,6 +135,19 @@ class OrderSyncCycle:
                 )
         except Exception as exc:
             self.logger.error("Error in notification retry: %s", exc, exc_info=True)
+
+    def run_allegro_ratings_snapshot(self) -> None:
+        try:
+            from .allegro_ratings_snapshot import sync_ratings_snapshot
+
+            snap = sync_ratings_snapshot(force=False)
+            self.logger.debug(
+                "Allegro ratings snapshot ok: %s%% / %s",
+                snap.get("recommended_percentage"),
+                snap.get("ratings_received_total"),
+            )
+        except Exception as exc:
+            self.logger.warning("Allegro ratings snapshot failed: %s", exc)
 
     def run_unpaid_auto_cancel(self) -> None:
         try:
