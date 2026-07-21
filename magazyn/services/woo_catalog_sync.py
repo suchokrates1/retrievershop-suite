@@ -341,8 +341,8 @@ def _sync_one_family(
         )
         size.woo_variation_id = int(variation["id"])
         stats["variations"] += 1
-        if size.woo_variation_id and size.barcode:
-            maybe_push_woo_stock(size.id, quantity=int(size.quantity or 0))
+        # Stock juz w upsert_variation — bez osobnego maybe_push (osobna sesja
+        # moglaby czytac stare woo_product_id przed commit).
 
 
 def _sync_one_product(
