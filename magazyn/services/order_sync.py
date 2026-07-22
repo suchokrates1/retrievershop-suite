@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy import func
 
-from ..constants import resolve_product_alias
+from ..constants import normalize_size_token, resolve_product_alias
 from ..models.orders import Order, OrderProduct, OrderStatusLog
 from ..models.products import Product, ProductSize
 from .order_status import add_order_status
@@ -130,7 +130,8 @@ def _color_matches(db_color: str, color_norm: str) -> bool:
 def match_product_to_warehouse(db, name: str, color: str, size: str) -> Optional[ProductSize]:
     """Dopasuj produkt z zamówienia do rozmiaru produktu w magazynie."""
     color_norm = _normalize_color_key(color)
-    size_upper = size.upper() if size else size
+    canonical_size = normalize_size_token(size) or size
+    size_upper = canonical_size.upper() if canonical_size else size
     parsed_name_keys = _normalized_name_keys(name)
 
     def valid_mode(product_size: ProductSize) -> bool:

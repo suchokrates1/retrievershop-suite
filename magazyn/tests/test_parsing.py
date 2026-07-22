@@ -78,6 +78,22 @@ def test_parse_offer_title_resolves_amortyzator_alias_to_inventory_name():
     assert size == "Uniwersalny"
 
 
+@pytest.mark.parametrize(
+    ("title", "expected_size"),
+    [
+        ("Obroża dla psa Truelove Active XXL czarny", "2XL"),
+        ("Obroża dla psa Truelove Active XXXL czarny", "3XL"),
+        ("Obroża dla psa Truelove Active 2XL czarny", "2XL"),
+    ],
+)
+def test_parse_offer_title_maps_xxl_aliases(title, expected_size):
+    name, color, size = parse_offer_title(title)
+
+    assert "Obroża" in name
+    assert color == "Czarny"
+    assert size == expected_size
+
+
 def test_parse_offer_title_smycz_z_amortyzatorem_zachowuje_rozmiar():
     """Smycz z wbudowanym amortyzatorem ma M/L - to nie osobny amortyzator."""
     name, color, size = parse_offer_title(

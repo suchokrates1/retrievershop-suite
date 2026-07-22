@@ -7,6 +7,26 @@ SIZED_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"]
 UNIWERSALNY = "Uniwersalny"
 ALL_SIZES = [*SIZED_SIZES, UNIWERSALNY]
 
+# Allegro/fakturzy często piszą XXL zamiast kanonicznego 2XL
+SIZE_ALIASES = {
+    "XXL": "2XL",
+    "XXXL": "3XL",
+}
+
+
+def normalize_size_token(value: str | None) -> str | None:
+    """Zwróć kanoniczny rozmiar magazynowy albo None gdy nierozpoznany."""
+    if not value:
+        return None
+    token = str(value).strip().upper()
+    if not token:
+        return None
+    token = SIZE_ALIASES.get(token, token)
+    for size in ALL_SIZES:
+        if size.upper() == token:
+            return size
+    return None
+
 # Product categories
 PRODUCT_CATEGORIES = [
     "Szelki",

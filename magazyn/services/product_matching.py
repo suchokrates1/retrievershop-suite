@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from magazyn.constants import SIZE_ALIASES
+
 
 def _extract_model_series(name: str) -> str:
     """Extract model series name from product name."""
@@ -78,7 +80,6 @@ def _parse_tiptop_sku(sku: str) -> dict:
         "ZOL": "żółty",
         "LIM": "limonkowy",
     }
-    size_aliases = {"XXL": "2XL", "XXXL": "3XL"}
 
     if len(parts) >= 5:
         color_code = parts[-1]
@@ -95,7 +96,7 @@ def _parse_tiptop_sku(sku: str) -> dict:
     size_upper = size.upper()
     return {
         "series": series_map.get(series_code, ""),
-        "size": size_aliases.get(size_upper, size_upper),
+        "size": SIZE_ALIASES.get(size_upper, size_upper),
         "color": color_map.get(color_code.upper(), "") if color_code else "",
         "color_code": color_code.upper() if color_code else "",
     }

@@ -14,6 +14,7 @@ from ..constants import (
     ALL_SIZES,
     KNOWN_COLORS,
     normalize_product_title_fragment,
+    normalize_size_token,
     resolve_product_alias,
 )
 from ..db import get_session
@@ -226,8 +227,6 @@ def _parse_simple_pdf(fh) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-_SIZE_ALIASES = {"XXL": "2XL", "XXXL": "3XL"}
-
 _KSEF_COLOR_CODE_MAP = {
     "BAN": "bananowy",
     "CZA": "czarny",
@@ -241,9 +240,9 @@ _KSEF_COLOR_CODE_MAP = {
 
 
 def _normalize_invoice_size(value: str) -> str:
+    """Zwróć kanoniczny rozmiar (XXL→2XL) albo pusty string."""
     token = re.sub(r"[^A-Za-z0-9]", "", value or "").upper()
-    token = _SIZE_ALIASES.get(token, token)
-    return token if token in ALL_SIZES else ""
+    return normalize_size_token(token) or ""
 
 
 def _size_from_sku(sku: str) -> str:
@@ -457,11 +456,9 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
             token1 = variant_match.group(1).strip()
             token2 = variant_match.group(2).strip() if variant_match.group(2) else ""
             
-            # Normalizacja rozmiarow: XXL->2XL, XXXL->3XL
-            _size_aliases = {'XXL': '2XL', 'XXXL': '3XL'}
-            token1_norm = _size_aliases.get(token1.upper(), token1.upper())
-            token2_norm = _size_aliases.get(token2.upper(), token2.upper()) if token2 else ""
-            
+            token1_norm = normalize_size_token(token1) or token1.upper()
+            token2_norm = (normalize_size_token(token2) or token2.upper()) if token2 else ""
+
             # Wykryj ktory token to rozmiar a ktory kolor
             if token1_norm in ALL_SIZES:
                 size = token1_norm
@@ -473,7 +470,7 @@ def _parse_tiptop_invoice(fh) -> pd.DataFrame:
                 # Probuj odczytac rozmiar z SKU
                 if sku:
                     for part in sku.split('-'):
-                        p_norm = _size_aliases.get(part.upper(), part.upper())
+                        p_norm = normalize_size_token(part) or part.upper()
                         if p_norm in ALL_SIZES:
                             size = p_norm
                             # Ustaw kolor na ten token ktory nie jest rozmiarem

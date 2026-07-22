@@ -6,6 +6,7 @@ import unicodedata
 from .constants import (
     ALL_SIZES,
     KNOWN_COLORS,
+    SIZE_ALIASES,
     normalize_product_title_fragment,
     resolve_product_alias,
 )
@@ -300,6 +301,8 @@ def parse_offer_title(title: str) -> tuple[str, str, str]:
 
     words = [word for word in (title or "").strip().split() if word]
     size_lookup = {size.upper(): size for size in ALL_SIZES}
+    for alias, canonical in SIZE_ALIASES.items():
+        size_lookup[alias.upper()] = canonical
     normalized_known_colors = [
         (_strip_diacritics(color), color) for color in KNOWN_COLORS
     ]

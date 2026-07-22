@@ -487,11 +487,7 @@ def generate_variant_correction_invoice(
     Jesli brak faktury — skipped. Jesli zamowienie ma juz korekte — blad.
     """
     from ..wfirma_api import WFirmaClient
-    from ..wfirma_api.invoices import (
-        create_correction_invoice,
-        download_invoice_pdf,
-        get_invoice,
-    )
+    from ..wfirma_api.invoices import download_invoice_pdf, get_invoice
     from .email_service import send_invoice_correction
 
     result = {
@@ -558,21 +554,67 @@ def generate_variant_correction_invoice(
             return result
 
         reason = f"Zmiana wariantu: {old_name} → {new_name}"
-        corrected_items = [{
-            "original_content_id": int(matched["id"]),
-            "count": float(matched.get("count", 1)),
-            "name": new_name,
-        }]
+        # wFirma nie pozwala zmienic name na pozycji z parent — zerujemy stara
+        # linie i dodajemy nowa pozycje bez parent (netto 0 przy tej samej cenie).
+        old_count = float(matched.get("count", 1))
+        price = matched.get("price")
+        unit = matched.get("unit", "szt.")
+        vat_code = matched.get("vat_code", {"id": 233})
+        original_type = original.get("type", "bill")
+        correction_type = original_type if original_type in ("bill", "normal") else "bill"
+
+        invoice_data = {
+            "invoices": [{
+                "invoice": {
+                    "type": "correction",
+                    "correction_type": correction_type,
+                    "paymentmethod": "transfer",
+                    "description": reason,
+                    "schema": "normal",
+                    "parent": {"id": original_invoice_id},
+                    "invoicecontents": [
+                        {
+                            "invoicecontent": {
+                                "name": matched.get("name"),
+                                "count": 0,
+                                "price": price,
+                                "unit": unit,
+                                "vat_code": vat_code,
+                                "parent": {"id": int(matched["id"])},
+                            }
+                        },
+                        {
+                            "invoicecontent": {
+                                "name": new_name,
+                                "count": old_count,
+                                "price": price,
+                                "unit": unit,
+                                "vat_code": vat_code,
+                            }
+                        },
+                    ],
+                }
+            }]
+        }
 
         try:
-            inv = create_correction_invoice(
-                client,
-                original_invoice_id=original_invoice_id,
-                corrected_items=corrected_items,
-                description=reason,
-            )
-            invoice_id = inv["invoice_id"]
-            invoice_number = inv["invoice_number"]
+            api_result = client.request("invoices/add", data=invoice_data)
+            invoices = api_result.get("invoices", {})
+            if isinstance(invoices, list):
+                inv = invoices[0].get("invoice", {})
+            else:
+                first_key = next(
+                    (k for k in sorted(invoices) if k != "parameters"), None
+                )
+                inv = invoices[first_key].get("invoice", {}) if first_key else {}
+            invoice_id = inv.get("id")
+            invoice_number = inv.get("fullnumber", "")
+            if not invoice_id:
+                result["errors"].append(
+                    f"wFirma nie zwrocil id korekty: {api_result}"
+                )
+                return result
+            invoice_id = int(invoice_id)
             result["invoice_number"] = invoice_number
         except Exception as exc:
             result["errors"].append(f"Blad wystawienia korekty wFirma: {exc}")
