@@ -19,6 +19,7 @@ from .products import (
     find_product_by_ean,
     upsert_variation,
 )
+from .refunds import create_order_refund, list_order_refunds
 
 __all__ = [
     "WooClient",
@@ -26,6 +27,7 @@ __all__ = [
     "build_product_attributes",
     "classify_woo_payment_method",
     "create_or_update_variable_product",
+    "create_order_refund",
     "ensure_attribute",
     "ensure_attribute_term",
     "ensure_product_category",
@@ -36,6 +38,7 @@ __all__ = [
     "find_product_by_ean",
     "get_order_payment_fees",
     "get_product_image_ids",
+    "list_order_refunds",
     "parse_woo_order_to_data",
     "resolve_category_name",
     "update_order_tracking",

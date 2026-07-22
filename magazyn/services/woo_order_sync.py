@@ -37,13 +37,40 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
     """Zaimportuj jedno zamowienie Woo (dict z API)."""
     order_data = parse_woo_order_to_data(order_payload)
     woo_status = order_data.pop("woo_status", None)
+    order_id = order_data["order_id"]
+
+    # refunded: nie importuj jako nowe, ale reconcile istniejacy Return
+    if woo_status == "refunded":
+        from .return_woo import mark_woo_return_refunded_from_order
+
+        with get_session() as db:
+            existing = db.query(Order).filter(Order.order_id == order_id).first()
+        if existing:
+            result = mark_woo_return_refunded_from_order(order_id)
+            return {
+                "skipped": True,
+                "reason": "status=refunded",
+                "order_id": order_id,
+                "reconcile": result,
+            }
+        return {"skipped": True, "reason": "status=refunded", "order_id": order_id}
 
     # Tylko oplacone / do realizacji
-    if woo_status in {"pending", "failed", "cancelled", "refunded", "checkout-draft"}:
-        return {"skipped": True, "reason": f"status={woo_status}", "order_id": order_data["order_id"]}
+    if woo_status in {"pending", "failed", "cancelled", "checkout-draft"}:
+        return {"skipped": True, "reason": f"status={woo_status}", "order_id": order_id}
+
+    # Takze gdy order.updated ma refunds[] — oznacz Return
+    refunds = order_payload.get("refunds") or []
+    if refunds:
+        from .return_woo import mark_woo_return_refunded_from_order
+
+        with get_session() as db:
+            existing = db.query(Order).filter(Order.order_id == order_id).first()
+        if existing:
+            mark_woo_return_refunded_from_order(order_id)
 
     with get_session() as db:
-        existing = db.query(Order).filter(Order.order_id == order_data["order_id"]).first()
+        existing = db.query(Order).filter(Order.order_id == order_id).first()
         if existing:
             latest = (
                 db.query(OrderStatusLog)
@@ -56,7 +83,7 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
                 return {
                     "skipped": True,
                     "reason": "anulowano_w_magazynie",
-                    "order_id": order_data["order_id"],
+                    "order_id": order_id,
                 }
 
         is_new = existing is None
@@ -65,7 +92,7 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
         if is_new:
             add_order_status(
                 db,
-                order_data["order_id"],
+                order_id,
                 "pobrano",
                 notes=f"Import z WooCommerce #{order_data.get('shop_order_id')}",
                 send_email=True,
@@ -75,7 +102,7 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
                 send_critical_alert(
                     f"Nowe zamowienie Woo #{order_data.get('shop_order_id')}",
                     f"{order_data.get('customer')} — {order_data.get('payment_done')} PLN\n"
-                    f"{order_data['order_id']}",
+                    f"{order_id}",
                 )
             except Exception:
                 logger.exception("Nie wyslano alertu o Woo order")
@@ -86,7 +113,7 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
         try:
             from ..domain.financial import FinancialCalculator
 
-            order_row = db.query(Order).filter(Order.order_id == order_data["order_id"]).first()
+            order_row = db.query(Order).filter(Order.order_id == order_id).first()
             if order_row is not None:
                 FinancialCalculator(db, settings_store).refresh_order_profit_cache(
                     order_row,
@@ -94,9 +121,9 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
                 )
                 db.commit()
         except Exception:
-            logger.exception("Nie odswiezono zysku Woo dla %s", order_data["order_id"])
+            logger.exception("Nie odswiezono zysku Woo dla %s", order_id)
 
-    return {"skipped": False, "order_id": order_data["order_id"], "is_new": is_new}
+    return {"skipped": False, "order_id": order_id, "is_new": is_new}
 
 
 def sync_woo_orders(*, days: int = 14) -> dict[str, int]:

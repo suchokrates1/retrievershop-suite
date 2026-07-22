@@ -32,6 +32,7 @@ SETTINGS_GROUPS = {
     "WOO_CONSUMER_KEY": ("WooCommerce", "bi-bag"),
     "WOO_CONSUMER_SECRET": ("WooCommerce", "bi-bag"),
     "WOO_WEBHOOK_SECRET": ("WooCommerce", "bi-bag"),
+    "WOO_RETURN_WEBHOOK_SECRET": ("WooCommerce", "bi-bag"),
     "WOO_FEE_CARD_PCT": ("WooCommerce", "bi-bag"),
     "WOO_FEE_CARD_FIXED": ("WooCommerce", "bi-bag"),
     "WOO_FEE_P24_PCT": ("WooCommerce", "bi-bag"),
