@@ -198,6 +198,11 @@ def consume_order_stock(products: List[dict], order_id: str | None = None):
     (realny koszt zakupu FIFO na stronie zamowienia + poprawny zwrot do
     oryginalnej partii).
     """
+    from .order_platform import is_woo_order
+
+    woo_order = bool(order_id and is_woo_order(order_id))
+    woo_fixed_applied = False
+
     for item in products or []:
         try:
             qty = _to_int(item.get("quantity", 0))
@@ -217,6 +222,35 @@ def consume_order_stock(products: List[dict], order_id: str | None = None):
         # Uzyj pre-kalkulowanej prowizji z zamowienia recznego, jesli dostepna
         if "commission_fee" in item and item["commission_fee"] is not None:
             commission_fee = _to_decimal(item["commission_fee"])
+        elif woo_order:
+            from ..woocommerce_api.payments import (
+                DEFAULT_CARD_FIXED,
+                DEFAULT_CARD_PCT,
+            )
+            from ..settings_store import settings_store
+
+            def _dec(key: str, default: Decimal) -> Decimal:
+                raw = settings_store.get(key)
+                if raw is None or raw == "":
+                    return default
+                try:
+                    return Decimal(str(raw))
+                except Exception:
+                    return default
+
+            pct = _dec("WOO_FEE_CARD_PCT", DEFAULT_CARD_PCT)
+            fixed = _dec("WOO_FEE_CARD_FIXED", DEFAULT_CARD_FIXED)
+            # % na każdej linii; stała opłata tylko raz (pierwsza linia)
+            commission_fee = (price * pct / Decimal("100")).quantize(
+                TWOPLACES, rounding=ROUND_HALF_UP
+            )
+            if not woo_fixed_applied:
+                commission_fee = (commission_fee + fixed).quantize(
+                    TWOPLACES, rounding=ROUND_HALF_UP
+                )
+                woo_fixed_applied = True
+            if str(item.get("payment_method") or "").lower() in {"cod", "pobranie"}:
+                commission_fee = Decimal("0.00")
         else:
             commission_fee = (
                 price

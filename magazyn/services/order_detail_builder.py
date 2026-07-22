@@ -115,14 +115,16 @@ class OrderDetailBuilder:
         sale_price: Decimal
     ) -> dict:
         """
-        Pobierz dane billingowe z Allegro API.
+        Pobierz dane billingowe (Allegro API / WooPayments + InPost).
         
         Returns:
             dict z kluczami: commission, promoted_commission, is_promoted_sale,
             promotion_type, listing_fee, shipping_fee, promo_fee,
             other_fees, billing_data_available, billing_entries, fee_details,
-            estimated_shipping
+            estimated_shipping, fee_platform
         """
+        from ..domain.order_platform import is_allegro_order, is_woo_order
+
         result = {
             "commission": Decimal("0"),
             "promoted_commission": Decimal("0"),
@@ -137,14 +139,65 @@ class OrderDetailBuilder:
             "billing_entries": [],
             "fee_details": [],
             "estimated_shipping": None,
+            "fee_platform": "allegro",
+            "payment_fee_source": None,
+            "shipping_source": None,
         }
 
         manual_fees = FinancialCalculator.get_manual_order_fees(order)
         if manual_fees is not None:
             result["commission"] = manual_fees
             result["billing_data_available"] = True
+            result["fee_platform"] = "manual"
+            return result
+
+        if is_woo_order(order):
+            result["fee_platform"] = "woocommerce"
+            try:
+                snapshot = self._calculator._resolve_woo_fee_snapshot(sale_price, order)
+                result["commission"] = Decimal(str(snapshot.get("payment_fees") or 0))
+                result["shipping_fee"] = Decimal(str(snapshot.get("shipping_cost") or 0))
+                result["billing_data_available"] = True
+                result["payment_fee_source"] = snapshot.get("payment_fee_source")
+                result["shipping_source"] = snapshot.get("shipping_source")
+                if snapshot.get("shipping_estimated"):
+                    result["estimated_shipping"] = {
+                        "estimated_cost": result["shipping_fee"],
+                        "source": snapshot.get("shipping_source") or "estimated",
+                    }
+                result["fee_details"] = [
+                    {
+                        "label": "WooPayments",
+                        "amount": float(result["commission"]),
+                        "source": snapshot.get("payment_fee_source"),
+                    },
+                    {
+                        "label": "InPost (sprzedawca)",
+                        "amount": float(result["shipping_fee"]),
+                        "source": snapshot.get("shipping_source"),
+                    },
+                ]
+            except Exception as e:
+                logger.warning(
+                    "Blad Woo fee snapshot dla %s: %s", order.order_id, e
+                )
+                from ..woocommerce_api.payments import estimate_woo_payment_fee
+                from ..domain.shop_shipping import estimate_shop_shipping_cost
+
+                result["commission"] = estimate_woo_payment_fee(
+                    sale_price, order.payment_method
+                )
+                ship = estimate_shop_shipping_cost(order)
+                result["shipping_fee"] = ship["cost"]
+                result["billing_data_available"] = True
+                result["estimated_shipping"] = ship
             return result
         
+        if not is_allegro_order(order):
+            result["fee_platform"] = "other"
+            result["billing_data_available"] = True
+            return result
+
         try:
             access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
             allegro_order_id = order.external_order_id
@@ -191,7 +244,7 @@ class OrderDetailBuilder:
         except Exception as e:
             logger.warning(f"Blad podczas pobierania danych billingowych dla {order.order_id}: {e}")
         
-        # Fallback - szacunki
+        # Fallback - szacunki Allegro
         if not result["billing_data_available"]:
             result["commission"] = sale_price * Decimal("0.123")  # 12.3%
         
@@ -409,6 +462,9 @@ class OrderDetailBuilder:
             "other_fees": billing["other_fees"],
             "campaign_bonus": billing["campaign_bonus"],
             "total_allegro_fees": total_allegro_fees,
+            "fee_platform": billing.get("fee_platform") or "allegro",
+            "payment_fee_source": billing.get("payment_fee_source"),
+            "shipping_source": billing.get("shipping_source"),
             "billing_data_available": billing["billing_data_available"],
             "billing_entries": billing["billing_entries"],
             "fee_details": billing["fee_details"],

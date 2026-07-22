@@ -45,8 +45,10 @@ def _refresh_order_profit_cache(app):
         access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
 
         with get_session() as db:
-            # Billing Allegro dotyczy wylacznie zamowien allegro_* (nie woo_/manual_)
-            orders = (
+            calculator = FinancialCalculator(db, settings_store)
+
+            # --- Allegro: billing API ---
+            allegro_orders = (
                 db.query(Order)
                 .filter(Order.order_id.like("allegro_%"))
                 .filter(
@@ -65,22 +67,18 @@ def _refresh_order_profit_cache(app):
                 .all()
             )
 
-            if not orders:
-                return stats
-
-            calculator = FinancialCalculator(db, settings_store)
             prefetched_billings = calculator._prefetch_order_billing_summaries(
-                orders,
+                allegro_orders,
                 access_token,
                 trace_label="scheduler-profit-cache",
             )
 
             logger.info(
-                "Profit cache refresh: znaleziono %s zamowien do odswiezenia",
-                len(orders),
+                "Profit cache refresh: allegro=%s zamowien do odswiezenia",
+                len(allegro_orders),
             )
 
-            for order in orders:
+            for order in allegro_orders:
                 try:
                     breakdown = calculator.refresh_order_profit_cache(
                         order,
@@ -100,6 +98,52 @@ def _refresh_order_profit_cache(app):
                         "Profit cache refresh error: order_id=%s external_order_id=%s error=%s",
                         order.order_id,
                         order.external_order_id,
+                        exc,
+                    )
+
+            # --- Woo: WooPayments + InPost shipping ---
+            woo_orders = (
+                db.query(Order)
+                .filter(Order.order_id.like("woo_%"))
+                .filter(
+                    db_or(
+                        Order.real_profit_amount.is_(None),
+                        Order.real_profit_is_final.is_(False),
+                        Order.real_profit_is_final.is_(None),
+                    )
+                )
+                .filter(
+                    db_or(
+                        Order.payment_done > 0,
+                        Order.payment_method_cod.is_(True),
+                    )
+                )
+                .all()
+            )
+
+            logger.info(
+                "Profit cache refresh: woo=%s zamowien do odswiezenia",
+                len(woo_orders),
+            )
+
+            for order in woo_orders:
+                try:
+                    breakdown = calculator.refresh_order_profit_cache(
+                        order,
+                        access_token=None,
+                        trace_label="scheduler-profit-cache-woo",
+                    )
+                    stats["checked"] += 1
+                    stats["updated"] += 1
+                    if breakdown.billing_complete:
+                        stats["finalized"] += 1
+                    else:
+                        stats["pending"] += 1
+                except Exception as exc:
+                    stats["errors"] += 1
+                    logger.warning(
+                        "Profit cache refresh error (woo): order_id=%s error=%s",
+                        order.order_id,
                         exc,
                     )
 

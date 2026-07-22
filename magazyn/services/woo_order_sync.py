@@ -82,6 +82,20 @@ def import_woo_order(order_payload: dict) -> dict[str, Any]:
         else:
             db.commit()
 
+        # Cache realnego zysku (WooPayments + InPost) — best effort
+        try:
+            from ..domain.financial import FinancialCalculator
+
+            order_row = db.query(Order).filter(Order.order_id == order_data["order_id"]).first()
+            if order_row is not None:
+                FinancialCalculator(db, settings_store).refresh_order_profit_cache(
+                    order_row,
+                    trace_label="woo-import",
+                )
+                db.commit()
+        except Exception:
+            logger.exception("Nie odswiezono zysku Woo dla %s", order_data["order_id"])
+
     return {"skipped": False, "order_id": order_data["order_id"], "is_new": is_new}
 
 

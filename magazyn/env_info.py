@@ -141,6 +141,22 @@ ENV_INFO = {
         "WooCommerce Webhook Secret",
         "Secret do weryfikacji podpisu X-WC-Webhook-Signature",
     ),
+    "WOO_FEE_CARD_PCT": (
+        "WooPayments karta (%)",
+        "Fallback prowizji karty / Apple Pay / Google Pay (domyslnie 1.50)",
+    ),
+    "WOO_FEE_CARD_FIXED": (
+        "WooPayments karta (zl)",
+        "Stala oplata karty (domyslnie 1.00 zl)",
+    ),
+    "WOO_FEE_P24_PCT": (
+        "WooPayments P24 (%)",
+        "Fallback prowizji Przelewy24 (domyslnie 1.90)",
+    ),
+    "WOO_FEE_P24_FIXED": (
+        "WooPayments P24 (zl)",
+        "Stala oplata P24 (domyslnie 1.00 zl)",
+    ),
     "NEWSLETTER_MAIL_SECRET": (
         "Newsletter Mail Secret",
         "Bearer/HMAC secret dla WP → magazyn (welcome z kuponem). Puste = WOO_WEBHOOK_SECRET",
@@ -164,5 +180,29 @@ ENV_INFO = {
     "INPOST_SENDING_METHOD": (
         "InPost sending_method",
         "Sposob nadania C2C: parcel_locker lub dispatch_order",
+    ),
+    "INPOST_SHOP_LOCKER_A": (
+        "InPost sklep paczkomat A (zl)",
+        "Koszt sprzedawcy paczkomat gabaryt A (fallback, domyslnie 16.49)",
+    ),
+    "INPOST_SHOP_LOCKER_B": (
+        "InPost sklep paczkomat B (zl)",
+        "Koszt sprzedawcy paczkomat gabaryt B (fallback, domyslnie 18.49)",
+    ),
+    "INPOST_SHOP_LOCKER_C": (
+        "InPost sklep paczkomat C (zl)",
+        "Koszt sprzedawcy paczkomat gabaryt C (fallback, domyslnie 20.49)",
+    ),
+    "INPOST_SHOP_COURIER_A": (
+        "InPost sklep kurier A (zl)",
+        "Koszt sprzedawcy kurier gabaryt A (fallback, domyslnie 19.49)",
+    ),
+    "INPOST_SHOP_COURIER_B": (
+        "InPost sklep kurier B (zl)",
+        "Koszt sprzedawcy kurier gabaryt B (fallback, domyslnie 20.49)",
+    ),
+    "INPOST_SHOP_COURIER_C": (
+        "InPost sklep kurier C (zl)",
+        "Koszt sprzedawcy kurier gabaryt C (fallback, domyslnie 25.49)",
     ),
 }

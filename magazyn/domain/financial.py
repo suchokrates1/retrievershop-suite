@@ -325,9 +325,16 @@ class FinancialCalculator:
             return Decimal("0")
 
         try:
-            products = _json.loads(products_json)
+            from .shop_shipping import parse_order_products_payload
+
+            products, _meta = parse_order_products_payload(products_json)
         except Exception:
-            return None
+            try:
+                products = _json.loads(products_json)
+            except Exception:
+                return None
+            if not isinstance(products, list):
+                return None
 
         total = Decimal("0")
         for product in products:
@@ -342,14 +349,63 @@ class FinancialCalculator:
         billing_complete: bool = False,
         error: Optional[str] = None,
     ) -> Dict[str, Any]:
-        fees = sale_price * self.DEFAULT_ALLEGRO_FEE_RATE
-        fees += self._estimate_shipping_cost(delivery_method)
+        shipping = self._estimate_shipping_cost(delivery_method)
+        payment = sale_price * self.DEFAULT_ALLEGRO_FEE_RATE
+        fees = payment + shipping
         return {
             "fees": fees,
             "fee_source": "estimated",
             "shipping_estimated": not billing_complete,
             "billing_complete": billing_complete,
             "error": error,
+            "payment_fees": payment,
+            "shipping_cost": shipping,
+        }
+
+    def _resolve_woo_fee_snapshot(
+        self,
+        sale_price: Decimal,
+        order=None,
+    ) -> Dict[str, Any]:
+        """Opłaty Woo: WooPayments + koszt InPost sprzedawcy."""
+        from .order_platform import is_woo_order
+        from .shop_shipping import resolve_seller_shipping_cost
+        from ..woocommerce_api.payments import get_order_payment_fees
+
+        if order is not None and not is_woo_order(order):
+            return self._estimate_fee_snapshot(sale_price)
+
+        payment_method = getattr(order, "payment_method", None) if order else None
+        woo_id = getattr(order, "external_order_id", None) if order else None
+        if not woo_id and order is not None:
+            woo_id = str(getattr(order, "order_id", "") or "").removeprefix("woo_")
+
+        payment = get_order_payment_fees(
+            woo_id or "",
+            sale_price=sale_price,
+            payment_method=payment_method,
+        )
+        payment_fees = Decimal(str(payment.get("fees") or 0))
+        fee_source = payment.get("fee_source") or "estimated"
+
+        shipping = resolve_seller_shipping_cost(order)
+        shipping_cost = Decimal(str(shipping["cost"]))
+        shipping_estimated = bool(shipping.get("is_estimated", True))
+
+        billing_complete = (fee_source == "api") and (not shipping_estimated)
+        return {
+            "fees": payment_fees + shipping_cost,
+            "fee_source": fee_source if not shipping_estimated else (
+                "estimated" if fee_source != "api" else "api"
+            ),
+            # fee_source for cache: api only when payment is api; shipping flag separate
+            "shipping_estimated": shipping_estimated,
+            "billing_complete": billing_complete,
+            "error": payment.get("error"),
+            "payment_fees": payment_fees,
+            "shipping_cost": shipping_cost,
+            "payment_fee_source": fee_source,
+            "shipping_source": shipping.get("source"),
         }
 
     def _snapshot_from_billing(self, billing: Dict[str, Any]) -> Dict[str, Any]:
@@ -386,6 +442,11 @@ class FinancialCalculator:
                 "error": None,
             }
 
+        from .order_platform import is_allegro_order, is_woo_order
+
+        if order is not None and is_woo_order(order):
+            return self._resolve_woo_fee_snapshot(sale_price, order)
+
         cached_fees = _decimal_or_none(
             getattr(order, 'real_profit_allegro_fees', None) if order is not None else None
         )
@@ -412,7 +473,9 @@ class FinancialCalculator:
             )
             return snapshot
 
-        if access_token and external_order_id:
+        # Allegro API tylko dla allegro_* (lub legacy bez prefiksu gdy jest token)
+        use_allegro = order is None or is_allegro_order(order)
+        if access_token and external_order_id and use_allegro:
             try:
                 from ..allegro_api import get_order_billing_summary
                 billing = get_order_billing_summary(access_token, external_order_id)
@@ -457,11 +520,21 @@ class FinancialCalculator:
                     error=str(exc),
                 )
 
-        return self._estimate_fee_snapshot(
-            sale_price,
-            delivery_method,
-            billing_complete=not bool(external_order_id),
-        )
+        if use_allegro:
+            return self._estimate_fee_snapshot(
+                sale_price,
+                delivery_method,
+                billing_complete=not bool(external_order_id),
+            )
+
+        # Nieznana platforma (nie Allegro/Woo/manual) — bez sztucznej prowizji Allegro
+        return {
+            "fees": Decimal("0"),
+            "fee_source": "estimated",
+            "shipping_estimated": False,
+            "billing_complete": True,
+            "error": None,
+        }
 
     def _build_profit_breakdown(
         self,
@@ -563,18 +636,26 @@ class FinancialCalculator:
         return breakdown
     
     def _estimate_shipping_cost(self, delivery_method: Optional[str] = None) -> Decimal:
-        """Szacuje koszt wysylki na podstawie metody dostawy."""
+        """Szacuje koszt wysylki Allegro Smart (tylko ścieżka Allegro)."""
         if not delivery_method:
             return self.DEFAULT_SHIPPING_COST
-        
+
         try:
-            from ..allegro_api import estimate_allegro_shipping_cost
-            return estimate_allegro_shipping_cost(delivery_method)
+            from ..allegro_api.shipping import estimate_allegro_shipping_cost
+
+            estimate = estimate_allegro_shipping_cost(delivery_method, Decimal("0"))
+            if isinstance(estimate, dict):
+                cost = estimate.get("estimated_cost")
+                if cost is not None:
+                    return Decimal(str(cost))
+            if isinstance(estimate, (int, float, Decimal, str)):
+                return Decimal(str(estimate))
         except Exception:
-            return self.DEFAULT_SHIPPING_COST
-    
+            pass
+        return self.DEFAULT_SHIPPING_COST
+
     def calculate_order_profit(
-        self, 
+        self,
         order,
         access_token: Optional[str] = None,
         trace_label: Optional[str] = None,
@@ -582,35 +663,23 @@ class FinancialCalculator:
     ) -> ProfitBreakdown:
         """
         Oblicza pelny rozklad zysku dla zamowienia.
-        
+
         Args:
             order: Obiekt Order
             access_token: Token Allegro do pobierania rzeczywistych oplat
-            
+
         Returns:
             ProfitBreakdown ze szczegolami kalkulacji
         """
         order_started_at = time.perf_counter()
         sale_price = self._get_sale_price(order)
-        allegro_fees, fee_source = self.get_allegro_fees(
-            getattr(order, 'external_order_id', None),
-            sale_price,
-            access_token,
-            getattr(order, 'delivery_method', None),
+        fee_snapshot = self._resolve_fee_snapshot(
+            sale_price=sale_price,
+            access_token=access_token,
+            delivery_method=getattr(order, "delivery_method", None),
             prefetched_billing=prefetched_billing,
+            order=order,
         )
-        shipping_estimated = bool(prefetched_billing.get("estimated_shipping")) if prefetched_billing else False
-        if fee_source == 'api':
-            billing_complete = not shipping_estimated
-        else:
-            billing_complete = not bool(getattr(order, 'external_order_id', None))
-        fee_snapshot = {
-            "fees": allegro_fees,
-            "fee_source": fee_source,
-            "shipping_estimated": shipping_estimated,
-            "billing_complete": billing_complete,
-            "error": prefetched_billing.get("error") if prefetched_billing else None,
-        }
         return self._build_profit_breakdown(
             order,
             sale_price,

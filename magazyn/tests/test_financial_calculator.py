@@ -156,13 +156,27 @@ class TestCalculateOrderProfit:
         """Zysk = cena sprzedazy - oplaty allegro - koszt zakupu - koszt pakowania."""
         order = MagicMock()
         order.payment_done = "100.00"
-        order.order_id = "order-1"
+        order.order_id = "allegro_order-1"
         order.delivery_method = None
         order.external_order_id = None
+        order.payment_method_cod = False
+        order.payment_method = ""
+        order.real_profit_allegro_fees = None
+        order.real_profit_is_final = False
 
         calc = FinancialCalculator(MagicMock(), settings_store=None)
 
-        with patch.object(calc, 'get_allegro_fees', return_value=(Decimal("12.30"), 'estimated')):
+        with patch.object(
+            calc,
+            "_resolve_fee_snapshot",
+            return_value={
+                "fees": Decimal("12.30"),
+                "fee_source": "estimated",
+                "shipping_estimated": False,
+                "billing_complete": True,
+                "error": None,
+            },
+        ):
             with patch.object(calc, 'get_purchase_cost_for_order', return_value=Decimal("30.00")):
                 with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
                     result = calc.calculate_order_profit(order)
@@ -180,19 +194,82 @@ class TestCalculateOrderProfit:
         """Zysk z rzeczywistymi oplatami z API."""
         order = MagicMock()
         order.payment_done = "200.00"
-        order.order_id = "order-2"
+        order.order_id = "allegro_order-2"
         order.delivery_method = "InPost"
         order.external_order_id = "ext-uuid-123"
+        order.payment_method_cod = False
+        order.payment_method = ""
+        order.real_profit_allegro_fees = None
+        order.real_profit_is_final = False
 
         calc = FinancialCalculator(MagicMock(), settings_store=None)
 
-        with patch.object(calc, 'get_allegro_fees', return_value=(Decimal("25.50"), 'api')):
+        with patch.object(
+            calc,
+            "_resolve_fee_snapshot",
+            return_value={
+                "fees": Decimal("25.50"),
+                "fee_source": "api",
+                "shipping_estimated": False,
+                "billing_complete": True,
+                "error": None,
+            },
+        ):
             with patch.object(calc, 'get_purchase_cost_for_order', return_value=Decimal("60.00")):
                 with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
                     result = calc.calculate_order_profit(order)
 
         assert result.fee_source == 'api'
         assert result.profit == Decimal("200.00") - Decimal("25.50") - Decimal("60.00") - Decimal("0.16")
+
+    def test_woo_profit_uses_payment_and_shipping_not_allegro(self):
+        """Woo: WooPayments + InPost, bez 12.3% Allegro."""
+        order = MagicMock()
+        order.payment_done = "100.00"
+        order.order_id = "woo_42"
+        order.external_order_id = "42"
+        order.delivery_method = "InPost Paczkomat"
+        order.delivery_point_id = "WAW1"
+        order.payment_method = "card"
+        order.payment_method_cod = False
+        order.products_json = None
+        order.real_profit_allegro_fees = None
+        order.real_profit_is_final = False
+
+        calc = FinancialCalculator(MagicMock(), settings_store=None)
+
+        with patch(
+            "magazyn.woocommerce_api.payments.get_order_payment_fees",
+            return_value={
+                "success": True,
+                "fees": Decimal("2.50"),
+                "fee_source": "api",
+                "error": None,
+            },
+        ):
+            with patch(
+                "magazyn.domain.shop_shipping.resolve_seller_shipping_cost",
+                return_value={
+                    "cost": Decimal("16.49"),
+                    "source": "estimated",
+                    "is_estimated": True,
+                },
+            ):
+                with patch.object(
+                    calc, "get_purchase_cost_for_order", return_value=Decimal("40.00")
+                ):
+                    with patch.object(
+                        calc, "get_packaging_cost", return_value=Decimal("0.16")
+                    ):
+                        result = calc.calculate_order_profit(order)
+
+        # 2.50 payment + 16.49 shipping
+        assert result.allegro_fees == Decimal("18.99")
+        assert result.shipping_estimated is True
+        assert result.billing_complete is False
+        assert result.profit == (
+            Decimal("100.00") - Decimal("18.99") - Decimal("40.00") - Decimal("0.16")
+        )
 
     def test_profit_uses_prefetched_billing(self):
         """Jesli billing zostal pobrany wczesniej, kalkulacja nie powinna czekac na API."""

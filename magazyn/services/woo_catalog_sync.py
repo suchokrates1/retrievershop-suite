@@ -427,51 +427,8 @@ def _resolve_variable_parent_id(
     return None
 
 
-def push_stock_for_product_size(
-    product_size_id: int,
-    *,
-    quantity: Optional[int] = None,
-) -> bool:
-    """Wypchnij stan jednego wariantu do Woo."""
-    try:
-        client = WooClient()
-    except WooClientError:
-        return False
-
-    with get_session() as db:
-        size = db.query(ProductSize).filter(ProductSize.id == product_size_id).first()
-        if not size or not size.woo_variation_id or not size.product or not size.product.woo_product_id:
-            return False
-        offer = (
-            db.query(AllegroOffer)
-            .filter(AllegroOffer.product_size_id == size.id)
-            .first()
-        )
-        price = str(offer.price) if offer else "0.00"
-        stock_qty = int(size.quantity or 0) if quantity is None else max(0, int(quantity))
-        color = (size.product.color or "").strip() or None
-        upsert_variation(
-            client,
-            size.product.woo_product_id,
-            variation_id=size.woo_variation_id,
-            sku=size.barcode or "",
-            regular_price=price,
-            stock_quantity=stock_qty,
-            size=size.size,
-            color=color,
-        )
-        return True
-
-
-def maybe_push_woo_stock(product_size_id: int | None, *, quantity: Optional[int] = None) -> None:
-    """Best-effort push stanu do Woo; nigdy nie rzuca do callera."""
-    if not product_size_id:
-        return
-    try:
-        push_stock_for_product_size(int(product_size_id), quantity=quantity)
-    except Exception:
-        logger.exception("Nie zaktualizowano stanu Woo dla product_size_id=%s", product_size_id)
-
+# Stock push żyje w woo_stock_reconcile (SoT stock); re-export dla kompatybilności
+from .woo_stock_reconcile import maybe_push_woo_stock, push_stock_for_product_size  # noqa: E402
 
 __all__ = [
     "maybe_push_woo_stock",

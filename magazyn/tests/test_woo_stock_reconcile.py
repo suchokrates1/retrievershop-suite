@@ -18,7 +18,7 @@ def test_apply_stock_adjustment_pushes_woo_when_mapped():
         stock_value=50,
         woo_variation_id=99,
     )
-    with patch("magazyn.services.woo_catalog_sync.maybe_push_woo_stock") as push_fn:
+    with patch("magazyn.services.woo_stock_reconcile.maybe_push_woo_stock") as push_fn:
         old, new = apply_stock_adjustment(size, delta=-1, reason="test")
     assert old == 5
     assert new == 4
@@ -34,7 +34,7 @@ def test_apply_stock_adjustment_skips_push_when_unmapped():
         stock_value=50,
         woo_variation_id=None,
     )
-    with patch("magazyn.services.woo_catalog_sync.maybe_push_woo_stock") as push_fn:
+    with patch("magazyn.services.woo_stock_reconcile.maybe_push_woo_stock") as push_fn:
         apply_stock_adjustment(size, delta=-1, reason="test")
     push_fn.assert_not_called()
 

@@ -55,6 +55,48 @@ def get_woo_inpost_packages(agent, order_id: str) -> List[Dict[str, Any]]:
         agent.logger.error("InPost ShipX blad dla %s: %s", order_id, exc)
         raise ApiError(str(exc)) from exc
 
+    shipping_cost = result.get("shipping_cost")
+    if shipping_cost is not None:
+        try:
+            from decimal import Decimal
+
+            from ..db import get_session
+            from ..domain.shop_shipping import store_seller_shipping_on_order
+            from ..models.orders import Order
+
+            with get_session() as db:
+                order = db.get(Order, order_id)
+                if order is not None:
+                    store_seller_shipping_on_order(
+                        order,
+                        Decimal(str(shipping_cost)),
+                        source="api",
+                    )
+                    db.commit()
+                    # Odśwież cache zysku po poznaniu realnego kosztu wysyłki
+                    try:
+                        from ..domain.financial import FinancialCalculator
+                        from ..settings_store import settings_store
+
+                        FinancialCalculator(db, settings_store).refresh_order_profit_cache(
+                            order,
+                            trace_label="woo-label-shipping",
+                        )
+                        db.commit()
+                    except Exception as profit_exc:
+                        agent.logger.warning(
+                            "Woo %s: nie odswiezono zysku po etykiecie: %s",
+                            order_id,
+                            profit_exc,
+                        )
+        except Exception as exc:
+            agent.logger.warning(
+                "Woo %s: nie zapisano kosztu wysylki %s: %s",
+                order_id,
+                shipping_cost,
+                exc,
+            )
+
     label_b64 = base64.b64encode(result["label_pdf"]).decode("ascii")
 
     woo_numeric = str(order_id).removeprefix("woo_")
