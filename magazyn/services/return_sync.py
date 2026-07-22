@@ -21,6 +21,7 @@ from .return_allegro import (
 from .return_core import expire_stale_returns
 from .return_notifications import send_return_notification
 from .return_stock import process_delivered_returns
+from .return_woo import check_woo_customer_returns
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ def sync_returns() -> Dict[str, Any]:
 
     results = {
         "allegro": check_allegro_customer_returns(log=logger),
+        "woo": check_woo_customer_returns(log=logger),
         "notifications": send_pending_return_notifications(log=logger),
         "status_updates": check_and_update_return_statuses(log=logger),
         "stock_restoration": process_delivered_returns(log=logger),
@@ -67,6 +69,7 @@ __all__ = [
     "create_return_sync_service",
     "sync_returns",
     "check_allegro_customer_returns",
+    "check_woo_customer_returns",
     "send_pending_return_notifications",
     "check_and_update_return_statuses",
     "process_delivered_returns",

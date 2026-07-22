@@ -33,7 +33,16 @@ PKO_IPKO_URL = "https://www.ipko.pl/"
 _IBAN_RE = re.compile(r"^PL\d{26}$")
 
 
+def _is_woo_return(return_record: Return) -> bool:
+    if getattr(return_record, "woo_withdrawal_id", None):
+        return True
+    carrier = (return_record.return_carrier or "").upper()
+    return carrier == "WOO"
+
+
 def _is_manual_return(return_record: Return) -> bool:
+    if _is_woo_return(return_record):
+        return False
     return not return_record.allegro_return_id
 
 
@@ -267,6 +276,142 @@ def _build_refund_execution(
     return details["line_items"], None
 
 
+def _woo_refund_amount(
+    order: Order,
+    return_record: Return,
+    *,
+    include_delivery: bool = True,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Zwraca (total, items_amount, delivery_amount)."""
+    items_amount = _amount_from_return_items(return_record)
+    delivery = Decimal(str(order.delivery_price or 0)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    if items_amount <= 0 and order.payment_done is not None:
+        total_paid = Decimal(str(order.payment_done)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        if include_delivery:
+            items_amount = (total_paid - delivery) if total_paid >= delivery else total_paid
+            if items_amount < 0:
+                items_amount = total_paid
+        else:
+            items_amount = total_paid
+    total = items_amount
+    if include_delivery:
+        total = (items_amount + delivery).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return total, items_amount, delivery
+
+
+def _build_woo_refund_eligibility_details(
+    order: Order,
+    return_record: Return,
+    *,
+    bank_transfer: Dict[str, Any],
+) -> Tuple[bool, str, Dict[str, Any]]:
+    from ..woocommerce_api.payments import classify_woo_payment_method
+
+    kind = classify_woo_payment_method(order.payment_method)
+    is_cod = _is_cod_order(order) or kind == "cod"
+    total, items_amount, delivery = _woo_refund_amount(
+        order, return_record, include_delivery=True
+    )
+    details: Dict[str, Any] = {
+        **bank_transfer,
+        "platform": "woocommerce",
+        "refund_channel": "bank" if is_cod else "woo",
+        "allegro_status": "WOO_COD" if is_cod else "WOO_READY",
+        "total_amount": float(total),
+        "items_amount": float(items_amount),
+        "delivery_amount": float(delivery),
+        "currency": order.currency or "PLN",
+        "items": [],
+        "returned_items": [],
+        "is_partial": False,
+        "woo_withdrawal_id": getattr(return_record, "woo_withdrawal_id", None),
+    }
+    if is_cod:
+        details["cod_settlement_pending"] = False
+        return (
+            False,
+            "Zamowienie Woo za pobraniem — uzyj zwrotu przelewem bankowym",
+            details,
+        )
+    return True, "Zwrot gotowy do realizacji: WooCommerce", details
+
+
+def _process_woo_refund(
+    db,
+    order_record: Order,
+    return_record: Return,
+    *,
+    delivery_cost_covered: bool,
+    reason: Optional[str],
+) -> Tuple[bool, str]:
+    from ..woocommerce_api.payments import classify_woo_payment_method
+    from ..woocommerce_api.refunds import create_order_refund
+
+    kind = classify_woo_payment_method(order_record.payment_method)
+    if _is_cod_order(order_record) or kind == "cod":
+        return False, "Zamowienie Woo COD — uzyj zwrotu przelewem bankowym"
+
+    amount, _items, _delivery = _woo_refund_amount(
+        order_record,
+        return_record,
+        include_delivery=delivery_cost_covered,
+    )
+    effective_reason = reason or "Zwrot produktow (Woo)"
+    result = create_order_refund(
+        order_record.external_order_id or order_record.order_id,
+        amount=amount,
+        reason=effective_reason,
+        api_refund=True,
+    )
+    if not result.get("success"):
+        return False, result.get("error") or "Blad zwrotu Woo"
+
+    return_record.status = RETURN_STATUS_COMPLETED
+    return_record.refund_processed = True
+    _add_return_status_log(
+        db,
+        return_record.id,
+        RETURN_STATUS_COMPLETED,
+        f"Zwrot pieniedzy przez Woo REST (refund_id={result.get('refund_id')}). "
+        f"{effective_reason}",
+    )
+    db.commit()
+
+    try:
+        from .invoice_service import generate_correction_invoice
+
+        correction = generate_correction_invoice(
+            order_id=order_record.order_id,
+            reason=effective_reason,
+            return_id=return_record.id,
+            include_delivery=delivery_cost_covered,
+        )
+        if correction["success"]:
+            logger.info(
+                "Korekta %s wystawiona dla zamowienia %s",
+                correction["invoice_number"],
+                order_record.order_id,
+            )
+        else:
+            logger.warning(
+                "Nie udalo sie wystawic korekty dla zamowienia %s: %s",
+                order_record.order_id,
+                correction["errors"],
+            )
+    except Exception as exc:
+        logger.error(
+            "Blad wystawiania korekty dla zamowienia %s: %s",
+            order_record.order_id,
+            exc,
+        )
+
+    return True, f"Zwrot Woo zainicjowany (refund #{result.get('refund_id')}, {amount} PLN)"
+
+
 def _build_refund_eligibility_details(
     return_record: Return,
     order_external_id: str,
@@ -336,6 +481,17 @@ def process_refund(
         order_record = db.query(Order).filter(Order.order_id == order_id).first()
         if not order_record or not order_record.external_order_id:
             return False, "Brak external_order_id zamowienia - nie mozna zrealizowac zwrotu"
+
+        from ..domain.order_platform import is_woo_order
+
+        if is_woo_order(order_record) or _is_woo_return(return_record):
+            return _process_woo_refund(
+                db,
+                order_record,
+                return_record,
+                delivery_cost_covered=delivery_cost_covered,
+                reason=reason,
+            )
 
         access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
         if not access_token:
@@ -461,13 +617,25 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         if not order_record:
             return False, "Nie znaleziono zamowienia", None
 
-        allegro_return_data = _fetch_allegro_return_data(access_token, return_record)
+        from ..domain.order_platform import is_woo_order
+
+        allegro_return_data = None
+        if not (is_woo_order(order_record) or _is_woo_return(return_record)):
+            allegro_return_data = _fetch_allegro_return_data(access_token, return_record)
+
         bank_transfer = _build_bank_transfer_details(
             order_record,
             return_record,
             allegro_return_data=allegro_return_data,
             include_delivery=True,
         )
+
+        if is_woo_order(order_record) or _is_woo_return(return_record):
+            return _build_woo_refund_eligibility_details(
+                order_record,
+                return_record,
+                bank_transfer=bank_transfer,
+            )
 
         if not access_token:
             return False, "Brak tokenu Allegro — dostepny zwrot przelewem", bank_transfer

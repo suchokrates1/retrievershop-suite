@@ -353,7 +353,8 @@
                                     <div class="flex flex-wrap gap-2">
                                         <button type="button" class="btn btn-error btn-sm" id="refundBtn"
                                                 onclick="document.getElementById('refundModal').showModal()">
-                                            <i class="bi bi-currency-exchange"></i> Zwroc przez Allegro
+                                            <i class="bi bi-currency-exchange"></i>
+                                            {% if order.platform == 'woocommerce' %}Zwroc przez Woo{% else %}Zwroc przez Allegro{% endif %}
                                         </button>
                                         <button type="button" class="btn btn-outline btn-primary btn-sm"
                                                 onclick="document.getElementById('bankTransferRefundModal').showModal()">
@@ -361,7 +362,11 @@
                                         </button>
                                     </div>
                                     <span class="block text-sm text-base-content/60 mt-1">
+                                        {% if order.platform == 'woocommerce' %}
+                                        Woo — zwrot przez WooPayments/REST. Przelew — COD / gdy zwrot poza bramka.
+                                        {% else %}
                                         Allegro — zwrot API. Przelew — gdy pobranie / przelew juz wykonany poza Allegro.
+                                        {% endif %}
                                     </span>
                                 </div>
                             </template>

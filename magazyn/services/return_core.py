@@ -36,13 +36,30 @@ def create_return_from_order(
     status: str = RETURN_STATUS_PENDING,
     notes: str = None,
     *,
+    woo_withdrawal_id: str = None,
+    items: Optional[List[Dict]] = None,
+    customer_name: str = None,
     log: Optional[logging.Logger] = None,
 ) -> Optional[Return]:
     """Utworz rekord zwrotu na podstawie zamowienia."""
     active_logger = log or logger
 
     with get_session() as db:
-        existing = db.query(Return).filter(Return.order_id == order.order_id).first()
+        order_id = getattr(order, "order_id", None) or str(order)
+        db_order = db.query(Order).filter(Order.order_id == order_id).first()
+        if not db_order:
+            active_logger.error("create_return_from_order: brak zamowienia %s", order_id)
+            return None
+
+        existing = None
+        if woo_withdrawal_id:
+            existing = (
+                db.query(Return)
+                .filter(Return.woo_withdrawal_id == str(woo_withdrawal_id))
+                .first()
+            )
+        if existing is None:
+            existing = db.query(Return).filter(Return.order_id == order_id).first()
         if existing:
             updated = False
             if tracking_number and existing.return_tracking_number != tracking_number:
@@ -54,36 +71,47 @@ def create_return_from_order(
             if allegro_return_id and existing.allegro_return_id != allegro_return_id:
                 existing.allegro_return_id = allegro_return_id
                 updated = True
+            if woo_withdrawal_id and existing.woo_withdrawal_id != str(woo_withdrawal_id):
+                existing.woo_withdrawal_id = str(woo_withdrawal_id)
+                updated = True
             if status and existing.status != status:
                 existing.status = status
                 add_return_status_log(
                     db,
                     existing.id,
                     status,
-                    notes or f"Aktualizacja zwrotu dla zamowienia {order.order_id}",
+                    notes or f"Aktualizacja zwrotu dla zamowienia {order_id}",
                 )
                 updated = True
             if notes and existing.notes != notes:
                 existing.notes = notes
                 updated = True
+            if items is not None:
+                new_items = json.dumps(items, ensure_ascii=False)
+                if existing.items_json != new_items:
+                    existing.items_json = new_items
+                    updated = True
             if updated:
                 db.commit()
             active_logger.info(
                 "Zwrot dla zamowienia %s juz istnieje (ID: %s)",
-                order.order_id,
+                order_id,
                 existing.id,
             )
             return existing
 
-        items = get_order_products_summary(order)
+        resolved_items = (
+            items if items is not None else get_order_products_summary(db_order)
+        )
         return_record = Return(
-            order_id=order.order_id,
+            order_id=order_id,
             status=status,
-            customer_name=order.customer_name,
-            items_json=json.dumps(items, ensure_ascii=False),
+            customer_name=customer_name or db_order.customer_name,
+            items_json=json.dumps(resolved_items, ensure_ascii=False),
             return_tracking_number=tracking_number,
             return_carrier=return_carrier,
             allegro_return_id=allegro_return_id,
+            woo_withdrawal_id=str(woo_withdrawal_id) if woo_withdrawal_id else None,
             notes=notes,
         )
         db.add(return_record)
@@ -93,11 +121,11 @@ def create_return_from_order(
             db,
             return_record.id,
             status,
-            notes or f"Utworzono zwrot dla zamowienia {order.order_id}",
+            notes or f"Utworzono zwrot dla zamowienia {order_id}",
         )
 
         db.commit()
-        active_logger.info("Utworzono zwrot #%s dla zamowienia %s", return_record.id, order.order_id)
+        active_logger.info("Utworzono zwrot #%s dla zamowienia %s", return_record.id, order_id)
         return return_record
 
 
