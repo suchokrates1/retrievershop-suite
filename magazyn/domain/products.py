@@ -129,21 +129,6 @@ def validate_sizing(
         )
 
 
-def has_mixed_sizing(
-    quantities: Dict[str, int],
-    barcodes: Optional[Dict[str, Optional[str]]] = None,
-) -> bool:
-    """Compatibility helper used by legacy callers."""
-    barcodes = barcodes or {}
-    return (
-        _is_populated(quantities.get(UNIWERSALNY, 0), barcodes.get(UNIWERSALNY))
-        and any(
-            _is_populated(quantities.get(size, 0), barcodes.get(size))
-            for size in SIZED_SIZES
-        )
-    )
-
-
 def create_product(
     category: str,
     brand: str,
@@ -415,7 +400,6 @@ __all__ = [
     "_to_decimal",
     "_clean_barcode",
     "validate_ean",
-    "has_mixed_sizing",
     "create_product",
     "update_product",
     "delete_product",

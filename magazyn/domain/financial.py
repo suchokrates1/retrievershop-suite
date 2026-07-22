@@ -976,39 +976,3 @@ class FinancialCalculator:
             returned_qty=returned_qty,
             returns_list=returns_list,
         )
-
-
-# Funkcje pomocnicze dla kompatybilnosci wstecznej
-
-def get_order_profit(db_session: Session, order, settings_store=None, access_token=None) -> Dict:
-    """
-    Funkcja pomocnicza - oblicza zysk z zamowienia.
-    
-    Dla kompatybilnosci wstecznej - preferuj uzycie FinancialCalculator.
-    """
-    calculator = FinancialCalculator(db_session, settings_store)
-    breakdown = calculator.calculate_order_profit(order, access_token)
-    return breakdown.to_dict()
-
-
-def get_period_financial_summary(
-    db_session: Session, 
-    start_ts: int, 
-    end_ts: int, 
-    settings_store=None,
-    include_fixed_costs: bool = True,
-    access_token: str = None
-) -> Dict:
-    """
-    Funkcja pomocnicza - generuje podsumowanie finansowe.
-    
-    Dla kompatybilnosci wstecznej - preferuj uzycie FinancialCalculator.
-    """
-    calculator = FinancialCalculator(db_session, settings_store)
-    summary = calculator.get_period_summary(
-        start_ts, 
-        end_ts, 
-        include_fixed_costs,
-        access_token
-    )
-    return summary.to_dict()

@@ -123,27 +123,6 @@ class MessengerClient:
 _default_client: Optional[MessengerClient] = None
 
 
-def init_messenger(access_token: str, recipient_id: str, timeout: int = DEFAULT_TIMEOUT):
-    """
-    Inicjalizuje domyslnego klienta Messenger.
-    
-    Wywolaj na starcie aplikacji z odpowiednimi credentialami.
-    """
-    global _default_client
-    config = MessengerConfig(
-        access_token=access_token,
-        recipient_id=recipient_id,
-        timeout=timeout
-    )
-    _default_client = MessengerClient(config)
-    logger.info("Zainicjalizowano klienta Messenger")
-
-
-def get_messenger_client() -> Optional[MessengerClient]:
-    """Zwraca domyslnego klienta Messenger."""
-    return _default_client
-
-
 def send_messenger(message: str) -> bool:
     """
     Wysyla wiadomosc przez domyslnego klienta lub bezposrednio przez settings.
@@ -195,37 +174,3 @@ def send_messenger(message: str) -> bool:
     except Exception as e:
         logger.error(f"Blad wysylania wiadomosci: {e}")
         return False
-
-
-def send_messenger_lines(lines: List[str]) -> bool:
-    """
-    Wysyla wiele linii przez domyslnego klienta.
-    
-    Args:
-        lines: Lista linii do wyslania
-        
-    Returns:
-        True jesli wyslano pomyslnie
-    """
-    if not _default_client:
-        logger.warning("Klient Messenger nie zainicjalizowany - pomijam wyslanie")
-        return False
-    
-    return _default_client.send_lines(lines)
-
-
-# Funkcja kompatybilnosci wstecznej dla print_agent
-def send_messenger_legacy(
-    message: str,
-    access_token: str,
-    recipient_id: str,
-    timeout: int = DEFAULT_TIMEOUT
-) -> bool:
-    """
-    Wysyla wiadomosc z podanymi credentialami (bez globalnego klienta).
-    
-    Dla kompatybilnosci wstecznej z istniejacym kodem.
-    """
-    config = MessengerConfig(access_token, recipient_id, timeout)
-    client = MessengerClient(config)
-    return client.send_text(message)

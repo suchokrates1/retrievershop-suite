@@ -92,14 +92,7 @@ def extract_dhl_box_barcodes_from_label_pdf(label_bytes: bytes) -> list[str]:
         return []
 
 
-# Zachowaj stare nazwy dla kompatybilności wewnętrznej skryptów ops.
-extract_barcodes_from_label_text = extract_dhl_box_barcodes_from_label_text
-extract_barcodes_from_label_pdf = extract_dhl_box_barcodes_from_label_pdf
-
-
 __all__ = [
-    "extract_barcodes_from_label_pdf",
-    "extract_barcodes_from_label_text",
     "extract_dhl_box_barcodes_from_label_pdf",
     "extract_dhl_box_barcodes_from_label_text",
     "needs_dhl_box_label_barcode_extraction",

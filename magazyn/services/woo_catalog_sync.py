@@ -427,11 +427,6 @@ def _resolve_variable_parent_id(
     return None
 
 
-# Stock push żyje w woo_stock_reconcile (SoT stock); re-export dla kompatybilności
-from .woo_stock_reconcile import maybe_push_woo_stock, push_stock_for_product_size  # noqa: E402
-
 __all__ = [
-    "maybe_push_woo_stock",
-    "push_stock_for_product_size",
     "sync_catalog_to_woo",
 ]
