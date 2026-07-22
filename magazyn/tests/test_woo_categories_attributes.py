@@ -144,7 +144,6 @@ def test_sync_one_product_sends_categories_and_attributes():
         ) as upsert_product,
         patch.object(sync_mod, "upsert_variation", return_value={"id": 100}) as upsert_var,
         patch.object(sync_mod, "sync_offer_content"),
-        patch.object(sync_mod, "maybe_push_woo_stock"),
     ):
         sync_mod._sync_one_product(
             db,
@@ -242,7 +241,6 @@ def test_sync_one_family_shares_parent_across_colors():
         ) as upsert_product,
         patch.object(sync_mod, "upsert_variation", side_effect=_upsert_var),
         patch.object(sync_mod, "sync_offer_content"),
-        patch.object(sync_mod, "maybe_push_woo_stock"),
         patch.object(
             sync_mod,
             "canonical_woo_product_name",

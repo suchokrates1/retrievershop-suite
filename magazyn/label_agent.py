@@ -158,9 +158,6 @@ class LabelAgent:
         self._configure_logging()
         self._configure_db_engine()
 
-    # Backwards-compatible alias
-    reload_env = reload_config
-
     # ------------------------------------------------------------------
     # Validation and persistence helpers
     # ------------------------------------------------------------------

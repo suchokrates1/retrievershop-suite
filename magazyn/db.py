@@ -201,10 +201,6 @@ def get_session():
         session.close()
 
 
-# Backward compatibility
-get_db_connection = get_session
-
-
 def init_db():
     """Initialize the SQLite database and create required tables."""
     Base.metadata.create_all(engine)

@@ -181,7 +181,7 @@ def store_seller_shipping_on_order(
 
 
 def resolve_seller_shipping_cost(order) -> dict[str, Any]:
-    """Preferuj zapisany koszt API, inaczej estymata settings."""
+    """Preferuj zapisany koszt API, potem ShipX calculate, inaczej estymata settings."""
     stored = get_stored_seller_shipping(order)
     if stored is not None:
         return {
@@ -192,6 +192,39 @@ def resolve_seller_shipping_cost(order) -> dict[str, Any]:
             "size": None,
             "settings_key": None,
         }
+
+    # Readonly calculate — działa też u klientów z cennikiem (prepaid/debit z calculate)
+    try:
+        from ..inpost_api.shipx import try_calculate_shipment_price
+
+        order_data = {
+            "order_id": getattr(order, "order_id", None),
+            "delivery_method": getattr(order, "delivery_method", None),
+            "delivery_point_id": getattr(order, "delivery_point_id", None),
+            "delivery_fullname": getattr(order, "delivery_fullname", None),
+            "customer": getattr(order, "customer_name", None),
+            "email": getattr(order, "email", None),
+            "phone": getattr(order, "phone", None),
+            "delivery_address": getattr(order, "delivery_address", None),
+            "delivery_city": getattr(order, "delivery_city", None),
+            "delivery_postcode": getattr(order, "delivery_postcode", None),
+            "delivery_country_code": getattr(order, "delivery_country_code", None) or "PL",
+            "payment_method_cod": "1" if getattr(order, "payment_method_cod", False) else "0",
+            "payment_done": float(getattr(order, "payment_done", 0) or 0),
+        }
+        calc_price = try_calculate_shipment_price(order_data)
+        if calc_price is not None:
+            return {
+                "cost": _to_decimal(calc_price),
+                "source": "api",
+                "is_estimated": False,
+                "channel": None,
+                "size": None,
+                "settings_key": None,
+            }
+    except Exception as exc:
+        logger.debug("ShipX calculate w resolve_seller_shipping: %s", exc)
+
     return estimate_shop_shipping_cost(order)
 
 

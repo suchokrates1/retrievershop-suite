@@ -158,37 +158,6 @@ class ReportGenerator:
 
 # Funkcje pomocnicze dla kompatybilnosci wstecznej
 
-def format_period_report(
-    summary: Dict[str, Any], 
-    period_name: str,
-    report_type: str = "monthly"
-) -> List[str]:
-    """
-    Formatuje raport za okres.
-    
-    Args:
-        summary: Slownik z podsumowaniem
-        period_name: Nazwa okresu
-        report_type: Typ raportu ('monthly', 'weekly', 'daily')
-        
-    Returns:
-        Lista linii raportu
-    """
-    generator = ReportGenerator()
-    
-    if report_type == "weekly":
-        # Probuj wyciagnac numer tygodnia z nazwy
-        try:
-            week_num = int(period_name.split()[-1])
-        except (ValueError, IndexError):
-            week_num = 0
-        return generator.format_weekly_report(summary, week_num)
-    elif report_type == "daily":
-        return generator.format_daily_report(summary, period_name)
-    else:
-        return generator.format_monthly_report(summary, period_name)
-
-
 def send_report(title: str, lines: List[str]) -> bool:
     """
     Wysyla raport przez Messenger.
