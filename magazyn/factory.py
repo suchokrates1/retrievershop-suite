@@ -15,10 +15,10 @@ from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
 from .orders import bp as orders_bp
-from .blueprints.woocommerce_webhooks import bp as woocommerce_webhooks_bp
-from .blueprints.shop_mail_api import bp as shop_mail_api_bp
-from .blueprints.shop_trust_api import bp as shop_trust_api_bp
-from .blueprints.woo_admin import bp as woo_admin_bp
+from .blueprints.woo import admin_bp as woo_admin_bp
+from .blueprints.woo import webhooks_bp as woocommerce_webhooks_bp
+from .blueprints.shop import mail_bp as shop_mail_api_bp
+from .blueprints.shop import trust_bp as shop_trust_api_bp
 from .blueprints.order_sync_admin import bp as order_sync_admin_bp
 from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import promo_scheduler  # noqa: F401 - publiczny import kompatybilnosci

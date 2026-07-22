@@ -62,7 +62,7 @@ def record_purchase(
             woo_vid = None
 
     if size_id and woo_vid:
-        from .woo_catalog_sync import maybe_push_woo_stock
+        from .woo_stock_reconcile import maybe_push_woo_stock
 
         maybe_push_woo_stock(size_id, quantity=new_qty)
 
@@ -190,7 +190,7 @@ def consume_stock(
         _log_consumed_stock(session, product_id, size, consumed, log)
 
     if size_id and woo_vid and new_qty is not None:
-        from .woo_catalog_sync import maybe_push_woo_stock
+        from .woo_stock_reconcile import maybe_push_woo_stock
 
         maybe_push_woo_stock(size_id, quantity=new_qty)
     return consumed

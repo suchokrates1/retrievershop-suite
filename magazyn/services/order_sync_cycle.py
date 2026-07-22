@@ -163,7 +163,6 @@ class OrderSyncCycle:
     def run_daily_allegro_offer_sync(self) -> None:
         from ..allegro_sync import sync_offers
         from .allegro_offer_content import sync_linked_offers_content
-        from .woo_catalog_sync import sync_catalog_to_woo
 
         self.logger.info("Starting daily Allegro offer sync")
         offer_stats = sync_offers()
@@ -173,14 +172,18 @@ class OrderSyncCycle:
             self.logger.info("Allegro offer content sync: %s", content_stats)
         except Exception as exc:
             self.logger.error("Allegro content sync failed: %s", exc, exc_info=True)
+
+    def run_daily_woo_catalog_sync(self) -> None:
+        from .woo_catalog_sync import sync_catalog_to_woo
+        from .woo_stock_reconcile import reconcile_woo_stock
+
+        self.logger.info("Starting daily Woo catalog sync")
         try:
             woo_stats = sync_catalog_to_woo(limit=300, refresh_content=False)
             self.logger.info("Woo catalog sync: %s", woo_stats)
         except Exception as exc:
             self.logger.error("Woo catalog sync failed: %s", exc, exc_info=True)
         try:
-            from .woo_stock_reconcile import reconcile_woo_stock
-
             recon = reconcile_woo_stock(dry_run=False)
             self.logger.info("Woo stock reconcile: %s", recon)
         except Exception as exc:
@@ -207,6 +210,7 @@ class OrderSyncCycle:
 
         try:
             self.run_daily_allegro_offer_sync()
+            self.run_daily_woo_catalog_sync()
             self.callbacks.set_last_offer_sync_date(today)
         except Exception as offer_err:
             self.logger.error(f"Error in daily offer sync: {offer_err}", exc_info=True)

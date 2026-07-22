@@ -39,12 +39,12 @@ def test_newsletter_welcome_api_unauthorized(client):
 
 def test_newsletter_welcome_api_ok(client, app):
     with app.app_context():
-        with patch("magazyn.blueprints.shop_mail_api.settings_store") as store:
+        with patch("magazyn.blueprints.shop.mail_api.settings_store") as store:
             store.get.side_effect = lambda k: "secret" if k in (
                 "NEWSLETTER_MAIL_SECRET",
                 "WOO_WEBHOOK_SECRET",
             ) else ""
-            with patch("magazyn.blueprints.shop_mail_api.send_newsletter_welcome") as send:
+            with patch("magazyn.blueprints.shop.mail_api.send_newsletter_welcome") as send:
                 send.return_value = True
                 res = client.post(
                     "/api/shop-mail/newsletter-welcome",

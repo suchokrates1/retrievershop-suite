@@ -83,7 +83,7 @@ def apply_stock_adjustment(
         reason or "-",
     )
     if product_size.id and getattr(product_size, "woo_variation_id", None):
-        from .woo_catalog_sync import maybe_push_woo_stock
+        from .woo_stock_reconcile import maybe_push_woo_stock
 
         maybe_push_woo_stock(product_size.id, quantity=new_qty)
     return old_qty, new_qty

@@ -71,6 +71,19 @@ class InpostShipxClient:
             json=payload,
         )
 
+    def calculate_shipments(self, shipments: list[dict]) -> list[dict]:
+        """Wylicz ceny przesyłek bez tworzenia (prepaid). Debet często bez ceny."""
+        result = self.request(
+            "POST",
+            f"/v1/organizations/{self.organization_id}/shipments/calculate",
+            json={"shipments": shipments},
+        )
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return result.get("shipments") or result.get("calculations") or [result]
+        return []
+
     def get_shipment(self, shipment_id: str | int) -> dict:
         return self.request("GET", f"/v1/shipments/{shipment_id}")
 
@@ -203,6 +216,40 @@ def _buy_offer_if_needed(client: InpostShipxClient, shipment_id: str | int, deta
     return client.get_shipment(shipment_id)
 
 
+def extract_shipment_price(details: dict) -> float | None:
+    """Cena z oferty ShipX lub calculated_charge_amount."""
+    from ..domain.shop_shipping import extract_rate_from_shipment
+
+    rate = extract_rate_from_shipment(details or {})
+    if rate is not None:
+        return float(rate)
+    for key in ("calculated_charge_amount", "price"):
+        if details.get(key) is not None:
+            try:
+                return float(details[key])
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def try_calculate_shipment_price(order_data: dict) -> float | None:
+    """Spróbuj POST /shipments/calculate — None gdy API nie zwraca ceny."""
+    try:
+        client = InpostShipxClient()
+        payload = build_shipment_payload(order_data)
+        payload["id"] = order_data.get("order_id") or "calc1"
+        rows = client.calculate_shipments([payload])
+        if not rows:
+            return None
+        row = rows[0]
+        if row.get("calculated_charge_amount") is not None:
+            return float(row["calculated_charge_amount"])
+        return extract_shipment_price(row)
+    except Exception as exc:
+        logger.debug("ShipX calculate niedostępne: %s", exc)
+        return None
+
+
 def create_shipment_and_label(
     order_data: dict,
     *,
@@ -258,6 +305,10 @@ def create_shipment_and_label(
             f"Brak etykiety ShipX dla {shipment_id}: {last_err or 'empty'}"
         )
 
+    shipping_cost = extract_shipment_price(details)
+    if shipping_cost is None:
+        shipping_cost = try_calculate_shipment_price(order_data)
+
     return {
         "shipment_id": str(shipment_id),
         "waybill": waybill,
@@ -265,4 +316,6 @@ def create_shipment_and_label(
         "carrier_id": "INPOST",
         "courier_code": "INPOST",
         "courier_package_nr": waybill,
+        "shipping_cost": shipping_cost,
+        "shipment_details": details,
     }
