@@ -101,6 +101,7 @@ def _send_html_email(
     html_body: str,
     attachment: bytes | None = None,
     attachment_filename: str | None = None,
+    reply_to: str | None = None,
 ) -> bool:
     """Wyslij email HTML przez SMTP.
 
@@ -125,7 +126,7 @@ def _send_html_email(
     msg["Subject"] = subject
     msg["From"] = formataddr((from_name, from_addr))
     msg["To"] = to_email
-    msg["Reply-To"] = from_addr
+    msg["Reply-To"] = (reply_to or "").strip() or from_addr
 
     # Wersja plain text - generowana z HTML (Allegro wyswietla te wersje)
     plain_text = _html_to_plain_text(html_body)
@@ -397,6 +398,68 @@ def send_invoice_correction(
     )
 
 
+def send_contact_form_message(
+    *,
+    to_email: str,
+    reply_to_email: str,
+    reply_to_name: str = "",
+    subject: str,
+    topic: str = "",
+    phone: str = "",
+    message: str,
+    source_ip: str = "",
+    page_url: str = "",
+) -> bool:
+    """Wyslij wiadomosc z formularza Kontakt (SMTP, Reply-To = klient)."""
+    dest = (to_email or "").strip()
+    reply = (reply_to_email or "").strip()
+    body = (message or "").strip()
+    if not dest or not reply or not body:
+        logger.warning("contact_form: brak to/reply_to/message")
+        return False
+
+    name = (reply_to_name or "").strip() or reply
+    topic_label = (topic or "").strip() or "Inne"
+    phone_label = (phone or "").strip() or "—"
+
+    def _esc(value: str) -> str:
+        return (
+            (value or "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+        )
+
+    safe_msg = _esc(body).replace("\n", "<br>\n")
+    html = f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,sans-serif;color:#17383E;line-height:1.5">
+  <h2 style="margin:0 0 12px">Nowa wiadomość z formularza Kontakt</h2>
+  <p style="margin:0 0 8px"><strong>Imię:</strong> {_esc(name)}</p>
+  <p style="margin:0 0 8px"><strong>E-mail:</strong> {_esc(reply)}</p>
+  <p style="margin:0 0 8px"><strong>Telefon:</strong> {_esc(phone_label)}</p>
+  <p style="margin:0 0 8px"><strong>Temat:</strong> {_esc(topic_label)}</p>
+  <hr style="border:none;border-top:1px solid #ddd;margin:16px 0">
+  <p style="margin:0 0 8px"><strong>Wiadomość:</strong></p>
+  <p style="margin:0 0 16px">{safe_msg}</p>
+  <hr style="border:none;border-top:1px solid #ddd;margin:16px 0">
+  <p style="margin:0;font-size:12px;color:#5A6B6B">
+    IP: {_esc(source_ip) or "—"} · Strona: {_esc(page_url) or "https://retrievershop.pl/kontakt/"}
+  </p>
+</body></html>"""
+    subj = (subject or "").strip() or f"[Retriever Shop] {topic_label} — {name}"
+    reply_hdr = formataddr((name, reply)) if name else reply
+    ok = _send_html_email(
+        to_email=dest,
+        subject=subj,
+        html_body=html,
+        reply_to=reply_hdr,
+    )
+    if ok:
+        logger.info("Contact form mail wyslany do %s od %s", dest, reply)
+    return ok
+
+
 def send_newsletter_welcome(
     *,
     to_email: str,
@@ -420,8 +483,8 @@ def send_newsletter_welcome(
         "valid_days": int(valid_days),
         "shop_url": shop_url or "https://retrievershop.pl/produkty/",
         "hero_image_url": (
-            "https://retrievershop.pl/wp-content/uploads/2021/11/"
-            "newsletter_dog_optimized-1.webp"
+            "https://retrievershop.pl/wp-content/uploads/2024/08/"
+            "Projekt-bez-nazwy-3.png"
         ),
         "order_page_url": "",
     }
