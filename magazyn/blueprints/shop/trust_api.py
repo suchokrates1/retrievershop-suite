@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 
 from ...csrf_extension import csrf
 from ...services.allegro_ratings_snapshot import get_public_snapshot
+from ...services.allegro_reviews_snapshot import get_public_reviews
 from ...services.shop_catalog import get_shop_bestsellers, get_shop_latest_delivery
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,20 @@ def allegro_trust():
     if not snap:
         return jsonify({"ok": False, "error": "snapshot_unavailable"}), 503
     return jsonify({"ok": True, "allegro": snap}), 200
+
+
+@bp.route("/api/shop-trust/reviews", methods=["GET"])
+@csrf.exempt
+def allegro_reviews():
+    """Lista opinii Allegro z komentarzem (do karuzeli na homepage)."""
+    try:
+        limit = int(request.args.get("limit", 12))
+    except (TypeError, ValueError):
+        limit = 12
+    data = get_public_reviews(limit=limit, refresh_if_stale=True)
+    if not data or not data.get("reviews"):
+        return jsonify({"ok": False, "error": "reviews_unavailable"}), 503
+    return jsonify({"ok": True, **data}), 200
 
 
 @bp.route("/api/shop-trust/bestsellers", methods=["GET"])
