@@ -9,7 +9,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from ...csrf_extension import csrf
-from ...services.email_service import send_newsletter_welcome
+from ...services.email_service import send_contact_form_message, send_newsletter_welcome
 from ...settings_store import settings_store
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,44 @@ def newsletter_welcome():
         discount_percent=discount_percent,
         valid_days=valid_days,
         shop_url=shop_url,
+    )
+    if not ok:
+        return jsonify({"ok": False, "error": "smtp_send_failed"}), 502
+    return jsonify({"ok": True}), 200
+
+
+@bp.route("/api/shop-mail/contact", methods=["POST"])
+@csrf.exempt
+def contact_form():
+    body = request.get_data()
+    if not _authorized(body):
+        logger.warning("shop-mail/contact: nieautoryzowane")
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+    topic = (payload.get("topic") or "").strip()
+    message = (payload.get("message") or "").strip()
+    subject = (payload.get("subject") or "").strip()
+    source_ip = (payload.get("source_ip") or "").strip()
+    page_url = (payload.get("page_url") or "").strip()
+    to_email = (payload.get("to_email") or "kontakt@retrievershop.pl").strip()
+
+    if not email or not message:
+        return jsonify({"error": "email and message required"}), 400
+
+    ok = send_contact_form_message(
+        to_email=to_email,
+        reply_to_email=email,
+        reply_to_name=name,
+        subject=subject,
+        topic=topic,
+        phone=phone,
+        message=message,
+        source_ip=source_ip,
+        page_url=page_url,
     )
     if not ok:
         return jsonify({"ok": False, "error": "smtp_send_failed"}), 502
