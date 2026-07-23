@@ -23,7 +23,7 @@ def test_send_newsletter_welcome_renders_and_sends(app):
             assert "RS10-ABC12345" in kwargs["html_body"]
             assert "Jan" in kwargs["html_body"]
             assert "10%" in kwargs["html_body"] or "−10%" in kwargs["html_body"]
-            assert "newsletter_dog_optimized" in kwargs["html_body"]
+            assert "Projekt-bez-nazwy-3.png" in kwargs["html_body"]
             assert "facebook.com/retrievershop" in kwargs["html_body"]
             assert "instagram.com/retrievershop.pl" in kwargs["html_body"]
             assert kwargs["subject"].startswith("Twoj rabat")
