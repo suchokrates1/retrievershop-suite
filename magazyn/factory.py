@@ -17,6 +17,7 @@ from .allegro import bp as allegro_bp
 from .orders import bp as orders_bp
 from .blueprints.woo import admin_bp as woo_admin_bp
 from .blueprints.woo import webhooks_bp as woocommerce_webhooks_bp
+from .blueprints.shop import invoice_bp as shop_invoice_api_bp
 from .blueprints.shop import mail_bp as shop_mail_api_bp
 from .blueprints.shop import return_instructions_bp as shop_return_instructions_bp
 from .blueprints.shop import trust_bp as shop_trust_api_bp
@@ -131,6 +132,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(shop_mail_api_bp)
     app.register_blueprint(shop_trust_api_bp)
     app.register_blueprint(shop_return_instructions_bp)
+    app.register_blueprint(shop_invoice_api_bp)
     app.register_blueprint(woo_admin_bp)
     app.register_blueprint(order_sync_admin_bp)
     app.register_blueprint(discussions_bp)
