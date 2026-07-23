@@ -1,0 +1,34 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Instrukcja zwrotu - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Zwrot własny — instrukcja</h2>
+<p style="margin:0 0 16px;font-size:14px;color:#555;line-height:1.6;">
+    Przyjęliśmy zgłoszenie odstąpienia dla zamówienia <strong>#{{ order_id }}</strong>
+    (nr zgłoszenia: <strong>{{ return_ref }}</strong>).
+</p>
+<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;">
+    Wyślij paczkę <strong>w ciągu 14 dni od zgłoszenia</strong>
+    (termin: <strong>{{ deadline }}</strong>) na adres poniżej.
+    Po otrzymaniu i sprawdzeniu paczki zwrócimy pieniądze tą samą metodą płatności.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;margin-bottom:20px;">
+    <tr>
+        <td style="padding:20px;font-size:14px;color:#333;line-height:1.7;">
+            <strong>{{ address.company }}</strong><br>
+            {{ address.name }}<br>
+            {{ address.street }}<br>
+            {{ address.postcode }} {{ address.city }}<br>
+            Tel: {{ address.phone }}
+        </td>
+    </tr>
+</table>
+
+<p style="margin:0 0 12px;font-size:13px;color:#555;line-height:1.6;">
+    Na paczce napisz nr zamówienia <strong>#{{ order_id }}</strong>.
+    Po nadaniu warto podać nam numer przesyłki (e-mail lub telefon).
+</p>
+<p style="margin:0;font-size:13px;color:#888;line-height:1.6;">
+    Koszt odesłania zwykle pokrywa kupujący (chyba że towar jest wadliwy / niezgodny z umową).
+</p>
+{% endblock %}

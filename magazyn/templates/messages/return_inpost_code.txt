@@ -1,0 +1,4 @@
+Szybki zwrot InPost — zamowienie #{{ order_id }}
+Kod nadania: {{ return_code }}
+Wazny do: {{ expires_at }}
+Nadasz w Paczkomacie. Oplate pobierze InPost przy nadaniu.

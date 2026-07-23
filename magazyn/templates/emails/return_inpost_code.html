@@ -1,0 +1,30 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Kod zwrotu InPost - Retriever Shop{% endblock %}
+{% block content %}
+<h2 style="margin:0 0 16px;font-size:22px;color:#1a1a2e;">Szybki zwrot InPost</h2>
+<p style="margin:0 0 16px;font-size:14px;color:#555;line-height:1.6;">
+    Dla zamówienia <strong>#{{ order_id }}</strong> wygenerowaliśmy kod nadania zwrotu.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff3cd;border-radius:8px;margin-bottom:20px;">
+    <tr>
+        <td style="padding:24px;text-align:center;">
+            <p style="margin:0 0 8px;font-size:13px;color:#664d03;">Kod nadania w Paczkomacie</p>
+            <p style="margin:0;font-size:28px;letter-spacing:2px;font-weight:bold;color:#1a1a2e;">{{ return_code }}</p>
+            {% if expires_at %}
+            <p style="margin:12px 0 0;font-size:13px;color:#664d03;">Ważny do: {{ expires_at }}</p>
+            {% endif %}
+        </td>
+    </tr>
+</table>
+
+<ol style="margin:0 0 16px;padding-left:20px;font-size:14px;color:#555;line-height:1.7;">
+    <li>Spakuj produkt (usuń starą etykietę z kartonu).</li>
+    <li>W dowolnym Paczkomacie wybierz opcję zwrotu / wpisz kod (lub użyj aplikacji InPost).</li>
+    <li><strong>Opłatę za nadanie pobierze InPost</strong> przy nadaniu — nie my z góry.</li>
+</ol>
+
+<p style="margin:0;font-size:13px;color:#888;line-height:1.6;">
+    Po otrzymaniu i sprawdzeniu paczki oddamy pieniądze tą samą metodą płatności.
+</p>
+{% endblock %}
