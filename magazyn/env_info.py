@@ -205,4 +205,12 @@ ENV_INFO = {
         "InPost sklep kurier C (zl)",
         "Koszt sprzedawcy kurier gabaryt C (fallback, domyslnie 25.49)",
     ),
+    "INPOST_RETURNS_CLIENT_ID": (
+        "InPost Returns client_id",
+        "OAuth client_id do Returns REST API (nie ShipX) — customer-paid zwroty",
+    ),
+    "INPOST_RETURNS_CLIENT_SECRET": (
+        "InPost Returns client_secret",
+        "OAuth client_secret do Returns REST API",
+    ),
 }

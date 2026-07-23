@@ -49,6 +49,8 @@ SETTINGS_GROUPS = {
     "INPOST_SHOP_COURIER_A": ("InPost ShipX", "bi-truck"),
     "INPOST_SHOP_COURIER_B": ("InPost ShipX", "bi-truck"),
     "INPOST_SHOP_COURIER_C": ("InPost ShipX", "bi-truck"),
+    "INPOST_RETURNS_CLIENT_ID": ("InPost Returns", "bi-arrow-return-left"),
+    "INPOST_RETURNS_CLIENT_SECRET": ("InPost Returns", "bi-arrow-return-left"),
     "WFIRMA_ACCESS_KEY": ("wFirma", "bi-receipt"),
     "WFIRMA_SECRET_KEY": ("wFirma", "bi-receipt"),
     "WFIRMA_APP_KEY": ("wFirma", "bi-receipt"),

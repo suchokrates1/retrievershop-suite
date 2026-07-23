@@ -1,0 +1,8 @@
+Zwrot wlasny — zamowienie #{{ order_id }}
+Nr zgloszenia: {{ return_ref }}
+Wyslij paczke do {{ deadline }} na:
+{{ address.company }}
+{{ address.name }}
+{{ address.street }}
+{{ address.postcode }} {{ address.city }}
+Tel: {{ address.phone }}

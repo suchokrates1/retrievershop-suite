@@ -16,6 +16,7 @@ from ..models.returns import Return
 from ..settings_store import settings_store
 from .order_status import add_order_status
 from .return_core import create_return_from_order
+from .return_ship_instructions import ensure_instruction_token, instruction_page_url
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,8 @@ def upsert_return_from_woo_withdrawal(
     if not return_record:
         return {"ok": False, "error": "create_failed", "order_id": order.order_id}
 
+    token = ensure_instruction_token(return_record.id)
+
     with get_session() as db:
         add_order_status(
             db,
@@ -152,6 +155,8 @@ def upsert_return_from_woo_withdrawal(
         "return_id": return_record.id,
         "order_id": order.order_id,
         "woo_withdrawal_id": str(withdrawal_id),
+        "instruction_token": token,
+        "instruction_url": instruction_page_url(token) if token else "",
     }
 
 

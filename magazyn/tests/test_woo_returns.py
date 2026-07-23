@@ -60,6 +60,8 @@ def test_upsert_return_from_woo_withdrawal_creates_and_dedups(app):
         first = upsert_return_from_woo_withdrawal(payload)
         assert first["ok"] is True
         assert first["created"] is True
+        assert first.get("instruction_token")
+        assert "instrukcja-zwrotu" in (first.get("instruction_url") or "")
 
         second = upsert_return_from_woo_withdrawal(payload)
         assert second["ok"] is True

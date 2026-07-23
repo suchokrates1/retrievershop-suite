@@ -15,6 +15,7 @@ class Return(Base):
         Index("idx_returns_status", "status"),
         Index("idx_returns_created_at", "created_at"),
         Index("ix_returns_woo_withdrawal_id", "woo_withdrawal_id", unique=True),
+        Index("ix_returns_return_instruction_token", "return_instruction_token", unique=True),
     )
 
     id = Column(Integer, primary_key=True)
@@ -26,6 +27,11 @@ class Return(Base):
     return_carrier = Column(String, nullable=True)
     allegro_return_id = Column(String, nullable=True)
     woo_withdrawal_id = Column(String, nullable=True)
+    return_ship_method = Column(String, nullable=True)  # inpost_buyer | self | null
+    return_instruction_token = Column(String, nullable=True)
+    return_code = Column(String, nullable=True)
+    return_code_expires_at = Column(DateTime, nullable=True)
+    return_ship_deadline = Column(DateTime, nullable=True)
     messenger_notified = Column(Boolean, default=False, nullable=False)
     stock_restored = Column(Boolean, default=False, nullable=False)
     refund_processed = Column(Boolean, default=False, nullable=False)
