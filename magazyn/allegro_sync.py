@@ -322,25 +322,52 @@ def sync_offers():
                 timestamp = timestamp_dt.isoformat()
 
                 if existing:
-                    existing.title = title
-                    existing.price = price
-                    existing.ean = offer_ean
-                    existing.publication_status = publication_status
-                    if product_size is not None or (
+                    old_price = Decimal(str(existing.price or 0)).quantize(Decimal("0.01"))
+                    new_price = Decimal(str(price or 0)).quantize(Decimal("0.01"))
+                    mapping_may_update = product_size is not None or (
                         existing.product_size_id is None
                         and existing.product_id is None
-                    ):
-                        if (existing.product_size_id is not None
-                                and existing.product_size_id != product_size_id):
-                            logger.warning(
-                                f"Zmiana przypisania oferty {offer_id}: "
-                                f"pid {existing.product_id}->{product_id}, "
-                                f"ps {existing.product_size_id}->{product_size_id} "
-                                f"(tytul: {title[:80]})"
+                    )
+                    mapping_changed = False
+                    if mapping_may_update:
+                        mapping_changed = (
+                            existing.product_id != product_id
+                            or existing.product_size_id != product_size_id
+                        )
+                    changed = (
+                        (existing.title or "") != (title or "")
+                        or old_price != new_price
+                        or (existing.ean or None) != (offer_ean or None)
+                        or (existing.publication_status or "") != (publication_status or "")
+                        or mapping_changed
+                    )
+                    if changed:
+                        existing.title = title
+                        existing.price = price
+                        existing.ean = offer_ean
+                        existing.publication_status = publication_status
+                        if mapping_may_update:
+                            if (
+                                existing.product_size_id is not None
+                                and existing.product_size_id != product_size_id
+                            ):
+                                logger.warning(
+                                    f"Zmiana przypisania oferty {offer_id}: "
+                                    f"pid {existing.product_id}->{product_id}, "
+                                    f"ps {existing.product_size_id}->{product_size_id} "
+                                    f"(tytul: {title[:80]})"
+                                )
+                            existing.product_id = product_id
+                            existing.product_size_id = product_size_id
+                        existing.synced_at = timestamp
+                        if old_price != new_price:
+                            allegro_prices.record_price_point(
+                                session,
+                                offer_id=offer_id,
+                                product_size_id=product_size_id,
+                                price=price,
+                                recorded_at=timestamp_dt,
                             )
-                        existing.product_id = product_id
-                        existing.product_size_id = product_size_id
-                    existing.synced_at = timestamp
                 else:
                     session.add(
                         AllegroOffer(
@@ -354,14 +381,13 @@ def sync_offers():
                             synced_at=timestamp,
                         )
                     )
-
-                allegro_prices.record_price_point(
-                    session,
-                    offer_id=offer_id,
-                    product_size_id=product_size_id,
-                    price=price,
-                    recorded_at=timestamp_dt,
-                )
+                    allegro_prices.record_price_point(
+                        session,
+                        offer_id=offer_id,
+                        product_size_id=product_size_id,
+                        price=price,
+                        recorded_at=timestamp_dt,
+                    )
 
                 if product_size:
                     matched_count += 1

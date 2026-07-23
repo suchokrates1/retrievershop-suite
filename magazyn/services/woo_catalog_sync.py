@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlalchemy import or_
 
 from ..db import get_session
 from ..models.allegro import AllegroOffer
 from ..models.products import Product, ProductSize
+from ..settings_store import settings_store
 from ..woocommerce_api import WooClient, WooClientError
 from ..woocommerce_api.attributes import build_product_attributes
 from ..woocommerce_api.categories import ensure_product_category
@@ -35,6 +37,98 @@ from .woo_product_naming import (
 logger = logging.getLogger(__name__)
 
 VariantRow = tuple[Product, ProductSize, AllegroOffer | None]
+SyncMode = Literal["incremental", "full"]
+SNAPSHOT_SETTING_KEY = "WOO_CATALOG_FAMILY_SNAPSHOTS"
+
+
+def _family_key_str(key: tuple[str, str, str]) -> str:
+    return "|".join(key)
+
+
+def _load_family_snapshots() -> dict[str, str]:
+    raw = settings_store.get(SNAPSHOT_SETTING_KEY) or ""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in data.items() if k is not None and v is not None}
+
+
+def _save_family_snapshots(snapshots: dict[str, str]) -> None:
+    settings_store.update(
+        {SNAPSHOT_SETTING_KEY: json.dumps(snapshots, ensure_ascii=False, separators=(",", ":"))}
+    )
+
+
+def compute_family_fingerprint(db, products: list[Product]) -> str:
+    """Hash stanu rodziny (mapowania Woo + ceny/tresc/stany) do detekcji zmian."""
+    parts: list[str] = []
+    for product in sorted(products, key=lambda p: int(p.id or 0)):
+        parts.append(
+            "p:{pid}:{woo}:{color}:{cat}:{brand}:{series}".format(
+                pid=product.id,
+                woo=product.woo_product_id or 0,
+                color=(product.color or "").strip().lower(),
+                cat=(product.category or "").strip().lower(),
+                brand=(product.brand or "").strip().lower(),
+                series=(product.series or "").strip().lower(),
+            )
+        )
+    variants = _collect_family_variants(db, products)
+    for product, size, offer in sorted(
+        variants, key=lambda row: (int(row[0].id or 0), int(row[1].id or 0))
+    ):
+        price = ""
+        title = ""
+        status = ""
+        content_ts = ""
+        if offer is not None:
+            price = str(offer.price or "")
+            title = (offer.title or "")[:120]
+            status = (offer.publication_status or "").strip()
+            content_ts = (offer.content_synced_at or "").strip()
+        # Bez quantity — stany ida osobnym reconcile / maybe_push_woo_stock.
+        parts.append(
+            "v:{sid}:{sku}:{size}:{wvid}:{price}:{status}:{cts}:{title}".format(
+                sid=size.id,
+                sku=(size.barcode or "").strip(),
+                size=(size.size or "").strip(),
+                wvid=size.woo_variation_id or 0,
+                price=price,
+                status=status,
+                cts=content_ts,
+                title=title,
+            )
+        )
+    digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+    return digest[:32]
+
+
+def family_needs_catalog_sync(
+    db,
+    products: list[Product],
+    *,
+    snapshots: dict[str, str],
+    mode: SyncMode,
+) -> bool:
+    """Czy rodzine trzeba wypchnac do Woo (full / brak mapowania / zmiana fingerprint)."""
+    if not products:
+        return False
+    if mode == "full":
+        return True
+    if any(not product.woo_product_id for product in products):
+        return True
+    variants = _collect_family_variants(db, products)
+    if not variants:
+        return False
+    if any(not size.woo_variation_id for _, size, _ in variants):
+        return True
+    key = _family_key_str(product_family_key(products[0]))
+    return snapshots.get(key) != compute_family_fingerprint(db, products)
 
 
 def sync_catalog_to_woo(
@@ -42,18 +136,34 @@ def sync_catalog_to_woo(
     product_ids: Optional[list[int]] = None,
     limit: int = 200,
     refresh_content: bool = True,
+    mode: SyncMode = "incremental",
 ) -> dict[str, int]:
     """Upsert produktow variable + wariantow (kolor x rozmiar) po EAN do Woo.
 
     Grupuje Magazyn Product (1 kolor) w rodziny (category+brand+series) i tworzy
     jeden parent Woo na rodzine.
+
+    ``mode="incremental"`` (domyslnie) syncuje tylko nowe / bez mapowania Woo /
+    rodziny ze zmienionym fingerprintem. ``mode="full"`` omija filtr zmian
+    (limit nadal obowiazuje na liczbie rodzin).
     """
-    stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0, "families": 0}
+    stats = {
+        "products": 0,
+        "variations": 0,
+        "errors": 0,
+        "skipped": 0,
+        "families": 0,
+        "candidates": 0,
+        "unchanged": 0,
+    }
     try:
         client = WooClient()
     except WooClientError as exc:
         logger.error("Woo catalog sync: %s", exc)
         return {**stats, "errors": 1}
+
+    snapshots = _load_family_snapshots()
+    updated_snapshots = dict(snapshots)
 
     with get_session() as db:
         q = (
@@ -73,13 +183,31 @@ def sync_catalog_to_woo(
         )
         if product_ids:
             q = q.filter(Product.id.in_(product_ids))
-        products = q.limit(limit).all()
+        # Najpierw zbierz wszystkie kandydaty (bez limitu produktow), potem filtruj
+        # rodziny — inaczej limit ucinalby czlonkow tej samej rodziny.
+        products = q.all()
 
         families: dict[tuple[str, str, str], list[Product]] = defaultdict(list)
         for product in products:
             families[product_family_key(product)].append(product)
+        stats["candidates"] = len(families)
 
-        for key, members in families.items():
+        dirty: list[tuple[tuple[str, str, str], list[Product]]] = []
+        for key, members in sorted(families.items(), key=lambda item: item[0]):
+            if product_ids or family_needs_catalog_sync(
+                db, members, snapshots=snapshots, mode=mode
+            ):
+                dirty.append((key, members))
+            else:
+                stats["unchanged"] += 1
+
+        max_families = max(1, int(limit))
+        selected = dirty[:max_families]
+        overflow = len(dirty) - len(selected)
+        if overflow > 0:
+            stats["skipped"] += overflow
+
+        for key, members in selected:
             try:
                 _sync_one_family(
                     db,
@@ -89,10 +217,26 @@ def sync_catalog_to_woo(
                     stats=stats,
                 )
                 stats["families"] += 1
+                updated_snapshots[_family_key_str(key)] = compute_family_fingerprint(db, members)
             except Exception:
                 logger.exception("Blad sync rodziny %s do Woo", key)
                 stats["errors"] += 1
         db.commit()
+
+    if updated_snapshots != snapshots:
+        try:
+            _save_family_snapshots(updated_snapshots)
+        except Exception:
+            logger.exception("Nie zapisano snapshotow katalogu Woo")
+
+    logger.info(
+        "Woo catalog sync mode=%s families=%s unchanged=%s candidates=%s errors=%s",
+        mode,
+        stats["families"],
+        stats["unchanged"],
+        stats["candidates"],
+        stats["errors"],
+    )
     return stats
 
 
@@ -138,6 +282,42 @@ def _collect_image_ids(
         if media_id and int(media_id) not in image_ids:
             image_ids.append(int(media_id))
     return image_ids
+
+
+def _collect_color_image_ids(
+    client: WooClient,
+    db,
+    variants: list[VariantRow],
+    *,
+    alt_text: str,
+) -> dict[int, int]:
+    """Mapa magazyn product.id -> pierwsze zdjecie koloru (Woo media id)."""
+    out: dict[int, int] = {}
+    seen_products: set[int] = set()
+    for product, _size, offer in variants:
+        pid = int(product.id)
+        if pid in seen_products:
+            continue
+        seen_products.add(pid)
+        if offer is None:
+            continue
+        _ensure_offer_content(db, offer)
+        try:
+            urls = json.loads(offer.image_urls or "[]")
+        except json.JSONDecodeError:
+            urls = []
+        if not urls:
+            continue
+        filename = f"allegro_{offer.offer_id}_0.jpg"
+        media_id = upload_product_image_from_url(
+            client,
+            str(urls[0]),
+            filename=filename,
+            alt_text=f"{alt_text} {(product.color or '').strip()}".strip(),
+        )
+        if media_id:
+            out[pid] = int(media_id)
+    return out
 
 
 def _offer_for_size(db, size: ProductSize) -> AllegroOffer | None:
@@ -336,6 +516,10 @@ def _sync_one_family(
         product.woo_product_id = woo_product_id
     stats["products"] += 1
 
+    # First image per magazyn color product → variation featured image
+    # (PDP/shop color photo swatches + Blocksy main-image swap).
+    color_image_ids = _collect_color_image_ids(client, db, variants, alt_text=name)
+
     for product, size, offer in variants:
         price_src = offer.price if offer is not None else "0.00"
         price = str(Decimal(str(price_src)).quantize(Decimal("0.01")))
@@ -349,7 +533,7 @@ def _sync_one_family(
             stock_quantity=size.quantity or 0,
             size=size.size,
             color=color,
-            image_id=None,
+            image_id=color_image_ids.get(int(product.id)),
         )
         size.woo_variation_id = int(variation["id"])
         stats["variations"] += 1
@@ -428,5 +612,7 @@ def _resolve_variable_parent_id(
 
 
 __all__ = [
+    "compute_family_fingerprint",
+    "family_needs_catalog_sync",
     "sync_catalog_to_woo",
 ]

@@ -177,9 +177,15 @@ class OrderSyncCycle:
         from .woo_catalog_sync import sync_catalog_to_woo
         from .woo_stock_reconcile import reconcile_woo_stock
 
-        self.logger.info("Starting daily Woo catalog sync")
+        # Niedziela = pelny przebieg (odswiezenie snapshotow); w tygodniu tylko delty.
+        mode = "full" if datetime.now().weekday() == 6 else "incremental"
+        self.logger.info("Starting daily Woo catalog sync mode=%s", mode)
         try:
-            woo_stats = sync_catalog_to_woo(limit=300, refresh_content=False)
+            woo_stats = sync_catalog_to_woo(
+                limit=300,
+                refresh_content=False,
+                mode=mode,
+            )
             self.logger.info("Woo catalog sync: %s", woo_stats)
         except Exception as exc:
             self.logger.error("Woo catalog sync failed: %s", exc, exc_info=True)

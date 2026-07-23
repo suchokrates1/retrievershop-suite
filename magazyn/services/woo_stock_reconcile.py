@@ -157,6 +157,7 @@ def reconcile_woo_stock(*, dry_run: bool = False) -> dict[str, int]:
     """Ujednolic stany Woo z magazynem i schowaj duplikaty/sieroty (private)."""
     stats = {
         "updated": 0,
+        "unchanged": 0,
         "deduped": 0,
         "orphaned": 0,
         "remapped": 0,
@@ -233,8 +234,27 @@ def reconcile_woo_stock(*, dry_run: bool = False) -> dict[str, int]:
                 size.woo_variation_id = int(var_id)
                 stats["remapped"] += 1
 
+            woo_qty_raw = preferred.get("qty")
             try:
-                if var_id:
+                woo_qty = int(woo_qty_raw) if woo_qty_raw is not None else None
+            except (TypeError, ValueError):
+                woo_qty = None
+            woo_status = (preferred.get("status") or "").strip().lower()
+            stock_already_ok = (
+                woo_qty is not None
+                and woo_qty == qty
+                and woo_status == "publish"
+            )
+
+            try:
+                if stock_already_ok:
+                    # Bez PUT — Seraph/Jetpack nie dostaja fałszywych "edycji".
+                    if var_id:
+                        seen_woo_keys.add((parent_id, int(var_id)))
+                    else:
+                        seen_woo_keys.add((parent_id, None))
+                    stats["unchanged"] += 1
+                elif var_id:
                     _set_variation_stock(
                         client,
                         parent_id=parent_id,
@@ -245,6 +265,7 @@ def reconcile_woo_stock(*, dry_run: bool = False) -> dict[str, int]:
                         dry_run=dry_run,
                     )
                     seen_woo_keys.add((parent_id, int(var_id)))
+                    stats["updated"] += 1
                 else:
                     # simple product
                     if not dry_run:
@@ -258,7 +279,7 @@ def reconcile_woo_stock(*, dry_run: bool = False) -> dict[str, int]:
                             },
                         )
                     seen_woo_keys.add((parent_id, None))
-                stats["updated"] += 1
+                    stats["updated"] += 1
             except Exception:
                 logger.exception("Woo reconcile update failed sku=%s", sku)
                 stats["errors"] += 1
