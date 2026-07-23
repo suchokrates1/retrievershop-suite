@@ -146,6 +146,7 @@ def test_catalog_reuses_existing_product_images():
         ) as upsert_product,
         patch.object(sync_mod, "upsert_variation", return_value={"id": 100}),
         patch.object(sync_mod, "sync_offer_content"),
+        patch.object(sync_mod, "_collect_color_image_ids", return_value={}),
     ):
         sync_mod._sync_one_product(
             db,

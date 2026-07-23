@@ -282,6 +282,17 @@ def test_sync_offers_records_price_history(monkeypatch, app_mod):
         assert entry.product_size_id == product_size_id
         assert entry.price == Decimal("11.00")
 
+    # Powtórny sync bez zmiany ceny nie dokłada kolejnego punktu historii.
+    result2 = sync_mod.sync_offers()
+    assert result2["fetched"] == 1
+    with get_session() as session:
+        history2 = (
+            session.query(AllegroPriceHistory)
+            .filter(AllegroPriceHistory.offer_id == "PH1")
+            .all()
+        )
+        assert len(history2) == 1
+
 
 def test_sync_offers_aggregates_paginated_responses(monkeypatch, app_mod):
     _set_tokens("token")

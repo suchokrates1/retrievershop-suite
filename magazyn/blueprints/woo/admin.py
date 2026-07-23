@@ -30,7 +30,8 @@ def sync_woo_catalog_route():
     from ...services.woo_catalog_sync import sync_catalog_to_woo
 
     content = sync_linked_offers_content(limit=60)
-    catalog = sync_catalog_to_woo(limit=200, refresh_content=False)
+    # Reczny przycisk = pelny sync (omija filtr fingerprintow).
+    catalog = sync_catalog_to_woo(limit=200, refresh_content=False, mode="full")
     flash(
         f"Tresc Allegro: {content}; Katalog Woo: {catalog}",
         "success" if not catalog.get("errors") else "warning",
@@ -47,9 +48,9 @@ def reconcile_woo_stock_route():
     dry_run = False
     stats = reconcile_woo_stock(dry_run=dry_run)
     flash(
-        f"Woo reconcile: updated={stats.get('updated')} deduped={stats.get('deduped')} "
-        f"orphaned={stats.get('orphaned')} remapped={stats.get('remapped')} "
-        f"errors={stats.get('errors')}",
+        f"Woo reconcile: updated={stats.get('updated')} unchanged={stats.get('unchanged')} "
+        f"deduped={stats.get('deduped')} orphaned={stats.get('orphaned')} "
+        f"remapped={stats.get('remapped')} errors={stats.get('errors')}",
         "success" if not stats.get("errors") else "warning",
     )
     return redirect(url_for("orders.orders_list"))
