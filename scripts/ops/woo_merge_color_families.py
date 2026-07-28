@@ -1,20 +1,31 @@
 #!/usr/bin/env python3
-"""Scal kolory Woo: 1 parent na rodzine (category|brand|series).
+"""[DEPRECATED] Scal kolory Woo: 1 parent na rodzine (category|brand|series).
 
-Domyslnie dry-run. Apply: --apply
-Pilot: --family "Szelki|Truelove|Front Line Premium"
-Wszystkie rodziny z >1 kolorem: --all
+Od 2026-07-28 model to odwrotny: 1 kolor = 1 parent Woo.
+Uzyj: scripts/ops/woo_split_color_products.py
 
-Uruchomienie (lokalnie lub w kontenerze magazyn, NIE pytest):
-  DISABLE_SCHEDULERS=1 PYTHONPATH=/app python scripts/ops/woo_merge_color_families.py --family "..."
-  DISABLE_SCHEDULERS=1 PYTHONPATH=/app python scripts/ops/woo_merge_color_families.py --all --apply
+Ten skrypt zostawiony tylko do awaryjnego rollbacku merge.
+Wymaga: --force-legacy-merge
 """
 from __future__ import annotations
+
+import sys
+
+print(
+    "DEPRECATED: kolory maja byc osobnymi produktami Woo.\n"
+    "Uzyj: python scripts/ops/woo_split_color_products.py --all [--apply]\n"
+    "Aby mimo to uruchomic stary merge, dodaj --force-legacy-merge",
+    file=sys.stderr,
+)
+
+if "--force-legacy-merge" not in sys.argv:
+    raise SystemExit(2)
+
+sys.argv = [a for a in sys.argv if a != "--force-legacy-merge"]
 
 import argparse
 import json
 import os
-import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -25,8 +36,17 @@ from magazyn.db import get_session
 from magazyn.factory import create_app
 from magazyn.models.products import Product, ProductSize
 from magazyn.services.woo_catalog_sync import _sync_one_family
-from magazyn.services.woo_product_naming import canonical_woo_product_name, product_family_key
+from magazyn.services.woo_product_naming import canonical_woo_product_name
 from magazyn.woocommerce_api import WooClient, WooClientError
+
+
+def _legacy_family_key(product: Any) -> tuple[str, str, str]:
+    """Stary klucz bez koloru (tylko do legacy merge)."""
+    return (
+        (getattr(product, "category", None) or "").strip().lower(),
+        (getattr(product, "brand", None) or "").strip().lower(),
+        (getattr(product, "series", None) or "").strip().lower(),
+    )
 
 
 @dataclass
@@ -54,7 +74,7 @@ def _load_families(
     products = db.query(Product).all()
     by_key: dict[tuple[str, str, str], list[Product]] = defaultdict(list)
     for p in products:
-        key = product_family_key(p)
+        key = _legacy_family_key(p)
         if not any(key):
             continue
         if family_filter and key != family_filter:
@@ -121,7 +141,6 @@ def _detach_foreign_variations(
     report: FamilyReport,
     canonical_id: int,
 ) -> list[dict[str, Any]]:
-    """Wyczysc mapowania wariantow lezacych na innym parentcie; usun SKU ze starych."""
     actions: list[dict[str, Any]] = []
     for product in report.products:
         sizes = db.query(ProductSize).filter(ProductSize.product_id == product.id).all()
@@ -132,7 +151,6 @@ def _detach_foreign_variations(
             parent = _variation_parent_id(client, var_id, int(product.woo_product_id or 0) or canonical_id)
             if parent and int(parent) == int(canonical_id):
                 continue
-            # Variation na obcym parentcie — zwolnij SKU i mapowanie
             if parent:
                 try:
                     client.put(
@@ -219,64 +237,6 @@ def _merge_family(
                     {"id": int(wid), "error": str(exc)}
                 )
 
-    new_slug = _get_product_slug(client, int(canonical)) if canonical else ""
-    # Kanoniczny slug z nazwy modelu (bez koloru/rozmiaru w URL)
-    desired_slug = ""
-    try:
-        from magazyn.services.woo_product_naming import sanitize_parent_product_title
-        import re
-        import unicodedata
-
-        def _slugify(text: str) -> str:
-            # Polskie znaki → ASCII (ł→l), nie strip jak NFKD+ignore
-            repl = str.maketrans(
-                {
-                    "ą": "a",
-                    "ć": "c",
-                    "ę": "e",
-                    "ł": "l",
-                    "ń": "n",
-                    "ó": "o",
-                    "ś": "s",
-                    "ź": "z",
-                    "ż": "z",
-                    "Ą": "a",
-                    "Ć": "c",
-                    "Ę": "e",
-                    "Ł": "l",
-                    "Ń": "n",
-                    "Ó": "o",
-                    "Ś": "s",
-                    "Ź": "z",
-                    "Ż": "z",
-                }
-            )
-            ascii_text = text.translate(repl)
-            normalized = unicodedata.normalize("NFKD", ascii_text)
-            ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
-            return re.sub(r"[^a-zA-Z0-9]+", "-", ascii_text.lower()).strip("-")
-
-        desired_name = canonical_woo_product_name(report.products[0])
-        desired_slug = _slugify(desired_name)
-        if desired_slug and new_slug != desired_slug:
-            updated = client.put(
-                f"wp-json/wc/v3/products/{int(canonical)}",
-                json={"name": desired_name, "slug": desired_slug},
-            )
-            new_slug = (updated.get("slug") or desired_slug).strip()
-            result["renamed_slug"] = new_slug
-    except Exception as exc:  # noqa: BLE001
-        result["rename_error"] = str(exc)
-
-    if new_slug:
-        target = f"/produkt/{new_slug}/"
-        for wid, slug in old_slugs.items():
-            if slug and slug != new_slug:
-                result["redirects"][f"produkt/{slug}"] = target
-        if desired_slug and old_slugs:
-            # redirect previous elect slug if renamed
-            pass
-
     return result
 
 
@@ -295,11 +255,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--family", help='Np. "Szelki|Truelove|Front Line Premium"')
     parser.add_argument("--all", action="store_true", help="Wszystkie rodziny multi-color")
     parser.add_argument("--apply", action="store_true", help="Wykonaj zmiany (domyslnie dry-run)")
-    parser.add_argument(
-        "--redirects-out",
-        default="",
-        help="Zapisz mape 301 JSON (sciezka pliku)",
-    )
     args = parser.parse_args(argv)
 
     if not args.family and not args.all:
@@ -307,7 +262,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     family_filter = _parse_family(args.family) if args.family else None
     app = create_app()
-    redirects: dict[str, str] = {}
     results: list[dict[str, Any]] = []
 
     with app.app_context():
@@ -327,20 +281,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             for report in reports:
                 res = _merge_family(db, client, report, apply=args.apply)
                 results.append(res)
-                redirects.update(res.get("redirects") or {})
                 print(json.dumps(res, ensure_ascii=False, default=str))
             if args.apply:
                 db.commit()
             else:
                 db.rollback()
-
-    if args.redirects_out:
-        path = args.redirects_out
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(redirects, fh, ensure_ascii=False, indent=2)
-        print(f"redirects_written={path} count={len(redirects)}")
-    elif redirects:
-        print("redirects=" + json.dumps(redirects, ensure_ascii=False))
 
     print(f"done families={len(results)} apply={args.apply}")
     return 0
