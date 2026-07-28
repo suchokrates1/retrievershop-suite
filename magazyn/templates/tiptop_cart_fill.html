@@ -12,7 +12,7 @@
     <button type="button" class="btn btn-primary" @click="start()">
       <i class="bi bi-cart-check"></i> Otwórz gotowy koszyk TipTop
     </button>
-    <a href="{{ url_for('products.tiptop_reorder') }}" class="btn btn-ghost">← Wróć</a>
+    <a href="{{ url_for('tiptop.reorder') }}" class="btn btn-ghost">← Wróć</a>
   </div>
 
   <div class="mb-4" x-show="running">

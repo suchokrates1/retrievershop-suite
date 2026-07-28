@@ -95,7 +95,7 @@
                         <ul x-show="open" x-transition class="menu bg-base-200 rounded-box absolute top-full left-0 z-50 w-56 p-2 shadow-lg">
                             <li><a href="{{ url_for('products.items') }}">Lista przedmiotów</a></li>
                             <li><a href="{{ url_for('products.add_item') }}">Dodaj przedmiot</a></li>
-                            <li><a href="{{ url_for('products.tiptop_reorder') }}">Nowe zamówienie (TipTop)</a></li>
+                            <li><a href="{{ url_for('tiptop.reorder') }}">Nowe zamówienie (TipTop)</a></li>
                             <li><a href="{{ url_for('products.import_invoice') }}">Dostawa z faktury</a></li>
                         </ul>
                     </li>
@@ -148,7 +148,7 @@
             <li><a class="{{ mob_cls(_ep == 'home') }}" @click="menuOpen = false" href="{{ url_for('home') }}">Strona główna</a></li>
             <li><a class="{{ mob_cls(_ep == 'stats_dashboard') }}" @click="menuOpen = false" href="{{ url_for('stats_dashboard') }}">Statystyki</a></li>
             <li><a class="{{ mob_cls(_bp == 'products' and _ep == 'products.items') }}" @click="menuOpen = false" href="{{ url_for('products.items') }}">Przedmioty</a></li>
-            <li><a class="{{ mob_cls(_ep == 'products.tiptop_reorder') }}" @click="menuOpen = false" href="{{ url_for('products.tiptop_reorder') }}">Nowe zamówienie (TipTop)</a></li>
+            <li><a class="{{ mob_cls(_ep == 'tiptop.reorder') }}" @click="menuOpen = false" href="{{ url_for('tiptop.reorder') }}">Nowe zamówienie (TipTop)</a></li>
             <li><a class="{{ mob_cls(_bp == 'orders') }}" @click="menuOpen = false" href="{{ url_for('orders.orders_list') }}">Zamówienia</a></li>
             <li><a class="{{ mob_cls(_bp == 'allegro') }}" @click="menuOpen = false" href="{{ url_for('allegro.offers_and_prices') }}">Oferty Allegro</a></li>
             <li><a class="{{ mob_cls(_bp == 'price_reports') }}" @click="menuOpen = false" href="{{ url_for('price_reports.reports_list') }}">Raporty cenowe</a></li>

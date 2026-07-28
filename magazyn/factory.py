@@ -11,7 +11,6 @@ from flask import Flask
 from .config import settings
 from .constants import ALL_SIZES
 from .products import bp as products_bp
-from . import tiptop_views as _tiptop_views  # noqa: F401 — routes on products blueprint
 from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
@@ -23,6 +22,7 @@ from .blueprints.shop import mail_bp as shop_mail_api_bp
 from .blueprints.shop import return_instructions_bp as shop_return_instructions_bp
 from .blueprints.shop import trust_bp as shop_trust_api_bp
 from .blueprints.order_sync_admin import bp as order_sync_admin_bp
+from .blueprints.tiptop import bp as tiptop_bp
 from . import order_sync_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import promo_scheduler  # noqa: F401 - publiczny import kompatybilnosci
 from . import billing_types_scheduler  # noqa: F401 - publiczny import kompatybilnosci
@@ -142,6 +142,7 @@ def create_app(config: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(fixed_costs_bp)
     app.register_blueprint(price_reports_bp)
     app.register_blueprint(customer_order_bp)
+    app.register_blueprint(tiptop_bp)
 
     for rule in list(app.url_map.iter_rules()):
         if rule.endpoint.startswith("main."):
