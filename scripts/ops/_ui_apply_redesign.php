@@ -156,11 +156,13 @@ body {
 }
 .rs-trust-row strong { color: var(--rs-ink); display: block; font-size: 13px; margin-bottom: 2px; }
 .rs-size-guide {
-  margin: 20px 0;
+  margin: 20px auto;
   padding: 16px;
   border: 1px solid #e5e1da;
   border-radius: 8px;
   background: #fff;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .rs-size-guide h3 { margin: 0 0 10px; font-size: 18px; }
 .rs-size-guide table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -399,7 +401,7 @@ add_action('woocommerce_after_single_product_summary', function () {
     if (strpos($name, 'szelk') === false && strpos($name, 'obroż') === false && strpos($name, 'obroz') === false) {
         return;
     }
-    echo '<div class="rs-size-guide"><h3>Tabela rozmiarów (orientacyjna)</h3>';
+    echo '<div class="ct-container"><div class="rs-size-guide"><h3>Tabela rozmiarów (orientacyjna)</h3>';
     echo '<table><thead><tr><th>Rozmiar</th><th>Obwód klatki</th><th>Waga psa (orient.)</th></tr></thead><tbody>';
     $rows = [
         ['XS', '30–40 cm', 'do ~5 kg'],
@@ -413,7 +415,7 @@ add_action('woocommerce_after_single_product_summary', function () {
         echo '<tr><td>' . esc_html($s) . '</td><td>' . esc_html($o) . '</td><td>' . esc_html($w) . '</td></tr>';
     }
     echo '</tbody></table>';
-    echo '<p style="margin:10px 0 0;font-size:13px;color:#5A6B6B;">Zawsze porównaj wymiary z tabelą producenta na karcie produktu / w opisie.</p></div>';
+    echo '<p style="margin:10px 0 0;font-size:13px;color:#5A6B6B;">Zawsze porównaj wymiary z tabelą producenta na karcie produktu / w opisie.</p></div></div>';
 }, 8);
 
 add_action('woocommerce_proceed_to_checkout', function () {
