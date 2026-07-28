@@ -15,10 +15,12 @@ from ..domain.returns import (
     RETURN_STATUS_DELIVERED,
     RETURN_STATUS_IN_TRANSIT,
     RETURN_STATUS_NOT_COLLECTED,
+    RETURN_STATUS_PENDING,
 )
 from ..models.orders import Order
 from ..models.returns import Return, ReturnStatusLog
 from ..settings_store import settings_store
+from .return_core import promote_never_shipped_return_to_delivered
 
 logger = logging.getLogger(__name__)
 
@@ -466,6 +468,8 @@ def process_refund(
         if return_record.refund_processed:
             return False, "Zwrot pieniedzy juz zostal przetworzony"
 
+        promote_never_shipped_return_to_delivered(db, return_record)
+
         allowed = (
             RETURN_STATUS_DELIVERED,
             RETURN_STATUS_IN_TRANSIT,
@@ -599,6 +603,8 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
 
         if return_record.status == RETURN_STATUS_CANCELLED:
             return False, "Zwrot zostal anulowany", None
+
+        promote_never_shipped_return_to_delivered(db, return_record)
 
         allowed = (
             RETURN_STATUS_DELIVERED,

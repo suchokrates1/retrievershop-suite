@@ -12,6 +12,24 @@ RETURN_STATUS_NOT_COLLECTED = "not_collected"
 RETURN_STATUS_COMPLETED = "completed"
 RETURN_STATUS_CANCELLED = "cancelled"
 
+# Statusy zamowienia oznaczajace, ze paczka opuscila magazyn (kurier / transport).
+# Brak ktoregos z nich = anulacja przed nadaniem → zwrot traktujemy jak odebrany.
+PACKAGE_LEFT_WAREHOUSE_STATUSES = frozenset(
+    {
+        "wyslano",
+        "w_transporcie",
+        "w_punkcie",
+        "dostarczono",
+        "nieodebrano",
+        "problem_z_dostawa",
+    }
+)
+
+NEVER_SHIPPED_DELIVERED_NOTE = (
+    "Anulacja przed wysylka — paczka nie opuscila magazynu "
+    "(traktowane jako odebrana paczka zwrotna)"
+)
+
 
 ALLEGRO_RETURN_STATUS_MAP = {
     "CREATED": RETURN_STATUS_PENDING,
@@ -60,6 +78,8 @@ def map_carrier_to_allegro(carrier_name: Optional[str]) -> Optional[str]:
 __all__ = [
     "ALLEGRO_RETURN_STATUS_MAP",
     "CARRIER_TO_ALLEGRO_MAP",
+    "NEVER_SHIPPED_DELIVERED_NOTE",
+    "PACKAGE_LEFT_WAREHOUSE_STATUSES",
     "RETURN_STATUS_PENDING",
     "RETURN_STATUS_IN_TRANSIT",
     "RETURN_STATUS_DELIVERED",

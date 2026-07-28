@@ -11,12 +11,15 @@ from sqlalchemy import desc
 
 from ..db import get_session
 from ..domain.returns import (
+    NEVER_SHIPPED_DELIVERED_NOTE,
+    PACKAGE_LEFT_WAREHOUSE_STATUSES,
     RETURN_STATUS_CANCELLED,
     RETURN_STATUS_DELIVERED,
+    RETURN_STATUS_IN_TRANSIT,
     RETURN_STATUS_NOT_COLLECTED,
     RETURN_STATUS_PENDING,
 )
-from ..models.orders import Order
+from ..models.orders import Order, OrderStatusLog
 from ..models.returns import Return, ReturnStatusLog
 from .return_notifications import get_order_products_summary
 
@@ -189,9 +192,47 @@ def get_returns_list(status: str = None, limit: int = 50) -> List[Return]:
         return query.order_by(desc(Return.created_at)).limit(limit).all()
 
 
+def order_package_never_shipped(db, order_id: str) -> bool:
+    """True gdy paczka nigdy nie opuscila magazynu (brak statusu kurierskiego)."""
+    hit = (
+        db.query(OrderStatusLog.id)
+        .filter(
+            OrderStatusLog.order_id == order_id,
+            OrderStatusLog.status.in_(PACKAGE_LEFT_WAREHOUSE_STATUSES),
+        )
+        .first()
+    )
+    return hit is None
+
+
+def promote_never_shipped_return_to_delivered(
+    db,
+    return_record: Return,
+    *,
+    notes: str | None = None,
+) -> bool:
+    """Jesli klient anulowal przed nadaniem — oznacz zwrot jako odebrany.
+
+    Paczka nie wyruszyła, wiec nie czekamy na paczke zwrotna.
+    """
+    if return_record.status not in {RETURN_STATUS_PENDING, RETURN_STATUS_IN_TRANSIT}:
+        return False
+    if not order_package_never_shipped(db, return_record.order_id):
+        return False
+    return_record.status = RETURN_STATUS_DELIVERED
+    add_return_status_log(
+        db,
+        return_record.id,
+        RETURN_STATUS_DELIVERED,
+        notes or NEVER_SHIPPED_DELIVERED_NOTE,
+    )
+    return True
+
+
 def mark_return_as_delivered(
     return_id: int,
     *,
+    notes: str | None = None,
     log: Optional[logging.Logger] = None,
 ) -> bool:
     """Recznie oznacz zwrot jako dostarczony."""
@@ -205,12 +246,17 @@ def mark_return_as_delivered(
         if return_record.status == RETURN_STATUS_DELIVERED:
             return True
 
+        if order_package_never_shipped(db, return_record.order_id):
+            log_notes = notes or NEVER_SHIPPED_DELIVERED_NOTE
+        else:
+            log_notes = notes or "Reczne oznaczenie jako dostarczone"
+
         return_record.status = RETURN_STATUS_DELIVERED
         add_return_status_log(
             db,
             return_record.id,
             RETURN_STATUS_DELIVERED,
-            "Reczne oznaczenie jako dostarczone",
+            log_notes,
         )
         db.commit()
 
@@ -256,4 +302,6 @@ __all__ = [
     "get_returns_list",
     "mark_return_as_not_collected",
     "mark_return_as_delivered",
+    "order_package_never_shipped",
+    "promote_never_shipped_return_to_delivered",
 ]
