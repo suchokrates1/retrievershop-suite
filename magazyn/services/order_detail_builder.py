@@ -339,6 +339,17 @@ class OrderDetailBuilder:
                 return_items = json.loads(active_return.items_json)
             except (json.JSONDecodeError, TypeError):
                 pass
+
+        from .return_core import order_package_never_shipped
+
+        never_shipped = order_package_never_shipped(self.db, order_id)
+        can_mark_delivered = (
+            active_return.status in {"pending", "in_transit"}
+            and (
+                not active_return.allegro_return_id
+                or never_shipped
+            )
+        )
         
         return_info = {
             "id": active_return.id,
@@ -356,6 +367,8 @@ class OrderDetailBuilder:
             "notes": active_return.notes,
             "created_at": active_return.created_at,
             "updated_at": active_return.updated_at,
+            "never_shipped": never_shipped,
+            "can_mark_delivered": can_mark_delivered,
         }
         
         # Historia statusow zwrotu

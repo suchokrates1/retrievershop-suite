@@ -250,6 +250,12 @@
                             <div>
                                 <h6 class="mb-2 font-semibold"><i class="bi bi-arrow-return-left"></i> Zwrot w toku</h6>
                                 <p class="mb-1"><strong>Status:</strong> {{ return_info.status_text }}</p>
+                                {% if return_info.never_shipped %}
+                                <p class="mb-1 text-sm">
+                                    <i class="bi bi-info-circle"></i>
+                                    Paczka nie opuscila magazynu — zwrot traktowany jak odebrany (anulacja przed nadaniem).
+                                </p>
+                                {% endif %}
                                 {% if return_info.return_tracking_number %}
                                 <p class="mb-1"><strong>Nr sledzenia:</strong> <code>{{ return_info.return_tracking_number }}</code></p>
                                 {% endif %}
@@ -303,10 +309,10 @@
                             <span class="badge badge-success"><i class="bi bi-check"></i> Stan przywrocony</span>
                             {% else %}
                             <span class="badge badge-neutral"><i class="bi bi-hourglass"></i> Stan do przywrocenia</span>
-                            {% if not return_info.allegro_return_id and return_info.status in ['pending', 'in_transit'] %}
+                            {% if return_info.can_mark_delivered %}
                             <form action="{{ url_for('orders.mark_return_delivered', order_id=order.order_id) }}" method="POST" class="inline ml-2">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-outline btn-info btn-sm" onclick="return confirm('Oznaczyc paczke zwrotna jako odebrana?')">
+                                <button type="submit" class="btn btn-outline btn-info btn-sm" onclick="return confirm('{% if return_info.never_shipped %}Paczka nie opuscila magazynu — oznaczyc zwrot jako odebrany?{% else %}Oznaczyc paczke zwrotna jako odebrana?{% endif %}')">
                                     <i class="bi bi-box-seam"></i> Oznacz jako odebrany
                                 </button>
                             </form>
@@ -325,7 +331,7 @@
                         <div class="mt-3 pt-3 border-t border-base-300">
                             <span class="badge badge-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
                         </div>
-                        {% elif return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed'] %}
+                        {% elif return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed', 'pending'] and (return_info.status != 'pending' or return_info.never_shipped) %}
                         <div class="mt-3 pt-3 border-t border-base-300" x-data="refundActionPanel()" x-init="load()">
                             <template x-if="loading">
                                 <div class="text-sm text-base-content/60">

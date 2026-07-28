@@ -22,7 +22,7 @@ from ..models.orders import Order
 from ..models.returns import Return
 from ..notifications import send_messenger
 from ..settings_store import settings_store
-from .return_core import add_return_status_log
+from .return_core import add_return_status_log, promote_never_shipped_return_to_delivered
 from .return_notifications import send_return_notification
 
 logger = logging.getLogger(__name__)
@@ -201,6 +201,10 @@ def _update_existing_return(db, existing: Return, return_data: dict, allegro_sta
             updated = True
             log.info("Zaktualizowano pozycje zwrotu #%s (%d produktow)", existing.id, len(allegro_items))
 
+    if promote_never_shipped_return_to_delivered(db, existing):
+        updated = True
+        log.info("Zwrot #%s: anulacja przed wysylka → delivered", existing.id)
+
     return updated
 
 
@@ -236,6 +240,12 @@ def _create_return_from_allegro_payload(db, order: Order, return_data: dict, all
         initial_status,
         f"Wykryto zwrot w Allegro (ref: {return_data.get('referenceNumber')}, status: {allegro_status})",
     )
+    if promote_never_shipped_return_to_delivered(db, return_record):
+        logger.info(
+            "Zwrot #%s (zamowienie %s): anulacja przed wysylka → delivered",
+            return_record.id,
+            order.order_id,
+        )
     return return_record
 
 

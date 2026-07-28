@@ -10,7 +10,11 @@ from ..domain.returns import RETURN_STATUS_IN_TRANSIT, RETURN_STATUS_PENDING
 from ..models.orders import Order
 from ..models.returns import Return
 from .order_status import add_order_status
-from .return_core import create_return_from_order, mark_return_as_delivered
+from .return_core import (
+    create_return_from_order,
+    mark_return_as_delivered,
+    order_package_never_shipped,
+)
 from .return_refunds import (
     check_refund_eligibility,
     process_bank_transfer_refund,
@@ -120,7 +124,13 @@ def mark_return_delivered_for_order(order_id: str) -> OrderReturnActionResult:
                 "Zwrot jest juz oznaczony jako odebrany lub rozliczony",
                 "warning",
             )
+        never_shipped = order_package_never_shipped(db, order_id)
         if mark_return_as_delivered(return_record.id):
+            if never_shipped:
+                return OrderReturnActionResult(
+                    "Zwrot oznaczono jako odebrany (paczka nie opuscila magazynu)",
+                    "success",
+                )
             return OrderReturnActionResult("Zwrot oznaczono jako odebrany", "success")
         return OrderReturnActionResult(
             "Nie udalo sie oznaczyc zwrotu jako odebranego",
