@@ -73,6 +73,7 @@ SETTINGS_GROUPS = {
     "PAGE_ACCESS_TOKEN": ("Powiadomienia", "bi-bell"),
     "RECIPIENT_ID": ("Powiadomienia", "bi-bell"),
     "LOW_STOCK_THRESHOLD": ("Powiadomienia", "bi-bell"),
+    "TIPTOP_REORDER_THRESHOLD": ("TipTop", "bi-cart"),
     "ALERT_EMAIL": ("Powiadomienia", "bi-bell"),
     "SMTP_SERVER": ("E-mail", "bi-envelope"),
     "SMTP_PORT": ("E-mail", "bi-envelope"),

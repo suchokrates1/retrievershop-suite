@@ -3,7 +3,8 @@
 {% set full_width = True %}
 {% endblock %}
 {% block content %}
-<div id="page-content" class="container mx-auto mt-6">
+<div id="page-content" class="container mx-auto mt-6"
+     x-data="tiptopReorderSettings({ open: {{ 'true' if open_settings else 'false' }}, searchUrl: '{{ url_for('products.tiptop_search_products') }}' })">
   <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
     <div>
       <h1 class="text-2xl font-semibold">Nowe zamówienie (TipTop)</h1>
@@ -14,6 +15,9 @@
     </div>
     <div class="flex flex-wrap gap-2">
       <a href="{{ url_for('products.items') }}" class="btn btn-ghost btn-sm">← Przedmioty</a>
+      <button type="button" class="btn btn-outline btn-sm" @click="open = true">
+        <i class="bi bi-gear"></i> Ustawienia TipTop
+      </button>
       <form method="post" action="{{ url_for('products.tiptop_refresh_catalog') }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-outline btn-sm">
@@ -26,16 +30,17 @@
   {% if not lines %}
   <div class="alert alert-info">
     <span>
-      Brak pozycji do zamówienia. Upewnij się, że katalog TipTop jest zsynchronizowany
-      i że warianty są zmapowane do magazynu.
+      Brak pozycji do zamówienia (próg ≤ {{ threshold }}). Zmień próg w ustawieniach
+      albo odśwież katalog TipTop / mapowanie wariantów.
     </span>
   </div>
   {% else %}
-  <form method="post" action="{{ url_for('products.tiptop_reorder') }}">
+  <form id="tt-cart-form" method="post" action="{{ url_for('products.tiptop_reorder') }}"
+        onsubmit="return tiptopCreateCart(event)">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="create_cart">
     <div class="flex flex-wrap items-center gap-2 mb-3">
-      <button type="submit" class="btn btn-primary">
+      <button type="submit" class="btn btn-primary" id="tt-create-cart-btn">
         <i class="bi bi-cart-plus"></i> Utwórz koszyk TipTop
       </button>
       <button type="button" class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('.tt-select').forEach(c => c.checked = true)">Zaznacz wszystkie</button>
@@ -121,19 +126,222 @@
   {% endfor %}
   {% endif %}
 
-  {% if exclusions %}
-  <div class="mt-8">
-    <h2 class="text-lg font-semibold mb-2">Wykluczenia</h2>
-    <ul class="text-sm space-y-1">
-      {% for ex in exclusions %}
-      <li class="text-base-content/70">
-        {% if ex.product_size_id %}wariant #{{ ex.product_size_id }}{% endif %}
-        {% if ex.product_id %}produkt #{{ ex.product_id }}{% endif %}
-        — {{ ex.reason or '' }}
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
+  {# ---- Settings modal ---- #}
+  <dialog class="modal" :class="open && 'modal-open'" @keydown.escape.window="open = false">
+    <div class="modal-box max-w-xl">
+      <h3 class="font-bold text-lg mb-1">Ustawienia TipTop</h3>
+      <p class="text-sm text-base-content/60 mb-4">
+        Próg braków i stałe wykluczenia produktów z listy zamówień.
+      </p>
+
+      <form method="post" action="{{ url_for('products.tiptop_reorder') }}" class="mb-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_settings">
+        <label class="form-control w-full max-w-xs">
+          <span class="label-text">Próg braków (stan ≤)</span>
+          <div class="flex gap-2">
+            <input type="number" min="0" max="999" name="tiptop_reorder_threshold"
+                   value="{{ threshold }}" class="input input-bordered input-sm w-24" required>
+            <button type="submit" class="btn btn-primary btn-sm">Zapisz próg</button>
+          </div>
+          <span class="label-text-alt text-base-content/50">
+            Sugerowana ilość uzupełnia stan do tego poziomu.
+          </span>
+        </label>
+      </form>
+
+      <h4 class="font-semibold mb-2">Stałe wykluczenia</h4>
+      <div class="mb-3">
+        <input type="search" class="input input-bordered input-sm w-full"
+               placeholder="Szukaj produktu do wykluczenia…"
+               x-model="query"
+               @input.debounce.300ms="search()">
+        <ul class="mt-2 max-h-40 overflow-y-auto space-y-1" x-show="results.length">
+          <template x-for="item in results" :key="item.product_id">
+            <li class="flex items-center justify-between gap-2 text-sm bg-base-200 rounded px-2 py-1">
+              <span x-text="item.label"></span>
+              <form method="post" action="{{ url_for('products.tiptop_reorder') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="exclude_product">
+                <input type="hidden" name="open_settings" value="1">
+                <input type="hidden" name="product_id" :value="item.product_id">
+                <input type="hidden" name="reason" value="Stałe wykluczenie z ustawień TipTop">
+                <button type="submit" class="btn btn-ghost btn-xs text-error">Wyklucz</button>
+              </form>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      {% if exclusions %}
+      <ul class="space-y-2 max-h-56 overflow-y-auto">
+        {% for ex in exclusions %}
+        <li class="flex items-start justify-between gap-2 text-sm border-b border-base-300 pb-2">
+          <div>
+            <div class="font-medium">{{ ex.label }}</div>
+            <div class="text-xs text-base-content/50">
+              {% if ex.scope == 'size' %}wariant{% else %}produkt{% endif %}
+              {% if ex.reason %}— {{ ex.reason }}{% endif %}
+            </div>
+          </div>
+          <form method="post" action="{{ url_for('products.tiptop_reorder') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="remove_exclusion">
+            <input type="hidden" name="exclusion_id" value="{{ ex.id }}">
+            <button type="submit" class="btn btn-ghost btn-xs" title="Usuń wykluczenie">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm text-base-content/50">Brak stałych wykluczeń.</p>
+      {% endif %}
+
+      <div class="modal-action">
+        <button type="button" class="btn" @click="open = false">Zamknij</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button type="button" @click="open = false">close</button>
+    </form>
+  </dialog>
 </div>
+
+<script>
+function tiptopReorderSettings(cfg) {
+  return {
+    open: !!cfg.open,
+    query: '',
+    results: [],
+    searchUrl: cfg.searchUrl,
+    async search() {
+      const q = (this.query || '').trim();
+      if (q.length < 2) {
+        this.results = [];
+        return;
+      }
+      try {
+        const res = await fetch(this.searchUrl + '?q=' + encodeURIComponent(q), {
+          headers: { 'Accept': 'application/json' }
+        });
+        this.results = await res.json();
+      } catch (e) {
+        this.results = [];
+      }
+    }
+  }
+}
+
+function tiptopCreateCart(event) {
+  // One-click: napełnij TipTop top-level formami (cookie Shop5) i przejdź do koszyka.
+  // Popup MUSI powstać synchronicznie z kliknięcia (przed await).
+  const form = event.target;
+  const selected = [...form.querySelectorAll('.tt-select:checked')];
+  if (!selected.length) {
+    return true; // niech serwer pokaże flash
+  }
+  event.preventDefault();
+  const popup = window.open('about:blank', 'tiptop_cart_fill');
+  if (!popup) {
+    // Fallback: POST na stronę z przyciskiem (kolejne kliknięcie = gest)
+    form.submit();
+    return false;
+  }
+
+  const btn = document.getElementById('tt-create-cart-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Napełniam koszyk…';
+  }
+
+  const selections = selected.map((cb) => {
+    const psId = cb.value;
+    const qtyEl = form.querySelector(`[name="qty_${psId}"]`);
+    return {
+      product_size_id: Number(psId),
+      quantity: Number(qtyEl ? qtyEl.value : 0) || 0,
+    };
+  });
+
+  const csrf = form.querySelector('[name="csrf_token"]')?.value || '';
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const formHtml = (addUrl, fields) => {
+    const inputs = Object.entries(fields).map(([k, v]) =>
+      `<input type="hidden" name="${k}" value="${String(v).replace(/"/g, '&quot;')}">`
+    ).join('');
+    return `<!DOCTYPE html><html><body>
+      <form id="f" method="POST" action="${addUrl}">${inputs}</form>
+      <script>document.getElementById('f').submit();<\/script>
+    </body></html>`;
+  };
+
+  (async () => {
+    try {
+      const res = await fetch('{{ url_for("products.tiptop_cart_payload") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': csrf,
+        },
+        body: JSON.stringify({ selections }),
+      });
+      const data = await res.json();
+      const items = data.fill_items || [];
+      if (!items.length) {
+        popup.close();
+        form.submit();
+        return;
+      }
+      const addUrl = data.add_url;
+      const basketUrl = data.basket_url;
+
+      // Jedna pozycja: zwykły top-level POST — bez popupu, od razu koszyk TipTop.
+      if (items.length === 1) {
+        try { popup.close(); } catch (_) {}
+        const f = document.createElement('form');
+        f.method = 'POST';
+        f.action = addUrl;
+        f.style.display = 'none';
+        for (const [k, v] of Object.entries(items[0].fields || {})) {
+          const inp = document.createElement('input');
+          inp.type = 'hidden';
+          inp.name = k;
+          inp.value = v;
+          f.appendChild(inp);
+        }
+        document.body.appendChild(f);
+        f.submit();
+        return;
+      }
+
+      for (let i = 0; i < items.length; i++) {
+        const fields = items[i].fields || {};
+        try {
+          popup.document.open();
+          popup.document.write(formHtml(addUrl, fields));
+          popup.document.close();
+        } catch (e) {
+          popup.location = 'about:blank';
+          await sleep(350);
+          popup.document.open();
+          popup.document.write(formHtml(addUrl, fields));
+          popup.document.close();
+        }
+        await sleep(2200);
+        try { popup.location = 'about:blank'; } catch (_) {}
+        await sleep(300);
+      }
+      popup.location = basketUrl;
+      window.location.href = basketUrl;
+    } catch (err) {
+      try { popup.close(); } catch (_) {}
+      form.submit();
+    }
+  })();
+  return false;
+}
+</script>
 {% endblock %}

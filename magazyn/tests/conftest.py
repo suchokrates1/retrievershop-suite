@@ -62,6 +62,7 @@ def app(tmp_path, monkeypatch):
         ("COMMISSION_ALLEGRO", "10.0"),
         ("ALERT_EMAIL", "test@example.com"),
         ("LOW_STOCK_THRESHOLD", "5"),
+        ("TIPTOP_REORDER_THRESHOLD", "5"),
         ("SMTP_SERVER", ""),
         ("SMTP_PORT", ""),
         ("SMTP_USERNAME", ""),
