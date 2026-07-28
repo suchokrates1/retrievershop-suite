@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Retriever SEO
- * Description: Slug 301 redirects (static + option rs_seo_slug_redirects) + homepage H1 + OG safety.
+ * Description: Slug 301 redirects (static + option rs_seo_slug_redirects) + homepage H1 (hero) + OG safety.
  */
 if (!defined('ABSPATH')) {
     exit;
@@ -35,34 +35,70 @@ add_action('template_redirect', function () {
     }
 }, 0);
 
-add_action('wp_body_open', function () {
-    if (!is_front_page()) {
+/**
+ * Homepage H1 = Elementor hero "Łączymy pasję do zwierząt z jakością".
+ * Drops legacy injected H1; promotes H2/H3 hero to H1 if Elementor still emits it.
+ */
+add_action('template_redirect', function () {
+    if (!is_front_page() || is_admin()) {
         return;
     }
-    $h1 = (string) get_option('rs_seo_home_h1', 'Retriever Shop — szelki i smycze dla psów');
-    echo '<div class="rs-seo-home-h1-wrap" style="max-width:1100px;margin:0 auto;padding:18px 20px 0;">'
-        . '<h1 class="rs-seo-home-h1" style="margin:0;font-size:clamp(1.35rem,2.5vw,1.85rem);line-height:1.25;color:#1a1a2e;font-weight:700;">'
-        . esc_html($h1)
-        . '</h1></div>';
-}, 5);
-
-add_filter('aioseo_facebook_tags', function ($tags) {
-    if (!is_array($tags)) {
-        return $tags;
-    }
-    $logo = 'https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png';
-    foreach (['og:image', 'og:image:secure_url'] as $key) {
-        if (empty($tags[$key])) {
-            continue;
+    ob_start(function ($html) {
+        if (!is_string($html) || $html === '') {
+            return $html;
         }
-        $val = is_array($tags[$key]) ? (string) reset($tags[$key]) : (string) $tags[$key];
-        if (stripos($val, 'fbcdn') !== false || stripos($val, 'facebook.com') !== false) {
-            if (is_singular('product') && has_post_thumbnail()) {
-                $tags[$key] = get_the_post_thumbnail_url(null, 'full') ?: $logo;
-            } else {
-                $tags[$key] = $logo;
-            }
+        $html = preg_replace(
+            '#<div class="rs-seo-home-h1-wrap"[^>]*>.*?</div>#is',
+            '',
+            $html,
+            1
+        );
+        $html = preg_replace_callback(
+            '#<(h[23])(\s+class="[^"]*elementor-heading-title[^"]*"[^>]*)>(\s*Łączymy pasję do zwierząt z jakością\s*)</\1>#u',
+            function ($m) {
+                return '<h1' . $m[2] . '>' . $m[3] . '</h1>';
+            },
+            $html,
+            1
+        );
+        return $html;
+    });
+}, 0);
+
+/**
+ * Prefer featured image / logo over expired Facebook CDN URLs in social tags.
+ */
+$rs_seo_social_image = static function (array $tags, array $keys): array {
+    $logo = 'https://retrievershop.pl/wp-content/uploads/2024/08/retriver-2.png';
+    $preferred = $logo;
+    if ((is_singular(['product', 'post']) || is_page()) && has_post_thumbnail()) {
+        $preferred = get_the_post_thumbnail_url(null, 'full') ?: $logo;
+    }
+    foreach ($keys as $key) {
+        $val = '';
+        if (!empty($tags[$key])) {
+            $val = is_array($tags[$key]) ? (string) reset($tags[$key]) : (string) $tags[$key];
+        }
+        $bad = $val === ''
+            || stripos($val, 'fbcdn') !== false
+            || stripos($val, 'facebook.com') !== false;
+        if ($bad) {
+            $tags[$key] = $preferred;
         }
     }
     return $tags;
+};
+
+add_filter('aioseo_facebook_tags', function ($tags) use ($rs_seo_social_image) {
+    if (!is_array($tags)) {
+        return $tags;
+    }
+    return $rs_seo_social_image($tags, ['og:image', 'og:image:secure_url']);
+}, 50);
+
+add_filter('aioseo_twitter_tags', function ($tags) use ($rs_seo_social_image) {
+    if (!is_array($tags)) {
+        return $tags;
+    }
+    return $rs_seo_social_image($tags, ['twitter:image', 'twitter:image:src']);
 }, 50);

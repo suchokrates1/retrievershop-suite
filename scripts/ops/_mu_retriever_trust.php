@@ -26,17 +26,22 @@ add_filter('woocommerce_short_description', function ($content) {
     return $content;
 }, 12);
 
-/** Hide duplicate Blocksy page title on PDP — Woo product_title remains the only H1. */
+/**
+ * PDP: show unified Blocksy hero title (visual).
+ * Keep Woo .product_title as the only real H1 (hero stays demoted to div);
+ * hide the duplicate summary title so the hero is the visible name.
+ */
 add_action('wp_head', function () {
     if (!is_product()) {
         return;
     }
     echo '<style id="rs-pdp-h1">'
-        . 'body.single-product .hero-section .page-title,'
-        . 'body.single-product .hero-section header.entry-header .page-title,'
-        . 'body.single-product header.entry-header .page-title,'
-        . 'body.single-product .hero-section h1.page-title{display:none!important;}'
-        . 'body.single-product .hero-section header.entry-header{display:none!important;}'
+        . 'body.single-product .summary .product_title,'
+        . 'body.single-product .entry-summary .product_title{'
+        . 'position:absolute!important;width:1px!important;height:1px!important;'
+        . 'padding:0!important;margin:-1px!important;overflow:hidden!important;'
+        . 'clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;'
+        . '}'
         . '</style>';
 }, 20);
 
@@ -120,36 +125,42 @@ add_action('wp_head', function () {
         return;
     }
     echo '<style id="rs-trust-faq">
-.rs-trust-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0 10px;padding:14px 16px;background:#F3F0EB;border-radius:8px;font-size:13px;color:#5A6B6B}
-.rs-trust-row strong{color:#1A3333;display:block;font-size:13px;margin-bottom:2px}
-.rs-ship-banner{margin:10px 0 14px;padding:10px 14px;border-left:3px solid #C45C3E;background:#fff7f3;border-radius:0 8px 8px 0;font-size:14px;color:#1A3333}
-.rs-ship-banner strong{color:#C45C3E}
+.rs-pdp-trust{margin:14px 0 8px}
+.rs-trust-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin:0;padding:12px 14px;background:var(--rs-surface-alt,#EEF2F1);border-radius:8px;font-size:13px;color:var(--rs-muted,#5A6B6B)}
+.rs-trust-row strong{color:var(--rs-ink,#1A3333);display:block;font-size:13px;margin-bottom:2px}
+.rs-ship-banner{margin:0 0 10px;padding:10px 14px;border-left:3px solid var(--rs-accent,#C45C3E);background:rgba(196,92,62,.08);border-radius:0 8px 8px 0;font-size:14px;color:var(--rs-ink,#1A3333);line-height:1.45}
+.rs-ship-banner strong{color:var(--rs-accent,#C45C3E)}
+@media (max-width:520px){.rs-trust-row{grid-template-columns:1fr}}
+html[data-color-mode="dark"] .rs-trust-row,body.wp-dark-mode-active .rs-trust-row,.darkmode--activated .rs-trust-row{background:rgba(255,255,255,.06);color:#c9d1d1}
+html[data-color-mode="dark"] .rs-trust-row strong,body.wp-dark-mode-active .rs-trust-row strong,.darkmode--activated .rs-trust-row strong{color:#fff}
+html[data-color-mode="dark"] .rs-ship-banner,body.wp-dark-mode-active .rs-ship-banner,.darkmode--activated .rs-ship-banner{background:rgba(196,92,62,.18);color:#f0f0f0}
+html[data-color-mode="dark"] .rs-ship-banner strong,body.wp-dark-mode-active .rs-ship-banner strong,.darkmode--activated .rs-ship-banner strong{color:#f0a888}
 .rs-faq-wrap{margin:28px auto 12px;max-width:1100px;padding:0 20px}
-.rs-faq-wrap h2{font-size:22px;margin:0 0 12px;color:#1A3333}
-.rs-faq__item{border:1px solid #e5e1da;border-radius:8px;background:#fff;margin:0 0 8px;padding:0 14px}
-.rs-faq__item summary{cursor:pointer;font-weight:600;padding:12px 0;color:#1A3333;list-style:none}
+.rs-faq-wrap h2{font-size:22px;margin:0 0 12px;color:var(--rs-ink,#1A3333)}
+.rs-faq__item{border:1px solid rgba(26,51,51,.12);border-radius:8px;background:#fff;margin:0 0 8px;padding:0 14px}
+.rs-faq__item summary{cursor:pointer;font-weight:600;padding:12px 0;color:var(--rs-ink,#1A3333);list-style:none}
 .rs-faq__item summary::-webkit-details-marker{display:none}
-.rs-faq__a{padding:0 0 12px;color:#5A6B6B;font-size:14px;line-height:1.5}
-.rs-related-note{font-size:13px;color:#5A6B6B;margin:0 0 10px}
-.rs-footer-trust{padding:16px 0;border-top:1px solid #e5e1da;font-size:14px}
+.rs-faq__a{padding:0 0 12px;color:var(--rs-muted,#5A6B6B);font-size:14px;line-height:1.5}
+.rs-related-note{font-size:13px;color:var(--rs-muted,#5A6B6B);margin:0 0 10px}
+.rs-footer-trust{padding:16px 0;border-top:1px solid rgba(26,51,51,.12);font-size:14px}
 .rs-footer-trust-links{display:flex;flex-wrap:wrap;gap:10px 18px;list-style:none;margin:0;padding:0}
-.rs-footer-trust-links a{color:#1A3333;text-decoration:underline}
-.rs-woo-lead{margin:0 0 16px;padding:12px 14px;background:#F3F0EB;border-radius:8px;color:#1A3333;font-size:15px;line-height:1.5}
+.rs-footer-trust-links a{color:var(--rs-ink,#1A3333);text-decoration:underline}
+.rs-woo-lead{margin:0 0 16px;padding:12px 14px;background:var(--rs-surface-alt,#EEF2F1);border-radius:8px;color:var(--rs-ink,#1A3333);font-size:15px;line-height:1.5}
 .rs-woo-lead p{margin:0}
 .rs-trust-stats{margin:8px auto 28px;max-width:1100px;padding:0 20px}
 .rs-trust-stats__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.rs-trust-stat{background:#F3F0EB;border-radius:12px;padding:22px 16px;text-align:center;min-height:140px;display:flex;flex-direction:column;justify-content:center}
-.rs-trust-stat__value{font-size:clamp(28px,4vw,40px);line-height:1.1;font-weight:700;color:#C45C3E;margin:0 0 8px}
-.rs-trust-stat__label{font-size:14px;line-height:1.35;color:#1A3333;margin:0}
-.rs-trust-stats__note{margin:12px 0 0;font-size:12px;color:#5A6B6B;text-align:center}
-.rs-trust-stats__note a{color:#C45C3E}
+.rs-trust-stat{background:var(--rs-surface,#FFFCFA);border-radius:12px;padding:22px 16px;text-align:center;min-height:140px;display:flex;flex-direction:column;justify-content:center;border:1px solid rgba(26,51,51,.06)}
+.rs-trust-stat__value{font-size:clamp(28px,4vw,40px);line-height:1.1;font-weight:700;color:var(--rs-accent,#C45C3E);margin:0 0 8px}
+.rs-trust-stat__label{font-size:14px;line-height:1.35;color:var(--rs-ink,#1A3333);margin:0}
+.rs-trust-stats__note{margin:12px 0 0;font-size:12px;color:var(--rs-muted,#5A6B6B);text-align:center}
+.rs-trust-stats__note a{color:var(--rs-accent,#C45C3E)}
 @media (max-width:900px){.rs-trust-stats__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:480px){.rs-trust-stats__grid{grid-template-columns:1fr}.rs-trust-stat{min-height:110px}}
 .rs-sticky-contact{display:none}
 @media (max-width:781px){
 body{padding-bottom:64px}
-.rs-sticky-contact{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:9999;gap:0;background:#1A3333;box-shadow:0 -4px 16px rgba(0,0,0,.15)}
-.rs-sticky-contact a{flex:1;text-align:center;padding:14px 8px;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+.rs-sticky-contact{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:9999;gap:0;background:var(--rs-forest,#17383E);box-shadow:0 -4px 16px rgba(0,0,0,.15)}
+.rs-sticky-contact a{flex:1;text-align:center;padding:14px 8px;color:var(--rs-on-dark,#FFFCFA);text-decoration:none;font-size:14px;font-weight:600}
 .rs-sticky-contact a.rs-wa{background:#2F4F4F}
 }
 </style>';
@@ -222,8 +233,7 @@ function rs_trust_stats_html(): string {
     }
     $html .= '</div>'
         . '<p class="rs-trust-stats__note">Oceny pochodzą ze sklepu Allegro '
-        . '<a href="' . $url . '" target="_blank" rel="noopener">Retriever_Shop</a>'
-        . ' — nie są to opinie produktów w tym sklepie. Liczba zamówień z magazynu, zaokrąglona w dół do 100.</p>'
+        . '<a href="' . $url . '" target="_blank" rel="noopener">Retriever_Shop</a>.</p>'
         . '</div>';
     return $html;
 }
@@ -240,7 +250,95 @@ add_shortcode('rs_trust_stats', function () {
     return rs_trust_stats_html();
 });
 
-/** Homepage Elementor hosts [rs_trust_stats] above "Opinie klientów". */
+/**
+ * O nas — te same źródła co homepage (Allegro + magazyn), etykiety sekcji „cyferki”.
+ */
+function rs_onas_stats_html(): string {
+    $d = rs_allegro_trust_data();
+    if (!$d) {
+        return '';
+    }
+    $pct = (string) ($d['recommended_percentage'] ?? '');
+    $ratings = (int) ($d['ratings_received_total'] ?? 0);
+    $orders_total = (int) ($d['orders_total'] ?? 0);
+    $orders = (int) ($d['orders_rounded_100'] ?? 0);
+    if ($orders < 100 && $orders_total > 0) {
+        $orders = intdiv($orders_total, 100) * 100;
+    }
+    if ($orders < 1 && $orders_total > 0) {
+        $orders = $orders_total;
+    }
+    $since = (string) ($d['seller_since'] ?? '2017-10-29');
+    $start_year = (int) (substr($since, 0, 4) ?: 2017);
+    $years = max(1, (int) gmdate('Y') - $start_year);
+    $url = esc_url((string) ($d['profile_url'] ?? 'https://allegro.pl/uzytkownik/Retriever_Shop'));
+    if ($pct === '' || $ratings < 1) {
+        return '';
+    }
+    $pct_show = esc_html(str_replace(',0', '', $pct));
+    $orders_show = $orders >= 100 ? ($orders . '+') : (string) max($orders, $orders_total);
+
+    // 1 Lat doświadczenia · 2 Szczęśliwych zwierząt (zamówienia) · 3 Pracowników · 4 Polecenia Allegro
+    $cards = [
+        ['value' => $years . '+', 'label' => 'Lat doświadczenia'],
+        ['value' => $orders_show, 'label' => 'Szczęśliwych zwierząt'],
+        ['value' => '2', 'label' => 'Pracowników'],
+        ['value' => $pct_show . '%', 'label' => 'Poleceń na Allegro'],
+    ];
+    $html = '<div class="rs-trust-stats rs-onas-stats" aria-label="Nasze liczby">'
+        . '<div class="rs-trust-stats__grid">';
+    foreach ($cards as $card) {
+        $html .= '<div class="rs-trust-stat">'
+            . '<p class="rs-trust-stat__value">' . esc_html($card['value']) . '</p>'
+            . '<p class="rs-trust-stat__label">' . esc_html($card['label']) . '</p>'
+            . '</div>';
+    }
+    $html .= '</div>'
+        . '<p class="rs-trust-stats__note">Dane z magazynu i Allegro '
+        . '<a href="' . $url . '" target="_blank" rel="noopener">Retriever_Shop</a>'
+        . ' · ' . (int) $ratings . ' ocen sprzedawcy · od ' . esc_html((string) $start_year) . '.</p>'
+        . '</div>';
+    return $html;
+}
+
+add_shortcode('rs_onas_stats', static function () {
+    return rs_onas_stats_html();
+});
+
+/**
+ * Homepage trust stats: if Elementor/page content does not already include the shortcode,
+ * inject the block before "Opinie klientów" (or before FAQ) in final HTML.
+ */
+add_action('template_redirect', function () {
+    if (!is_front_page() || is_admin()) {
+        return;
+    }
+    ob_start(function ($html) {
+        if (!is_string($html) || $html === '') {
+            return $html;
+        }
+        if (str_contains($html, 'rs-trust-stats')) {
+            return $html;
+        }
+        $block = rs_trust_stats_html();
+        if ($block === '') {
+            return $html;
+        }
+        // Prefer just above Allegro reviews carousel / heading.
+        $patterns = [
+            '/(<section[^>]*class="[^"]*rs-rev[^"]*"[^>]*>)/i',
+            '/(<h[2-4][^>]*>\s*Opinie klientów\s*<\/h[2-4]>)/iu',
+            '/(<h[2-4][^>]*>\s*Opinie\s*<\/h[2-4]>)/iu',
+        ];
+        foreach ($patterns as $re) {
+            $out = preg_replace($re, $block . '$1', $html, 1, $count);
+            if ($count > 0 && is_string($out)) {
+                return $out;
+            }
+        }
+        return $html;
+    });
+}, 1);
 
 /** Sticky phone / WhatsApp on mobile */
 add_action('wp_footer', function () {
@@ -253,18 +351,13 @@ add_action('wp_footer', function () {
         . '</div>';
 }, 40);
 
-/** Homepage FAQ after page content (Elementor). */
+/** Homepage FAQ is rendered via Elementor shortcode section — do not duplicate here. */
 add_filter('the_content', function ($content) {
     if (!is_front_page() || !in_the_loop() || !is_main_query() || is_admin()) {
         return $content;
     }
-    if (strpos($content, 'rs-faq') !== false) {
-        return $content;
-    }
-    $faq = '<div class="rs-faq-wrap"><h2>Najczęstsze pytania</h2>'
-        . do_shortcode('[rs_faq]')
-        . '<p style="font-size:14px;color:#5A6B6B">Więcej: <a href="/faq/">FAQ</a> · <a href="/dostawa/">Dostawa</a> · <a href="/zwroty/">Zwroty</a></p></div>';
-    return $content . $faq;
+    // Kept as no-op: FAQ lives in Elementor ([rs_faq] section).
+    return $content;
 }, 30);
 
 /** Footer trust links strip. */
@@ -284,16 +377,41 @@ add_action('wp_head', function () {
     if (!is_page() && !is_singular('post')) {
         return;
     }
+    // Cart/checkout use dedicated flush-up rules in retriever-ui-bg.php
+    if (function_exists('is_cart') && is_cart()) {
+        return;
+    }
+    if (function_exists('is_checkout') && is_checkout()) {
+        return;
+    }
+    // Heroes unified in retriever-ui-bg.php — skip duplicate pad rules everywhere it covers.
+    $woo_shop = function_exists('is_shop') && (is_shop() || (function_exists('is_product_taxonomy') && is_product_taxonomy()));
+    if (
+        is_page([1976, 1977, 1978, 1979, 5913, 1037, 1361])
+        || $woo_shop
+        || (function_exists('is_product') && is_product())
+        || is_home()
+        || is_front_page()
+        || is_singular()
+        || is_archive()
+        || is_search()
+    ) {
+        return;
+    }
     echo '<style id="rs-page-hero-pad">'
         . 'body.page .hero-section[data-type="type-2"],'
         . 'body.single-post .hero-section[data-type="type-2"]{'
-        . 'padding-top:clamp(96px,12vw,140px)!important;'
-        . 'padding-bottom:28px!important;'
-        . 'min-height:0!important;'
+        . 'padding-top:calc(var(--theme-header-absolute-height, var(--header-height, 110px)) + 40px)!important;'
+        . 'padding-bottom:40px!important;'
+        . 'min-height:400px!important;'
         . '}'
         . 'body.page .hero-section .page-title,'
         . 'body.single-post .hero-section .page-title{'
         . 'margin-top:0;'
+        . 'font-family:Poppins,sans-serif!important;'
+        . 'font-size:clamp(2.5rem,4.2vw,70px)!important;'
+        . 'font-weight:700!important;'
+        . 'color:var(--rs-on-dark,#FFFCFA)!important;'
         . '}'
         . '</style>';
 }, 30);

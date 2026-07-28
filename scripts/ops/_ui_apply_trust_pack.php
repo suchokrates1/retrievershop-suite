@@ -59,14 +59,16 @@ $trust_new = <<<'PHP'
  * Retriever Shop UI — PDP trust + size guide + archive price
  */
 add_action('woocommerce_single_product_summary', function () {
-    echo '<div class="rs-ship-banner">';
+    echo '<div class="rs-pdp-trust" aria-label="Informacje o dostawie i zakupie">';
+    echo '<p class="rs-ship-banner">';
     echo '<strong>Zamów do 16:00</strong> — wyślemy jeszcze dziś. Paczka zwykle <strong>jutro u Ciebie</strong> (InPost, dni robocze).';
-    echo '</div>';
+    echo '</p>';
     echo '<div class="rs-trust-row">';
-    echo '<div><strong>Wysyłka z Legnicy</strong>InPost paczkomat / kurier</div>';
-    echo '<div><strong>Zwroty</strong>14 dni na odstąpienie</div>';
-    echo '<div><strong>Kontakt</strong><a href="tel:+48782865895">782 865 895</a></div>';
+    echo '<div><strong>Darmowa dostawa</strong>InPost paczkomat / kurier</div>';
+    echo '<div><strong>14 dni na zwrot</strong>Bez zbędnych formalności</div>';
+    echo '<div><strong>782 865 895</strong>Pomoc przy doborze rozmiaru</div>';
     echo '<div><strong>Płatności</strong>BLIK, przelew, karta</div>';
+    echo '</div>';
     echo '</div>';
 }, 35);
 PHP;
