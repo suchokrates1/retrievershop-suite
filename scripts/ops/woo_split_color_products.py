@@ -1,23 +1,16 @@
 #!/usr/bin/env python3
 """Rozdziel wspoldzielone woo_product_id: 1 kolor magazynu = 1 parent Woo.
 
-Po merge kolorow (stary model) wiele Product mialo ten sam woo_product_id.
-Ten skrypt:
-  - zostawia 1 kolor na istniejącym Woo parentcie (keeper),
-  - pozostale kolory odlacza (czysci SKU wariantow + mapowania),
-  - syncuje kazdy kolor osobno → nowe Woo ID,
-  - aktualizuje keepera (nazwa z kolorem, atrybuty).
+Bez create_app (brak workerow). Commit po kazdej grupie. Bez Allegro content.
 
-Domyslnie dry-run. Apply: --apply
-Pilot: --woo-id 3440  albo  --product-ids 56,73
-
-  DISABLE_SCHEDULERS=1 PYTHONPATH=/app python scripts/ops/woo_split_color_products.py --all
   DISABLE_SCHEDULERS=1 PYTHONPATH=/app python scripts/ops/woo_split_color_products.py --all --apply
+  DISABLE_SCHEDULERS=1 PYTHONPATH=/app python scripts/ops/woo_split_color_products.py --woo-id 3440 --apply
 """
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from collections import defaultdict
@@ -25,12 +18,14 @@ from typing import Any, Optional
 
 os.environ["DISABLE_SCHEDULERS"] = "1"
 
-from magazyn.db import get_session
-from magazyn.factory import create_app
+from magazyn.db import configure_engine, get_session
 from magazyn.models.products import Product, ProductSize
+from magazyn.services import woo_catalog_sync as sync_mod
 from magazyn.services.woo_catalog_sync import _sync_one_family
 from magazyn.services.woo_product_naming import canonical_woo_product_name, product_family_key
 from magazyn.woocommerce_api import WooClient, WooClientError
+
+logger = logging.getLogger("woo_split")
 
 
 def _mapped_variation_count(db, product: Product) -> int:
@@ -99,7 +94,6 @@ def _split_group(
         "keeper_color": keeper.color,
         "other_ids": [p.id for p in others],
         "other_colors": [p.color for p in others],
-        "families": ["|".join(product_family_key(p)) for p in products],
         "applied": False,
     }
     if not others:
@@ -120,13 +114,11 @@ def _split_group(
     result["detach"] = detach_actions
     db.flush()
 
-    stats_all: list[dict[str, int]] = []
     created: list[dict[str, Any]] = []
     for other in others:
         stats = {"products": 0, "variations": 0, "errors": 0, "skipped": 0}
         _sync_one_family(db, client, [other], refresh_content=False, stats=stats)
         db.flush()
-        stats_all.append(stats)
         created.append(
             {
                 "product_id": other.id,
@@ -158,7 +150,6 @@ def _load_shared_groups(
     by_woo: dict[int, list[Product]] = defaultdict(list)
     q = db.query(Product).filter(Product.woo_product_id.isnot(None))
     if product_ids:
-        # Zaladuj cale grupy wspoldzielace ID z wybranymi produktami
         seed = q.filter(Product.id.in_(product_ids)).all()
         seed_wids = {int(p.woo_product_id) for p in seed if p.woo_product_id}
         if not seed_wids:
@@ -174,46 +165,67 @@ def _load_shared_groups(
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--all", action="store_true", help="Wszystkie wspoldzielone woo_product_id")
-    parser.add_argument("--woo-id", type=int, help="Tylko jedno Woo ID (np. 3440 Blossom)")
-    parser.add_argument(
-        "--product-ids",
-        help="CSV id produktow magazynu — rozdziel ich wspoldzielone grupy",
-    )
-    parser.add_argument("--apply", action="store_true", help="Wykonaj zmiany (domyslnie dry-run)")
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument("--woo-id", type=int)
+    parser.add_argument("--product-ids", help="CSV id produktow")
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--limit", type=int, default=0, help="Max grup w tym przebiegu")
     args = parser.parse_args(argv)
 
     if not args.all and args.woo_id is None and not args.product_ids:
         parser.error("podaj --all, --woo-id albo --product-ids")
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
     product_ids = None
     if args.product_ids:
         product_ids = {int(x.strip()) for x in args.product_ids.split(",") if x.strip()}
 
-    app = create_app()
+    # Bez Allegro / uploadu zdjec — szybciej i stabilniej przy bulk split.
+    sync_mod._ensure_offer_content = lambda db, offer: None  # type: ignore[assignment]
+    sync_mod._collect_color_image_ids = lambda client, db, variants, alt_text="": {}  # type: ignore
+
+    configure_engine()
+    client = WooClient()
     results: list[dict[str, Any]] = []
-    with app.app_context():
-        client = WooClient()
+
+    with get_session() as db:
+        groups = _load_shared_groups(db, woo_id=args.woo_id, product_ids=product_ids)
+        items = list(groups.items())
+        if args.limit and args.limit > 0:
+            items = items[: args.limit]
+        print(f"shared_groups={len(groups)} processing={len(items)} mode={'APPLY' if args.apply else 'DRY-RUN'}")
+
+    for wid, _ in items:
         with get_session() as db:
-            groups = _load_shared_groups(db, woo_id=args.woo_id, product_ids=product_ids)
-            print(f"shared_groups={len(groups)} mode={'APPLY' if args.apply else 'DRY-RUN'}")
-            for wid, products in groups.items():
-                colors = ", ".join(sorted({(p.color or "?") for p in products}))
-                print(f"group woo={wid} n={len(products)} colors=[{colors}] ids={[p.id for p in products]}")
+            # Przeladuj swieze produkty (po poprzednich commitach)
+            fresh = _load_shared_groups(db, woo_id=wid)
+            products = fresh.get(wid) or []
+            if len(products) < 2:
+                print(f"group woo={wid} already_split_or_gone")
+                continue
+            colors = ", ".join(sorted({(p.color or "?") for p in products}))
+            print(f"group woo={wid} n={len(products)} colors=[{colors}] ids={[p.id for p in products]}")
+            try:
                 res = _split_group(db, client, wid, products, apply=args.apply)
                 results.append(res)
                 print(json.dumps(res, ensure_ascii=False, default=str))
-            if args.apply:
-                db.commit()
-            else:
+                if args.apply:
+                    db.commit()
+                    print(f"committed woo={wid}")
+                else:
+                    db.rollback()
+            except Exception as exc:
                 db.rollback()
+                err = {"woo_id": wid, "error": str(exc)}
+                results.append(err)
+                print(json.dumps(err, ensure_ascii=False))
+                logger.exception("split failed woo=%s", wid)
 
-    shared_after = 0
     if args.apply:
-        with app.app_context():
-            with get_session() as db:
-                shared_after = len(_load_shared_groups(db))
-        print(f"shared_groups_after={shared_after}")
+        with get_session() as db:
+            left = len(_load_shared_groups(db))
+        print(f"shared_groups_after={left}")
 
     print(f"done groups={len(results)} apply={args.apply}")
     return 0
