@@ -13,7 +13,7 @@ from magazyn.services.woo_product_naming import (
 )
 
 
-def test_canonical_strips_color_from_parent_name():
+def test_canonical_includes_color_in_parent_name():
     product = SimpleNamespace(
         name="Szelki dla psa Truelove Front Line Premium",
         category="Szelki",
@@ -23,11 +23,11 @@ def test_canonical_strips_color_from_parent_name():
     )
     assert (
         canonical_woo_product_name(product, fallback_title="Szelki guard L fioletowe")
-        == "Szelki dla psa Truelove Front Line Premium"
+        == "Szelki dla psa Truelove Front Line Premium fioletowe"
     )
 
 
-def test_canonical_strips_em_dash_color_suffix():
+def test_canonical_keeps_explicit_color_suffix():
     product = SimpleNamespace(
         name="Szelki dla psa Truelove Front Line Premium — czarne",
         category="Szelki",
@@ -35,7 +35,10 @@ def test_canonical_strips_em_dash_color_suffix():
         series="Front Line Premium",
         color="czarne",
     )
-    assert canonical_woo_product_name(product) == "Szelki dla psa Truelove Front Line Premium"
+    assert (
+        canonical_woo_product_name(product)
+        == "Szelki dla psa Truelove Front Line Premium czarne"
+    )
 
 
 def test_canonical_without_color_stays_base():
@@ -49,9 +52,19 @@ def test_canonical_without_color_stays_base():
     assert canonical_woo_product_name(product) == "Smycz dla psa Truelove Handy"
 
 
-def test_product_family_key():
-    product = SimpleNamespace(category="Szelki", brand="Truelove", series="Front Line Premium")
-    assert product_family_key(product) == ("szelki", "truelove", "front line premium")
+def test_product_family_key_includes_color():
+    product = SimpleNamespace(
+        category="Szelki",
+        brand="Truelove",
+        series="Front Line Premium",
+        color="Czerwony",
+    )
+    assert product_family_key(product) == (
+        "szelki",
+        "truelove",
+        "front line premium",
+        "czerwony",
+    )
 
 
 def test_sanitize_strips_size_color_and_typos():

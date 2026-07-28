@@ -1,4 +1,4 @@
-"""Synchronizacja katalogu magazyn/Allegro → WooCommerce (1 parent na rodzine kolorow)."""
+"""Synchronizacja katalogu magazyn/Allegro → WooCommerce (1 parent na kolor)."""
 
 from __future__ import annotations
 
@@ -138,10 +138,10 @@ def sync_catalog_to_woo(
     refresh_content: bool = True,
     mode: SyncMode = "incremental",
 ) -> dict[str, int]:
-    """Upsert produktow variable + wariantow (kolor x rozmiar) po EAN do Woo.
+    """Upsert produktow variable + wariantow (rozmiary) po EAN do Woo.
 
-    Grupuje Magazyn Product (1 kolor) w rodziny (category+brand+series) i tworzy
-    jeden parent Woo na rodzine.
+    Kazdy Magazyn Product (1 kolor) = osobny parent Woo. Rodzina klucza to
+    category+brand+series+color (patrz ``product_family_key``).
 
     ``mode="incremental"`` (domyslnie) syncuje tylko nowe / bez mapowania Woo /
     rodziny ze zmienionym fingerprintem. ``mode="full"`` omija filtr zmian
@@ -187,12 +187,12 @@ def sync_catalog_to_woo(
         # rodziny — inaczej limit ucinalby czlonkow tej samej rodziny.
         products = q.all()
 
-        families: dict[tuple[str, str, str], list[Product]] = defaultdict(list)
+        families: dict[tuple[str, str, str, str], list[Product]] = defaultdict(list)
         for product in products:
             families[product_family_key(product)].append(product)
         stats["candidates"] = len(families)
 
-        dirty: list[tuple[tuple[str, str, str], list[Product]]] = []
+        dirty: list[tuple[tuple[str, str, str, str], list[Product]]] = []
         for key, members in sorted(families.items(), key=lambda item: item[0]):
             if product_ids or family_needs_catalog_sync(
                 db, members, snapshots=snapshots, mode=mode

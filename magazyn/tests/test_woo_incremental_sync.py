@@ -57,7 +57,7 @@ def test_family_skips_when_fingerprint_matches():
         return_value=variants,
     ):
         fp = compute_family_fingerprint(db, [product])
-        key = "szelki|truelove|tracker"
+        key = "szelki|truelove|tracker|czarny"
         assert not family_needs_catalog_sync(
             db, [product], snapshots={key: fp}, mode="incremental"
         )

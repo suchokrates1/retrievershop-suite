@@ -6,7 +6,8 @@ import re
 from html import escape, unescape
 from typing import Any, Optional
 
-# Tokeny rozmiaru / koloru — nie powinny trafic do nazwy rodzica variable
+# Tokeny rozmiaru — nie powinny trafic do nazwy rodzica variable.
+# Kolor JEST w nazwie (1 Product magazynu = 1 kolor = 1 parent Woo).
 _SIZE_TOKENS = {
     "xxs",
     "xs",
@@ -154,20 +155,25 @@ def apply_woo_lead_to_description(description_html: str, lead_plain: str) -> str
     return block
 
 
-def product_family_key(product: Any) -> tuple[str, str, str]:
-    """Klucz rodziny Woo: category + brand + series (bez koloru)."""
+def product_family_key(product: Any) -> tuple[str, str, str, str]:
+    """Klucz rodziny Woo: category + brand + series + color.
+
+    Kazdy kolor w magazynie to osobny Product i osobny parent Woo
+    (warianty = rozmiary). Dawniej bez koloru — scalalo kolory w 1 ID.
+    """
     return (
         (getattr(product, "category", None) or "").strip().lower(),
         (getattr(product, "brand", None) or "").strip().lower(),
         (getattr(product, "series", None) or "").strip().lower(),
+        (getattr(product, "color", None) or "").strip().lower(),
     )
 
 
 def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = None) -> str:
-    """Nazwa rodzica variable: kategoria + marka + model — bez rozmiaru i koloru.
+    """Nazwa rodzica variable: kategoria + marka + model + kolor — bez rozmiaru.
 
-    Kolor jest atrybutem wariantu (scalanie kolorow w 1 parent). Preferuje
-    ``Product.name``; ``fallback_title`` tylko gdy name puste.
+    1 Product magazynu = 1 kolor = 1 parent Woo; kolor jest w nazwie.
+    Preferuje ``Product.name``; ``fallback_title`` tylko gdy name puste.
     """
     name = (getattr(product, "name", None) or "").strip()
     if not name and fallback_title:
@@ -192,7 +198,11 @@ def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = 
             )
             name = f"{cat} dla psa {rest}".strip()
 
-    return sanitize_parent_product_title(name)
+    base = sanitize_parent_product_title(name)
+    color = (getattr(product, "color", None) or "").strip()
+    if color and color.lower() not in base.lower():
+        return f"{base} {color}"
+    return base
 
 
 def sanitize_parent_product_title(title: str) -> str:
