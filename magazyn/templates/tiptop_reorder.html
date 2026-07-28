@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{% endblock %}
+{% block content %}
+<div id="page-content" class="container mx-auto mt-6">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+    <div>
+      <h1 class="text-2xl font-semibold">Nowe zamówienie (TipTop)</h1>
+      <p class="text-sm text-base-content/60">
+        Braki i niskie stany (≤ {{ threshold }}) posortowane po sprzedaży 30 dni.
+        Katalog TipTop: {{ catalog_count }} produktów.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('products.items') }}" class="btn btn-ghost btn-sm">← Przedmioty</a>
+      <form method="post" action="{{ url_for('products.tiptop_refresh_catalog') }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline btn-sm">
+          <i class="bi bi-arrow-repeat"></i> Odśwież katalog TipTop
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% if not lines %}
+  <div class="alert alert-info">
+    <span>
+      Brak pozycji do zamówienia. Upewnij się, że katalog TipTop jest zsynchronizowany
+      i że warianty są zmapowane do magazynu.
+    </span>
+  </div>
+  {% else %}
+  <form method="post" action="{{ url_for('products.tiptop_reorder') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="create_cart">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-cart-plus"></i> Utwórz koszyk TipTop
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('.tt-select').forEach(c => c.checked = true)">Zaznacz wszystkie</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('.tt-select').forEach(c => c.checked = false)">Odznacz</button>
+      <span class="text-sm text-base-content/60">{{ lines|length }} pozycji</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="table table-sm table-zebra w-full">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Produkt</th>
+            <th>Kolor</th>
+            <th>Rozmiar</th>
+            <th>Stock</th>
+            <th>Sold 30d</th>
+            <th>Ilość</th>
+            <th>TipTop</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in lines %}
+          <tr>
+            <td>
+              <input type="checkbox" class="checkbox checkbox-sm tt-select" name="selected"
+                     value="{{ line.product_size_id }}" {% if line.selected %}checked{% endif %}>
+            </td>
+            <td>
+              <div class="font-medium">{{ line.series or line.name }}</div>
+              <div class="text-xs text-base-content/50">{{ line.name }}</div>
+            </td>
+            <td>{{ line.color or '—' }}</td>
+            <td>{{ line.size }}</td>
+            <td>
+              <span class="badge {% if line.stock == 0 %}badge-error{% else %}badge-warning{% endif %}">
+                {{ line.stock }}
+              </span>
+            </td>
+            <td>{{ line.sold_30d }}</td>
+            <td>
+              <input type="number" min="1" max="999" class="input input-bordered input-sm w-20"
+                     name="qty_{{ line.product_size_id }}" value="{{ line.suggested_qty }}">
+            </td>
+            <td>
+              {% if line.tiptop_url %}
+              <a href="{{ line.tiptop_url }}" target="_blank" rel="noopener" class="link link-primary text-xs">
+                otwórz
+              </a>
+              {% else %}
+              <span class="text-xs text-error">brak linku</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap">
+              <button type="submit" form="exclude-size-{{ line.product_size_id }}"
+                      class="btn btn-ghost btn-xs" title="Wyklucz wariant">
+                <i class="bi bi-eye-slash"></i>
+              </button>
+              <button type="submit" form="exclude-product-{{ line.product_id }}"
+                      class="btn btn-ghost btn-xs" title="Wyklucz cały produkt">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  {% for line in lines %}
+  <form id="exclude-size-{{ line.product_size_id }}" method="post" action="{{ url_for('products.tiptop_reorder') }}" class="hidden">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="exclude_size">
+    <input type="hidden" name="product_size_id" value="{{ line.product_size_id }}">
+  </form>
+  <form id="exclude-product-{{ line.product_id }}" method="post" action="{{ url_for('products.tiptop_reorder') }}" class="hidden">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="exclude_product">
+    <input type="hidden" name="product_id" value="{{ line.product_id }}">
+  </form>
+  {% endfor %}
+  {% endif %}
+
+  {% if exclusions %}
+  <div class="mt-8">
+    <h2 class="text-lg font-semibold mb-2">Wykluczenia</h2>
+    <ul class="text-sm space-y-1">
+      {% for ex in exclusions %}
+      <li class="text-base-content/70">
+        {% if ex.product_size_id %}wariant #{{ ex.product_size_id }}{% endif %}
+        {% if ex.product_id %}produkt #{{ ex.product_id }}{% endif %}
+        — {{ ex.reason or '' }}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -13,23 +13,34 @@ def _extract_model_series(name: str) -> str:
         return ""
     name_lower = name.lower()
     model_series = [
+        "front line premium cordura",
         "front line premium",
+        "front line cordura",
         "front line",
         "tropical",
+        "active pro+",
         "active",
         "outdoor",
         "classic",
         "comfort",
         "sport",
         "easy walk",
+        "lumen lite",
         "lumen",
         "amor",
         "blossom",
         "neon",
         "reflective",
         "dogi",
+        "adventure soft",
+        "adventure dog",
         "adventure",
         "handy",
+        "dive",
+        "chłodząca",
+        "security",
+        "safe hiking",
+        "trail bag",
     ]
 
     for series in model_series:
@@ -49,6 +60,7 @@ def _parse_tiptop_sku(sku: str) -> dict:
 
     series_map = {
         "frolin-prem": "front line premium",
+        "frolin-cor": "front line cordura",
         "frolin": "front line",
         "tropic": "tropical",
         "tropi": "tropical",
@@ -64,6 +76,9 @@ def _parse_tiptop_sku(sku: str) -> dict:
         "amor": "amor",
         "neon": "neon",
         "handy": "handy",
+        "dive": "dive",
+        "chl": "chłodząca",
+        "securi": "security",
     }
     color_map = {
         "CZA": "czarny",
@@ -79,6 +94,10 @@ def _parse_tiptop_sku(sku: str) -> dict:
         "FIO": "fioletowy",
         "ZOL": "żółty",
         "LIM": "limonkowy",
+        "LIL": "liliowy",
+        "BAN": "bananowy",
+        "KHA": "khaki",
+        "GRA": "granatowy",
     }
 
     if len(parts) >= 5:
@@ -115,6 +134,14 @@ def _extract_category(name: str) -> str:
         return "Obroża"
     if "szelki" in name_lower or "szelek" in name_lower:
         return "Szelki"
+    if "kapok" in name_lower:
+        return "Kapok"
+    if "kamizelk" in name_lower:
+        return "Kamizelka"
+    if "saszetk" in name_lower:
+        return "Saszetki"
+    if "amortyzator" in name_lower:
+        return "Amortyzator"
     return ""
 
 
