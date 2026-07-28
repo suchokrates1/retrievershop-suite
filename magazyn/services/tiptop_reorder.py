@@ -18,7 +18,7 @@ from magazyn.models.tiptop import (
     TipTopReorderExclusion,
     TipTopVariant,
 )
-from magazyn.services.tiptop_catalog import cart_item_from_link
+from magazyn.services.tiptop_catalog import TIPTOP_BASE, cart_item_from_link
 
 
 @dataclass
@@ -43,11 +43,17 @@ class ReorderLine:
         return asdict(self)
 
 
-def _low_stock_threshold() -> int:
+def _tiptop_reorder_threshold() -> int:
+    """Próg braków dla zamówień TipTop (osobny od alertów LOW_STOCK_THRESHOLD)."""
+    raw = getattr(settings, "TIPTOP_REORDER_THRESHOLD", None)
+    if raw is None or str(raw).strip() == "":
+        # Fallback: dawniej używano LOW_STOCK_THRESHOLD
+        raw = getattr(settings, "LOW_STOCK_THRESHOLD", 5)
     try:
-        return int(getattr(settings, "LOW_STOCK_THRESHOLD", 5) or 5)
+        value = int(raw)
     except (TypeError, ValueError):
         return 5
+    return max(0, value)
 
 
 def _sold_30d_by_product_size(db: Session) -> dict[int, int]:
@@ -88,7 +94,7 @@ def build_reorder_candidates(
     require_tiptop_link: bool = True,
 ) -> list[ReorderLine]:
     """Build sorted low-stock reorder lines (bestsellers first)."""
-    thr = _low_stock_threshold() if threshold is None else int(threshold)
+    thr = _tiptop_reorder_threshold() if threshold is None else int(threshold)
     tgt = thr if target is None else int(target)
     excl_products, excl_sizes = _excluded_ids(db)
     sold_map = _sold_30d_by_product_size(db)
@@ -116,11 +122,8 @@ def build_reorder_candidates(
             continue
 
         stock = int(ps.quantity or 0)
-        suggested = max(0, tgt - stock)
-        if stock == 0 and suggested < 1:
-            suggested = 1
-        if suggested <= 0:
-            continue
+        # Na liście braków zawsze proponuj co najmniej 1 szt. do uzupełnienia.
+        suggested = max(1, tgt - stock)
 
         options: dict[str, int] = {}
         stock_id = None
@@ -194,6 +197,82 @@ def list_exclusions(db: Session) -> list[TipTopReorderExclusion]:
     )
 
 
+@dataclass
+class ExclusionView:
+    id: int
+    product_id: int | None
+    product_size_id: int | None
+    reason: str | None
+    label: str
+    scope: str  # "product" | "size"
+
+
+def list_exclusions_enriched(db: Session) -> list[ExclusionView]:
+    """Exclusions with human-readable product labels for settings UI."""
+    rows = list_exclusions(db)
+    views: list[ExclusionView] = []
+    for row in rows:
+        label = ""
+        scope = "product"
+        if row.product_size_id is not None:
+            scope = "size"
+            ps = db.get(ProductSize, row.product_size_id)
+            if ps is not None:
+                prod = db.get(Product, ps.product_id)
+                if prod is not None:
+                    label = f"{prod.series or prod.name} / {prod.color or '—'} / {ps.size}"
+                else:
+                    label = f"Wariant #{row.product_size_id} ({ps.size})"
+            else:
+                label = f"Wariant #{row.product_size_id} (usunięty)"
+        elif row.product_id is not None:
+            prod = db.get(Product, row.product_id)
+            if prod is not None:
+                label = f"{prod.series or prod.name} / {prod.color or '—'} (cały produkt)"
+            else:
+                label = f"Produkt #{row.product_id} (usunięty)"
+        else:
+            label = f"Wykluczenie #{row.id}"
+        views.append(
+            ExclusionView(
+                id=row.id,
+                product_id=row.product_id,
+                product_size_id=row.product_size_id,
+                reason=row.reason,
+                label=label,
+                scope=scope,
+            )
+        )
+    return views
+
+
+def search_products_for_exclusion(db: Session, q: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    """Search warehouse products to permanently exclude from TipTop reorder."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    like = f"%{q}%"
+    rows = (
+        db.query(Product)
+        .filter(
+            (Product._name.ilike(like))
+            | (Product.color.ilike(like))
+            | (Product.series.ilike(like))
+            | (Product.category.ilike(like))
+        )
+        .order_by(Product.series, Product.color)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "product_id": p.id,
+            "label": f"{p.series or p.name} / {p.color or '—'} ({p.category or ''})",
+        }
+        for p in rows
+    ]
+
+
 def build_cart_payload(
     db: Session,
     selections: list[dict[str, Any]],
@@ -222,8 +301,39 @@ def build_cart_payload(
     return items
 
 
+TIPTOP_ADD_URL = f"{TIPTOP_BASE}/pl/basket/add/post"
+TIPTOP_BASKET_URL = f"{TIPTOP_BASE}/pl/basket"
+
+
+def cart_item_to_add_fields(item: dict[str, Any]) -> dict[str, str]:
+    """Pola formularza HTML TipTop ``/pl/basket/add/post`` (top-level, z cookie)."""
+    fields: dict[str, str] = {
+        "stock_id": str(int(item["stock_id"])),
+        "quantity": str(int(item["quantity"])),
+        "nojs": "1",
+    }
+    for key, value in (item.get("options") or {}).items():
+        fields[f"option_{key}"] = str(int(value))
+    return fields
+
+
+def build_browser_fill_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Payload dla one-click napełniania koszyka w przeglądarce użytkownika."""
+    out: list[dict[str, Any]] = []
+    for it in items:
+        if not it.get("stock_id"):
+            continue
+        out.append(
+            {
+                "label": it.get("label") or "",
+                "fields": cart_item_to_add_fields(it),
+            }
+        )
+    return out
+
+
+# Zachowane pod stare testy / debug — Front API na originie TipTop.
 def build_filler_script(items: list[dict[str, Any]]) -> str:
-    """JS runnable on tiptop24.pl origin to fill the basket via Front API."""
     payload = [
         {
             "stock_id": int(it["stock_id"]),
@@ -237,48 +347,40 @@ def build_filler_script(items: list[dict[str, Any]]) -> str:
     return f"""(async () => {{
   const items = {data_json};
   const endpoint = '/webapi/front/pl_PL/basket/PLN/';
-  const results = [];
   for (const item of items) {{
-    try {{
-      const res = await fetch(endpoint, {{
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {{
-          'Content-Type': 'application/json;charset=UTF-8',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        }},
-        body: JSON.stringify({{
-          stock_id: item.stock_id,
-          quantity: item.quantity,
-          options: item.options || {{}}
-        }})
-      }});
-      const json = await res.json();
-      results.push({{ ok: res.ok, json }});
-    }} catch (err) {{
-      results.push({{ ok: false, error: String(err) }});
-    }}
+    await fetch(endpoint, {{
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {{
+        'Content-Type': 'application/json;charset=UTF-8',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }},
+      body: JSON.stringify({{
+        stock_id: item.stock_id,
+        quantity: item.quantity,
+        options: item.options || {{}}
+      }})
+    }});
   }}
-  console.log('RetrieverShop TipTop cart fill', results);
-  location.href = '/basket';
+  location.href = '/pl/basket';
 }})();"""
 
 
-def build_bookmarklet(items: list[dict[str, Any]]) -> str:
-    script = build_filler_script(items)
-    # bookmarklet: javascript:(...)()
-    compact = script.replace("\n", " ")
-    return "javascript:" + compact
-
-
 __all__ = [
+    "ExclusionView",
     "ReorderLine",
+    "TIPTOP_ADD_URL",
+    "TIPTOP_BASKET_URL",
     "add_exclusion",
-    "build_bookmarklet",
+    "build_browser_fill_items",
     "build_cart_payload",
     "build_filler_script",
     "build_reorder_candidates",
+    "cart_item_to_add_fields",
     "list_exclusions",
+    "list_exclusions_enriched",
     "remove_exclusion",
+    "search_products_for_exclusion",
+    "_tiptop_reorder_threshold",
 ]

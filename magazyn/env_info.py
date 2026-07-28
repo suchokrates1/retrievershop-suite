@@ -41,6 +41,10 @@ ENV_INFO = {
         "Próg niskiego stanu",
         "Ilość przy której wysyłane jest powiadomienie",
     ),
+    "TIPTOP_REORDER_THRESHOLD": (
+        "Próg braków TipTop",
+        "Warianty ze stanem ≤ tej wartości pojawiają się na liście zamówienia TipTop; sugerowana ilość uzupełnia do tego poziomu",
+    ),
     "ALERT_EMAIL": (
         "Email alertów",
         "Adres email do powiadomień o niskim stanie",

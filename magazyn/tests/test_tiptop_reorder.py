@@ -19,9 +19,11 @@ from magazyn.services.tiptop_catalog import (
 )
 from magazyn.services.tiptop_reorder import (
     add_exclusion,
+    build_browser_fill_items,
     build_cart_payload,
-    build_filler_script,
     build_reorder_candidates,
+    cart_item_to_add_fields,
+    list_exclusions_enriched,
 )
 from magazyn.tests.fixtures.tiptop_product_page import (
     TIPTOP_ACTIVE_COLLAR_HTML,
@@ -97,7 +99,9 @@ def test_score_variant_match_active_collar(app):
 
 
 def test_upsert_and_auto_link_creates_reorder_candidates(app, monkeypatch):
-    monkeypatch.setattr("magazyn.services.tiptop_reorder.settings.LOW_STOCK_THRESHOLD", 5)
+    monkeypatch.setattr(
+        "magazyn.services.tiptop_reorder.settings.TIPTOP_REORDER_THRESHOLD", "5"
+    )
 
     with get_session() as db:
         product = Product(
@@ -129,7 +133,9 @@ def test_upsert_and_auto_link_creates_reorder_candidates(app, monkeypatch):
 
 
 def test_exclusion_hides_line(app, monkeypatch):
-    monkeypatch.setattr("magazyn.services.tiptop_reorder.settings.LOW_STOCK_THRESHOLD", 5)
+    monkeypatch.setattr(
+        "magazyn.services.tiptop_reorder.settings.TIPTOP_REORDER_THRESHOLD", "5"
+    )
 
     with get_session() as db:
         product = Product(
@@ -214,10 +220,19 @@ def test_build_filler_script_and_cart_payload(app):
         assert items[0]["quantity"] == 3
         assert items[0]["options"] == {"8": 51, "9": 60}
 
-        script = build_filler_script(items)
-        assert "/webapi/front/pl_PL/basket/PLN/" in script
-        assert "stock_id" in script
-        assert "/basket" in script
+        from magazyn.services.tiptop_reorder import (
+            build_browser_fill_items,
+            cart_item_to_add_fields,
+        )
+
+        fields = cart_item_to_add_fields(items[0])
+        assert fields["stock_id"] == "214"
+        assert fields["quantity"] == "3"
+        assert fields["option_8"] == "51"
+        assert fields["option_9"] == "60"
+        fill = build_browser_fill_items(items)
+        assert len(fill) == 1
+        assert fill[0]["fields"]["stock_id"] == "214"
 
 
 def test_tiptop_reorder_page_requires_login(client):
@@ -246,3 +261,65 @@ def test_sync_catalog_from_urls_uses_fetch(app, monkeypatch):
         assert db.query(TipTopProduct).count() == 1
         assert db.query(TipTopVariant).count() == 15
     assert calls
+
+
+def test_tiptop_threshold_setting_controls_candidates(app, monkeypatch):
+    monkeypatch.setattr(
+        "magazyn.services.tiptop_reorder.settings.TIPTOP_REORDER_THRESHOLD", "1"
+    )
+    with get_session() as db:
+        product = Product(
+            category="Obroża", brand="Truelove", series="Active", color="czarny"
+        )
+        db.add(product)
+        db.flush()
+        ps_low = ProductSize(product_id=product.id, size="L", quantity=1)
+        ps_ok = ProductSize(product_id=product.id, size="M", quantity=5)
+        db.add_all([ps_low, ps_ok])
+        db.flush()
+        tip = TipTopProduct(
+            tiptop_product_id=214,
+            url="https://tiptop24.pl/x",
+            name="Obroża Active",
+        )
+        db.add(tip)
+        db.flush()
+        for ps, size_label, opt in ((ps_low, "L", 51), (ps_ok, "M", 50)):
+            v = TipTopVariant(
+                tiptop_product_id=214,
+                option_map=json.dumps({"8": opt, "9": 60}),
+                size_label=size_label,
+                color_label="czarny",
+            )
+            db.add(v)
+            db.flush()
+            db.add(
+                TipTopProductLink(
+                    product_size_id=ps.id,
+                    tiptop_variant_id=v.id,
+                    match_type="manual",
+                )
+            )
+        db.flush()
+        lines = build_reorder_candidates(db)
+        assert [l.product_size_id for l in lines] == [ps_low.id]
+        assert lines[0].suggested_qty == 1
+        lines2 = build_reorder_candidates(db, threshold=1, target=2)
+        assert len(lines2) == 1
+        assert lines2[0].product_size_id == ps_low.id
+        assert lines2[0].suggested_qty == 1
+
+def test_exclusions_enriched_labels(app):
+    from magazyn.services.tiptop_reorder import add_exclusion, list_exclusions_enriched
+
+    with get_session() as db:
+        product = Product(
+            category="Obroża", brand="Truelove", series="Active", color="czarny"
+        )
+        db.add(product)
+        db.flush()
+        add_exclusion(db, product_id=product.id, reason="test")
+        views = list_exclusions_enriched(db)
+        assert len(views) == 1
+        assert "Active" in views[0].label
+        assert views[0].scope == "product"

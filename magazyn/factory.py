@@ -11,6 +11,7 @@ from flask import Flask
 from .config import settings
 from .constants import ALL_SIZES
 from .products import bp as products_bp
+from . import tiptop_views as _tiptop_views  # noqa: F401 — routes on products blueprint
 from .history import bp as history_bp
 from .sales import bp as sales_bp
 from .allegro import bp as allegro_bp
