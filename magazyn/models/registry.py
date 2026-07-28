@@ -17,6 +17,7 @@ MODEL_MODULES = (
     "magazyn.models.settings",
     "magazyn.models.shipments",
     "magazyn.models.stocktakes",
+    "magazyn.models.tiptop",
     "magazyn.models.users",
 )
 

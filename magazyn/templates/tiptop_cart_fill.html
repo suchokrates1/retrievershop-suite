@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto mt-6 max-w-3xl" x-data="tiptopCartFill()">
+  <h1 class="text-2xl font-semibold mb-2">Koszyk TipTop — gotowy do napełnienia</h1>
+  <p class="text-sm text-base-content/70 mb-4">
+    TipTop nie udostępnia API zamówień dla kupującego. Skrypt poniżej działa
+    <strong>tylko na domenie tiptop24.pl</strong> (sesja przeglądarki).
+  </p>
+
+  <div class="alert alert-warning mb-4">
+    <ol class="list-decimal ml-4 space-y-1 text-sm">
+      <li>Kliknij „Otwórz TipTop” (nowa karta).</li>
+      <li>Na TipTop otwórz konsolę DevTools (F12 → Console) i wklej skrypt (Ctrl+V, Enter)
+          — albo użyj bookmarkletu z pola poniżej.</li>
+      <li>Po dodaniu pozycji zostaniesz przeniesiony do koszyka — opłać zamówienie.</li>
+    </ol>
+  </div>
+
+  <div class="flex flex-wrap gap-2 mb-4">
+    <a href="{{ tiptop_home_url }}" target="_blank" rel="noopener" class="btn btn-primary"
+       @click="copyScript()">
+      <i class="bi bi-box-arrow-up-right"></i> Otwórz TipTop + kopiuj skrypt
+    </a>
+    <button type="button" class="btn btn-outline" @click="copyScript()">
+      <i class="bi bi-clipboard"></i> <span x-text="copied ? 'Skopiowano!' : 'Kopiuj skrypt'"></span>
+    </button>
+    <a href="{{ tiptop_basket_url }}" target="_blank" rel="noopener" class="btn btn-ghost">
+      Koszyk TipTop
+    </a>
+    <a href="{{ url_for('products.tiptop_reorder') }}" class="btn btn-ghost">← Wróć do listy</a>
+  </div>
+
+  <h2 class="font-semibold mb-2">Pozycje ({{ items|length }})</h2>
+  <ul class="mb-4 space-y-1 text-sm">
+    {% for item in items %}
+    <li>
+      {{ item.quantity }}× {{ item.label }}
+      <span class="text-base-content/50">(stock_id={{ item.stock_id }})</span>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <label class="form-control w-full mb-2">
+    <span class="label-text text-sm">Skrypt do wklejenia na tiptop24.pl</span>
+    <textarea id="tt-filler-script" class="textarea textarea-bordered font-mono text-xs h-48"
+              readonly x-ref="script">{{ filler_script }}</textarea>
+  </label>
+
+  <label class="form-control w-full">
+    <span class="label-text text-sm">Bookmarklet (przeciągnij na pasek zakładek)</span>
+    <input class="input input-bordered input-sm font-mono text-xs"
+           readonly
+           value="javascript:void(document.body.appendChild(Object.assign(document.createElement('script'),{textContent:document.getElementById('tt-filler-script').value})))">
+  </label>
+</div>
+
+<script>
+function tiptopCartFill() {
+  return {
+    copied: false,
+    async copyScript() {
+      const text = this.$refs.script.value;
+      try {
+        await navigator.clipboard.writeText(text);
+        this.copied = true;
+        setTimeout(() => this.copied = false, 2500);
+      } catch (e) {
+        this.$refs.script.select();
+        document.execCommand('copy');
+        this.copied = true;
+        setTimeout(() => this.copied = false, 2500);
+      }
+    }
+  }
+}
+</script>
+{% endblock %}
