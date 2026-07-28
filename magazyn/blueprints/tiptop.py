@@ -1,24 +1,24 @@
-"""HTTP routes for TipTop reorder — registered on products blueprint."""
+"""HTTP routes for TipTop reorder (osobny blueprint — poza budżetem products.py)."""
 
 from __future__ import annotations
 
 import logging
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
-from .auth import login_required
-from .db import get_session
-from .products import bp
+from magazyn.auth import login_required
+from magazyn.db import get_session
 
+bp = Blueprint("tiptop", __name__)
 logger = logging.getLogger(__name__)
 
 
 @bp.route("/tiptop/reorder", methods=["GET", "POST"])
 @login_required
-def tiptop_reorder():
+def reorder():
     """Lista braków magazynowych do zamówienia na TipTop24."""
-    from .models.tiptop import TipTopProduct
-    from .services.tiptop_reorder import (
+    from magazyn.models.tiptop import TipTopProduct
+    from magazyn.services.tiptop_reorder import (
         TIPTOP_ADD_URL,
         TIPTOP_BASKET_URL,
         _tiptop_reorder_threshold,
@@ -29,15 +29,15 @@ def tiptop_reorder():
         list_exclusions_enriched,
         remove_exclusion,
     )
-    from .settings_store import settings_store
+    from magazyn.settings_store import settings_store
 
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
 
         def _tiptop_redirect():
             if request.form.get("open_settings") == "1":
-                return redirect(url_for("products.tiptop_reorder", settings=1))
-            return redirect(url_for("products.tiptop_reorder"))
+                return redirect(url_for("tiptop.reorder", settings=1))
+            return redirect(url_for("tiptop.reorder"))
 
         if action == "exclude_size":
             ps_id = request.form.get("product_size_id", type=int)
@@ -69,7 +69,7 @@ def tiptop_reorder():
                 with get_session() as db:
                     remove_exclusion(db, excl_id)
                 flash("Usunięto wykluczenie TipTop", "success")
-            return redirect(url_for("products.tiptop_reorder", settings=1))
+            return redirect(url_for("tiptop.reorder", settings=1))
 
         if action == "save_settings":
             raw = (request.form.get("tiptop_reorder_threshold") or "").strip()
@@ -77,10 +77,10 @@ def tiptop_reorder():
                 thr = max(0, int(raw))
             except (TypeError, ValueError):
                 flash("Próg braków musi być liczbą całkowitą ≥ 0", "error")
-                return redirect(url_for("products.tiptop_reorder", settings=1))
+                return redirect(url_for("tiptop.reorder", settings=1))
             settings_store.update({"TIPTOP_REORDER_THRESHOLD": str(thr)})
             flash(f"Zapisano próg braków TipTop: ≤ {thr}", "success")
-            return redirect(url_for("products.tiptop_reorder", settings=1))
+            return redirect(url_for("tiptop.reorder", settings=1))
 
         if action == "create_cart":
             selected = request.form.getlist("selected")
@@ -105,7 +105,7 @@ def tiptop_reorder():
                     "Odśwież katalog lub sprawdź linki.",
                     "error",
                 )
-                return redirect(url_for("products.tiptop_reorder"))
+                return redirect(url_for("tiptop.reorder"))
 
             return render_template(
                 "tiptop_cart_fill.html",
@@ -133,8 +133,8 @@ def tiptop_reorder():
 
 @bp.route("/tiptop/reorder/search-products")
 @login_required
-def tiptop_search_products():
-    from .services.tiptop_reorder import search_products_for_exclusion
+def search_products():
+    from magazyn.services.tiptop_reorder import search_products_for_exclusion
 
     q = request.args.get("q", "")
     with get_session() as db:
@@ -143,8 +143,8 @@ def tiptop_search_products():
 
 @bp.route("/tiptop/reorder/refresh-catalog", methods=["POST"])
 @login_required
-def tiptop_refresh_catalog():
-    from .services.tiptop_catalog import refresh_truelove_catalog
+def refresh_catalog():
+    from magazyn.services.tiptop_catalog import refresh_truelove_catalog
 
     max_pages = request.form.get("max_pages", type=int) or 5
     max_products = request.form.get("max_products", type=int) or 80
@@ -165,13 +165,13 @@ def tiptop_refresh_catalog():
     except Exception as exc:
         logger.exception("TipTop catalog refresh failed")
         flash(f"Odświeżanie katalogu TipTop nie powiodło się: {exc}", "error")
-    return redirect(url_for("products.tiptop_reorder"))
+    return redirect(url_for("tiptop.reorder"))
 
 
 @bp.route("/tiptop/reorder/cart-payload.json", methods=["POST"])
 @login_required
-def tiptop_cart_payload():
-    from .services.tiptop_reorder import (
+def cart_payload():
+    from magazyn.services.tiptop_reorder import (
         TIPTOP_ADD_URL,
         TIPTOP_BASKET_URL,
         build_browser_fill_items,

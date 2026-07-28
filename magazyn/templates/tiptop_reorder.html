@@ -4,7 +4,7 @@
 {% endblock %}
 {% block content %}
 <div id="page-content" class="container mx-auto mt-6"
-     x-data="tiptopReorderSettings({ open: {{ 'true' if open_settings else 'false' }}, searchUrl: '{{ url_for('products.tiptop_search_products') }}' })">
+     x-data="tiptopReorderSettings({ open: {{ 'true' if open_settings else 'false' }}, searchUrl: '{{ url_for('tiptop.search_products') }}' })">
   <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
     <div>
       <h1 class="text-2xl font-semibold">Nowe zamówienie (TipTop)</h1>
@@ -18,7 +18,7 @@
       <button type="button" class="btn btn-outline btn-sm" @click="open = true">
         <i class="bi bi-gear"></i> Ustawienia TipTop
       </button>
-      <form method="post" action="{{ url_for('products.tiptop_refresh_catalog') }}" class="inline">
+      <form method="post" action="{{ url_for('tiptop.refresh_catalog') }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-outline btn-sm">
           <i class="bi bi-arrow-repeat"></i> Odśwież katalog TipTop
@@ -35,7 +35,7 @@
     </span>
   </div>
   {% else %}
-  <form id="tt-cart-form" method="post" action="{{ url_for('products.tiptop_reorder') }}"
+  <form id="tt-cart-form" method="post" action="{{ url_for('tiptop.reorder') }}"
         onsubmit="return tiptopCreateCart(event)">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="create_cart">
@@ -113,12 +113,12 @@
   </form>
 
   {% for line in lines %}
-  <form id="exclude-size-{{ line.product_size_id }}" method="post" action="{{ url_for('products.tiptop_reorder') }}" class="hidden">
+  <form id="exclude-size-{{ line.product_size_id }}" method="post" action="{{ url_for('tiptop.reorder') }}" class="hidden">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="exclude_size">
     <input type="hidden" name="product_size_id" value="{{ line.product_size_id }}">
   </form>
-  <form id="exclude-product-{{ line.product_id }}" method="post" action="{{ url_for('products.tiptop_reorder') }}" class="hidden">
+  <form id="exclude-product-{{ line.product_id }}" method="post" action="{{ url_for('tiptop.reorder') }}" class="hidden">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="exclude_product">
     <input type="hidden" name="product_id" value="{{ line.product_id }}">
@@ -134,7 +134,7 @@
         Próg braków i stałe wykluczenia produktów z listy zamówień.
       </p>
 
-      <form method="post" action="{{ url_for('products.tiptop_reorder') }}" class="mb-6">
+      <form method="post" action="{{ url_for('tiptop.reorder') }}" class="mb-6">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="save_settings">
         <label class="form-control w-full max-w-xs">
@@ -160,7 +160,7 @@
           <template x-for="item in results" :key="item.product_id">
             <li class="flex items-center justify-between gap-2 text-sm bg-base-200 rounded px-2 py-1">
               <span x-text="item.label"></span>
-              <form method="post" action="{{ url_for('products.tiptop_reorder') }}">
+              <form method="post" action="{{ url_for('tiptop.reorder') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="exclude_product">
                 <input type="hidden" name="open_settings" value="1">
@@ -184,7 +184,7 @@
               {% if ex.reason %}— {{ ex.reason }}{% endif %}
             </div>
           </div>
-          <form method="post" action="{{ url_for('products.tiptop_reorder') }}">
+          <form method="post" action="{{ url_for('tiptop.reorder') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="remove_exclusion">
             <input type="hidden" name="exclusion_id" value="{{ ex.id }}">
@@ -279,7 +279,7 @@ function tiptopCreateCart(event) {
 
   (async () => {
     try {
-      const res = await fetch('{{ url_for("products.tiptop_cart_payload") }}', {
+      const res = await fetch('{{ url_for("tiptop.cart_payload") }}', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
