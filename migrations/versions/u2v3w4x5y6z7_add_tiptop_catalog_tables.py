@@ -50,7 +50,7 @@ def upgrade() -> None:
         sa.Column("size_label", sa.String(), nullable=True),
         sa.Column("color_label", sa.String(), nullable=True),
         sa.Column("variant_stock_id", sa.Integer(), nullable=True),
-        sa.Column("available", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("available", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("price", sa.Float(), nullable=True),
         sa.ForeignKeyConstraint(
             ["tiptop_product_id"],
