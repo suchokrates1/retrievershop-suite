@@ -72,6 +72,84 @@ def build_sender(settings_store: Any) -> Dict[str, str]:
     return sender
 
 
+def receiver_phone_digits(phone: Any) -> str:
+    """Wyciagnij same cyfry z numeru telefonu odbiorcy."""
+    return re.sub(r"\D", "", str(phone or ""))
+
+
+def is_receiver_ready(order_data: Dict[str, Any]) -> bool:
+    """Czy dane odbiorcy wystarcza do create-commands Allegro SM."""
+    has_name = bool(
+        (order_data.get("delivery_fullname") or "").strip()
+        or (order_data.get("delivery_company") or "").strip()
+    )
+    if not has_name:
+        return False
+    if len(receiver_phone_digits(order_data.get("phone"))) < 9:
+        return False
+
+    point_id = (order_data.get("delivery_point_id") or "").strip()
+    if point_id:
+        return True
+
+    street = (order_data.get("delivery_address") or "").strip()
+    city = (order_data.get("delivery_city") or "").strip()
+    postcode = (order_data.get("delivery_postcode") or "").strip()
+    return bool(street and city and postcode)
+
+
+def hydrate_receiver_from_checkout(
+    order_data: Dict[str, Any],
+    checkout_form: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Uzupelnij lokalne dane odbiorcy swiezymi polami z checkout-form Allegro."""
+    delivery = checkout_form.get("delivery") or {}
+    address = delivery.get("address") or {}
+    pickup = delivery.get("pickupPoint") or {}
+    pickup_address = pickup.get("address") or {}
+
+    first_name = (address.get("firstName") or "").strip()
+    last_name = (address.get("lastName") or "").strip()
+    name = f"{first_name} {last_name}".strip()
+    company = (address.get("companyName") or "").strip()
+    phone = (address.get("phoneNumber") or "").strip()
+
+    if name:
+        order_data["delivery_fullname"] = name
+    if company:
+        order_data["delivery_company"] = company
+    if phone:
+        order_data["phone"] = phone
+
+    street = (address.get("street") or "").strip()
+    city = (address.get("city") or "").strip()
+    postcode = (address.get("zipCode") or "").strip()
+    country = (address.get("countryCode") or "").strip()
+    if street:
+        order_data["delivery_address"] = street
+    if city:
+        order_data["delivery_city"] = city
+    if postcode:
+        order_data["delivery_postcode"] = postcode
+    if country:
+        order_data["delivery_country_code"] = country
+
+    point_id = (pickup.get("id") or "").strip()
+    if point_id:
+        order_data["delivery_point_id"] = point_id
+    point_name = (pickup.get("name") or "").strip()
+    if point_name:
+        order_data["delivery_point_name"] = point_name
+    if (pickup_address.get("street") or "").strip():
+        order_data["delivery_point_address"] = pickup_address["street"].strip()
+    if (pickup_address.get("zipCode") or "").strip():
+        order_data["delivery_point_postcode"] = pickup_address["zipCode"].strip()
+    if (pickup_address.get("city") or "").strip():
+        order_data["delivery_point_city"] = pickup_address["city"].strip()
+
+    return order_data
+
+
 def build_receiver(order_data: Dict[str, Any]) -> Dict[str, str]:
     """Zbuduj dane odbiorcy z danych zamowienia."""
     point_id = order_data.get("delivery_point_id", "")
@@ -94,6 +172,10 @@ def build_receiver(order_data: Dict[str, Any]) -> Dict[str, str]:
         "email": order_data.get("email", ""),
         "phone": order_data.get("phone", ""),
     }
+
+    company = (order_data.get("delivery_company") or "").strip()
+    if company:
+        receiver["company"] = company[:30]
 
     if point_id:
         receiver["point"] = point_id
@@ -183,6 +265,9 @@ __all__ = [
     "build_receiver",
     "build_sender",
     "choose_package_dimensions",
+    "hydrate_receiver_from_checkout",
+    "is_receiver_ready",
+    "receiver_phone_digits",
     "truncate_pickup_street",
     "MAX_PICKUP_STREET_LENGTH",
     "resolve_carrier_id",
