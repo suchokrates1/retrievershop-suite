@@ -5,12 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
+from .print_agent_errors import IncompleteReceiverData
 from .print_agent_shipments import (
     build_additional_services,
     build_cod_payload,
     build_packages,
     build_receiver,
     build_sender,
+    hydrate_receiver_from_checkout,
+    is_receiver_ready,
 )
 from .shipment_waybills import extract_waybills_from_shipment_details
 
@@ -63,6 +66,7 @@ class PrintShipmentCreator:
             order_id,
             checkout_form_id,
             delivery_method,
+            order_data,
         )
         if not delivery_method_id:
             self.logger.error(
@@ -71,6 +75,12 @@ class PrintShipmentCreator:
                 order_id,
             )
             return []
+
+        if not is_receiver_ready(order_data):
+            raise IncompleteReceiverData(
+                order_id,
+                "brak telefonu/imienia/adresu po hydracji z checkout-form",
+            )
 
         carrier_id = self.resolve_carrier_id(delivery_method)
         try:
@@ -81,7 +91,14 @@ class PrintShipmentCreator:
                 delivery_method_id,
                 carrier_id,
             )
+        except IncompleteReceiverData:
+            raise
         except Exception as exc:
+            if self._is_receiver_validation_error(exc):
+                raise IncompleteReceiverData(
+                    order_id,
+                    "Allegro odrzucilo dane odbiorcy (VALIDATION_ERROR)",
+                ) from exc
             self._log_creation_error(order_id, exc)
             return []
 
@@ -90,10 +107,12 @@ class PrintShipmentCreator:
         order_id: str,
         checkout_form_id: str,
         delivery_method: str,
+        order_data: Dict[str, Any],
     ) -> tuple[Optional[str], str]:
         delivery_method_id = None
         try:
             allegro_detail = self.fetch_order_detail(checkout_form_id)
+            hydrate_receiver_from_checkout(order_data, allegro_detail)
             allegro_delivery = (allegro_detail.get("delivery") or {}).get("method") or {}
             delivery_method_id = allegro_delivery.get("id")
             if not delivery_method:
@@ -105,6 +124,8 @@ class PrintShipmentCreator:
                 order_id,
                 delivery_method,
             )
+        except IncompleteReceiverData:
+            raise
         except Exception as exc:
             self.logger.warning(
                 "Nie mozna pobrac delivery.method.id z Allegro API dla %s: %s",
@@ -229,6 +250,20 @@ class PrintShipmentCreator:
                 order_id,
                 exc,
             )
+
+    def _is_receiver_validation_error(self, exc: Exception) -> bool:
+        response = getattr(exc, "response", None)
+        if response is None:
+            return False
+        try:
+            errors = (response.json() or {}).get("errors") or []
+        except Exception:
+            return False
+        for error in errors:
+            path = str(error.get("path") or "")
+            if path.startswith("input.receiver."):
+                return True
+        return False
 
     def _log_creation_error(self, order_id: str, exc: Exception) -> None:
         self.logger.error("Blad tworzenia przesylki dla zamowienia %s: %s", order_id, exc)
