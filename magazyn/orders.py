@@ -270,16 +270,17 @@ def cancel_order_route(order_id: str):
 @bp.route("/order/<order_id>/item/<int:order_product_id>/variant_options", methods=["GET"])
 @login_required
 def order_item_variant_options(order_id: str, order_product_id: int):
-    """JSON: dostepne warianty koloru/rozmiaru dla pozycji."""
+    """JSON: dostepne opcje zamiany (wariant lub caly magazyn)."""
     from .services.order_item_edit import list_variant_options
 
-    return jsonify(list_variant_options(order_id, order_product_id))
+    mode = request.args.get("mode") or "wariant"
+    return jsonify(list_variant_options(order_id, order_product_id, mode=mode))
 
 
 @bp.route("/order/<order_id>/edit_item", methods=["POST"])
 @login_required
 def edit_order_item(order_id: str):
-    """Zmien kolor/rozmiar pozycji zamowienia."""
+    """Zmien wariant lub model pozycji zamowienia."""
     from .services.order_item_edit import edit_order_item_variant
 
     try:
@@ -292,11 +293,13 @@ def edit_order_item(order_id: str):
     restore_previous_stock = request.form.get("restore_previous_stock") in (
         "1", "true", "on", "yes",
     )
+    mode = request.form.get("mode") or "wariant"
     result = edit_order_item_variant(
         order_id,
         order_product_id,
         new_product_size_id,
         restore_previous_stock=restore_previous_stock,
+        mode=mode,
     )
     if result.not_found:
         abort(404)

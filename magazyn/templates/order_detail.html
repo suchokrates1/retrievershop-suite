@@ -185,7 +185,7 @@
                                     {% if product.warehouse_product %}
                                     <button type="button" class="btn btn-xs btn-outline"
                                             onclick="openEditVariantModal({{ product.id }})">
-                                        <i class="bi bi-palette"></i> Wariant
+                                        <i class="bi bi-arrow-left-right"></i> Zamień
                                     </button>
                                     {% endif %}
                                 </td>
@@ -1502,12 +1502,12 @@ document.addEventListener('alpine:init', () => {
 <dialog id="editVariantModal" class="modal">
     <div class="modal-box max-w-lg">
         <h3 class="font-bold text-lg mb-4">
-            <i class="bi bi-palette mr-2"></i>
-            Edytuj wariant (kolor / rozmiar)
+            <i class="bi bi-arrow-left-right mr-2"></i>
+            Zamień produkt
         </h3>
-        <p class="text-sm text-base-content/70 mb-3">
-            Tylko kolor i rozmiar w tej samej rodzinie produktu. Zmiana ilosci, ceny lub innego produktu —
-            klient musi kupic nowe na Allegro.
+        <p id="editVariantHint" class="text-sm text-base-content/70 mb-3">
+            Wariant: tylko kolor i rozmiar w tej samej rodzinie. Model: dowolny produkt z magazynu.
+            Ilość i cena pozostają bez zmian.
         </p>
         <div id="editVariantLoading" class="text-center py-4 hidden">
             <span class="loading loading-spinner loading-md"></span>
@@ -1516,27 +1516,52 @@ document.addEventListener('alpine:init', () => {
         <form id="editVariantForm" action="{{ url_for('orders.edit_order_item', order_id=order.order_id) }}" method="POST" class="space-y-3 hidden">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="order_product_id" id="editVariantOrderProductId" value="">
+            <input type="hidden" name="mode" id="editVariantMode" value="wariant">
             <div>
-                <label class="label"><span class="label-text">Aktualny wariant</span></label>
+                <label class="label"><span class="label-text">Aktualny produkt</span></label>
                 <p id="editVariantCurrent" class="font-semibold"></p>
             </div>
             <div>
-                <label for="editVariantSelect" class="label"><span class="label-text">Nowy wariant</span></label>
-                <select id="editVariantSelect" name="new_product_size_id" class="select select-bordered w-full" required></select>
+                <label class="label"><span class="label-text">Tryb zamiany</span></label>
+                <div class="flex flex-wrap gap-4">
+                    <label class="label cursor-pointer justify-start gap-2 py-0">
+                        <input type="radio" name="swap_mode_ui" class="radio radio-sm" value="wariant" checked
+                               onchange="setEditVariantMode('wariant')">
+                        <span class="label-text">Wariant <span class="text-base-content/50">(kolor / rozmiar)</span></span>
+                    </label>
+                    <label class="label cursor-pointer justify-start gap-2 py-0">
+                        <input type="radio" name="swap_mode_ui" class="radio radio-sm" value="model"
+                               onchange="setEditVariantMode('model')">
+                        <span class="label-text">Model <span class="text-base-content/50">(cały magazyn)</span></span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label for="editVariantSearch" class="label"><span class="label-text">Wyszukaj</span></label>
+                <input type="search" id="editVariantSearch" class="input input-bordered w-full"
+                       placeholder="Nazwa, kolor, rozmiar, EAN…" autocomplete="off"
+                       oninput="filterEditVariantOptions()">
+            </div>
+            <div>
+                <label for="editVariantSelect" class="label">
+                    <span class="label-text">Nowy produkt</span>
+                    <span id="editVariantCount" class="label-text-alt"></span>
+                </label>
+                <select id="editVariantSelect" name="new_product_size_id" class="select select-bordered w-full" size="8" required></select>
             </div>
             <div class="form-control">
                 <label class="label cursor-pointer justify-start gap-2">
                     <input type="checkbox" class="checkbox" name="restore_previous_stock" value="true" id="editVariantRestore" checked>
-                    <span class="label-text">Przywróć poprzedni wariant do magazynu</span>
+                    <span class="label-text">Przywróć poprzedni produkt do magazynu</span>
                 </label>
                 <p class="text-xs text-base-content/60 ml-8">
-                    Odznacz, gdy poprzedniego koloru/rozmiaru nie było na stanie (0 ma zostać 0).
+                    Odznacz, gdy poprzedniego produktu nie było na stanie (0 ma zostać 0).
                 </p>
             </div>
             <div class="modal-action">
                 <button class="btn" type="button" onclick="document.getElementById('editVariantModal').close()">Anuluj</button>
                 <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check2"></i> Zapisz wariant
+                    <i class="bi bi-check2"></i> Zapisz zamianę
                 </button>
             </div>
         </form>
@@ -1544,53 +1569,116 @@ document.addEventListener('alpine:init', () => {
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 <script>
-async function openEditVariantModal(orderProductId) {
-    const modal = document.getElementById('editVariantModal');
-    const loading = document.getElementById('editVariantLoading');
-    const errorBox = document.getElementById('editVariantError');
-    const form = document.getElementById('editVariantForm');
-    const select = document.getElementById('editVariantSelect');
-    const currentEl = document.getElementById('editVariantCurrent');
+(function () {
+    let editVariantCache = [];
+    let editVariantOrderProductId = null;
+    let editVariantLoadingMode = null;
 
-    errorBox.classList.add('hidden');
-    errorBox.textContent = '';
-    form.classList.add('hidden');
-    loading.classList.remove('hidden');
-    select.innerHTML = '';
-    document.getElementById('editVariantOrderProductId').value = orderProductId;
-    modal.showModal();
+    window.setEditVariantMode = function (mode) {
+        document.getElementById('editVariantMode').value = mode;
+        const radios = document.querySelectorAll('input[name="swap_mode_ui"]');
+        radios.forEach(function (r) { r.checked = r.value === mode; });
+        loadEditVariantOptions(mode);
+    };
 
-    try {
-        const resp = await fetch(
-            '/order/' + {{ order.order_id|tojson }} + '/item/' + orderProductId + '/variant_options'
-        );
-        const data = await resp.json();
-        loading.classList.add('hidden');
-        if (!data.ok) {
-            errorBox.textContent = data.error || 'Nie udalo sie pobrac wariantow';
-            errorBox.classList.remove('hidden');
-            return;
-        }
-        currentEl.textContent = (data.current && data.current.label) || '-';
-        const variants = (data.variants || []).filter(function (v) { return !v.is_current; });
-        if (!variants.length) {
-            errorBox.textContent = 'Brak innych wariantow (kolor/rozmiar) w tej rodzinie produktu';
-            errorBox.classList.remove('hidden');
-            return;
-        }
-        variants.forEach(function (v) {
+    window.filterEditVariantOptions = function () {
+        const select = document.getElementById('editVariantSelect');
+        const search = (document.getElementById('editVariantSearch').value || '').trim().toLowerCase();
+        const prev = select.value;
+        select.innerHTML = '';
+        const filtered = editVariantCache.filter(function (v) {
+            if (v.is_current) return false;
+            if (!search) return true;
+            const hay = [
+                v.label || '',
+                v.color || '',
+                v.size || '',
+                v.barcode || '',
+            ].join(' ').toLowerCase();
+            return hay.indexOf(search) !== -1;
+        });
+        filtered.forEach(function (v) {
             const opt = document.createElement('option');
             opt.value = v.product_size_id;
             opt.textContent = v.label + ' (stan: ' + v.quantity + ')';
             select.appendChild(opt);
         });
-        form.classList.remove('hidden');
-    } catch (err) {
-        loading.classList.add('hidden');
-        errorBox.textContent = 'Blad pobierania wariantow: ' + err;
-        errorBox.classList.remove('hidden');
+        if (prev) {
+            const still = Array.from(select.options).some(function (o) { return o.value === prev; });
+            if (still) select.value = prev;
+        }
+        const countEl = document.getElementById('editVariantCount');
+        countEl.textContent = filtered.length ? (filtered.length + ' pozycji') : 'brak wyników';
+    };
+
+    async function loadEditVariantOptions(mode) {
+        const loading = document.getElementById('editVariantLoading');
+        const errorBox = document.getElementById('editVariantError');
+        const form = document.getElementById('editVariantForm');
+        const currentEl = document.getElementById('editVariantCurrent');
+        const searchInput = document.getElementById('editVariantSearch');
+
+        if (!editVariantOrderProductId) return;
+        if (editVariantLoadingMode === mode) return;
+        editVariantLoadingMode = mode;
+
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+        form.classList.add('hidden');
+        loading.classList.remove('hidden');
+        searchInput.value = '';
+        editVariantCache = [];
+        document.getElementById('editVariantSelect').innerHTML = '';
+
+        try {
+            const resp = await fetch(
+                '/order/' + {{ order.order_id|tojson }} + '/item/' + editVariantOrderProductId
+                + '/variant_options?mode=' + encodeURIComponent(mode)
+            );
+            const data = await resp.json();
+            if (editVariantLoadingMode !== mode) return;
+            loading.classList.add('hidden');
+            if (!data.ok) {
+                errorBox.textContent = data.error || 'Nie udało się pobrać opcji zamiany';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+            currentEl.textContent = (data.current && data.current.label) || '-';
+            editVariantCache = data.variants || [];
+            const available = editVariantCache.filter(function (v) { return !v.is_current; });
+            if (!available.length) {
+                errorBox.textContent = mode === 'model'
+                    ? 'Brak innych produktów w magazynie'
+                    : 'Brak innych wariantów (kolor/rozmiar) w tej rodzinie produktu';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+            filterEditVariantOptions();
+            form.classList.remove('hidden');
+        } catch (err) {
+            if (editVariantLoadingMode !== mode) return;
+            loading.classList.add('hidden');
+            errorBox.textContent = 'Błąd pobierania opcji: ' + err;
+            errorBox.classList.remove('hidden');
+        } finally {
+            if (editVariantLoadingMode === mode) editVariantLoadingMode = null;
+        }
     }
-}
+
+    window.openEditVariantModal = function (orderProductId) {
+        editVariantOrderProductId = orderProductId;
+        editVariantLoadingMode = null;
+        document.getElementById('editVariantOrderProductId').value = orderProductId;
+        document.getElementById('editVariantMode').value = 'wariant';
+        document.querySelectorAll('input[name="swap_mode_ui"]').forEach(function (r) {
+            r.checked = r.value === 'wariant';
+        });
+        document.getElementById('editVariantError').classList.add('hidden');
+        document.getElementById('editVariantForm').classList.add('hidden');
+        document.getElementById('editVariantModal').showModal();
+        loadEditVariantOptions('wariant');
+    };
+})();
 </script>
 {% endif %}
 
