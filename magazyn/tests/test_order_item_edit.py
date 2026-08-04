@@ -318,6 +318,74 @@ def test_list_variant_options_same_family(app):
 
         data = list_variant_options(order_id, op_id)
         assert data["ok"] is True
+        assert data["mode"] == "wariant"
         ids = {v["product_size_id"] for v in data["variants"]}
         assert black_id in ids
         assert tropical_id not in ids
+
+
+def test_list_model_options_includes_full_warehouse(app):
+    order_id = "edit_options_model"
+    with app.app_context():
+        with get_session() as db:
+            _, _, _, orange_l, black_l, tropical_l = _seed_security_variants(db)
+            db.add(Order(order_id=order_id, platform="allegro"))
+            op = OrderProduct(
+                order_id=order_id,
+                name="Szelki Security L pomaranczowe",
+                quantity=1,
+                product_size_id=orange_l.id,
+            )
+            db.add(op)
+            db.add(OrderStatusLog(order_id=order_id, status="pobrano"))
+            db.commit()
+            op_id = op.id
+            black_id = black_l.id
+            tropical_id = tropical_l.id
+
+        data = list_variant_options(order_id, op_id, mode="model")
+        assert data["ok"] is True
+        assert data["mode"] == "model"
+        ids = {v["product_size_id"] for v in data["variants"]}
+        assert black_id in ids
+        assert tropical_id in ids
+
+
+def test_edit_model_allows_different_series(app):
+    order_id = "edit_model_series"
+    with app.app_context():
+        with get_session() as db:
+            _, _, _, orange_l, _, tropical_l = _seed_security_variants(db)
+            db.add(Order(order_id=order_id, platform="allegro"))
+            op = OrderProduct(
+                order_id=order_id,
+                name="Szelki Security L pomaranczowe",
+                quantity=1,
+                price_brutto=Decimal("120.00"),
+                product_size_id=orange_l.id,
+                ean=orange_l.barcode,
+            )
+            db.add(op)
+            db.add(OrderStatusLog(order_id=order_id, status="pobrano"))
+            db.commit()
+            op_id = op.id
+            tropical_id = tropical_l.id
+
+        with patch(
+            "magazyn.services.invoice_service.generate_variant_correction_invoice",
+            return_value={"success": True, "skipped": True, "invoice_number": None, "errors": []},
+        ):
+            result = edit_order_item_variant(
+                order_id,
+                op_id,
+                tropical_id,
+                restore_previous_stock=False,
+                mode="model",
+            )
+
+        assert result.category in ("success", "warning")
+        assert result.details["mode"] == "model"
+        with get_session() as db:
+            op = db.query(OrderProduct).filter(OrderProduct.id == op_id).first()
+            assert op.product_size_id == tropical_id
+            assert "Tropical" in (op.name or "") or "turkus" in (op.name or "").lower()

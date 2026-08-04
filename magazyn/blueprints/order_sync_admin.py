@@ -50,9 +50,12 @@ def api_product_search():
             )
             results.append(
                 {
+                    "product_size_id": ps.id,
+                    "product_id": product.id,
                     "name": f"{product.name} - {product.color or ''} - {ps.size}".strip(" -"),
                     "ean": ps.barcode or "",
                     "size": ps.size,
+                    "color": product.color or "",
                     "stock": ps.quantity,
                     "label": label,
                 }

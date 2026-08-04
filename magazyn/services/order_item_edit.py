@@ -77,8 +77,37 @@ def _order_has_consumed_stock(db, order_id: str) -> bool:
     return db.query(Sale.id).filter(Sale.order_id == order_id).first() is not None
 
 
-def list_variant_options(order_id: str, order_product_id: int) -> dict[str, Any]:
-    """Dostepne warianty (kolor/rozmiar) tej samej rodziny produktu."""
+SWAP_MODE_VARIANT = "wariant"
+SWAP_MODE_MODEL = "model"
+SWAP_MODES = frozenset({SWAP_MODE_VARIANT, SWAP_MODE_MODEL})
+
+
+def _normalize_swap_mode(mode: Optional[str]) -> str:
+    value = (mode or SWAP_MODE_VARIANT).strip().lower()
+    return value if value in SWAP_MODES else SWAP_MODE_VARIANT
+
+
+def _variant_option_dict(product: Product, ps: ProductSize, current_ps_id: int) -> dict[str, Any]:
+    return {
+        "product_size_id": ps.id,
+        "product_id": product.id,
+        "color": product.color or "",
+        "size": ps.size or "",
+        "quantity": ps.quantity or 0,
+        "barcode": ps.barcode or "",
+        "label": _format_variant_name(product, ps.size or ""),
+        "is_current": ps.id == current_ps_id,
+    }
+
+
+def list_variant_options(
+    order_id: str,
+    order_product_id: int,
+    *,
+    mode: str = SWAP_MODE_VARIANT,
+) -> dict[str, Any]:
+    """Dostepne opcje zamiany: wariant (rodzina) albo model (caly magazyn)."""
+    swap_mode = _normalize_swap_mode(mode)
     with get_session() as db:
         order = db.query(Order).filter(Order.order_id == order_id).first()
         if not order:
@@ -104,38 +133,46 @@ def list_variant_options(order_id: str, order_product_id: int) -> dict[str, Any]
             return {"ok": False, "error": "Brak produktu magazynowego"}
 
         current_product = current_ps.product
-        family = _product_family_key(current_product)
+        variants: list[dict[str, Any]] = []
 
-        if any(family):
-            siblings = (
-                db.query(Product)
-                .filter(
-                    Product.category == current_product.category,
-                    Product.brand == current_product.brand,
-                    Product.series == current_product.series,
-                )
+        if swap_mode == SWAP_MODE_MODEL:
+            rows = (
+                db.query(ProductSize, Product)
+                .join(Product, Product.id == ProductSize.product_id)
                 .all()
             )
+            for ps, product in rows:
+                variants.append(_variant_option_dict(product, ps, current_ps.id))
+            variants.sort(
+                key=lambda v: (
+                    v["label"].lower(),
+                    v["color"].lower(),
+                    v["size"],
+                )
+            )
         else:
-            siblings = [current_product]
+            family = _product_family_key(current_product)
+            if any(family):
+                siblings = (
+                    db.query(Product)
+                    .filter(
+                        Product.category == current_product.category,
+                        Product.brand == current_product.brand,
+                        Product.series == current_product.series,
+                    )
+                    .all()
+                )
+            else:
+                siblings = [current_product]
 
-        variants = []
-        for product in siblings:
-            for ps in product.sizes or []:
-                variants.append({
-                    "product_size_id": ps.id,
-                    "product_id": product.id,
-                    "color": product.color or "",
-                    "size": ps.size or "",
-                    "quantity": ps.quantity or 0,
-                    "barcode": ps.barcode or "",
-                    "label": _format_variant_name(product, ps.size or ""),
-                    "is_current": ps.id == current_ps.id,
-                })
+            for product in siblings:
+                for ps in product.sizes or []:
+                    variants.append(_variant_option_dict(product, ps, current_ps.id))
+            variants.sort(key=lambda v: (v["color"].lower(), v["size"]))
 
-        variants.sort(key=lambda v: (v["color"].lower(), v["size"]))
         return {
             "ok": True,
+            "mode": swap_mode,
             "order_product_id": op.id,
             "current": {
                 "product_size_id": current_ps.id,
@@ -157,8 +194,10 @@ def edit_order_item_variant(
     new_product_size_id: int,
     *,
     restore_previous_stock: bool = True,
+    mode: str = SWAP_MODE_VARIANT,
 ) -> OrderItemEditResult:
-    """Zamien kolor/rozmiar pozycji — bez zmiany ilosci/ceny/innego produktu."""
+    """Zamien pozycje: wariant (kolor/rozmiar) albo dowolny model z magazynu."""
+    swap_mode = _normalize_swap_mode(mode)
     old_name = ""
     new_name = ""
     need_consume = False
@@ -202,10 +241,10 @@ def edit_order_item_variant(
             return OrderItemEditResult("Wybrany wariant nie istnieje", "error")
         if new_ps.id == old_ps.id:
             return OrderItemEditResult("Wybrano ten sam wariant", "warning")
-        if not _same_family(old_ps.product, new_ps.product):
+        if swap_mode == SWAP_MODE_VARIANT and not _same_family(old_ps.product, new_ps.product):
             return OrderItemEditResult(
-                "Mozna zmienic tylko kolor/rozmiar w tej samej rodzinie produktu "
-                "(category/brand/series). Inny produkt — klient musi kupic nowe na Allegro.",
+                "W trybie wariant mozna zmienic tylko kolor/rozmiar w tej samej rodzinie "
+                "(category/brand/series). Wybierz tryb model, aby zamienic na inny produkt.",
                 "error",
             )
 
@@ -225,6 +264,7 @@ def edit_order_item_variant(
         op.name = new_name
         order.items_locally_edited = True
 
+        change_label = "Zmiana modelu" if swap_mode == SWAP_MODE_MODEL else "Zmiana wariantu"
         add_order_status(
             db,
             order_id,
@@ -232,7 +272,7 @@ def edit_order_item_variant(
             skip_if_same=False,
             allow_backwards=True,
             send_email=False,
-            notes=f"Zmiana wariantu: {old_name} → {new_name}",
+            notes=f"{change_label}: {old_name} → {new_name}",
         )
 
         if stock_was_consumed:
@@ -284,13 +324,14 @@ def edit_order_item_variant(
         logger.error("Blad korekty wariantu dla %s: %s", order_id, exc)
         correction_errors = [str(exc)]
 
-    parts = [f"Zmieniono wariant: {old_name} → {new_name}"]
+    change_word = "model" if swap_mode == SWAP_MODE_MODEL else "wariant"
+    parts = [f"Zmieniono {change_word}: {old_name} → {new_name}"]
     if did_restore:
-        parts.append("przywrócono poprzedni wariant do magazynu")
+        parts.append("przywrócono poprzedni produkt do magazynu")
     elif not restore_previous_stock:
-        parts.append("poprzedni wariant NIE wrócił do magazynu")
+        parts.append("poprzedni produkt NIE wrócił do magazynu")
     if need_consume:
-        parts.append("odjęto nowy wariant od stanu")
+        parts.append("odjęto nowy produkt od stanu")
     if correction_number:
         parts.append(f"korekta: {correction_number}")
     elif correction_errors:
@@ -302,6 +343,7 @@ def edit_order_item_variant(
         details={
             "old_name": old_name,
             "new_name": new_name,
+            "mode": swap_mode,
             "restored_previous": did_restore,
             "consumed_new": need_consume,
             "stock_was_consumed": stock_was_consumed,
@@ -313,6 +355,9 @@ def edit_order_item_variant(
 
 __all__ = [
     "EDIT_BLOCKED_STATUSES",
+    "SWAP_MODE_MODEL",
+    "SWAP_MODE_VARIANT",
+    "SWAP_MODES",
     "OrderItemEditResult",
     "can_edit_order_items",
     "edit_order_item_variant",
