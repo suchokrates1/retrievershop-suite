@@ -134,6 +134,35 @@ def test_settings_reload_updates_print_agent(app_mod, client, login, monkeypatch
     cfg.settings = app_mod.label_agent.settings
 
 
+def test_cups_watchdog_settings_on_page_and_reload_printer(app_mod, client, login):
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Timeout joba CUPS" in html
+    assert "Próby druku CUPS" in html
+    assert 'name="CUPS_JOB_TIMEOUT_SECONDS"' in html
+    assert 'name="CUPS_PRINT_MAX_ATTEMPTS"' in html
+
+    values = app_mod.load_settings(include_hidden=True)
+    from magazyn.sales import _sales_keys
+
+    for skey in _sales_keys(values):
+        values.pop(skey, None)
+    values["QUIET_HOURS_START"] = "10:00"
+    values["QUIET_HOURS_END"] = "22:00"
+    values["CUPS_JOB_TIMEOUT_SECONDS"] = "90"
+    values["CUPS_PRINT_MAX_ATTEMPTS"] = "3"
+    values["CUPS_JOB_POLL_INTERVAL_SECONDS"] = "1"
+    resp = client.post("/settings", data=values)
+    assert resp.status_code == 302
+
+    stored = settings_store.as_ordered_dict()
+    assert stored["CUPS_JOB_TIMEOUT_SECONDS"] == "90"
+    assert stored["CUPS_PRINT_MAX_ATTEMPTS"] == "3"
+    assert app_mod.label_agent.printer.job_timeout_seconds == 90.0
+    assert app_mod.label_agent.printer.max_attempts == 3
+
+
 def test_extra_keys_display_and_save(app_mod, client, login, monkeypatch):
     settings_store.update({"EXTRA_KEY": "foo"})
 

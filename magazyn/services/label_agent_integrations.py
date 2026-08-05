@@ -161,8 +161,10 @@ def get_label(agent, courier_code: str, package_id: str) -> Tuple[str, str]:
 
 def print_label(agent, base64_data: str, extension: str, order_id: str, *, labels_total, errors_total) -> None:
     try:
+        # CupsPrinter czeka na zakończenie joba CUPS; przy hangu: cancel +
+        # disable/enable + jeden auto-retry (patrz CUPS_JOB_TIMEOUT_SECONDS).
         agent.printer.print_label_base64(base64_data, extension)
-        agent.logger.info("Label printed")
+        agent.logger.info("Label printed (CUPS job completed) order_id=%s", order_id)
         labels_total.inc()
     except PrintCommandError as exc:
         errors_total.labels(stage="print").inc()

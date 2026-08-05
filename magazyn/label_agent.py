@@ -93,7 +93,7 @@ class LabelAgent:
             now=lambda: datetime.now(),
             handle_readonly_error=self._handle_readonly_error,
         )
-        self.printer = CupsPrinter(
+        self.printer = CupsPrinter.from_env(
             printer_name=config.printer_name,
             cups_server=config.cups_server,
             cups_port=config.cups_port,
@@ -155,6 +155,11 @@ class LabelAgent:
         """Reload configuration from ``.env`` and update the agent state."""
         self.settings = load_config()
         self.config = AgentConfig.from_settings(self.settings)
+        self.printer = CupsPrinter.from_env(
+            printer_name=self.config.printer_name,
+            cups_server=self.config.cups_server,
+            cups_port=self.config.cups_port,
+        )
         self._configure_logging()
         self._configure_db_engine()
 
