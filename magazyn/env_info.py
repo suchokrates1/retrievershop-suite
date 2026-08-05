@@ -10,6 +10,18 @@ ENV_INFO = {
     "PRINTER_NAME": ("Nazwa drukarki", "Nazwa używanej drukarki CUPS"),
     "CUPS_SERVER": ("Serwer CUPS", "Nazwa hosta zdalnego serwera CUPS"),
     "CUPS_PORT": ("Port CUPS", "Port zdalnego serwera CUPS"),
+    "CUPS_JOB_TIMEOUT_SECONDS": (
+        "Timeout joba CUPS (s)",
+        "Po tylu sekundach bez zakończenia: cancel + restart kolejki + retry",
+    ),
+    "CUPS_JOB_POLL_INTERVAL_SECONDS": (
+        "Interwał poll joba CUPS (s)",
+        "Jak często sprawdzać czy job CUPS się zakończył",
+    ),
+    "CUPS_PRINT_MAX_ATTEMPTS": (
+        "Próby druku CUPS",
+        "Liczba prób wydruku (1 = bez retry, 2 = jeden auto-reprint po hangu)",
+    ),
     "POLL_INTERVAL": (
         "Interwał sprawdzania",
         "Liczba sekund między sprawdzeniami zamówień",

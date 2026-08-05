@@ -128,6 +128,9 @@ class SettingsStore:
             "SENDER_ZIPCODE": "59-220",
             "SENDER_EMAIL": "kontakt@retrievershop.pl",
             "SENDER_PHONE": "782865895",
+            "CUPS_JOB_TIMEOUT_SECONDS": "120",
+            "CUPS_JOB_POLL_INTERVAL_SECONDS": "2",
+            "CUPS_PRINT_MAX_ATTEMPTS": "2",
         }
         for key, fallback in _HARD_DEFAULTS.items():
             if not defaults.get(key):  # override if missing OR empty string
