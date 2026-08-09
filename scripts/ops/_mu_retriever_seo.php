@@ -102,3 +102,16 @@ add_filter('aioseo_twitter_tags', function ($tags) use ($rs_seo_social_image) {
     }
     return $rs_seo_social_image($tags, ['twitter:image', 'twitter:image:src']);
 }, 50);
+
+/**
+ * Keep commerce / noindex pages out of AIOSEO sitemaps (GSC page-sitemap warnings).
+ * IDs managed via option rs_aioseo_sitemap_exclude_pages.
+ */
+add_filter('aioseo_sitemap_exclude_posts', static function ($ids) {
+    $extra = get_option('rs_aioseo_sitemap_exclude_pages', []);
+    if (!is_array($extra)) {
+        return $ids;
+    }
+    $ids = is_array($ids) ? $ids : [];
+    return array_values(array_unique(array_merge($ids, array_map('intval', $extra))));
+}, 20);
