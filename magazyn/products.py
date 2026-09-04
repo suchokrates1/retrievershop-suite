@@ -25,7 +25,7 @@ from .domain.inventory import (
     record_delivery,
     update_quantity as inventory_update_quantity,
 )
-from .domain.invoice_import import _parse_pdf, import_invoice_rows
+from .domain.invoice_import import _parse_pdf
 from .domain.products import (
     _to_decimal,
     _to_int,
@@ -38,6 +38,7 @@ from .forms import AddItemForm, ProductEditForm
 from .auth import login_required
 from .constants import ALL_SIZES
 from .models.products import ProductSize
+from .services.invoice_confirm import confirm_invoice_submission
 from .services.invoice_matching import match_invoice_rows
 from .services.product_detail import (
     build_product_detail_context,
@@ -337,72 +338,7 @@ def invoice_pdf():
 @bp.route("/confirm_invoice", methods=["POST"])
 @login_required
 def confirm_invoice():
-    rows = session.get("invoice_rows") or []
-    invoice_number = session.get("invoice_number")
-    supplier = session.get("invoice_supplier")
-    delivery_date = session.get("invoice_delivery_date")
-    confirmed = []
-    for idx, base in enumerate(rows):
-        if not request.form.get(f"accept_{idx}"):
-            continue
-        ps_id = request.form.get(f"ps_id_{idx}")
-        qty_val = request.form.get(f"quantity_{idx}", base.get("Ilość"))
-        price_val = request.form.get(f"price_{idx}", base.get("Cena"))
-        barcode_val = request.form.get(f"barcode_{idx}", base.get("Barcode"))
-        if ps_id:
-            with get_session() as db:
-                ps = (
-                    db.query(ProductSize)
-                    .filter_by(id=int(ps_id))
-                    .first()
-                )
-                if ps:
-                    record_purchase(
-                        ps.product_id,
-                        ps.size,
-                        _to_int(qty_val),
-                        _to_decimal(price_val),
-                        barcode=barcode_val,
-                        invoice_number=invoice_number,
-                        supplier=supplier,
-                        purchase_date=delivery_date,
-                    )
-            continue
-        confirmed.append(
-            {
-                "Nazwa": request.form.get(f"name_{idx}", base.get("Nazwa")),
-                "Kolor": request.form.get(f"color_{idx}", base.get("Kolor")),
-                "Rozmiar": request.form.get(
-                    f"size_{idx}", base.get("Rozmiar")
-                ),
-                "Ilość": qty_val,
-                "Cena": price_val,
-                "Barcode": request.form.get(
-                    f"barcode_{idx}", base.get("Barcode")
-                ),
-            }
-        )
-    if confirmed:
-        try:
-            import_invoice_rows(
-                confirmed,
-                invoice_number=invoice_number,
-                supplier=supplier,
-                delivery_date=delivery_date,
-            )
-            flash("Zaimportowano fakture", "success")
-        except Exception as exc:
-            logger.exception("Blad podczas potwierdzania faktury")
-            flash(f"Blad podczas importu faktury: {exc}", "error")
-    pdf_path = session.pop("invoice_pdf", None)
-    if pdf_path:
-        try:
-            os.remove(pdf_path)
-        except OSError:
-            pass
-    session.pop("invoice_rows", None)
-    session.pop("invoice_number", None)
-    session.pop("invoice_supplier", None)
+    confirm_invoice_submission(request.form)
     return redirect(url_for("products.items"))
 
 
