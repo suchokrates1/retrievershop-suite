@@ -305,6 +305,63 @@ def test_confirm_invoice_updates_existing(app_mod, client, login, tmp_path):
         assert batch[0] == 2
 
 
+def test_confirm_invoice_fills_empty_barcode_on_matched_size(app_mod, client, login, tmp_path):
+    with app_mod.get_session() as db:
+        prod = Product(name="ExistingNoEan", color="Red")
+        db.add(prod)
+        db.flush()
+        ps = ProductSize(product_id=prod.id, size="M", quantity=1, barcode=None)
+        db.add(ps)
+        db.flush()
+        ps_id = ps.id
+        product_id = prod.id
+
+    df = pd.DataFrame(
+        [
+            {
+                "Nazwa": "ExistingNoEan",
+                "Kolor": "Red",
+                "Rozmiar": "M",
+                "Ilość": 1,
+                "Cena": 120.83,
+                "Barcode": "6970117176285",
+            }
+        ]
+    )
+    file_path = tmp_path / "inv_ean.xlsx"
+    df.to_excel(file_path, index=False)
+
+    with open(file_path, "rb") as f:
+        data = {"file": (f, "inv.xlsx")}
+        resp = client.post(
+            "/import_invoice", data=data, content_type="multipart/form-data"
+        )
+    assert resp.status_code == 200
+
+    confirm = {
+        "name_0": "ExistingNoEan",
+        "color_0": "Red",
+        "size_0": "M",
+        "quantity_0": "1",
+        "price_0": "120.83",
+        "barcode_0": "6970117176285",
+        "ps_id_0": str(ps_id),
+        "accept_0": "y",
+    }
+    resp = client.post("/confirm_invoice", data=confirm)
+    assert resp.status_code == 302
+
+    with app_mod.get_session() as db:
+        ps = db.query(ProductSize).filter_by(id=ps_id).first()
+        assert ps.barcode == "6970117176285"
+        batch = (
+            db.query(PurchaseBatch)
+            .filter_by(product_id=product_id, size="M")
+            .one()
+        )
+        assert batch.barcode == "6970117176285"
+
+
 def test_import_invoice_alias_matches_existing(app_mod, client, login, tmp_path):
     with app_mod.get_session() as db:
         # Create product with new structure (category, brand, series)

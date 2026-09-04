@@ -348,6 +348,7 @@ def confirm_invoice():
         ps_id = request.form.get(f"ps_id_{idx}")
         qty_val = request.form.get(f"quantity_{idx}", base.get("Ilość"))
         price_val = request.form.get(f"price_{idx}", base.get("Cena"))
+        barcode_val = request.form.get(f"barcode_{idx}", base.get("Barcode"))
         if ps_id:
             with get_session() as db:
                 ps = (
@@ -361,8 +362,10 @@ def confirm_invoice():
                         ps.size,
                         _to_int(qty_val),
                         _to_decimal(price_val),
+                        barcode=barcode_val,
                         invoice_number=invoice_number,
                         supplier=supplier,
+                        purchase_date=delivery_date,
                     )
             continue
         confirmed.append(
