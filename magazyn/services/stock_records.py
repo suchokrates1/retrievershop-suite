@@ -11,10 +11,13 @@ jako dziennik dostaw (historia/raporty), nie do wyceny.
 from __future__ import annotations
 
 import datetime
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from ..models.products import Product, ProductSize, PurchaseBatch, Sale
+
+logger = logging.getLogger(__name__)
 
 
 def record_purchase(
@@ -53,6 +56,21 @@ def record_purchase(
             product_size.quantity += quantity
             current_value = Decimal(str(product_size.stock_value or 0))
             product_size.stock_value = current_value + Decimal(quantity) * price
+            if barcode and not product_size.barcode:
+                taken = (
+                    session.query(ProductSize.id)
+                    .filter(ProductSize.barcode == str(barcode))
+                    .first()
+                )
+                if taken:
+                    logger.warning(
+                        "Nie wpisano EAN %s na product_size=%s — kod jest juz na id=%s",
+                        barcode,
+                        product_size.id,
+                        taken.id,
+                    )
+                else:
+                    product_size.barcode = str(barcode)
             size_id = product_size.id
             new_qty = product_size.quantity
             woo_vid = product_size.woo_variation_id
