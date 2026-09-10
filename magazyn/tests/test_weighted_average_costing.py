@@ -98,6 +98,34 @@ class TestSaleCostsAtAverage:
             assert ps.quantity == 0
             assert ps.stock_value == Decimal("0.00")
 
+    def test_oversell_after_zero_stock_uses_last_batch_price(self, app_mod):
+        """Stan 0 zeruje stock_value, ale cena z ostatniej dostawy nadal istnieje."""
+        with app_mod.get_session() as db:
+            pid, ps_id = _make_size(db)
+            _make_order(db, "order-oversell", ps_id)
+
+        app_mod.record_purchase(pid, "M", 1, 134.33)
+        app_mod.consume_stock(pid, "M", 1, sale_price=199)
+
+        consumed = app_mod.consume_stock(
+            pid, "M", 1, sale_price=199, order_id="order-oversell"
+        )
+        assert consumed == 0
+
+        with app_mod.get_session() as db:
+            sale = db.query(Sale).filter_by(order_id="order-oversell").one()
+            assert sale.purchase_cost == Decimal("134.33")
+            ps = db.query(ProductSize).filter_by(product_id=pid, size="M").one()
+            assert ps.quantity == 0
+            assert ps.stock_value == Decimal("0.00")
+
+            calc = FinancialCalculator(db, settings_store=None)
+            cost, is_actual = calc.get_purchase_cost_for_order(
+                "order-oversell", with_source=True
+            )
+            assert cost == Decimal("134.33")
+            assert is_actual is True
+
 
 class TestReturnRecomputesAverage:
     def test_scenario_three_units_sell_deliver_return(self, app_mod):
@@ -179,6 +207,31 @@ class TestPurchaseCostForOrder:
 
         assert is_actual is True
         assert cost == Decimal("12.00")
+
+    def test_zero_sale_cost_falls_back_to_last_batch(self, app_mod):
+        """Historyczny Sale.purchase_cost=0 nie przeslania znanej ceny dostawy."""
+        with app_mod.get_session() as db:
+            pid, ps_id = _make_size(db)
+            _make_order(db, "order-zero", ps_id)
+
+        app_mod.record_purchase(pid, "M", 1, 134.33)
+        app_mod.consume_stock(pid, "M", 1, sale_price=199, order_id="order-zero")
+
+        with app_mod.get_session() as db:
+            sale = db.query(Sale).filter_by(order_id="order-zero").one()
+            sale.purchase_cost = Decimal("0.00")
+            ps = db.query(ProductSize).filter_by(product_id=pid, size="M").one()
+            ps.quantity = 0
+            ps.stock_value = Decimal("0.00")
+
+        with app_mod.get_session() as db:
+            calc = FinancialCalculator(db, settings_store=None)
+            cost, is_actual = calc.get_purchase_cost_for_order(
+                "order-zero", with_source=True
+            )
+
+        assert cost == Decimal("134.33")
+        assert is_actual is False
 
 
 class TestManualAdjust:

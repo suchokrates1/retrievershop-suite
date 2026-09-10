@@ -161,14 +161,16 @@ class FinancialCalculator:
             avg = Decimal(str(product_size.stock_value)) / Decimal(product_size.quantity)
             return avg * quantity
 
-        # Fallback: brak stanu/wartosci -> ostatnia znana cena dostawy.
+        # Fallback: brak stanu/wartosci (quantity=0 zeruje stock_value) ->
+        # ostatnia znana cena dostawy, nawet gdy na stanie nic nie zostalo.
         latest_batch = (
             self.db.query(PurchaseBatch)
             .filter(
                 PurchaseBatch.product_id == product_id,
-                PurchaseBatch.size == size
+                PurchaseBatch.size == size,
+                PurchaseBatch.price > 0,
             )
-            .order_by(desc(PurchaseBatch.purchase_date))
+            .order_by(desc(PurchaseBatch.purchase_date), desc(PurchaseBatch.id))
             .first()
         )
 
@@ -224,7 +226,11 @@ class FinancialCalculator:
             .group_by(Sale.product_id, Sale.size)
             .all()
         ):
-            actual_by_key[(product_id, size)] = Decimal(str(cost_sum or 0))
+            cost = Decimal(str(cost_sum or 0))
+            # Sale.purchase_cost=0 znaczy "nie wyceniono" (np. sprzedaz przy
+            # zerowym stanie bez fallbacku), nie prawdziwy koszt 0 zl.
+            if cost > 0:
+                actual_by_key[(product_id, size)] = cost
 
         total_cost = Decimal("0")
         is_fully_actual = bool(actual_by_key) or not order_products

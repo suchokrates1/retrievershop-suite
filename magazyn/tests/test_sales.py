@@ -70,7 +70,27 @@ def test_consume_stock_records_sale_without_inventory(app_mod):
         sale = db.query(Sale).first()
         assert sale.product_id == pid
         assert sale.quantity == 2
+        # Brak dostawy i braku stock_value -> nadal 0.
         assert sale.purchase_cost == Decimal("0.00")
+
+
+def test_consume_stock_without_inventory_uses_last_batch_price(app_mod):
+    with app_mod.get_session() as db:
+        prod = Product(name="GhostPriced", color="")
+        db.add(prod)
+        db.flush()
+        db.add(ProductSize(product_id=prod.id, size="M", quantity=0))
+        pid = prod.id
+
+    app_mod.record_purchase(pid, "M", 1, 134.33)
+    app_mod.consume_stock(pid, "M", 1, sale_price=199)
+    consumed = app_mod.consume_stock(pid, "M", 1, sale_price=199)
+
+    assert consumed == 0
+    with app_mod.get_session() as db:
+        sales = db.query(Sale).filter_by(product_id=pid).order_by(Sale.id).all()
+        assert len(sales) == 2
+        assert sales[1].purchase_cost == Decimal("134.33")
 
 
 def test_sales_page_shows_unknown_for_unmatched_order(app_mod, client, login):

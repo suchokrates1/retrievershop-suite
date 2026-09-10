@@ -148,6 +148,33 @@ class TestPurchaseCostForOrder:
         assert total == Decimal("18.50")
         assert is_actual is True
 
+    def test_zero_actual_sale_cost_falls_back_to_estimate(self):
+        """Sale.purchase_cost=0 nie jest traktowane jako rzeczywisty koszt."""
+        op1 = MagicMock()
+        op1.product_size = MagicMock()
+        op1.product_size.product = MagicMock()
+        op1.product_size.product_id = 1
+        op1.product_size.size = "L"
+        op1.quantity = 1
+        op1.auction_id = None
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [op1]
+        db.query.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            (1, "L", Decimal("0.00")),
+        ]
+
+        calc = FinancialCalculator(db, settings_store=None)
+        with patch.object(calc, "get_purchase_cost_for_product") as mock_cost:
+            mock_cost.return_value = Decimal("134.33")
+            total, is_actual = calc.get_purchase_cost_for_order(
+                "order-zero-stock", with_source=True
+            )
+
+        mock_cost.assert_called_once_with(1, "L", 1)
+        assert total == Decimal("134.33")
+        assert is_actual is False
+
 
 class TestCalculateOrderProfit:
     """Testy pelnej kalkulacji zysku."""

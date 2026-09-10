@@ -15,9 +15,45 @@ import logging
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
+from sqlalchemy import desc
+
 from ..models.products import Product, ProductSize, PurchaseBatch, Sale
 
 logger = logging.getLogger(__name__)
+
+
+def last_known_unit_cost(session, product_id, size) -> Optional[Decimal]:
+    """Ostatnia znana cena zakupu sztuki, gdy magazyn nie ma juz ``stock_value``.
+
+    Preferuje najnowsza dostawe (``PurchaseBatch``). Gdy jej brak, bierze
+    ostatnia sprzedaz z niezerowym ``purchase_cost``.
+    """
+    latest_batch = (
+        session.query(PurchaseBatch)
+        .filter(
+            PurchaseBatch.product_id == product_id,
+            PurchaseBatch.size == size,
+            PurchaseBatch.price > 0,
+        )
+        .order_by(desc(PurchaseBatch.purchase_date), desc(PurchaseBatch.id))
+        .first()
+    )
+    if latest_batch:
+        return Decimal(str(latest_batch.price))
+
+    last_sale = (
+        session.query(Sale)
+        .filter(
+            Sale.product_id == product_id,
+            Sale.size == size,
+            Sale.purchase_cost > 0,
+        )
+        .order_by(desc(Sale.id))
+        .first()
+    )
+    if last_sale and last_sale.quantity:
+        return Decimal(str(last_sale.purchase_cost)) / Decimal(last_sale.quantity)
+    return None
 
 
 def record_purchase(
@@ -143,7 +179,9 @@ def consume_stock(
 
     Koszt zakupu sprzedanych sztuk = proporcjonalny udzial ``stock_value``
     (``stock_value * consumed / available``). Zdjecie calego stanu zeruje
-    ``stock_value``. ``order_id`` (jesli podany) laczy sprzedaz z zamowieniem.
+    ``stock_value``. Gdy stanu brak (albo wartosc=0), koszt bierze sie z
+    ostatniej znanej ceny dostawy zamiast 0. ``order_id`` (jesli podany)
+    laczy sprzedaz z zamowieniem.
     """
     with session_factory() as session:
         sale_price = decimal_converter(sale_price)
@@ -193,6 +231,24 @@ def consume_stock(
                 consumed,
             )
 
+        # Gdy nie ma stanu (albo stock_value=0), AVCO nic nie wyceni.
+        # Nadal znamy ostatnia cene dostawy - uzyj jej dla nieobliczonych sztuk,
+        # zeby zamowienie i zwrot mialy koszt, a nie 0.
+        unpriced_qty = quantity if purchase_cost <= 0 else quantity - consumed
+        if unpriced_qty > 0:
+            unit = last_known_unit_cost(session, product_id, size)
+            if unit is not None:
+                purchase_cost += unit * Decimal(unpriced_qty)
+                log.info(
+                    "Fallback purchase cost from last known price: product_id=%s size=%s "
+                    "unit=%s qty=%s available=%s",
+                    product_id,
+                    size,
+                    unit,
+                    unpriced_qty,
+                    available,
+                )
+
         record_sale(
             session,
             product_id,
@@ -241,4 +297,4 @@ def _log_consumed_stock(session, product_id, size, consumed: int, log) -> None:
     log.info("Pobrano z magazynu: %s %s x%s", name, size, consumed)
 
 
-__all__ = ["consume_stock", "record_purchase", "record_sale"]
+__all__ = ["consume_stock", "last_known_unit_cost", "record_purchase", "record_sale"]
