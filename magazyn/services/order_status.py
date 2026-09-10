@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Optional
 
 from sqlalchemy import desc
@@ -165,4 +165,22 @@ def add_order_status(
     return log
 
 
-__all__ = ["add_order_status", "dispatch_status_email"]
+def latest_statuses_map(db, order_ids: Sequence[str]) -> dict[str, str]:
+    """Najnowszy status kazdego zamowienia (timestamp DESC, id DESC)."""
+    if not order_ids:
+        return {}
+
+    logs = (
+        db.query(OrderStatusLog)
+        .filter(OrderStatusLog.order_id.in_(list(order_ids)))
+        .order_by(desc(OrderStatusLog.timestamp), desc(OrderStatusLog.id))
+        .all()
+    )
+    latest: dict[str, str] = {}
+    for log in logs:
+        if log.order_id not in latest:
+            latest[log.order_id] = log.status
+    return latest
+
+
+__all__ = ["add_order_status", "dispatch_status_email", "latest_statuses_map"]

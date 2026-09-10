@@ -124,6 +124,45 @@ def test_stats_overview_validates_granularity(client, login):
     assert payload["errors"][0]["code"] == "INVALID_GRANULARITY"
 
 
+def test_stats_overview_excludes_cancelled_orders(client, app, login):
+    from magazyn import stats as stats_module
+
+    stats_module._FAST_CACHE.clear()
+    _seed_order(app, "ord_stats_kept", payment_done=100.0)
+    _seed_order(app, "ord_stats_cancelled", payment_done=443.0)
+    _seed_status_log(app, "ord_stats_cancelled", "pobrano", datetime.now() - timedelta(minutes=5))
+    _seed_status_log(app, "ord_stats_cancelled", "anulowano", datetime.now())
+
+    response = client.get("/api/stats/overview")
+    assert response.status_code == 200
+    kpi = response.get_json()["data"]["kpi"]
+    assert kpi["orders_count"]["value"] == 1
+    assert kpi["revenue_gross"]["value"] == 100.0
+    assert kpi["items_sold"]["value"] == 2
+
+
+def test_period_summary_excludes_cancelled_orders(app):
+    from magazyn.domain.financial import FinancialCalculator
+    from magazyn.settings_store import settings_store
+
+    _seed_order(app, "ord_fin_kept", payment_done=100.0)
+    _seed_order(app, "ord_fin_cancelled", payment_done=443.0)
+    _seed_status_log(app, "ord_fin_cancelled", "anulowano", datetime.now())
+
+    now_ts = int(datetime.now().timestamp()) + 10
+    start_ts = now_ts - 86400
+    with app.app_context():
+        with get_session() as db:
+            summary = FinancialCalculator(db, settings_store).get_period_summary(
+                start_ts,
+                now_ts,
+                include_fixed_costs=False,
+            )
+            assert summary.orders_count == 1
+            assert summary.products_sold == 2
+            assert float(summary.total_revenue) == 100.0
+
+
 def test_stats_overview_handles_cod_revenue(client, app, login):
     _seed_order(app, "ord_stats_cod", payment_done=0.0, cod=True)
 

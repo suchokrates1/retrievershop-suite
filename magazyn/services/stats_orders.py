@@ -9,6 +9,8 @@ from typing import Any
 from sqlalchemy import func
 
 from ..models.orders import Order, OrderProduct
+from ..status_config import STATS_EXCLUDED_STATUSES
+from .order_status import latest_statuses_map
 from .stats_support import StatsFilters, to_ts
 
 
@@ -56,12 +58,25 @@ def filter_orders_by_payment(orders: list[Order], payment_type: str) -> list[Ord
     return [order for order in orders if not is_cod(order)]
 
 
+def exclude_cancelled_orders(db: Any, orders: list[Order]) -> list[Order]:
+    """Pomin zamowienia w statusie anulowano (nie licza sie do statystyk)."""
+    if not orders:
+        return orders
+    latest = latest_statuses_map(db, [order.order_id for order in orders])
+    return [
+        order
+        for order in orders
+        if latest.get(order.order_id) not in STATS_EXCLUDED_STATUSES
+    ]
+
+
 def fetch_orders(db: Any, filters: StatsFilters, start_ts: int, end_ts: int) -> list[Order]:
     query = db.query(Order).filter(Order.date_add >= start_ts, Order.date_add < end_ts)
     if filters.platform != "all":
         query = query.filter(Order.platform == filters.platform)
     orders = query.all()
-    return filter_orders_by_payment(orders, filters.payment_type)
+    orders = filter_orders_by_payment(orders, filters.payment_type)
+    return exclude_cancelled_orders(db, orders)
 
 
 def bucket_key(ts: int, granularity: str) -> str:
@@ -85,6 +100,7 @@ def period_offsets(filters: StatsFilters) -> tuple[int, int, int, int]:
 
 __all__ = [
     "bucket_key",
+    "exclude_cancelled_orders",
     "fetch_orders",
     "filter_orders_by_payment",
     "is_cod",

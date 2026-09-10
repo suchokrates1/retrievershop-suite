@@ -778,6 +778,8 @@ class FinancialCalculator:
         from ..models.orders import Order, OrderProduct
         from ..models.returns import Return
         from ..models.settings import FixedCost
+        from ..services.order_status import latest_statuses_map
+        from ..status_config import STATS_EXCLUDED_STATUSES
         from sqlalchemy import func, select
 
         total_started_at = time.perf_counter()
@@ -807,21 +809,22 @@ class FinancialCalculator:
                 Order.payment_method_cod.is_(True),
             )
         ).all()
+        latest_statuses = latest_statuses_map(self.db, [order.order_id for order in orders])
+        orders = [
+            order
+            for order in orders
+            if latest_statuses.get(order.order_id) not in STATS_EXCLUDED_STATUSES
+        ]
         orders_query_ms = (time.perf_counter() - orders_query_started_at) * 1000
 
-        # Zlicz produkty
+        # Zlicz produkty tych samych zamowien (bez anulowanych / zwrotow completed)
         products_query_started_at = time.perf_counter()
-        products_sold = self.db.query(func.sum(OrderProduct.quantity)).join(
-            Order, Order.order_id == OrderProduct.order_id
-        ).filter(
-            Order.date_add >= start_timestamp,
-            Order.date_add < end_timestamp,
-        ).filter(
-            db_or(
-                Order.payment_done > 0,
-                Order.payment_method_cod.is_(True),
-            )
-        ).scalar() or 0
+        if orders:
+            products_sold = self.db.query(func.sum(OrderProduct.quantity)).filter(
+                OrderProduct.order_id.in_([order.order_id for order in orders])
+            ).scalar() or 0
+        else:
+            products_sold = 0
         products_query_ms = (time.perf_counter() - products_query_started_at) * 1000
 
         # Zwroty zakonczone w tym okresie (wg updated_at - kiedy status zmieniono na completed)
