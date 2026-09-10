@@ -375,6 +375,8 @@ def send_invoice_correction(
     pdf_data: bytes | None = None,
     pdf_filename: str | None = None,
     invoice_number: str = "",
+    *,
+    is_unclaimed: bool = False,
 ) -> DeliveryResult:
     """Wyslij email z korekta faktury (odpowiednik automatyzacji BL 90895)."""
     email = order.email
@@ -385,6 +387,7 @@ def send_invoice_correction(
     ctx["reason"] = reason
     ctx["refund_amount"] = refund_amount
     ctx["invoice_number"] = invoice_number
+    ctx["is_unclaimed"] = is_unclaimed
 
     html = render_template("emails/invoice_correction.html", **ctx)
     text = _render_message_text("invoice_correction.txt", **ctx)

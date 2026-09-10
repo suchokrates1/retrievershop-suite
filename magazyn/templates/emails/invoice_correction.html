@@ -17,7 +17,12 @@
             <tr>
                 <td style="padding:20px;text-align:center;">
                     <h1 style="color:#333333;">Szanowny Kliencie!</h1>
+                    {% if is_unclaimed %}
+                    <p style="color:#666666;">Przesylamy w zalaczniku korekte faktury nr&nbsp;{{ invoice_number }}, poniewaz przesylka nie zostala odebrana i wrocila do nadawcy.</p>
+                    {% if not refund_amount %}<p style="color:#666666;">Przy platnosci za pobraniem wplata nie nastapila, wiec nie ma zwrotu srodkow.</p>{% endif %}
+                    {% else %}
                     <p style="color:#666666;">Przesylamy w zalaczniku korekte faktury nr&nbsp;{{ invoice_number }} w zwiazku ze zwrotem Panstwa zamowienia. Bede ogromnie wdzieczna jezeli w odpowiedzi napisza Panstwo co spowodowalo taka decyzje. Pozwoli to ulepszyc moja dzialalnosc i oferowac produkty jak najlepszej jakosci.</p>
+                    {% endif %}
                     {% if reason %}<p style="color:#666666;"><b>Powod:</b> {{ reason }}</p>{% endif %}
                     {% if refund_amount %}<p style="color:#666666;"><b>Kwota zwrotu:</b> {{ '%.2f'|format(refund_amount) }} zl</p>{% endif %}
                 </td>

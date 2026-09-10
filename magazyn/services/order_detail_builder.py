@@ -350,6 +350,15 @@ class OrderDetailBuilder:
                 or never_shipped
             )
         )
+        order = self.db.query(Order).filter(Order.order_id == order_id).first()
+        is_cod = bool(
+            order
+            and (
+                order.payment_method_cod
+                or "pobranie" in (order.payment_method or "").lower()
+            )
+        )
+        skip_money_refund = is_cod and active_return.status == "not_collected"
         
         return_info = {
             "id": active_return.id,
@@ -364,6 +373,7 @@ class OrderDetailBuilder:
             "messenger_notified": active_return.messenger_notified,
             "stock_restored": active_return.stock_restored,
             "refund_processed": active_return.refund_processed,
+            "skip_money_refund": skip_money_refund,
             "notes": active_return.notes,
             "created_at": active_return.created_at,
             "updated_at": active_return.updated_at,

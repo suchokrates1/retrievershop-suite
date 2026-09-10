@@ -22,6 +22,10 @@ from .return_core import expire_stale_returns
 from .return_notifications import send_return_notification
 from .return_stock import process_delivered_returns
 from .return_woo import check_woo_customer_returns
+from .return_corrections import (
+    process_not_collected_corrections,
+    promote_unclaimed_orders_to_zwrot,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,8 @@ def sync_returns() -> Dict[str, Any]:
         "notifications": send_pending_return_notifications(log=logger),
         "status_updates": check_and_update_return_statuses(log=logger),
         "stock_restoration": process_delivered_returns(log=logger),
+        "unclaimed_to_zwrot": promote_unclaimed_orders_to_zwrot(log=logger),
+        "not_collected_corrections": process_not_collected_corrections(log=logger),
         "expired": expire_stale_returns(log=logger),
     }
 
@@ -73,6 +79,8 @@ __all__ = [
     "send_pending_return_notifications",
     "check_and_update_return_statuses",
     "process_delivered_returns",
+    "process_not_collected_corrections",
+    "promote_unclaimed_orders_to_zwrot",
     "expire_stale_returns",
     "_map_carrier_to_allegro",
     "send_return_notification",

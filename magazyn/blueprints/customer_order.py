@@ -12,6 +12,7 @@ from flask import Blueprint, render_template, abort, Response
 
 from ..db import get_session
 from ..models.orders import Order, OrderStatusLog
+from ..models.returns import Return
 from ..services.tracking import get_tracking_url
 from ..status_config import (
     CUSTOMER_STATUS_DISPLAY as CUSTOMER_STATUS_MAP_CONFIG,
@@ -98,8 +99,17 @@ def customer_order_page(token):
 
         # Status
         current_status = _get_current_status(order)
+        unclaimed_return = (
+            db.query(Return)
+            .filter(
+                Return.order_id == order.order_id,
+                Return.status == "not_collected",
+            )
+            .first()
+        )
+        status_key = "nieodebrano" if unclaimed_return else current_status
         status_info = CUSTOMER_STATUS_MAP.get(
-            current_status, ("W realizacji", "info", "bi-hourglass-split")
+            status_key, ("W realizacji", "info", "bi-hourglass-split")
         )
 
         # Etap na progress barze

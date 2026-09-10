@@ -120,13 +120,15 @@
                     {% if order.return_info %}
                     {% set rs = order.return_info.status %}
                     {% if order.return_info.refund_processed or rs == 'completed' %}
-                    <span class="badge badge-xs badge-error"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-error" title="Zwrot zakończony"><i class="bi bi-arrow-return-left"></i></span>
+                    {% elif rs == 'not_collected' %}
+                    <span class="badge badge-xs badge-warning" title="Zwrot — nie odebrano"><i class="bi bi-arrow-return-left"></i></span>
                     {% elif rs == 'delivered' %}
-                    <span class="badge badge-xs badge-warning"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-warning" title="Zwrot — odebrano"><i class="bi bi-arrow-return-left"></i></span>
                     {% elif rs == 'in_transit' %}
-                    <span class="badge badge-xs badge-info"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-info" title="Zwrot — w drodze"><i class="bi bi-arrow-return-left"></i></span>
                     {% else %}
-                    <span class="badge badge-xs badge-neutral"><i class="bi bi-arrow-return-left"></i></span>
+                    <span class="badge badge-xs badge-neutral" title="Zwrot — zgłoszony"><i class="bi bi-arrow-return-left"></i></span>
                     {% endif %}
                     {% else %}
                     <span class="badge badge-xs {{ order.status_class }}">{{ order.status_text }}</span>
@@ -189,13 +191,15 @@
             {% if order.return_info %}
             {% set rs = order.return_info.status %}
             {% if order.return_info.refund_processed or rs == 'completed' %}
-            <span class="badge badge-error" title="Zwrot zakończony"><i class="bi bi-arrow-return-left"></i> zakończony</span>
+            <span class="badge badge-error" title="Zwrot zakończony"><i class="bi bi-arrow-return-left"></i> Zwrot · zakończony</span>
+            {% elif rs == 'not_collected' %}
+            <span class="badge badge-warning" title="Nie odebrano — wróciło do nadawcy"><i class="bi bi-arrow-return-left"></i> Zwrot · nie odebrano</span>
             {% elif rs == 'delivered' %}
-            <span class="badge badge-warning" title="Paczka zwrotna odebrana"><i class="bi bi-arrow-return-left"></i> odebrano</span>
+            <span class="badge badge-warning" title="Paczka zwrotna odebrana"><i class="bi bi-arrow-return-left"></i> Zwrot · odebrano</span>
             {% elif rs == 'in_transit' %}
-            <span class="badge badge-info" title="Paczka zwrotna w drodze"><i class="bi bi-arrow-return-left"></i> w drodze</span>
+            <span class="badge badge-info" title="Paczka zwrotna w drodze"><i class="bi bi-arrow-return-left"></i> Zwrot · w drodze</span>
             {% else %}
-            <span class="badge badge-neutral" title="Zwrot zgłoszony"><i class="bi bi-arrow-return-left"></i> zgłoszony</span>
+            <span class="badge badge-neutral" title="Zwrot zgłoszony"><i class="bi bi-arrow-return-left"></i> Zwrot · zgłoszony</span>
             {% endif %}
             {% else %}
             <span class="badge {{ order.status_class }}">{{ order.status_text }}</span>

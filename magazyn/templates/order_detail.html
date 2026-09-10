@@ -331,6 +331,16 @@
                         <div class="mt-3 pt-3 border-t border-base-300">
                             <span class="badge badge-success"><i class="bi bi-check-circle"></i> Pieniadze zostaly zwrocone</span>
                         </div>
+                        {% elif return_info.skip_money_refund %}
+                        <div class="mt-3 pt-3 border-t border-base-300">
+                            <div class="alert alert-info text-sm">
+                                <span>
+                                    <i class="bi bi-info-circle"></i>
+                                    Pobranie nieodebrane — brak wplaty, bez zwrotu kasy.
+                                    Korekta faktury idzie automatycznie po powrocie paczki.
+                                </span>
+                            </div>
+                        </div>
                         {% elif return_info.status in ['delivered', 'in_transit', 'not_collected', 'completed', 'pending'] and (return_info.status != 'pending' or return_info.never_shipped) %}
                         <div class="mt-3 pt-3 border-t border-base-300" x-data="refundActionPanel()" x-init="load()">
                             <template x-if="loading">
@@ -541,7 +551,7 @@
                         <i class="bi bi-chat-dots"></i> Chat z {{ order.customer_name or order.user_login }}
                     </a>
                     {% endif %}
-                    {% if return_info and not return_info.refund_processed and return_info.status in ['delivered', 'not_collected', 'completed'] %}
+                    {% if return_info and not return_info.refund_processed and not return_info.skip_money_refund and return_info.status in ['delivered', 'not_collected', 'completed'] %}
                     <button type="button" class="btn btn-error w-full mt-1" id="refundBtnQuick"
                             onclick="document.getElementById('refundModal').showModal()">
                         <i class="bi bi-currency-exchange"></i> Zwroc pieniadze

@@ -339,6 +339,38 @@ class TestEmailService:
                     assert "Zwrot produktu" in call_kwargs[1]["html_body"]
                     assert call_kwargs[1]["attachment"] == b"%PDF-korekta"
 
+    def test_send_invoice_correction_unclaimed_cod_omits_refund(self, app, order_with_invoice):
+        """Nieodebrane pobranie: inny tekst, bez kwoty zwrotu."""
+        with app.app_context():
+            with get_session() as db:
+                order = db.query(Order).filter(
+                    Order.customer_token == order_with_invoice
+                ).first()
+
+                with patch(
+                    "magazyn.services.email_service._send_html_email"
+                ) as mock_send:
+                    mock_send.return_value = True
+                    from magazyn.services.email_service import (
+                        send_invoice_correction,
+                    )
+                    result = send_invoice_correction(
+                        order,
+                        reason="Nieodebranie przesylki - paczka wrocila do nadawcy",
+                        refund_amount=None,
+                        pdf_data=b"%PDF-korekta",
+                        pdf_filename="korekta.pdf",
+                        invoice_number="KOR 1/2026",
+                        is_unclaimed=True,
+                    )
+
+                    assert result.success is True
+                    html = mock_send.call_args[1]["html_body"]
+                    assert "nie zostala odebrana" in html
+                    assert "nie ma zwrotu srodkow" in html
+                    assert "Kwota zwrotu" not in html
+                    assert "co spowodowalo taka decyzje" not in html
+
     def test_order_page_url_generation(self, app):
         """_get_order_page_url buduje poprawny URL."""
         with app.app_context():

@@ -230,6 +230,9 @@ def generate_correction_invoice(
     reason: str = "",
     return_id: int = None,
     include_delivery: bool = False,
+    *,
+    include_refund_amount: bool = True,
+    is_unclaimed: bool = False,
 ) -> dict:
     """
     Wystaw korekte do faktury zamowienia na podstawie zwrotu.
@@ -247,11 +250,16 @@ def generate_correction_invoice(
         ID rekordu Return. Jesli podane, korygowane sa tylko zwracane pozycje.
     include_delivery : bool
         Czy uwzglednic korekte kosztu dostawy. Domyslnie False.
+    include_refund_amount : bool
+        Czy podac kwote zwrotu w mailu. Dla nieodebranego pobrania False.
+    is_unclaimed : bool
+        Szablon maila dla nieodebranej przesylki (bez pytania o powod zwrotu).
 
     Returns
     -------
     dict
-        {"success": bool, "invoice_number": str, "errors": list[str]}
+        {"success": bool, "invoice_number": str, "errors": list[str],
+         "already_exists": bool}
     """
     from ..wfirma_api import WFirmaClient
     from ..wfirma_api.invoices import (
@@ -260,12 +268,23 @@ def generate_correction_invoice(
     from ..models.returns import Return
     from .email_service import send_invoice_correction
 
-    result = {"success": False, "invoice_number": None, "errors": []}
+    result = {
+        "success": False,
+        "invoice_number": None,
+        "errors": [],
+        "already_exists": False,
+    }
 
     with get_session() as db:
         order = db.query(Order).filter(Order.order_id == order_id).first()
         if not order:
             result["errors"].append(f"Zamowienie {order_id} nie znalezione")
+            return result
+
+        if order.wfirma_correction_id:
+            result["success"] = True
+            result["already_exists"] = True
+            result["invoice_number"] = order.wfirma_correction_number
             return result
 
         if not order.wfirma_invoice_id:
@@ -353,10 +372,11 @@ def generate_correction_invoice(
                 delivery = send_invoice_correction(
                     order,
                     reason=reason,
-                    refund_amount=abs(inv["total"]),
+                    refund_amount=(abs(inv["total"]) if include_refund_amount else None),
                     pdf_data=pdf_data,
                     pdf_filename=pdf_filename,
                     invoice_number=invoice_number,
+                    is_unclaimed=is_unclaimed,
                 )
                 if delivery.success:
                     from .notification_delivery import _mark_email_sent

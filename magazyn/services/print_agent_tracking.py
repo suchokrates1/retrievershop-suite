@@ -20,6 +20,7 @@ from .order_status import add_order_status
 TERMINAL_TRACKING_STATUSES = {
     "dostarczono",
     "zwrot",
+    "nieodebrano",
     "anulowano",
     "problem_z_dostawa",
 }

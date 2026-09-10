@@ -31,7 +31,8 @@ CARRIER_ID_MAP = {
 }
 
 CARRIER_ALLEGRO = "ALLEGRO"
-UNCLAIMED_ORDER_STATUS = "nieodebrano"
+UNCLAIMED_RETURN_STATUS = "not_collected"
+RETURN_ORDER_STATUS = "zwrot"
 RETURN_TO_SENDER_STATUSES = {"RETURNED", "RETURNED_TO_SENDER"}
 PICKUP_POINT_STATUSES = {"AT_PICKUP_POINT", "READY_TO_PICKUP", "PICKUP_REMINDER", "AVIZO", "AVAILABLE_FOR_PICKUP"}
 UNCLAIMED_ISSUE_HINTS = (
@@ -82,7 +83,9 @@ def _collect_tracking_statuses(waybill_data: Dict) -> List[Dict[str, str]]:
     return sorted(statuses, key=lambda item: (bool(item["occurred_at"]), item["occurred_at"]))
 
 
-def _infer_special_order_status(tracking_statuses: List[Dict[str, str]]) -> Optional[Tuple[str, str]]:
+def _infer_special_order_status(
+    tracking_statuses: List[Dict[str, str]],
+) -> Optional[Tuple[str, str, bool]]:
     pickup_seen = False
     unclaimed_issue_description = ""
     returned_description = ""
@@ -101,12 +104,12 @@ def _infer_special_order_status(tracking_statuses: List[Dict[str, str]]) -> Opti
         if code in RETURN_TO_SENDER_STATUSES:
             returned_description = description
 
-    if returned_description:
-        if pickup_seen or unclaimed_issue_description:
-            return UNCLAIMED_ORDER_STATUS, unclaimed_issue_description or returned_description
-        return "zwrot", returned_description
+    if not returned_description:
+        return None
 
-    return None
+    is_unclaimed = bool(pickup_seen or unclaimed_issue_description)
+    description = unclaimed_issue_description or returned_description
+    return RETURN_ORDER_STATUS, description, is_unclaimed
 
 
 def _ensure_not_collected_return(order: Order, description: str) -> None:
@@ -118,7 +121,7 @@ def _ensure_not_collected_return(order: Order, description: str) -> None:
         order,
         tracking_number=order.delivery_package_nr,
         return_carrier=CARRIER_ALLEGRO,
-        status="not_collected",
+        status=UNCLAIMED_RETURN_STATUS,
         notes=note,
     )
 
@@ -287,8 +290,9 @@ def sync_parcel_statuses() -> Dict[str, int]:
                                 continue
 
                             special_status = _infer_special_order_status(tracking_statuses)
+                            is_unclaimed = False
                             if special_status:
-                                new_status, special_description = special_status
+                                new_status, special_description, is_unclaimed = special_status
                                 description = special_description or description
                             else:
                                 # Mapuj na wewnętrzny status
@@ -317,13 +321,13 @@ def sync_parcel_statuses() -> Dict[str, int]:
                                         new_status,
                                         notes=note_text
                                     )
-                                    if new_status == UNCLAIMED_ORDER_STATUS:
-                                        _ensure_not_collected_return(order, description)
                                     stats["updated"] += 1
                                 else:
                                     logger.debug(
                                         f"Status zamówienia {order.order_id} bez zmian: {current_status}"
                                     )
+                                if is_unclaimed:
+                                    _ensure_not_collected_return(order, description)
                     
                     except Exception as e:
                         logger.error(f"Błąd podczas sprawdzania przesyłek {carrier_id}: {e}", exc_info=True)

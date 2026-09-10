@@ -11,6 +11,8 @@ Nie definiuj mapowania statusow nigdzie indziej.
 #   → w_transporcie(5) → w_punkcie(6) → dostarczono(7)
 #
 # Problemy (999): blad_druku, problem_z_dostawa, zwrot, nieodebrano, anulowano
+# nieodebrano zostaje w historii (stare wpisy); nowe nieodebrania to status
+# zamowienia "zwrot" + podstatus zwrotu "not_collected".
 # ────────────────────────────────────────────────────────────────────
 
 VALID_STATUSES = [
@@ -31,8 +33,8 @@ VALID_STATUSES = [
     # Problemy (mogą byc ustawione z dowolnego stanu)
     "blad_druku",        # Blad tworzenia/drukowania etykiety
     "problem_z_dostawa", # Niedostarczono / zagubiono / blad dostawy
-    "zwrot",             # Zwrot od klienta
-    "nieodebrano",       # Nie odebrano w punkcie - paczka wrócila do nadawcy
+    "zwrot",             # Zwrot (podstatusy w rekordzie Return)
+    "nieodebrano",       # legacy: nowe przypadki ida jako zwrot + not_collected
     "anulowano",         # Anulowano
 ]
 

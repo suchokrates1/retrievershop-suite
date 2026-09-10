@@ -149,6 +149,34 @@ def test_infer_not_collected_from_return_to_sender_history():
     special_status = _infer_special_order_status(_collect_tracking_statuses(payload))
 
     assert special_status == (
-        "nieodebrano",
+        "zwrot",
         "Recipient has refused to accept the parcel — Purchase cancellation",
+        True,
+    )
+
+
+def test_infer_returned_without_pickup_is_zwrot_not_unclaimed():
+    payload = {
+        "trackingDetails": {
+            "statuses": [
+                {
+                    "code": "IN_TRANSIT",
+                    "description": "Picked up from sender",
+                    "occurredAt": "2026-04-24T08:57:32.000Z",
+                },
+                {
+                    "code": "RETURNED",
+                    "description": "Parcel has been returned to the sender",
+                    "occurredAt": "2026-04-29T12:57:29.000Z",
+                },
+            ]
+        }
+    }
+
+    special_status = _infer_special_order_status(_collect_tracking_statuses(payload))
+
+    assert special_status == (
+        "zwrot",
+        "Parcel has been returned to the sender",
+        False,
     )

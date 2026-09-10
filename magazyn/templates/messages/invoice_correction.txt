@@ -5,6 +5,8 @@ RETRIEVER SHOP — Korekta faktury
 W załączniku przesyłamy korektę do zamówienia #{{ order_id }}.
 {% if invoice_number %}
 Numer dokumentu: {{ invoice_number }}
+{% endif %}{% if is_unclaimed %}
+Przesyłka nie została odebrana i wróciła do nadawcy.{% if not refund_amount %} Przy płatności za pobraniem wpłata nie nastąpiła, więc nie ma zwrotu środków.{% endif %}
 {% endif %}{% if reason %}
 Powód: {{ reason }}
 {% endif %}{% if refund_amount is not none %}
