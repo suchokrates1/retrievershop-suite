@@ -48,7 +48,7 @@ def _force_clear_allegro_tokens() -> None:
     settings_store.update(empty_allegro_token_values())
 
 
-def _parse_retry_after(value: ***REMOVED***) -> float:
+def _parse_retry_after(value: Optional[str]) -> float:
     """Parsuj nagłówek Retry-After."""
     if not value:
         return 0.0
@@ -64,7 +64,7 @@ def _parse_retry_after(value: ***REMOVED***) -> float:
         return max((dt - datetime.now(timezone.utc)).total_seconds(), 0.0)
 
 
-def _parse_rate_limit_reset(value: ***REMOVED***) -> float:
+def _parse_rate_limit_reset(value: Optional[str]) -> float:
     """Parsuj nagłówek X-RateLimit-Reset."""
     if not value:
         return 0.0
@@ -104,7 +104,7 @@ def _rate_limit_delay(headers) -> float:
     return 0.0
 
 
-def _extract_request_id(headers) -> ***REMOVED***:
+def _extract_request_id(headers) -> Optional[str]:
     """Wyciagnij identyfikator requestu z naglowkow odpowiedzi."""
     if not headers:
         return None
@@ -223,7 +223,7 @@ def _request_with_retry(method, url: str, *, endpoint: str, **kwargs) -> Respons
         return response
 
 
-def _describe_token(token: ***REMOVED***) -> str:
+def _describe_token(token: Optional[str]) -> str:
     """Opisz token (maskując środek)."""
     if not token:
         return "brak"

@@ -82,13 +82,13 @@ def check_allegro_customer_returns(*, log: Optional[logging.Logger] = None) -> D
     stats = {"created": 0, "existing": 0, "updated": 0, "errors": 0}
 
     try:
-        ***REMOVED*** = settings_store.settings.ALLEGRO_ACCESS_TOKEN
-        if not ***REMOVED***:
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        if not access_token:
             active_logger.warning("Brak tokenu Allegro - pomijam sprawdzanie Customer Returns")
             return stats
 
         headers = {
-            "Authorization": f"Bearer {***REMOVED***}",
+            "Authorization": f"Bearer {access_token}",
             "Accept": "application/vnd.allegro.beta.v1+json",
             "User-Agent": ALLEGRO_USER_AGENT,
         }
@@ -272,7 +272,7 @@ def send_pending_return_notifications(*, log: Optional[logging.Logger] = None) -
     return stats
 
 
-def track_return_parcel(return_id: int, *, log: Optional[logging.Logger] = None) -> ***REMOVED***:
+def track_return_parcel(return_id: int, *, log: Optional[logging.Logger] = None) -> Optional[str]:
     """Sledz paczke zwrotna przez Allegro API."""
     from ..allegro_api.core import ALLEGRO_USER_AGENT
 
@@ -288,15 +288,15 @@ def track_return_parcel(return_id: int, *, log: Optional[logging.Logger] = None)
             active_logger.warning("Zwrot #%s nie ma numeru sledzenia", return_id)
             return None
 
-        ***REMOVED*** = settings_store.settings.ALLEGRO_ACCESS_TOKEN
-        if not ***REMOVED***:
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        if not access_token:
             active_logger.error("Brak tokena dostepu Allegro")
             return None
 
         try:
             carrier_id = map_carrier_to_allegro(return_record.return_carrier) or "INPOST"
             headers = {
-                "Authorization": f"Bearer {***REMOVED***}",
+                "Authorization": f"Bearer {access_token}",
                 "Accept": "application/vnd.allegro.public.v1+json",
                 "User-Agent": ALLEGRO_USER_AGENT,
             }

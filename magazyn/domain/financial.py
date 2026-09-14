@@ -274,8 +274,8 @@ class FinancialCalculator:
         self, 
         external_order_id: str, 
         sale_price: Decimal,
-        ***REMOVED***: ***REMOVED*** = None,
-        delivery_method: ***REMOVED*** = None,
+        access_token: Optional[str] = None,
+        delivery_method: Optional[str] = None,
         prefetched_billing: Optional[Dict[str, Any]] = None,
     ) -> tuple[Decimal, str]:
         """
@@ -287,7 +287,7 @@ class FinancialCalculator:
         Args:
             external_order_id: UUID zamowienia Allegro (external_order_id)
             sale_price: Cena sprzedazy
-            ***REMOVED***: Token dostepu Allegro (opcjonalny)
+            access_token: Token dostepu Allegro (opcjonalny)
             delivery_method: Metoda dostawy do szacowania kosztu wysylki
             
         Returns:
@@ -297,7 +297,7 @@ class FinancialCalculator:
             order=None,
             external_order_id=external_order_id,
             sale_price=sale_price,
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
             delivery_method=delivery_method,
             prefetched_billing=prefetched_billing,
         )
@@ -351,9 +351,9 @@ class FinancialCalculator:
     def _estimate_fee_snapshot(
         self,
         sale_price: Decimal,
-        delivery_method: ***REMOVED*** = None,
+        delivery_method: Optional[str] = None,
         billing_complete: bool = False,
-        error: ***REMOVED*** = None,
+        error: Optional[str] = None,
     ) -> Dict[str, Any]:
         shipping = self._estimate_shipping_cost(delivery_method)
         payment = sale_price * self.DEFAULT_ALLEGRO_FEE_RATE
@@ -429,11 +429,11 @@ class FinancialCalculator:
     def _resolve_fee_snapshot(
         self,
         sale_price: Decimal,
-        ***REMOVED***: ***REMOVED*** = None,
-        delivery_method: ***REMOVED*** = None,
+        access_token: Optional[str] = None,
+        delivery_method: Optional[str] = None,
         prefetched_billing: Optional[Dict[str, Any]] = None,
         order=None,
-        external_order_id: ***REMOVED*** = None,
+        external_order_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         billing_started_at = time.perf_counter()
         external_order_id = external_order_id or getattr(order, 'external_order_id', None)
@@ -457,7 +457,7 @@ class FinancialCalculator:
             getattr(order, 'real_profit_allegro_fees', None) if order is not None else None
         )
         cached_is_final = (getattr(order, 'real_profit_is_final', None) is True) if order is not None else False
-        if cached_is_final and cached_fees is not None and not ***REMOVED*** and prefetched_billing is None:
+        if cached_is_final and cached_fees is not None and not access_token and prefetched_billing is None:
             return {
                 "fees": cached_fees,
                 "fee_source": getattr(order, 'real_profit_fee_source', None) or 'api',
@@ -481,10 +481,10 @@ class FinancialCalculator:
 
         # Allegro API tylko dla allegro_* (lub legacy bez prefiksu gdy jest token)
         use_allegro = order is None or is_allegro_order(order)
-        if ***REMOVED*** and external_order_id and use_allegro:
+        if access_token and external_order_id and use_allegro:
             try:
                 from ..allegro_api import get_order_billing_summary
-                billing = get_order_billing_summary(***REMOVED***, external_order_id)
+                billing = get_order_billing_summary(access_token, external_order_id)
                 if billing and billing.get("success") and billing.get("total_fees") is not None:
                     snapshot = self._snapshot_from_billing(billing)
                     elapsed_ms = (time.perf_counter() - billing_started_at) * 1000
@@ -547,7 +547,7 @@ class FinancialCalculator:
         order,
         sale_price: Decimal,
         fee_snapshot: Dict[str, Any],
-        trace_label: ***REMOVED*** = None,
+        trace_label: Optional[str] = None,
         started_at: Optional[float] = None,
     ) -> ProfitBreakdown:
         purchase_cost = self.get_purchase_cost_for_order(order.order_id)
@@ -609,14 +609,14 @@ class FinancialCalculator:
     def refresh_order_profit_cache(
         self,
         order,
-        ***REMOVED***: ***REMOVED*** = None,
-        trace_label: ***REMOVED*** = None,
+        access_token: Optional[str] = None,
+        trace_label: Optional[str] = None,
         prefetched_billing: Optional[Dict[str, Any]] = None,
     ) -> ProfitBreakdown:
         sale_price = self._get_sale_price(order)
         fee_snapshot = self._resolve_fee_snapshot(
             sale_price=sale_price,
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
             delivery_method=getattr(order, 'delivery_method', None),
             prefetched_billing=prefetched_billing,
             order=order,
@@ -641,7 +641,7 @@ class FinancialCalculator:
         order.real_profit_updated_at = datetime.now(timezone.utc)
         return breakdown
     
-    def _estimate_shipping_cost(self, delivery_method: ***REMOVED*** = None) -> Decimal:
+    def _estimate_shipping_cost(self, delivery_method: Optional[str] = None) -> Decimal:
         """Szacuje koszt wysylki Allegro Smart (tylko ścieżka Allegro)."""
         if not delivery_method:
             return self.DEFAULT_SHIPPING_COST
@@ -663,8 +663,8 @@ class FinancialCalculator:
     def calculate_order_profit(
         self,
         order,
-        ***REMOVED***: ***REMOVED*** = None,
-        trace_label: ***REMOVED*** = None,
+        access_token: Optional[str] = None,
+        trace_label: Optional[str] = None,
         prefetched_billing: Optional[Dict[str, Any]] = None,
     ) -> ProfitBreakdown:
         """
@@ -672,7 +672,7 @@ class FinancialCalculator:
 
         Args:
             order: Obiekt Order
-            ***REMOVED***: Token Allegro do pobierania rzeczywistych oplat
+            access_token: Token Allegro do pobierania rzeczywistych oplat
 
         Returns:
             ProfitBreakdown ze szczegolami kalkulacji
@@ -681,7 +681,7 @@ class FinancialCalculator:
         sale_price = self._get_sale_price(order)
         fee_snapshot = self._resolve_fee_snapshot(
             sale_price=sale_price,
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
             delivery_method=getattr(order, "delivery_method", None),
             prefetched_billing=prefetched_billing,
             order=order,
@@ -697,10 +697,10 @@ class FinancialCalculator:
     def _prefetch_order_billing_summaries(
         self,
         orders: List[Any],
-        ***REMOVED***: ***REMOVED***,
-        trace_label: ***REMOVED*** = None,
+        access_token: Optional[str],
+        trace_label: Optional[str] = None,
     ) -> Dict[str, Dict[str, Any]]:
-        if not ***REMOVED***:
+        if not access_token:
             return {}
 
         order_ids = []
@@ -728,7 +728,7 @@ class FinancialCalculator:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_order_id = {
-                executor.submit(get_order_billing_summary, ***REMOVED***, order_id): order_id
+                executor.submit(get_order_billing_summary, access_token, order_id): order_id
                 for order_id in order_ids
             }
             for future in as_completed(future_to_order_id):
@@ -760,8 +760,8 @@ class FinancialCalculator:
         start_timestamp: int,
         end_timestamp: int,
         include_fixed_costs: bool = True,
-        ***REMOVED***: ***REMOVED*** = None,
-        trace_label: ***REMOVED*** = None,
+        access_token: Optional[str] = None,
+        trace_label: Optional[str] = None,
     ) -> PeriodSummary:
         """
         Generuje podsumowanie finansowe za okres.
@@ -770,7 +770,7 @@ class FinancialCalculator:
             start_timestamp: Poczatek okresu (Unix timestamp)
             end_timestamp: Koniec okresu (Unix timestamp)
             include_fixed_costs: Czy odejmowac koszty stale
-            ***REMOVED***: Token Allegro do pobierania rzeczywistych oplat
+            access_token: Token Allegro do pobierania rzeczywistych oplat
             
         Returns:
             PeriodSummary z pelnym podsumowaniem
@@ -784,12 +784,12 @@ class FinancialCalculator:
 
         total_started_at = time.perf_counter()
         logger.info(
-            "Profit period summary start: trace=%s start_ts=%s end_ts=%s include_fixed_costs=%s ***REMOVED***=%s",
+            "Profit period summary start: trace=%s start_ts=%s end_ts=%s include_fixed_costs=%s access_token=%s",
             trace_label or '-',
             start_timestamp,
             end_timestamp,
             include_fixed_costs,
-            bool(***REMOVED***),
+            bool(access_token),
         )
 
         # Wyklucz zamowienia ze zwrotem zakonczonym (status=completed)
@@ -884,7 +884,7 @@ class FinancialCalculator:
                 cache_misses += 1
                 breakdown = self.calculate_order_profit(
                     order,
-                    ***REMOVED***=None,
+                    access_token=None,
                     trace_label=trace_label,
                 )
             else:

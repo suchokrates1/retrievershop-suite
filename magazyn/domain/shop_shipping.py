@@ -49,7 +49,7 @@ def _settings_cost(key: str, default: Decimal) -> Decimal:
     return _to_decimal(raw, default)
 
 
-def resolve_parcel_size(template_or_method: ***REMOVED*** = None) -> str:
+def resolve_parcel_size(template_or_method: Optional[str] = None) -> str:
     text = (template_or_method or "small").strip().lower()
     if text in TEMPLATE_TO_SIZE:
         return TEMPLATE_TO_SIZE[text]
@@ -60,7 +60,7 @@ def resolve_parcel_size(template_or_method: ***REMOVED*** = None) -> str:
     return "A"
 
 
-def is_locker_delivery(order_or_method: Any = None, point_id: ***REMOVED*** = None) -> bool:
+def is_locker_delivery(order_or_method: Any = None, point_id: Optional[str] = None) -> bool:
     if point_id:
         return True
     if order_or_method is None:
@@ -78,8 +78,8 @@ def is_locker_delivery(order_or_method: Any = None, point_id: ***REMOVED*** = No
 def estimate_shop_shipping_cost(
     order=None,
     *,
-    delivery_method: ***REMOVED*** = None,
-    point_id: ***REMOVED*** = None,
+    delivery_method: Optional[str] = None,
+    point_id: Optional[str] = None,
     parcel_template: str = "small",
 ) -> dict[str, Any]:
     """Szacunek kosztu InPost sprzedawcy (settings, nie Allegro Smart)."""
@@ -125,7 +125,7 @@ def extract_rate_from_shipment(details: dict) -> Optional[Decimal]:
     return None
 
 
-def parse_order_products_payload(products_json: ***REMOVED***) -> tuple[list, dict]:
+def parse_order_products_payload(products_json: Optional[str]) -> tuple[list, dict]:
     """Zwraca (products_list, meta_dict). Obsługuje listę lub {"products","meta"}."""
     if not products_json:
         return [], {}

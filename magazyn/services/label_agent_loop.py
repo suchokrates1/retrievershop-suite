@@ -82,22 +82,22 @@ def order_processor(agent) -> PrintOrderProcessor:
     )
 
 
-def check_allegro_discussions(agent, ***REMOVED***: str) -> None:
+def check_allegro_discussions(agent, access_token: str) -> None:
     service = AllegroSyncService(
         db_file=agent.config.db_file,
         settings=agent.settings,
         save_state_callback=agent._save_state_value,
     )
-    service.check_discussions(***REMOVED***)
+    service.check_discussions(access_token)
 
 
-def check_allegro_messages(agent, ***REMOVED***: str) -> None:
+def check_allegro_messages(agent, access_token: str) -> None:
     service = AllegroSyncService(
         db_file=agent.config.db_file,
         settings=agent.settings,
         save_state_callback=agent._save_state_value,
     )
-    service.check_messages(***REMOVED***)
+    service.check_messages(access_token)
 
 
 def agent_loop(agent) -> None:

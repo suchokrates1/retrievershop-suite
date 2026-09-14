@@ -32,14 +32,14 @@ def send_price_report_notification(report_id: int, *, log: logging.Logger | None
         if stats is None:
             return
 
-        ***REMOVED*** = settings_store.get("PAGE_ACCESS_TOKEN", "")
+        access_token = settings_store.get("PAGE_ACCESS_TOKEN", "")
         recipient_id = settings_store.get("RECIPIENT_ID", "")
-        if not ***REMOVED*** or not recipient_id:
+        if not access_token or not recipient_id:
             active_logger.warning("Brak konfiguracji Messenger - pomijam powiadomienie")
             return
 
         message = _notification_message(report_id, stats)
-        client = MessengerClient(MessengerConfig(***REMOVED***=***REMOVED***, recipient_id=recipient_id))
+        client = MessengerClient(MessengerConfig(access_token=access_token, recipient_id=recipient_id))
         if client.send_text(message):
             active_logger.info("Wyslano powiadomienie o raporcie #%s", report_id)
         else:

@@ -9,7 +9,7 @@ from urllib.parse import quote_plus
 
 logger = logging.getLogger(__name__)
 
-TRACKING_URL_TEMPLATES: dict[str, ***REMOVED***] = {
+TRACKING_URL_TEMPLATES: dict[str, Optional[str]] = {
     "inpost": "https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
     "paczkomat": "https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
     "dpd": "https://tracktrace.dpd.com.pl/parcelDetails?typ=1&p1={tracking_number}",
@@ -25,11 +25,11 @@ TRACKING_URL_TEMPLATES: dict[str, ***REMOVED***] = {
 
 
 def get_tracking_url(
-    courier_code: ***REMOVED***,
-    delivery_package_module: ***REMOVED***,
-    tracking_number: ***REMOVED***,
-    delivery_method: ***REMOVED*** = None,
-) -> ***REMOVED***:
+    courier_code: Optional[str],
+    delivery_package_module: Optional[str],
+    tracking_number: Optional[str],
+    delivery_method: Optional[str] = None,
+) -> Optional[str]:
     """Zbuduj publiczny URL śledzenia przesyłki, jeśli przewoźnik go udostępnia."""
     if not tracking_number:
         return None

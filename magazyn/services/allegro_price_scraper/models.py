@@ -20,7 +20,7 @@ class CompetitorOffer:
     offer_url: str = ""
     is_super_seller: bool = False
     has_smart: bool = False
-    offer_id: ***REMOVED*** = None
+    offer_id: Optional[str] = None
     condition: str = ""
 
 
@@ -36,7 +36,7 @@ class PriceCheckResult:
     my_position: int = 0
     competitors_all_count: int = 0
     our_other_offers: list[CompetitorOffer] | None = None
-    error: ***REMOVED*** = None
+    error: Optional[str] = None
     checked_at: str = ""
     source: str = "cdp"
 

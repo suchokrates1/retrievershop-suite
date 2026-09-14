@@ -73,13 +73,13 @@ def read_only_settings_store(tmp_path):
 def test_update_tokens_read_only_database_preserves_tokens(read_only_settings_store):
     env_path = read_only_settings_store
     original_env = env_path.read_text(encoding="utf-8")
-    original_access = ***REMOVED***
+    original_access = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     original_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
 
     with pytest.raises(SettingsPersistenceError):
         update_allegro_tokens("new-access", "new-refresh")
 
-    assert ***REMOVED*** == original_access
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == original_access
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == original_refresh
     assert os.environ.get("ALLEGRO_ACCESS_TOKEN") == original_access
     assert os.environ.get("ALLEGRO_REFRESH_TOKEN") == original_refresh
@@ -89,13 +89,13 @@ def test_update_tokens_read_only_database_preserves_tokens(read_only_settings_st
 def test_clear_tokens_read_only_database_preserves_tokens(read_only_settings_store):
     env_path = read_only_settings_store
     original_env = env_path.read_text(encoding="utf-8")
-    original_access = ***REMOVED***
+    original_access = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     original_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
 
     with pytest.raises(SettingsPersistenceError):
         clear_allegro_tokens()
 
-    assert ***REMOVED*** == original_access
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == original_access
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == original_refresh
     assert os.environ.get("ALLEGRO_ACCESS_TOKEN") == original_access
     assert os.environ.get("ALLEGRO_REFRESH_TOKEN") == original_refresh

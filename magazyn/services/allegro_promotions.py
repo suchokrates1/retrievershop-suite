@@ -31,8 +31,8 @@ class PromoOption:
     """Opcja promowania pojedynczej oferty."""
     offer_id: str
     offer_name: str
-    package_id: ***REMOVED*** = None
-    package_name: ***REMOVED*** = None
+    package_id: Optional[str] = None
+    package_name: Optional[str] = None
     valid_from: Optional[datetime] = None
     valid_to: Optional[datetime] = None
     next_cycle_date: Optional[datetime] = None
@@ -63,10 +63,10 @@ class PromoSummary:
     renewing_tomorrow: List[PromoOption] = field(default_factory=list)
     renewing_soon: List[PromoOption] = field(default_factory=list)  # w ciągu 3 dni
     last_check: Optional[datetime] = None
-    error: ***REMOVED*** = None
+    error: Optional[str] = None
 
 
-def _parse_datetime(dt_str: ***REMOVED***) -> Optional[datetime]:
+def _parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
     """Parsuje datę z formatu ISO 8601."""
     if not dt_str:
         return None
@@ -79,17 +79,17 @@ def _parse_datetime(dt_str: ***REMOVED***) -> Optional[datetime]:
         return None
 
 
-def _get_headers(***REMOVED***: str) -> Dict[str, str]:
+def _get_headers(access_token: str) -> Dict[str, str]:
     """Zwraca nagłówki dla API Allegro."""
     return {
-        'Authorization': f'Bearer {***REMOVED***}',
+        'Authorization': f'Bearer {access_token}',
         'Accept': 'application/vnd.allegro.public.v1+json',
         'Content-Type': 'application/vnd.allegro.public.v1+json',
         'User-Agent': ALLEGRO_USER_AGENT,
     }
 
 
-def fetch_offer_promo_options(***REMOVED***: str, offer_id: str) -> Optional[Dict[str, Any]]:
+def fetch_offer_promo_options(access_token: str, offer_id: str) -> Optional[Dict[str, Any]]:
     """
     Pobiera opcje promowania dla pojedynczej oferty.
     
@@ -97,7 +97,7 @@ def fetch_offer_promo_options(***REMOVED***: str, offer_id: str) -> Optional[Dic
         Dict z danymi promo-options lub None w przypadku błędu
     """
     url = f'{API_BASE_URL}/sale/offers/{offer_id}/promo-options'
-    headers = _get_headers(***REMOVED***)
+    headers = _get_headers(access_token)
     
     try:
         response = requests.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
@@ -111,7 +111,7 @@ def fetch_offer_promo_options(***REMOVED***: str, offer_id: str) -> Optional[Dic
         return None
 
 
-def fetch_all_promo_options(***REMOVED***: str, limit: int = 5000) -> List[Dict[str, Any]]:
+def fetch_all_promo_options(access_token: str, limit: int = 5000) -> List[Dict[str, Any]]:
     """
     Pobiera opcje promowania dla wszystkich ofert sprzedawcy.
     
@@ -119,7 +119,7 @@ def fetch_all_promo_options(***REMOVED***: str, limit: int = 5000) -> List[Dict[
         Lista słowników z danymi promo-options
     """
     url = f'{API_BASE_URL}/sale/offers/promo-options'
-    headers = _get_headers(***REMOVED***)
+    headers = _get_headers(access_token)
     params = {'limit': limit, 'offset': 0}
     
     all_options = []
@@ -148,10 +148,10 @@ def fetch_all_promo_options(***REMOVED***: str, limit: int = 5000) -> List[Dict[
     return all_options
 
 
-def fetch_offer_info(***REMOVED***: str, offer_id: str) -> Dict[str, str]:
+def fetch_offer_info(access_token: str, offer_id: str) -> Dict[str, str]:
     """Pobiera nazwe i status publikacji oferty z Allegro API."""
     url = f'{API_BASE_URL}/sale/product-offers/{offer_id}'
-    headers = _get_headers(***REMOVED***)
+    headers = _get_headers(access_token)
     
     try:
         response = requests.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
@@ -167,25 +167,25 @@ def fetch_offer_info(***REMOVED***: str, offer_id: str) -> Dict[str, str]:
     return {'name': f'Oferta {offer_id}', 'publication_status': 'UNKNOWN'}
 
 
-def fetch_offer_name(***REMOVED***: str, offer_id: str) -> str:
+def fetch_offer_name(access_token: str, offer_id: str) -> str:
     """Pobiera nazwe oferty z Allegro API (kompatybilnosc wsteczna)."""
-    return fetch_offer_info(***REMOVED***, offer_id)['name']
+    return fetch_offer_info(access_token, offer_id)['name']
 
 
-def get_promotions_summary(***REMOVED***: ***REMOVED*** = None) -> PromoSummary:
+def get_promotions_summary(access_token: Optional[str] = None) -> PromoSummary:
     """
     Pobiera podsumowanie aktywnych wyróżnień.
     
     Args:
-        ***REMOVED***: Token Allegro (jeśli None, pobierze z settings_store)
+        access_token: Token Allegro (jeśli None, pobierze z settings_store)
         
     Returns:
         PromoSummary z danymi o wyróżnieniach
     """
-    if not ***REMOVED***:
-        ***REMOVED*** = settings_store.get('ALLEGRO_ACCESS_TOKEN')
+    if not access_token:
+        access_token = settings_store.get('ALLEGRO_ACCESS_TOKEN')
     
-    if not ***REMOVED***:
+    if not access_token:
         return PromoSummary(error="Brak tokenu Allegro")
     
     summary = PromoSummary(last_check=datetime.now(timezone.utc))
@@ -194,7 +194,7 @@ def get_promotions_summary(***REMOVED***: ***REMOVED*** = None) -> PromoSummary:
     three_days = now + timedelta(days=3)
     
     # Pobierz wszystkie opcje promowania
-    all_options = fetch_all_promo_options(***REMOVED***)
+    all_options = fetch_all_promo_options(access_token)
     
     if not all_options:
         logger.info("Brak aktywnych wyróżnień")
@@ -226,7 +226,7 @@ def get_promotions_summary(***REMOVED***: ***REMOVED*** = None) -> PromoSummary:
         
         # Pobierz info o ofercie (leniwie) i odfiltuj zakonczone oferty
         if offer_id not in offer_info_cache:
-            offer_info_cache[offer_id] = fetch_offer_info(***REMOVED***, offer_id)
+            offer_info_cache[offer_id] = fetch_offer_info(access_token, offer_id)
         
         offer_info = offer_info_cache[offer_id]
         if offer_info['publication_status'] == 'ENDED':
@@ -276,7 +276,7 @@ def get_promotions_summary(***REMOVED***: ***REMOVED*** = None) -> PromoSummary:
 
 
 def disable_promotion(
-    ***REMOVED***: str, 
+    access_token: str, 
     offer_id: str, 
     package_id: str = 'emphasized10d',
     immediate: bool = False
@@ -285,7 +285,7 @@ def disable_promotion(
     Wyłącza wyróżnienie dla oferty.
     
     Args:
-        ***REMOVED***: Token Allegro
+        access_token: Token Allegro
         offer_id: ID oferty
         package_id: ID pakietu promowania
         immediate: True = wyłącz natychmiast, False = wyłącz z końcem cyklu
@@ -294,7 +294,7 @@ def disable_promotion(
         True jeśli sukces
     """
     url = f'{API_BASE_URL}/sale/offers/{offer_id}/promo-options-modification'
-    headers = _get_headers(***REMOVED***)
+    headers = _get_headers(access_token)
     
     modification_type = 'REMOVE_NOW' if immediate else 'REMOVE_WITH_END_OF_CYCLE'
     
@@ -319,7 +319,7 @@ def disable_promotion(
         return False
 
 
-def format_promotion_alert(summary: PromoSummary) -> ***REMOVED***:
+def format_promotion_alert(summary: PromoSummary) -> Optional[str]:
     """
     Formatuje alert o zbliżających się przedłużeniach wyróżnień.
     

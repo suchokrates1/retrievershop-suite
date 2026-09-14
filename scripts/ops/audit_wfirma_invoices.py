@@ -44,7 +44,7 @@ def fetch_invoices(
     client: WFirmaClient,
     date_from: str,
     date_to: str,
-    invoice_type: ***REMOVED*** = "bill",
+    invoice_type: Optional[str] = "bill",
 ) -> list[dict]:
     """Paginate invoices/find for date range."""
     all_invoices: list[dict] = []
@@ -118,7 +118,7 @@ def _money(val: Any) -> Decimal:
         return Decimal("0.00")
 
 
-def _order_id_from_description(desc: ***REMOVED***) -> ***REMOVED***:
+def _order_id_from_description(desc: Optional[str]) -> Optional[str]:
     if not desc:
         return None
     m = ORDER_DESC_RE.match(desc.strip())

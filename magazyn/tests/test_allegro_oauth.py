@@ -65,20 +65,20 @@ def _start_authorization(client):
 def test_full_oauth_flow(client, login, monkeypatch, allegro_oauth_config):
     state = _start_authorization(client)
 
-    def fake_get_***REMOVED***(client_id, client_secret, code, redirect_uri=None):
+    def fake_get_access_token(client_id, client_secret, code, redirect_uri=None):
         assert client_id == "client-123"
         assert client_secret == "secret-456"
         assert code == "auth-code"
         assert redirect_uri == "https://example.com/callback"
         return {
-            "***REMOVED***": "access-token",
+            "access_token": "access-token",
             "refresh_token": "refresh-token",
             "expires_in": 3600,
             "scope": "sale:offers",
             "token_type": "bearer",
         }
 
-    monkeypatch.setattr(allegro_api, "get_***REMOVED***", fake_get_***REMOVED***)
+    monkeypatch.setattr(allegro_api, "get_access_token", fake_get_access_token)
 
     response = client.get(
         "/allegro/oauth/callback",
@@ -93,7 +93,7 @@ def test_full_oauth_flow(client, login, monkeypatch, allegro_oauth_config):
     flashes = _get_flashes(client)
     assert any("sukcesem" in message.lower() for _, message in flashes)
 
-    assert ***REMOVED*** == "access-token"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "access-token"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
     assert settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN") == "3600"
 
@@ -110,20 +110,20 @@ def test_debug_route_redirects_like_callback(
 ):
     state = _start_authorization(client)
 
-    def fake_get_***REMOVED***(client_id, client_secret, code, redirect_uri=None):
+    def fake_get_access_token(client_id, client_secret, code, redirect_uri=None):
         assert client_id == "client-123"
         assert client_secret == "secret-456"
         assert code == "auth-code"
         assert redirect_uri == "https://example.com/callback"
         return {
-            "***REMOVED***": "access-token",
+            "access_token": "access-token",
             "refresh_token": "refresh-token",
             "expires_in": 3600,
             "scope": "sale:offers",
             "token_type": "bearer",
         }
 
-    monkeypatch.setattr(allegro_api, "get_***REMOVED***", fake_get_***REMOVED***)
+    monkeypatch.setattr(allegro_api, "get_access_token", fake_get_access_token)
 
     response = client.get(
         "/allegro",
@@ -138,7 +138,7 @@ def test_debug_route_redirects_like_callback(
     flashes = _get_flashes(client)
     assert any("sukcesem" in message.lower() for _, message in flashes)
 
-    assert ***REMOVED*** == "access-token"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "access-token"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
     assert settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN") == "3600"
 
@@ -156,7 +156,7 @@ def test_oauth_callback_state_mismatch(client, login, allegro_oauth_config):
     flashes = _get_flashes(client)
     assert any("state" in message.lower() for _, message in flashes)
 
-    assert ***REMOVED*** is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
 
 
 def test_oauth_callback_missing_code(client, login, allegro_oauth_config):
@@ -172,7 +172,7 @@ def test_oauth_callback_missing_code(client, login, allegro_oauth_config):
     flashes = _get_flashes(client)
     assert any("brak kodu" in message.lower() for _, message in flashes)
 
-    assert ***REMOVED*** is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
 
 
 def test_oauth_callback_handles_api_error(
@@ -183,10 +183,10 @@ def test_oauth_callback_handles_api_error(
     class DummyResponse:
         status_code = 400
 
-    def failing_get_***REMOVED***(*_, **__):
+    def failing_get_access_token(*_, **__):
         raise HTTPError(response=DummyResponse())
 
-    monkeypatch.setattr(allegro_api, "get_***REMOVED***", failing_get_***REMOVED***)
+    monkeypatch.setattr(allegro_api, "get_access_token", failing_get_access_token)
 
     response = client.get(
         "/allegro/oauth/callback",
@@ -198,7 +198,7 @@ def test_oauth_callback_handles_api_error(
     flashes = _get_flashes(client)
     assert any("http status 400" in message.lower() for _, message in flashes)
 
-    assert ***REMOVED*** is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
 
 
 def test_debug_route_state_mismatch(client, login, allegro_oauth_config):
@@ -223,10 +223,10 @@ def test_debug_route_handles_api_error(
     class DummyResponse:
         status_code = 400
 
-    def failing_get_***REMOVED***(*_, **__):
+    def failing_get_access_token(*_, **__):
         raise HTTPError(response=DummyResponse())
 
-    monkeypatch.setattr(allegro_api, "get_***REMOVED***", failing_get_***REMOVED***)
+    monkeypatch.setattr(allegro_api, "get_access_token", failing_get_access_token)
 
     response = client.get(
         "/allegro",
@@ -238,4 +238,4 @@ def test_debug_route_handles_api_error(
     flashes = _get_flashes(client)
     assert any("http status 400" in message.lower() for _, message in flashes)
 
-    assert ***REMOVED*** is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None

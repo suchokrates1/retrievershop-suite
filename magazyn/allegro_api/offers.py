@@ -21,13 +21,13 @@ from ..settings_store import SettingsPersistenceError, settings_store
 logger = logging.getLogger(__name__)
 
 
-def fetch_offers(***REMOVED***: str, offset: int = 0, limit: int = 100, **kwargs) -> dict:
+def fetch_offers(access_token: str, offset: int = 0, limit: int = 100, **kwargs) -> dict:
     """
     Pobierz oferty z Allegro używając access tokenu.
 
     Parameters
     ----------
-    ***REMOVED*** : str
+    access_token : str
         OAuth access token dla Allegro API.
     offset : int
         Offset od którego rozpocząć pobieranie. Domyślnie 0.
@@ -42,7 +42,7 @@ def fetch_offers(***REMOVED***: str, offset: int = 0, limit: int = 100, **kwargs
         Odpowiedź JSON z listą ofert.
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     params = {"offset": offset, "limit": limit, **kwargs}
@@ -88,7 +88,7 @@ def fetch_product_listing(
         except Exception as exc:
             logger.debug("Pominięto błąd callbacka debug ofert Allegro: %s", exc)
 
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
     record(
         "Listing Allegro: używany access token",
@@ -130,7 +130,7 @@ def fetch_product_listing(
         error_payload.update(_extract_allegro_error_details(getattr(exc, "response", None)))
         record("Listing Allegro: otrzymano błąd HTTP", error_payload)
 
-        latest_token = ***REMOVED***
+        latest_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
         latest_refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
         if latest_token and latest_token != token:
             token = latest_token
@@ -158,7 +158,7 @@ def fetch_product_listing(
                 )
                 raise RuntimeError(friendly_message) from refresh_exc
 
-            new_token = token_data.get("***REMOVED***")
+            new_token = token_data.get("access_token")
             if not new_token:
                 record(
                     "Listing Allegro: brak tokenu po odświeżeniu",
@@ -186,7 +186,7 @@ def fetch_product_listing(
             record(
                 "Listing Allegro: odświeżanie zakończone",
                 {
-                    "***REMOVED***": _describe_token(token),
+                    "access_token": _describe_token(token),
                     "refresh_token": _describe_token(refresh),
                 },
             )
@@ -277,7 +277,7 @@ def get_offer_details(offer_id: str) -> dict:
     dict
         Slownik z danymi oferty lub bledem.
     """
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         return {"success": False, "error": "Brak tokenu Allegro"}
     
@@ -338,7 +338,7 @@ def get_offer_price(offer_id: str) -> dict:
     dict
         Slownik z kluczami: success, price (Decimal), currency, error (jesli blad).
     """
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         return {"success": False, "error": "Brak tokenu Allegro"}
     
@@ -394,7 +394,7 @@ def get_offer_badge_price(offer_id: str) -> Optional[Decimal]:
     Optional[Decimal]
         Cena promocyjna (bargain) jesli oferta ma aktywna kampanie, None w przeciwnym razie.
     """
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         return None
 
@@ -455,7 +455,7 @@ def change_offer_name(offer_id: str, new_name: str) -> dict:
     dict
         Odpowiedz z Allegro API lub slownik z bledem.
     """
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         return {"success": False, "error": "Brak tokenu Allegro"}
 
@@ -508,7 +508,7 @@ def change_offer_price(offer_id: str, new_price: Decimal) -> dict:
     dict
         Odpowiedz z Allegro API lub slownik z bledem.
     """
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         return {"success": False, "error": "Brak tokenu Allegro"}
     

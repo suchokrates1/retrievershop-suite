@@ -24,8 +24,8 @@ def empty_allegro_token_values() -> dict[str, None]:
 
 
 def update_allegro_tokens(
-    ***REMOVED***: ***REMOVED*** = None,
-    refresh_token: ***REMOVED*** = None,
+    access_token: Optional[str] = None,
+    refresh_token: Optional[str] = None,
     expires_in: Optional[int] = None,
     metadata: Optional[Mapping[str, object]] = None,
 ) -> None:
@@ -33,7 +33,7 @@ def update_allegro_tokens(
 
     Parameters
     ----------
-    ***REMOVED***:
+    access_token:
         The freshly obtained access token. If ``None`` the persisted value is not
         modified.
     refresh_token:
@@ -50,7 +50,7 @@ def update_allegro_tokens(
     """
 
     if (
-        ***REMOVED*** is None
+        access_token is None
         and refresh_token is None
         and expires_in is None
         and metadata is None
@@ -58,8 +58,8 @@ def update_allegro_tokens(
         return
 
     updates = {}
-    if ***REMOVED*** is not None:
-        updates["ALLEGRO_ACCESS_TOKEN"] = ***REMOVED***
+    if access_token is not None:
+        updates["ALLEGRO_ACCESS_TOKEN"] = access_token
     if refresh_token is not None:
         updates["ALLEGRO_REFRESH_TOKEN"] = refresh_token
     expires_value: Optional[int] = None
@@ -82,7 +82,7 @@ def update_allegro_tokens(
 
     now = datetime.now(timezone.utc)
     tokens_modified = (
-        ***REMOVED*** is not None
+        access_token is not None
         or refresh_token is not None
         or expires_in is not None
     )

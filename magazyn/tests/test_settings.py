@@ -130,7 +130,7 @@ def test_settings_reload_updates_print_agent(app_mod, client, login, monkeypatch
 
     settings_store.update({"PAGE_ACCESS_TOKEN": "new0"})
     app_mod.label_agent.reload_config()
-    assert app_mod.label_agent.config.page_***REMOVED*** == "new0"
+    assert app_mod.label_agent.config.page_access_token == "new0"
     cfg.settings = app_mod.label_agent.settings
 
 

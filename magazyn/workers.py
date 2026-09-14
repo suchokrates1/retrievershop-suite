@@ -101,9 +101,9 @@ class MessagingWorker(BaseWorker):
             self.logger.debug("Token Allegro niedostepny/niewazny - pomijam")
             return
 
-        ***REMOVED*** = self.agent.settings.ALLEGRO_ACCESS_TOKEN
-        self.agent._check_allegro_discussions(***REMOVED***)
-        self.agent._check_allegro_messages(***REMOVED***)
+        access_token = self.agent.settings.ALLEGRO_ACCESS_TOKEN
+        self.agent._check_allegro_discussions(access_token)
+        self.agent._check_allegro_messages(access_token)
 
 
 class ReportWorker(BaseWorker):

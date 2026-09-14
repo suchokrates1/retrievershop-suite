@@ -23,11 +23,11 @@ def create_invoice(
     contractor_data: Optional[dict] = None,
     items: list[dict],
     payment_method: str = "transfer",
-    payment_date: ***REMOVED*** = None,
-    invoice_date: ***REMOVED*** = None,
+    payment_date: Optional[str] = None,
+    invoice_date: Optional[str] = None,
     series_id: Optional[int] = None,
     invoice_type: str = "bill",
-    description: ***REMOVED*** = None,
+    description: Optional[str] = None,
 ) -> dict:
     """
     Utworz fakture/rachunek w wFirma.

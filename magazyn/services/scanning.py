@@ -264,7 +264,7 @@ def check_and_auto_pack(
         )
 
 
-def load_order_for_barcode(barcode: str) -> tuple[***REMOVED***, Optional[dict[str, Any]]]:
+def load_order_for_barcode(barcode: str) -> tuple[Optional[str], Optional[dict[str, Any]]]:
     """Wczytaj zamówienie dla kodu etykiety lub numeru śledzenia."""
     barcode = barcode.strip()
     matched_order_id = None

@@ -8,7 +8,7 @@ from typing import Optional
 from ..models.messages import Message, Thread
 
 
-def serialize_dt(value) -> ***REMOVED***:
+def serialize_dt(value) -> Optional[str]:
     """Serializuj datetime do formatu ISO."""
     if value is None:
         return None
@@ -38,7 +38,7 @@ def parse_iso_timestamp(raw_value) -> datetime:
     return parsed
 
 
-def message_preview(text: ***REMOVED***, limit: int = 160) -> str:
+def message_preview(text: Optional[str], limit: int = 160) -> str:
     """Zwroc skrocony podglad wiadomosci."""
     if not text:
         return ""

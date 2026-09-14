@@ -171,14 +171,14 @@ def _handle_remote_http_error(exc: HTTPError, log: logging.Logger) -> tuple[list
                 from ..env_tokens import update_allegro_tokens
 
                 log.info("Próba odświeżenia tokena Allegro...")
-                new_tokens = ***REMOVED***
+                new_tokens = allegro_api.refresh_token(refresh_token)
                 update_allegro_tokens(
-                    ***REMOVED***=new_tokens.get("***REMOVED***"),
-                    refresh_token=***REMOVED***
+                    access_token=new_tokens.get("access_token"),
+                    refresh_token=new_tokens.get("refresh_token"),
                     expires_in=new_tokens.get("expires_in"),
                 )
                 log.info("Token Allegro odświeżony i zapisany pomyślnie")
-                return _fetch_remote_threads(new_tokens.get("***REMOVED***"), log), None
+                return _fetch_remote_threads(new_tokens.get("access_token"), log), None
             except Exception as refresh_exc:
                 log.error("Nie udało się odświeżyć tokena: %s", refresh_exc)
                 return [], "Token Allegro wygasł i nie udało się go odświeżyć. Przejdź do ustawień i autoryzuj ponownie."

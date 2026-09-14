@@ -73,7 +73,7 @@ def _find_product_size_for_return_item(db, return_record: Return, item: dict) ->
 
 def _restore_stock_for_return_item(
     db,
-    order_id: ***REMOVED***,
+    order_id: Optional[str],
     product_size: ProductSize,
     quantity: int,
 ) -> int:

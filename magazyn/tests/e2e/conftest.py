@@ -110,7 +110,7 @@ def _e2e_app(tmp_path_factory):
         with get_session() as db:
             test_user = User(
                 username="testuser",
-                password=***REMOVED***"testpass123"),
+                password=generate_password_hash("testpass123"),
             )
             db.add(test_user)
             db.commit()

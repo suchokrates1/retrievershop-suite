@@ -18,8 +18,8 @@ from ..parsing import parse_product_info
 
 @dataclass
 class SuccessMarker:
-    order_id: ***REMOVED***
-    timestamp: ***REMOVED***
+    order_id: Optional[str]
+    timestamp: Optional[str]
 
 
 class PrintAgentStorage:
@@ -202,7 +202,7 @@ class PrintAgentStorage:
                 "Could not update order status for %s: %s", order_id, status_exc
             )
 
-    def load_state_value(self, key: str) -> ***REMOVED***:
+    def load_state_value(self, key: str) -> Optional[str]:
         self.ensure_db()
         with db_connect() as conn:
             row = conn.execute(
@@ -210,7 +210,7 @@ class PrintAgentStorage:
             ).fetchone()
         return row[0] if row else None
 
-    def save_state_value(self, key: str, value: ***REMOVED***) -> None:
+    def save_state_value(self, key: str, value: Optional[str]) -> None:
         self.ensure_db()
         try:
             with db_connect() as conn:
@@ -237,8 +237,8 @@ class PrintAgentStorage:
 
     def update_last_success_marker(
         self,
-        order_id: ***REMOVED***,
-        timestamp: ***REMOVED*** = None,
+        order_id: Optional[str],
+        timestamp: Optional[str] = None,
     ) -> None:
         if timestamp is None:
             timestamp = self._now().isoformat()

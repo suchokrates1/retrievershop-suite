@@ -54,7 +54,7 @@ def build_profit_data(
     purchase_price: Optional[Decimal],
     shipping_cost: Decimal,
     packaging_cost: Decimal,
-    note: ***REMOVED*** = None,
+    note: Optional[str] = None,
 ) -> dict[str, Any]:
     """Zbuduj payload kalkulacji zysku używany przez API raportów cenowych."""
     target_price = competitor_price - Decimal("0.01") if competitor_price > 0 else our_price

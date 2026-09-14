@@ -214,7 +214,7 @@ def test_stats_profit_returns_summary(client, app, login, monkeypatch):
             self.db = db
             self.settings = settings
 
-        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, ***REMOVED***=None, trace_label=None):
+        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, access_token=None, trace_label=None):
             return SimpleNamespace(
                 total_revenue=200.0,
                 total_purchase_cost=80.0,
@@ -247,7 +247,7 @@ def test_stats_profit_logs_trace_and_completion(client, app, login, monkeypatch,
             self.db = db
             self.settings = settings
 
-        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, ***REMOVED***=None, trace_label=None):
+        def get_period_summary(self, start_ts, end_ts, include_fixed_costs=True, access_token=None, trace_label=None):
             return SimpleNamespace(
                 total_revenue=200.0,
                 total_purchase_cost=80.0,

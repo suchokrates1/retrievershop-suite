@@ -9,11 +9,11 @@ from .core import ALLEGRO_USER_AGENT, AUTH_URL, DEFAULT_TIMEOUT
 from ..settings_store import SettingsPersistenceError, settings_store
 
 
-def get_***REMOVED***(
+def get_access_token(
     client_id: str, 
     client_secret: str, 
     code: str, 
-    redirect_uri: ***REMOVED*** = None
+    redirect_uri: Optional[str] = None
 ) -> dict:
     """
     Uzyskaj access token i refresh token z Allegro.
@@ -26,7 +26,7 @@ def get_***REMOVED***(
         Klucz tajny aplikacji Allegro.
     code : str
         Kod autoryzacyjny uzyskany po zgodzie użytkownika.
-    redirect_uri : ***REMOVED***
+    redirect_uri : Optional[str]
         URI przekierowania użyty podczas autoryzacji.
 
     Returns
@@ -56,18 +56,18 @@ def refresh_token(refresh_token: str) -> dict:
     zostanie wyrzucony ValueError.
     """
 
-    def ***REMOVED***value: ***REMOVED***) -> ***REMOVED***:
+    def _normalize(value: Optional[str]) -> Optional[str]:
         return value or None
 
     try:
-        store_client_id = ***REMOVED***settings_store.get("ALLEGRO_CLIENT_ID"))
-        ***REMOVED*** = ***REMOVED***
+        store_client_id = _normalize(settings_store.get("ALLEGRO_CLIENT_ID"))
+        store_client_secret = _normalize(settings_store.get("ALLEGRO_CLIENT_SECRET"))
     except SettingsPersistenceError as exc:
         raise ValueError(
             "Brak danych uwierzytelniających Allegro. Nie można odczytać ustawień."
         ) from exc
 
-    if not (store_client_id and ***REMOVED***):
+    if not (store_client_id and store_client_secret):
         raise ValueError(
             "Brak danych uwierzytelniających Allegro. Uzupełnij ALLEGRO_CLIENT_ID i "
             "ALLEGRO_CLIENT_SECRET w ustawieniach."
@@ -77,7 +77,7 @@ def refresh_token(refresh_token: str) -> dict:
     response = requests.post(
         AUTH_URL,
         data=data,
-        auth=(store_client_id, ***REMOVED***),
+        auth=(store_client_id, store_client_secret),
         timeout=DEFAULT_TIMEOUT,
         headers={"User-Agent": ALLEGRO_USER_AGENT},
     )

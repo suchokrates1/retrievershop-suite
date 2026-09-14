@@ -149,11 +149,11 @@ not appear on this page.
 4. Exchange the returned `code` for tokens using the helper:
    ```bash
    python - <<'PY'
-from magazyn.allegro_api import get_***REMOVED***
-print(get_***REMOVED***("YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET", "AUTH_CODE", "YOUR_REDIRECT_URI"))
+from magazyn.allegro_api import get_access_token
+print(get_access_token("YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET", "AUTH_CODE", "YOUR_REDIRECT_URI"))
 PY
    ```
-   Save the `***REMOVED***` and `refresh_token` values as `ALLEGRO_ACCESS_TOKEN`
+   Save the `access_token` and `refresh_token` values as `ALLEGRO_ACCESS_TOKEN`
    and `ALLEGRO_REFRESH_TOKEN` in your environment or `.env` file.
 
 ### Running synchronization

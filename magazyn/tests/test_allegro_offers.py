@@ -277,7 +277,7 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
     def fake_refresh(refresh_value):
         assert refresh_value == "refresh-token"
         return {
-            "***REMOVED***": "new-access",
+            "access_token": "new-access",
             "refresh_token": "new-refresh",
             "expires_in": 3600,
         }
@@ -290,16 +290,16 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
     original_update = _offers_mod.update_allegro_tokens
 
     def capture_tokens(
-        ***REMOVED***=None, refresh_token=None, expires_in=None, metadata=None
+        access_token=None, refresh_token=None, expires_in=None, metadata=None
     ):
         persisted.append(
             {
-                "***REMOVED***": ***REMOVED***,
+                "access_token": access_token,
                 "refresh_token": refresh_token,
                 "expires_in": expires_in,
             }
         )
-        original_update(***REMOVED***, refresh_token, expires_in, metadata)
+        original_update(access_token, refresh_token, expires_in, metadata)
 
     monkeypatch.setattr(
         "magazyn.allegro_api.offers.update_allegro_tokens", capture_tokens
@@ -310,11 +310,11 @@ def test_fetch_product_listing_refreshes_token_on_unauthorized(monkeypatch, alle
     assert len(calls) == 2
     assert calls[0]["headers"]["Authorization"] == "Bearer expired-token"
     assert calls[1]["headers"]["Authorization"] == "Bearer new-access"
-    assert ***REMOVED*** == "new-access"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert persisted == [
         {
-            "***REMOVED***": "new-access",
+            "access_token": "new-access",
             "refresh_token": "new-refresh",
             "expires_in": 3600,
         }

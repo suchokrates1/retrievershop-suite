@@ -260,7 +260,7 @@ def _collect_image_ids(
     *,
     woo_product_id: Optional[int],
     image_urls: list[str],
-    offer_id: ***REMOVED***,
+    offer_id: Optional[str],
     product_id: int,
     alt_text: str,
 ) -> list[int]:

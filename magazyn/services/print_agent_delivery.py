@@ -6,7 +6,7 @@ import logging
 from typing import Any, Dict, Iterable, List, Optional
 
 
-def get_delivery_method_id(service: Dict[str, Any]) -> ***REMOVED***:
+def get_delivery_method_id(service: Dict[str, Any]) -> Optional[str]:
     """Wyciagnij deliveryMethodId z id uslugi."""
     service_id = service.get("id")
     if isinstance(service_id, dict):
@@ -26,7 +26,7 @@ def pick_best_delivery_service(
     candidates: List[Dict[str, Any]],
     delivery_method: str,
     logger: logging.Logger,
-) -> ***REMOVED***:
+) -> Optional[str]:
     """Wybierz usluge Allegro Standard, a gdy jej brak pierwsza umowe wlasna."""
     allegro_standard = [service for service in candidates if is_allegro_standard(service)]
     if allegro_standard:
@@ -53,7 +53,7 @@ def resolve_delivery_service_id(
     delivery_method: str,
     services: Iterable[Dict[str, Any]],
     logger: logging.Logger,
-) -> ***REMOVED***:
+) -> Optional[str]:
     """Mapuj nazwe metody dostawy Allegro na deliveryMethodId."""
     if not delivery_method:
         return None

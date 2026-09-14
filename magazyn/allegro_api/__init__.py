@@ -22,7 +22,7 @@ from .core import (
 )
 
 from .auth import (
-    get_***REMOVED***,
+    get_access_token,
     refresh_token,
 )
 
@@ -148,7 +148,7 @@ __all__ = [
     "MAX_RETRY_ATTEMPTS",
     "MAX_BACKOFF_SECONDS",
     # Auth
-    "get_***REMOVED***",
+    "get_access_token",
     "refresh_token",
     "get_allegro_token",
     "refresh_allegro_token",

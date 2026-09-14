@@ -43,7 +43,7 @@ def token() -> str:
         method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    return json.loads(urllib.request.urlopen(req).read())["***REMOVED***"]
+    return json.loads(urllib.request.urlopen(req).read())["access_token"]
 
 
 def api(url: str, access: str, method: str = "GET", data: bytes | None = None):

@@ -88,7 +88,7 @@ class SettingsDatabaseGateway:
                         return None
 
                 data: "OrderedDict[str, str]" = OrderedDict()
-                latest: ***REMOVED*** = None
+                latest: Optional[str] = None
                 for row in rows:
                     data[row[0]] = row[1] if row[1] is not None else ""
                     if has_updated_at:
@@ -98,7 +98,7 @@ class SettingsDatabaseGateway:
             self._logger.warning("Failed to read settings from engine: %s", exc)
             return None
 
-    def load_from_db(self, db_path: Path) -> Optional[tuple["OrderedDict[str, str]", ***REMOVED***]]:
+    def load_from_db(self, db_path: Path) -> Optional[tuple["OrderedDict[str, str]", Optional[str]]]:
         runtime_engine, should_dispose = self.get_runtime_engine()
         if runtime_engine is not None and self.engine_matches_db_path(runtime_engine, db_path):
             try:
@@ -141,14 +141,14 @@ class SettingsDatabaseGateway:
             conn.close()
 
         data: "OrderedDict[str, str]" = OrderedDict()
-        latest: ***REMOVED*** = None
+        latest: Optional[str] = None
         for row in rows:
             data[row["key"]] = row["value"] if row["value"] is not None else ""
             if "updated_at" in row.keys():
                 latest = _latest_value(latest, row["updated_at"])
         return data, latest
 
-    def fetch_last_updated_at(self, db_path: Optional[Path]) -> ***REMOVED***:
+    def fetch_last_updated_at(self, db_path: Optional[Path]) -> Optional[str]:
         runtime_engine, should_dispose = self.get_runtime_engine()
         if runtime_engine is None:
             return None
@@ -175,7 +175,7 @@ class SettingsDatabaseGateway:
             if should_dispose:
                 runtime_engine.dispose()
 
-    def persist_many(self, values: Mapping[str, str]) -> ***REMOVED***:
+    def persist_many(self, values: Mapping[str, str]) -> Optional[str]:
         if not values:
             return None
         rows = [
@@ -194,7 +194,7 @@ class SettingsDatabaseGateway:
             "Failed to persist settings to database: %s",
         )
 
-    def delete_keys(self, keys: Iterable[str]) -> ***REMOVED***:
+    def delete_keys(self, keys: Iterable[str]) -> Optional[str]:
         rows = [{"key": key} for key in keys]
         if not rows:
             return None
@@ -204,7 +204,7 @@ class SettingsDatabaseGateway:
             "Failed to delete settings from database: %s",
         )
 
-    def _execute_mutation(self, rows, statement, log_message: str) -> ***REMOVED***:
+    def _execute_mutation(self, rows, statement, log_message: str) -> Optional[str]:
         from ..db import db_connect as _db_connect
         from ..db import engine as configured_engine
         from ..settings_store import SettingsPersistenceError
@@ -230,12 +230,12 @@ class SettingsDatabaseGateway:
             raise SettingsPersistenceError(log_message % "") from exc
 
 
-def _mutate_with_engine(engine, rows, statement) -> ***REMOVED***:
+def _mutate_with_engine(engine, rows, statement) -> Optional[str]:
     with engine.connect() as conn:
         return _mutate_connection(conn, rows, statement)
 
 
-def _mutate_connection(conn, rows, statement) -> ***REMOVED***:
+def _mutate_connection(conn, rows, statement) -> Optional[str]:
     conn.execute(text(APP_SETTINGS_SCHEMA))
     conn.execute(statement, rows)
     conn.commit()
@@ -252,7 +252,7 @@ def _mutate_connection(conn, rows, statement) -> ***REMOVED***:
     return latest if isinstance(latest, str) else str(latest)
 
 
-def _latest_value(current: ***REMOVED***, value) -> ***REMOVED***:
+def _latest_value(current: Optional[str], value) -> Optional[str]:
     if value is None:
         return current
     value_str = value if isinstance(value, str) else str(value)

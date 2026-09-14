@@ -122,11 +122,11 @@ def create_shipment(
     packages: list[dict],
     cash_on_delivery: Optional[dict] = None,
     insurance: Optional[dict] = None,
-    reference_number: ***REMOVED*** = None,
+    reference_number: Optional[str] = None,
     label_format: str = "PDF",
     additional_services: Optional[list[str]] = None,
     additional_properties: Optional[dict] = None,
-    credentials_id: ***REMOVED*** = None,
+    credentials_id: Optional[str] = None,
 ) -> dict:
     """Utworz przesylke w Allegro Shipment Management (async command).
 

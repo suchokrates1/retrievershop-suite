@@ -91,7 +91,7 @@ def _build_receiver(order_data: dict) -> dict:
     return receiver
 
 
-def _find_delivery_service_id(delivery_method_name: str) -> ***REMOVED***:
+def _find_delivery_service_id(delivery_method_name: str) -> Optional[str]:
     """Znajdz delivery_service_id na podstawie nazwy metody dostawy.
 
     Przeszukuje liste dostepnych uslug dostawy z API i dopasowuje

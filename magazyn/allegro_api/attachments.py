@@ -10,19 +10,19 @@ from .core import API_BASE_URL, _request_with_retry
 # ZALACZNIKI W CENTRUM WIADOMOSCI
 # ============================================================================
 
-def download_attachment(***REMOVED***: str, attachment_id: str) -> bytes:
+def download_attachment(access_token: str, attachment_id: str) -> bytes:
     """
     Pobierz załącznik z Centrum Wiadomości Allegro.
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         attachment_id: ID załącznika (z pola attachment.url w wiadomości)
     
     Returns:
         bytes: Zawartość pliku
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "*/*",
     }
     url = f"{API_BASE_URL}/messaging/message-attachments/{attachment_id}"
@@ -33,7 +33,7 @@ def download_attachment(***REMOVED***: str, attachment_id: str) -> bytes:
 
 
 def create_attachment_declaration(
-    ***REMOVED***: str, 
+    access_token: str, 
     filename: str, 
     size: int
 ) -> dict:
@@ -41,7 +41,7 @@ def create_attachment_declaration(
     Utwórz deklarację załącznika przed jego przesłaniem.
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         filename: Nazwa pliku (z rozszerzeniem)
         size: Rozmiar pliku w bajtach
     
@@ -49,7 +49,7 @@ def create_attachment_declaration(
         dict: Odpowiedź z ID załącznika {"id": "..."}
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
         "Content-Type": "application/vnd.allegro.public.v1+json",
     }
@@ -69,7 +69,7 @@ def create_attachment_declaration(
 
 
 def upload_attachment(
-    ***REMOVED***: str, 
+    access_token: str, 
     attachment_id: str, 
     file_content: bytes,
     content_type: str
@@ -78,7 +78,7 @@ def upload_attachment(
     Prześlij załącznik na serwery Allegro.
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         attachment_id: ID załącznika (z create_attachment_declaration)
         file_content: Zawartość pliku (binarna)
         content_type: Typ MIME (np. 'image/png', 'application/pdf')
@@ -95,7 +95,7 @@ def upload_attachment(
         - application/pdf
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
         "Content-Type": content_type,
     }
@@ -111,7 +111,7 @@ def upload_attachment(
 
 
 def upload_attachment_complete(
-    ***REMOVED***: str,
+    access_token: str,
     filename: str,
     file_content: bytes,
     content_type: str
@@ -120,7 +120,7 @@ def upload_attachment_complete(
     Pełny proces przesyłania załącznika (deklaracja + upload).
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         filename: Nazwa pliku
         file_content: Zawartość pliku (binarna)
         content_type: Typ MIME
@@ -129,10 +129,10 @@ def upload_attachment_complete(
         str: ID załącznika gotowego do użycia w wiadomości
     """
     size = len(file_content)
-    declaration = create_attachment_declaration(***REMOVED***, filename, size)
+    declaration = create_attachment_declaration(access_token, filename, size)
     attachment_id = declaration["id"]
     
-    upload_attachment(***REMOVED***, attachment_id, file_content, content_type)
+    upload_attachment(access_token, attachment_id, file_content, content_type)
     
     return attachment_id
 
@@ -141,21 +141,21 @@ def upload_attachment_complete(
 # ZALACZNIKI W DYSKUSJACH I REKLAMACJACH (ISSUES API)
 # ============================================================================
 
-def download_issue_attachment(***REMOVED***: str, attachment_id: str) -> bytes:
+def download_issue_attachment(access_token: str, attachment_id: str) -> bytes:
     """
     Pobierz załącznik z dyskusji/reklamacji (Issues API).
     
     Endpoint: GET /sale/issues/attachments/{attachmentId}
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         attachment_id: ID załącznika
     
     Returns:
         bytes: Zawartość pliku
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
     }
     url = f"{API_BASE_URL}/sale/issues/attachments/{attachment_id}"
     response = _request_with_retry(
@@ -165,7 +165,7 @@ def download_issue_attachment(***REMOVED***: str, attachment_id: str) -> bytes:
 
 
 def create_issue_attachment_declaration(
-    ***REMOVED***: str, 
+    access_token: str, 
     filename: str, 
     size: int
 ) -> dict:
@@ -175,7 +175,7 @@ def create_issue_attachment_declaration(
     Endpoint: POST /sale/issues/attachments
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         filename: Nazwa pliku (z rozszerzeniem)
         size: Rozmiar pliku w bajtach (max 2097152 = 2MB)
     
@@ -183,7 +183,7 @@ def create_issue_attachment_declaration(
         dict: Odpowiedź z ID załącznika {"id": "..."}
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
         "Content-Type": "application/vnd.allegro.beta.v1+json",
     }
@@ -203,7 +203,7 @@ def create_issue_attachment_declaration(
 
 
 def upload_issue_attachment(
-    ***REMOVED***: str, 
+    access_token: str, 
     attachment_id: str, 
     file_content: bytes,
     content_type: str
@@ -214,7 +214,7 @@ def upload_issue_attachment(
     Endpoint: PUT /sale/issues/attachments/{attachmentId}
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         attachment_id: ID załącznika (z create_issue_attachment_declaration)
         file_content: Zawartość pliku (binarna)
         content_type: Typ MIME (np. 'image/png', 'application/pdf')
@@ -231,7 +231,7 @@ def upload_issue_attachment(
         - application/pdf
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
         "Content-Type": content_type,
     }
@@ -247,7 +247,7 @@ def upload_issue_attachment(
 
 
 def upload_issue_attachment_complete(
-    ***REMOVED***: str,
+    access_token: str,
     filename: str,
     file_content: bytes,
     content_type: str
@@ -256,7 +256,7 @@ def upload_issue_attachment_complete(
     Pełny proces przesyłania załącznika do dyskusji/reklamacji (Issues API).
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         filename: Nazwa pliku
         file_content: Zawartość pliku (binarna)
         content_type: Typ MIME
@@ -265,9 +265,9 @@ def upload_issue_attachment_complete(
         str: ID załącznika gotowego do użycia w wiadomości
     """
     size = len(file_content)
-    declaration = create_issue_attachment_declaration(***REMOVED***, filename, size)
+    declaration = create_issue_attachment_declaration(access_token, filename, size)
     attachment_id = declaration["id"]
     
-    upload_issue_attachment(***REMOVED***, attachment_id, file_content, content_type)
+    upload_issue_attachment(access_token, attachment_id, file_content, content_type)
     
     return attachment_id

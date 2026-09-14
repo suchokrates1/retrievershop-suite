@@ -37,8 +37,8 @@ class AllegroSyncService:
     
     Uzycie:
         service = AllegroSyncService(db_file, settings, save_state_callback)
-        service.check_discussions(***REMOVED***)
-        service.check_messages(***REMOVED***)
+        service.check_discussions(access_token)
+        service.check_messages(access_token)
     """
     
     def __init__(
@@ -82,17 +82,17 @@ class AllegroSyncService:
             text = f'Użytkownik {login} napisał wiadomość: "{preview}"'
         notify_allegro_message_once(conn, message_id, text)
     
-    def check_discussions(self, ***REMOVED***: str) -> None:
+    def check_discussions(self, access_token: str) -> None:
         """
         Sprawdza nowe dyskusje Allegro i synchronizuje z baza.
         
         Args:
-            ***REMOVED***: Token dostepu Allegro
+            access_token: Token dostepu Allegro
         """
         auto_enabled, auto_reply_text = self._get_auto_reply_config()
         
         try:
-            discussions = fetch_discussions(***REMOVED***).get("issues", [])
+            discussions = fetch_discussions(access_token).get("issues", [])
         except Exception as exc:
             logger.error("Blad pobierania dyskusji Allegro: %s", exc)
             return
@@ -103,7 +103,7 @@ class AllegroSyncService:
         with db_connect() as conn:
             for discussion in discussions:
                 self._process_discussion(
-                    conn, discussion, ***REMOVED***, 
+                    conn, discussion, access_token, 
                     auto_enabled, auto_reply_text
                 )
         
@@ -113,7 +113,7 @@ class AllegroSyncService:
         self, 
         conn, 
         discussion: Dict[str, Any],
-        ***REMOVED***: str,
+        access_token: str,
         auto_enabled: bool,
         auto_reply_text: str
     ) -> None:
@@ -142,7 +142,7 @@ class AllegroSyncService:
         
         # Pobierz wiadomosci
         try:
-            chat_payload = fetch_discussion_chat(***REMOVED***, discussion_id, limit=100)
+            chat_payload = fetch_discussion_chat(access_token, discussion_id, limit=100)
         except Exception as exc:
             logger.error("Blad pobierania wiadomosci dyskusji %s: %s", discussion_id, exc)
             return
@@ -199,13 +199,13 @@ class AllegroSyncService:
         
         if new_buyer_message and auto_enabled:
             self._send_auto_reply_discussion(
-                conn, ***REMOVED***, discussion_id, auto_reply_text
+                conn, access_token, discussion_id, auto_reply_text
             )
     
     def _send_auto_reply_discussion(
         self, 
         conn, 
-        ***REMOVED***: str, 
+        access_token: str, 
         discussion_id: str, 
         reply_text: str
     ) -> None:
@@ -217,7 +217,7 @@ class AllegroSyncService:
             return
         
         try:
-            send_discussion_message(***REMOVED***, discussion_id, reply_text)
+            send_discussion_message(access_token, discussion_id, reply_text)
             conn.execute(
                 text("INSERT INTO allegro_replied_discussions (discussion_id, replied_at) VALUES (:did, :rat)"),
                 {"did": discussion_id, "rat": datetime.now(timezone.utc).isoformat()},
@@ -225,17 +225,17 @@ class AllegroSyncService:
         except Exception as exc:
             logger.error("Blad wysylania autorespondera do dyskusji %s: %s", discussion_id, exc)
     
-    def check_messages(self, ***REMOVED***: str) -> None:
+    def check_messages(self, access_token: str) -> None:
         """
         Sprawdza nowe wiadomosci Allegro i synchronizuje z baza.
         
         Args:
-            ***REMOVED***: Token dostepu Allegro
+            access_token: Token dostepu Allegro
         """
         auto_enabled, auto_reply_text = self._get_auto_reply_config()
         
         try:
-            threads = fetch_message_threads(***REMOVED***).get("threads", [])
+            threads = fetch_message_threads(access_token).get("threads", [])
         except Exception as exc:
             logger.error("Blad pobierania wiadomosci Allegro: %s", exc)
             return
@@ -246,7 +246,7 @@ class AllegroSyncService:
         with db_connect() as conn:
             for thread in threads:
                 self._process_message_thread(
-                    conn, thread, ***REMOVED***,
+                    conn, thread, access_token,
                     auto_enabled, auto_reply_text
                 )
         
@@ -256,7 +256,7 @@ class AllegroSyncService:
         self,
         conn,
         thread: Dict[str, Any],
-        ***REMOVED***: str,
+        access_token: str,
         auto_enabled: bool,
         auto_reply_text: str
     ) -> None:
@@ -286,7 +286,7 @@ class AllegroSyncService:
         
         # Pobierz wiadomosci
         try:
-            messages_payload = fetch_thread_messages(***REMOVED***, thread_id, limit=100)
+            messages_payload = fetch_thread_messages(access_token, thread_id, limit=100)
         except HTTPError as exc:
             status_code = getattr(getattr(exc, "response", None), "status_code", 0)
             if status_code == 422:
@@ -350,13 +350,13 @@ class AllegroSyncService:
         
         if new_interlocutor_message and auto_enabled:
             self._send_auto_reply_thread(
-                conn, ***REMOVED***, thread_id, auto_reply_text
+                conn, access_token, thread_id, auto_reply_text
             )
     
     def _send_auto_reply_thread(
         self,
         conn,
-        ***REMOVED***: str,
+        access_token: str,
         thread_id: str,
         reply_text: str
     ) -> None:
@@ -368,7 +368,7 @@ class AllegroSyncService:
             return
         
         try:
-            send_thread_message(***REMOVED***, thread_id, reply_text)
+            send_thread_message(access_token, thread_id, reply_text)
             conn.execute(
                 text("INSERT INTO allegro_replied_threads (thread_id, replied_at) VALUES (:tid, :rat)"),
                 {"tid": thread_id, "rat": datetime.now(timezone.utc).isoformat()},

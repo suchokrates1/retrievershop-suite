@@ -84,7 +84,7 @@ def shipment_creator(
     )
 
 
-def resolve_delivery_service_id(agent, delivery_method: str, *, get_delivery_services) -> ***REMOVED***:
+def resolve_delivery_service_id(agent, delivery_method: str, *, get_delivery_services) -> Optional[str]:
     return resolve_delivery_service_from_api(
         delivery_method,
         get_delivery_services=get_delivery_services,

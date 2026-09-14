@@ -31,7 +31,7 @@ def test_discussions_page_loads_without_error(app_no_agent):
         with get_session() as db:
             user = db.query(User).filter_by(username='test').first()
             if not user:
-                user = User(username='test', password=***REMOVED***'test'))
+                user = User(username='test', password=generate_password_hash('test'))
                 db.add(user)
 
             test_thread_id = str(uuid.uuid4())

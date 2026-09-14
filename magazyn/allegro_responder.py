@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def process_new_messages(***REMOVED***: str):
+def process_new_messages(access_token: str):
     """
     Fetches new messages from Allegro, and if autoresponder is enabled,
     sends an automated reply to each new message.
@@ -15,21 +15,21 @@ def process_new_messages(***REMOVED***: str):
         return
 
     try:
-        threads = allegro_api.fetch_message_threads(***REMOVED***)
+        threads = allegro_api.fetch_message_threads(access_token)
         with get_session() as db:
             for thread in threads.get("threads", []):
                 if not thread.get("read"):
                     thread_id = thread["id"]
                     if not db.query(AllegroRepliedThread).filter_by(thread_id=thread_id).first():
                         message = settings_store.get("ALLEGRO_AUTORESPONDER_MESSAGE")
-                        allegro_api.send_thread_message(***REMOVED***, thread_id, message)
+                        allegro_api.send_thread_message(access_token, thread_id, message)
                         db.add(AllegroRepliedThread(thread_id=thread_id))
                         db.commit()
                         logger.info(f"Auto-reply sent to thread {thread_id}")
     except Exception as e:
         logger.error(f"Failed to process new messages: {e}")
 
-def process_new_discussions(***REMOVED***: str):
+def process_new_discussions(access_token: str):
     """
     Fetches new discussions from Allegro, and if autoresponder is enabled,
     sends an automated reply to each new discussion.
@@ -38,13 +38,13 @@ def process_new_discussions(***REMOVED***: str):
         return
 
     try:
-        discussions = allegro_api.fetch_discussions(***REMOVED***)
+        discussions = allegro_api.fetch_discussions(access_token)
         with get_session() as db:
             for discussion in discussions.get("disputes", []):
                 discussion_id = discussion["id"]
                 if not db.query(AllegroRepliedDiscussion).filter_by(discussion_id=discussion_id).first():
                     message = settings_store.get("ALLEGRO_AUTORESPONDER_MESSAGE")
-                    allegro_api.send_discussion_message(***REMOVED***, discussion_id, message)
+                    allegro_api.send_discussion_message(access_token, discussion_id, message)
                     db.add(AllegroRepliedDiscussion(discussion_id=discussion_id))
                     db.commit()
                     logger.info(f"Auto-reply sent to discussion {discussion_id}")

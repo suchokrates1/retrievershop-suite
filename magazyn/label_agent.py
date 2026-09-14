@@ -214,7 +214,7 @@ class LabelAgent:
 
     def validate_env(self) -> None:
         required = {
-            "PAGE_ACCESS_TOKEN": self.config.page_***REMOVED***,
+            "PAGE_ACCESS_TOKEN": self.config.page_access_token,
             "RECIPIENT_ID": self.config.recipient_id,
         }
         missing = [name for name, value in required.items() if not value]
@@ -238,17 +238,17 @@ class LabelAgent:
     ) -> None:
         self.storage.mark_as_printed(order_id, last_order_data)
 
-    def _load_state_value(self, key: str) -> ***REMOVED***:
+    def _load_state_value(self, key: str) -> Optional[str]:
         return self.storage.load_state_value(key)
 
-    def _save_state_value(self, key: str, value: ***REMOVED***) -> None:
+    def _save_state_value(self, key: str, value: Optional[str]) -> None:
         self.storage.save_state_value(key, value)
 
     def load_last_success_marker(self) -> SuccessMarker:
         return self.storage.load_last_success_marker()
 
     def update_last_success_marker(
-        self, order_id: ***REMOVED***, timestamp: ***REMOVED*** = None
+        self, order_id: Optional[str], timestamp: Optional[str] = None
     ) -> None:
         self.storage.update_last_success_marker(order_id, timestamp)
 
@@ -310,14 +310,14 @@ class LabelAgent:
             update_fulfillment_status=update_fulfillment_status,
         )
 
-    def _resolve_delivery_service_id(self, delivery_method: str) -> ***REMOVED***:
+    def _resolve_delivery_service_id(self, delivery_method: str) -> Optional[str]:
         return integrations.resolve_delivery_service_id(
             self,
             delivery_method,
             get_delivery_services=get_delivery_services,
         )
 
-    def _resolve_carrier_id(self, delivery_method: str) -> ***REMOVED***:
+    def _resolve_carrier_id(self, delivery_method: str) -> Optional[str]:
         return integrations.resolve_carrier_id(delivery_method)
 
     def _label_service(self):
@@ -428,11 +428,11 @@ class LabelAgent:
     def _order_processor(self):
         return loop_services.order_processor(self)
 
-    def _check_allegro_discussions(self, ***REMOVED***: str) -> None:
-        loop_services.check_allegro_discussions(self, ***REMOVED***)
+    def _check_allegro_discussions(self, access_token: str) -> None:
+        loop_services.check_allegro_discussions(self, access_token)
 
-    def _check_allegro_messages(self, ***REMOVED***: str) -> None:
-        loop_services.check_allegro_messages(self, ***REMOVED***)
+    def _check_allegro_messages(self, access_token: str) -> None:
+        loop_services.check_allegro_messages(self, access_token)
 
     def _agent_loop(self) -> None:
         loop_services.agent_loop(self)

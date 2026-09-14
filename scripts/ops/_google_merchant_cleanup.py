@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from _merchant_api import API_ROOT, ***REMOVED***, merchant_id, request_json
+from _merchant_api import API_ROOT, access_token, merchant_id, request_json
 
 AUDIT = Path(os.path.expanduser("~/retrievershop-suite/scripts/ops/_merchant_audit.json"))
 DRY = "--apply" not in sys.argv
@@ -33,7 +33,7 @@ def http_status(url: str) -> int:
 
 def main() -> int:
     mid = merchant_id()
-    access = ***REMOVED***()
+    access = access_token()
     audit = json.loads(AUDIT.read_text(encoding="utf-8"))
     if audit.get("api") != "Merchant API products/v1":
         raise RuntimeError(

@@ -57,12 +57,12 @@ def _normalize_comment(text: str) -> str:
 
 
 def fetch_reviews_with_comments(
-    ***REMOVED***: str | None = None,
+    access_token: str | None = None,
     *,
     limit: int = DEFAULT_LIMIT,
 ) -> list[dict[str, Any]]:
     """Pobierz polecane oceny z niepustym komentarzem (najnowsze pierwsze)."""
-    token = ***REMOVED*** or ***REMOVED***
+    token = access_token or settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         raise RuntimeError("missing ALLEGRO_ACCESS_TOKEN")
 

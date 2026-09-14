@@ -68,13 +68,13 @@ def test_allegro_oauth_callback_persists_tokens(client, login, monkeypatch):
         }
     )
 
-    def fake_get_***REMOVED***(client_id, client_secret, code, redirect_uri=None):
+    def fake_get_access_token(client_id, client_secret, code, redirect_uri=None):
         assert client_id == "client-123"
         assert client_secret == "secret-456"
         assert code == "auth-code"
         assert redirect_uri == "https://example.com/callback"
         return {
-            "***REMOVED***": "new-access",
+            "access_token": "new-access",
             "refresh_token": "new-refresh",
             "expires_in": 3600,
             "scope": "sale:offers",
@@ -82,7 +82,7 @@ def test_allegro_oauth_callback_persists_tokens(client, login, monkeypatch):
         }
 
     monkeypatch.setattr(
-        "magazyn.allegro_api.get_***REMOVED***", fake_get_***REMOVED***
+        "magazyn.allegro_api.get_access_token", fake_get_access_token
     )
 
     state = "state-token"
@@ -109,7 +109,7 @@ def test_allegro_oauth_callback_persists_tokens(client, login, monkeypatch):
 
     assert any("Autoryzacja Allegro zakończona sukcesem." in message for _, message in flashes)
 
-    assert ***REMOVED*** == "new-access"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN") == "3600"
 
@@ -147,11 +147,11 @@ def test_allegro_oauth_callback_handles_allegro_error(client, login, monkeypatch
     class DummyResponse:
         status_code = 400
 
-    def failing_get_***REMOVED***(*_, **__):
+    def failing_get_access_token(*_, **__):
         raise HTTPError(response=DummyResponse())
 
     monkeypatch.setattr(
-        "magazyn.allegro_api.get_***REMOVED***", failing_get_***REMOVED***
+        "magazyn.allegro_api.get_access_token", failing_get_access_token
     )
 
     state = "state-token"
@@ -178,7 +178,7 @@ def test_allegro_oauth_callback_handles_allegro_error(client, login, monkeypatch
 
     assert any("HTTP status 400" in message for _, message in flashes)
 
-    assert ***REMOVED*** is None
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") is None
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") is None
     assert settings_store.get("ALLEGRO_TOKEN_EXPIRES_IN") is None
     assert settings_store.get("ALLEGRO_TOKEN_METADATA") is None
@@ -754,7 +754,7 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
         refresh_calls["count"] += 1
         assert token == "refresh-token"
         return {
-            "***REMOVED***": "new-access",
+            "access_token": "new-access",
             "refresh_token": "new-refresh",
             "expires_in": 3600,
         }
@@ -766,16 +766,16 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
     original_update = sync_mod.update_allegro_tokens
 
     def capture_tokens(
-        ***REMOVED***=None, refresh_token=None, expires_in=None, metadata=None
+        access_token=None, refresh_token=None, expires_in=None, metadata=None
     ):
         persisted.append(
             {
-                "***REMOVED***": ***REMOVED***,
+                "access_token": access_token,
                 "refresh_token": refresh_token,
                 "expires_in": expires_in,
             }
         )
-        original_update(***REMOVED***, refresh_token, expires_in, metadata)
+        original_update(access_token, refresh_token, expires_in, metadata)
 
     monkeypatch.setattr("magazyn.allegro_sync.update_allegro_tokens", capture_tokens)
 
@@ -792,11 +792,11 @@ def test_refresh_on_unauthorized_fetch(client, login, monkeypatch):
 
     assert attempts["count"] == 2
     assert refresh_calls["count"] == 1
-    assert ***REMOVED*** == "new-access"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "new-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "new-refresh"
     assert persisted == [
         {
-            "***REMOVED***": "new-access",
+            "access_token": "new-access",
             "refresh_token": "new-refresh",
             "expires_in": 3600,
         }
@@ -988,7 +988,7 @@ def test_sync_offers_aborts_when_settings_store_is_read_only(
         sync_mod.allegro_api,
         "refresh_token",
         lambda refresh: {
-            "***REMOVED***": "new-access-token",
+            "access_token": "new-access-token",
             "refresh_token": "new-refresh-token",
         },
     )
@@ -1071,7 +1071,7 @@ def test_token_refresher_refreshes_tokens_automatically(app, monkeypatch):
         assert token == "refresh-token"
         refresh_called.set()
         return {
-            "***REMOVED***": "refreshed-access",
+            "access_token": "refreshed-access",
             "refresh_token": "refreshed-refresh",
             "expires_in": 1800,
             "scope": "sale:orders",
@@ -1095,7 +1095,7 @@ def test_token_refresher_refreshes_tokens_automatically(app, monkeypatch):
     finally:
         refresher.stop()
 
-    assert ***REMOVED*** == "refreshed-access"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "refreshed-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refreshed-refresh"
 
     metadata_raw = settings_store.get("ALLEGRO_TOKEN_METADATA")
@@ -1129,7 +1129,7 @@ def test_token_refresher_retries_after_failure(app, monkeypatch):
             raise HTTPError(response=DummyResponse())
         refresh_complete.set()
         return {
-            "***REMOVED***": "final-access",
+            "access_token": "final-access",
             "refresh_token": "refresh-token",
             "expires_in": 900,
         }
@@ -1159,7 +1159,7 @@ def test_token_refresher_retries_after_failure(app, monkeypatch):
     assert len(call_times) >= 2
     assert call_times[1] - call_times[0] >= 0.18
 
-    assert ***REMOVED*** == "final-access"
+    assert settings_store.get("ALLEGRO_ACCESS_TOKEN") == "final-access"
     assert settings_store.get("ALLEGRO_REFRESH_TOKEN") == "refresh-token"
 
     assert error_metric._value.get() == error_start + 1
@@ -1191,7 +1191,7 @@ def test_refresh_token_uses_settings_store_even_if_env_present(app, monkeypatch)
             return None
 
         def json(self):
-            return {"***REMOVED***": "new-token", "refresh_token": "new-refresh"}
+            return {"access_token": "new-token", "refresh_token": "new-refresh"}
 
     def fake_post(url, data, auth=None, timeout=None, headers=None):
         assert url == AUTH_URL
@@ -1209,7 +1209,7 @@ def test_refresh_token_uses_settings_store_even_if_env_present(app, monkeypatch)
             cleanup[key] = value if value is not None else None
         settings_store.update(cleanup)
 
-    assert result == {"***REMOVED***": "new-token", "refresh_token": "new-refresh"}
+    assert result == {"access_token": "new-token", "refresh_token": "new-refresh"}
 
 
 def test_refresh_token_uses_settings_store_when_env_missing(app, monkeypatch):
@@ -1235,7 +1235,7 @@ def test_refresh_token_uses_settings_store_when_env_missing(app, monkeypatch):
             return None
 
         def json(self):
-            return {"***REMOVED***": "new-token", "refresh_token": "new-refresh"}
+            return {"access_token": "new-token", "refresh_token": "new-refresh"}
 
     def fake_post(url, data, auth=None, timeout=None, headers=None):
         assert url == AUTH_URL
@@ -1253,4 +1253,4 @@ def test_refresh_token_uses_settings_store_when_env_missing(app, monkeypatch):
             cleanup[key] = value if value is not None else None
         settings_store.update(cleanup)
 
-    assert result == {"***REMOVED***": "new-token", "refresh_token": "new-refresh"}
+    assert result == {"access_token": "new-token", "refresh_token": "new-refresh"}

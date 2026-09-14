@@ -21,7 +21,7 @@ def upsert_offer_from_api(
     offer_id: str,
     title: str,
     price,
-    offer_ean: ***REMOVED***,
+    offer_ean: Optional[str],
     publication_status: str,
     product_id: Optional[int],
     product_size_id: Optional[int],

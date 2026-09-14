@@ -42,8 +42,8 @@ class PrintAgentTrackingService:
 
     def check_tracking_statuses(self) -> None:
         try:
-            ***REMOVED*** = ***REMOVED***
-            if not ***REMOVED***:
+            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+            if not access_token:
                 self.logger.debug("Brak tokenu Allegro - pomijam sprawdzanie trackingu")
                 return
 
@@ -57,7 +57,7 @@ class PrintAgentTrackingService:
                     sum(len(items) for items in carrier_waybills.values()),
                     len(carrier_waybills),
                 )
-                self._update_tracking_batches(db, ***REMOVED***, carrier_waybills)
+                self._update_tracking_batches(db, access_token, carrier_waybills)
         except Exception as exc:
             self.logger.warning("Blad sprawdzania statusow przesylek: %s", exc)
 
@@ -96,7 +96,7 @@ class PrintAgentTrackingService:
     def _update_tracking_batches(
         self,
         db: Any,
-        ***REMOVED***: str,
+        access_token: str,
         carrier_waybills: Dict[str, List[Tuple[Order, str, str]]],
     ) -> None:
         for carrier_id, order_items in carrier_waybills.items():
@@ -106,7 +106,7 @@ class PrintAgentTrackingService:
             for start in range(0, len(waybill_list), 20):
                 batch = waybill_list[start:start + 20]
                 try:
-                    tracking_data = fetch_parcel_tracking(***REMOVED***, carrier_id, batch)
+                    tracking_data = fetch_parcel_tracking(access_token, carrier_id, batch)
                 except Exception as exc:
                     self.logger.warning(
                         "Blad pobierania trackingu %s: %s",

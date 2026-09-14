@@ -62,7 +62,7 @@ def map_allegro_return_status(allegro_status: str) -> str:
     return ALLEGRO_RETURN_STATUS_MAP.get(allegro_status, RETURN_STATUS_PENDING)
 
 
-def map_carrier_to_allegro(carrier_name: ***REMOVED***) -> ***REMOVED***:
+def map_carrier_to_allegro(carrier_name: Optional[str]) -> Optional[str]:
     """Mapuj nazwe przewoznika na ID w Allegro API."""
     if not carrier_name:
         return None

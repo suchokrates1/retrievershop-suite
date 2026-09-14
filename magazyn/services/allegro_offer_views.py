@@ -23,12 +23,12 @@ def get_ean_for_offer(offer_id: str, *, log: logging.Logger | None = None) -> st
     """Pobierz EAN oferty z Allegro API."""
     active_logger = log or logger
     try:
-        ***REMOVED*** = ***REMOVED***
-        if not ***REMOVED***:
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        if not access_token:
             return ""
 
         headers = {
-            "Authorization": f"Bearer {***REMOVED***}",
+            "Authorization": f"Bearer {access_token}",
             "Accept": "application/vnd.allegro.public.v1+json",
             "User-Agent": ALLEGRO_USER_AGENT,
         }

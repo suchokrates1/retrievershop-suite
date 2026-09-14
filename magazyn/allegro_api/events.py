@@ -38,7 +38,7 @@ ACTIONABLE_EVENT_TYPES = frozenset({
 
 def fetch_order_events(
     *,
-    from_event_id: ***REMOVED*** = None,
+    from_event_id: Optional[str] = None,
     event_types: Optional[list[str]] = None,
     limit: int = 1000,
 ) -> dict:

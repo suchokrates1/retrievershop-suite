@@ -41,7 +41,7 @@ READONLY_ROUTES = [
 @pytest.fixture(autouse=True)
 def _seed_user(app_mod):
     """Tworzy uzytkownika testowego dla wszystkich testow w module."""
-    hashed = ***REMOVED***"secret")
+    hashed = generate_password_hash("secret")
     with app_mod.get_session() as db:
         db.add(User(username="tester", password=hashed))
         db.commit()

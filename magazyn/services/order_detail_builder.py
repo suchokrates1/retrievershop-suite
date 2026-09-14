@@ -199,14 +199,14 @@ class OrderDetailBuilder:
             return result
 
         try:
-            ***REMOVED*** = ***REMOVED***
+            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
             allegro_order_id = order.external_order_id
             
-            if ***REMOVED*** and allegro_order_id:
+            if access_token and allegro_order_id:
                 from ..allegro_api import get_order_billing_summary
                 
                 billing_summary = get_order_billing_summary(
-                    ***REMOVED***, 
+                    access_token, 
                     allegro_order_id,
                     delivery_method=order.delivery_method,
                     order_value=sale_price

@@ -65,8 +65,8 @@ def _clear_cached_tokens():
         _raise_settings_store_read_only(exc)
 
 
-def _invalidate_***REMOVED***():
-    """Usun ***REMOVED*** zachowujac refresh_token do ponownej proby odswiezenia."""
+def _invalidate_access_token():
+    """Usun access_token zachowujac refresh_token do ponownej proby odswiezenia."""
     from .settings_store import SettingsPersistenceError
     try:
         updates = empty_allegro_token_values()
@@ -95,12 +95,12 @@ def sync_offers():
             Aggregated price trend entries generated from the stored history
             samples.
     """
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
     if not token and refresh:
         try:
             token_data = allegro_api.refresh_token(refresh)
-            token = token_data.get("***REMOVED***")
+            token = token_data.get("access_token")
             new_refresh = token_data.get("refresh_token")
             expires_in = token_data.get("expires_in")
             if new_refresh:
@@ -135,7 +135,7 @@ def sync_offers():
                 if status_code == 401 and refresh:
                     # First check if tokens were refreshed by external process
                     settings_store.reload()
-                    new_external_token = ***REMOVED***
+                    new_external_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
                     if new_external_token and new_external_token != token:
                         # Use externally refreshed token
                         token = new_external_token
@@ -147,16 +147,16 @@ def sync_offers():
                     try:
                         token_data = allegro_api.refresh_token(refresh)
                     except Exception as refresh_exc:
-                        _invalidate_***REMOVED***()
+                        _invalidate_access_token()
                         logger.exception("Failed to refresh Allegro token")
                         ALLEGRO_SYNC_ERRORS_TOTAL.labels(reason="token_refresh").inc()
                         raise RuntimeError(
                             "Failed to refresh Allegro token after unauthorized response "
                             f"at offset {offset}; please re-authorize the Allegro integration"
                         ) from refresh_exc
-                    new_token = token_data.get("***REMOVED***")
+                    new_token = token_data.get("access_token")
                     if not new_token:
-                        _invalidate_***REMOVED***()
+                        _invalidate_access_token()
                         message = (
                             "Failed to refresh Allegro offers at offset "
                             f"{offset}: missing access token"

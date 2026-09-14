@@ -36,7 +36,7 @@ def distinct_series() -> List[str]:
     return _distinct_values(Product.series)
 
 
-def taxonomy_options(values: Iterable[str], current: ***REMOVED*** = None) -> List[str]:
+def taxonomy_options(values: Iterable[str], current: Optional[str] = None) -> List[str]:
     """Posortowana lista wartosci z bazy, z aktualna wartoscia produktu jesli brakuje."""
     merged = {value.strip() for value in values if value and str(value).strip()}
     if current and str(current).strip():
@@ -45,12 +45,12 @@ def taxonomy_options(values: Iterable[str], current: ***REMOVED*** = None) -> Li
 
 
 def resolve_taxonomy_value(
-    selected: ***REMOVED***,
-    custom: ***REMOVED***,
+    selected: Optional[str],
+    custom: Optional[str],
     *,
     required: bool = True,
     field_label: str = "wartość",
-) -> ***REMOVED***:
+) -> Optional[str]:
     """Rozwiaz wybor z listy lub nowa wartosc z pola tekstowego."""
     selected_value = (selected or "").strip()
     if selected_value == NEW_TAXONOMY_VALUE:
@@ -65,7 +65,7 @@ def resolve_taxonomy_value(
     return selected_value
 
 
-def resolve_optional_series(selected: ***REMOVED***, custom: ***REMOVED***) -> ***REMOVED***:
+def resolve_optional_series(selected: Optional[str], custom: Optional[str]) -> Optional[str]:
     """Seria moze byc pusta (-- Brak serii --)."""
     selected_value = (selected or "").strip()
     if selected_value == NEW_TAXONOMY_VALUE:
@@ -73,7 +73,7 @@ def resolve_optional_series(selected: ***REMOVED***, custom: ***REMOVED***) -> *
     return selected_value or None
 
 
-def parse_product_form_taxonomy(form_data) -> tuple[str, str, ***REMOVED***]:
+def parse_product_form_taxonomy(form_data) -> tuple[str, str, Optional[str]]:
     """Rozwiaz kategorie, marke i serie z pol formularza add/edit item."""
     category = resolve_taxonomy_value(
         form_data.get("category"),

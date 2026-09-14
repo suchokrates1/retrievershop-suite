@@ -251,11 +251,11 @@ def create_default_user_if_needed(app):
                 old_user = session.query(User).filter_by(username="admin").first()
                 if old_user:
                     old_user.username = "kontakt@retrievershop.pl"
-                    old_user.password = ***REMOVED***
+                    old_user.password = generate_password_hash(
                         "Lucynka66@", method="pbkdf2:sha256", salt_length=16
                     )
                 else:
-                    hashed_password = ***REMOVED***
+                    hashed_password = generate_password_hash(
                         "Lucynka66@", method="pbkdf2:sha256", salt_length=16
                     )
                     session.add(User(username="kontakt@retrievershop.pl", password=hashed_password))

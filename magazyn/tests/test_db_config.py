@@ -15,7 +15,7 @@ def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
     db.configure_engine(str(first))
     db.init_db()
     with db.get_session() as session:
-        session.add(User(username="u1", password=***REMOVED***"p")))
+        session.add(User(username="u1", password=generate_password_hash("p")))
 
     second = tmp_path / "second.db"
     new_settings = SimpleNamespace(**vars(settings))
@@ -26,7 +26,7 @@ def test_reload_env_reconfigures_engine(tmp_path, monkeypatch):
 
     db.init_db()
     with db.get_session() as session:
-        session.add(User(username="u2", password=***REMOVED***"p")))
+        session.add(User(username="u2", password=generate_password_hash("p")))
 
     conn1 = sqlite_connect(first)
     conn2 = sqlite_connect(second)

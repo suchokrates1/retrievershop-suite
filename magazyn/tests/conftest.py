@@ -121,9 +121,9 @@ def allegro_tokens():
 
     from magazyn.env_tokens import update_allegro_tokens, clear_allegro_tokens
 
-    def _set(***REMOVED***="test-access", refresh_token="test-refresh", expires_in=3600, metadata=None):
-        update_allegro_tokens(***REMOVED***, refresh_token, expires_in, metadata)
-        return ***REMOVED***, refresh_token
+    def _set(access_token="test-access", refresh_token="test-refresh", expires_in=3600, metadata=None):
+        update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
+        return access_token, refresh_token
 
     try:
         yield _set

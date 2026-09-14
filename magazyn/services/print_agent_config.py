@@ -60,10 +60,10 @@ def calculate_cod_amount(order_data: dict) -> Decimal:
 
 @dataclass
 class AgentConfig:
-    page_***REMOVED***: str
+    page_access_token: str
     recipient_id: str
     printer_name: str
-    cups_server: ***REMOVED***
+    cups_server: Optional[str]
     cups_port: Optional[int]
     poll_interval: int
     quiet_hours_start: dt_time
@@ -77,9 +77,9 @@ class AgentConfig:
     db_file: str
     lock_file: str
     base_url: str = ""
-    legacy_printed_file: ***REMOVED*** = None
-    legacy_queue_file: ***REMOVED*** = None
-    legacy_db_file: ***REMOVED*** = None
+    legacy_printed_file: Optional[str] = None
+    legacy_queue_file: Optional[str] = None
+    legacy_db_file: Optional[str] = None
     api_rate_limit_calls: int = 60
     api_rate_limit_period: float = 60.0
     api_retry_attempts: int = 3
@@ -95,7 +95,7 @@ class AgentConfig:
             os.path.join(os.path.dirname(log_file), "agent.lock"),
         )
         return cls(
-            page_***REMOVED***=cfg.PAGE_ACCESS_TOKEN,
+            page_access_token=cfg.PAGE_ACCESS_TOKEN,
             recipient_id=cfg.RECIPIENT_ID,
             printer_name=cfg.PRINTER_NAME,
             cups_server=cfg.CUPS_SERVER,

@@ -75,7 +75,7 @@ class PrintAgentNotifier:
             response = self.http_post(
                 MESSENGER_ENDPOINT,
                 headers={
-                    "Authorization": f"Bearer {config.page_***REMOVED***}",
+                    "Authorization": f"Bearer {config.page_access_token}",
                     "Content-Type": "application/json",
                 },
                 data=json.dumps(
@@ -101,7 +101,7 @@ class PrintAgentNotifier:
             response = self.http_post(
                 MESSENGER_ENDPOINT,
                 headers={
-                    "Authorization": f"Bearer {config.page_***REMOVED***}",
+                    "Authorization": f"Bearer {config.page_access_token}",
                     "Content-Type": "application/json",
                 },
                 data=json.dumps(

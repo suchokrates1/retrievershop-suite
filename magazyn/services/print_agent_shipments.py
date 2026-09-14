@@ -26,7 +26,7 @@ def shorten_product_name(full_name: str) -> str:
     return full_name
 
 
-def resolve_carrier_id(delivery_method: str) -> ***REMOVED***:
+def resolve_carrier_id(delivery_method: str) -> Optional[str]:
     """Mapuj nazwe metody dostawy na carrier_id Allegro."""
     if not delivery_method:
         return None
@@ -191,7 +191,7 @@ def choose_package_dimensions(products: List[Dict[str, Any]]) -> Dict[str, int]:
     return {"length": 40, "width": 38, "height": 8}
 
 
-def build_label_references(products: List[Dict[str, Any]]) -> Tuple[***REMOVED***, ***REMOVED***]:
+def build_label_references(products: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
     """Zbuduj textOnLabel i referenceNumber zgodne z limitami Allegro."""
     product_names = []
     for product in products:
@@ -217,7 +217,7 @@ def build_label_references(products: List[Dict[str, Any]]) -> Tuple[***REMOVED**
     return label_text, label_text
 
 
-def build_packages(products: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], ***REMOVED***]:
+def build_packages(products: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """Zbuduj payload paczek i referenceNumber dla Shipment Management."""
     dimensions = choose_package_dimensions(products)
     text_on_label, reference_number = build_label_references(products)
@@ -235,7 +235,7 @@ def build_packages(products: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]]
     return [package], reference_number
 
 
-def build_additional_services(carrier_id: ***REMOVED***) -> Optional[List[str]]:
+def build_additional_services(carrier_id: Optional[str]) -> Optional[List[str]]:
     """Zwroc dodatkowe uslugi dla przewoznika."""
     if carrier_id == "INPOST":
         return ["sendingAtPoint"]

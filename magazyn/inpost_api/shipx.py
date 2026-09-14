@@ -24,7 +24,7 @@ class InpostShipxError(RuntimeError):
 class InpostShipxClient:
     def __init__(
         self,
-        token: ***REMOVED*** = None,
+        token: Optional[str] = None,
         organization_id: Optional[str | int] = None,
         timeout: int = 45,
     ):

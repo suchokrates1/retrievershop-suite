@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 def record_shipment_error(
     order_id: str,
     error_type: str,
-    error_message: ***REMOVED*** = None,
-    error_code: ***REMOVED*** = None,
-    delivery_method: ***REMOVED*** = None,
-    raw_response: ***REMOVED*** = None,
+    error_message: Optional[str] = None,
+    error_code: Optional[str] = None,
+    delivery_method: Optional[str] = None,
+    raw_response: Optional[str] = None,
 ) -> ShipmentError:
     """
     Zarejestruj błąd shipmentu w bazie.
@@ -77,8 +77,8 @@ def mark_error_resolved(error_id: int) -> bool:
 
 
 def get_unresolved_errors(
-    order_id: ***REMOVED*** = None,
-    error_type: ***REMOVED*** = None,
+    order_id: Optional[str] = None,
+    error_type: Optional[str] = None,
     limit: int = 100,
 ) -> List[ShipmentError]:
     """

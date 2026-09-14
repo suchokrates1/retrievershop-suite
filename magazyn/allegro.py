@@ -37,7 +37,7 @@ ALLEGRO_AUTHORIZATION_URL = "https://allegro.pl/auth/oauth/authorize"
 bp = Blueprint("allegro", __name__)
 
 SENSITIVE_DEBUG_KEYS = {
-    "***REMOVED***",
+    "access_token",
     "refresh_token",
     "code",
     "client_secret",
@@ -142,7 +142,7 @@ def _process_oauth_response() -> dict[str, object]:
         return {"ok": False, "message": message, "debug_steps": debug_steps}
 
     try:
-        token_payload = allegro_api.get_***REMOVED***(
+        token_payload = allegro_api.get_access_token(
             client_id,
             client_secret,
             code,
@@ -178,13 +178,13 @@ def _process_oauth_response() -> dict[str, object]:
         message = f"Nie udało się uzyskać tokenów Allegro: {exc}"
         return {"ok": False, "message": message, "debug_steps": debug_steps}
 
-    ***REMOVED*** = token_payload.get("***REMOVED***")
+    access_token = token_payload.get("access_token")
     refresh_token = token_payload.get("refresh_token")
     expires_in_raw = token_payload.get("expires_in")
-    _record_debug_step(debug_steps, "Access token", {"***REMOVED***": ***REMOVED***})
+    _record_debug_step(debug_steps, "Access token", {"access_token": access_token})
     _record_debug_step(debug_steps, "Refresh token", {"refresh_token": refresh_token})
     _record_debug_step(debug_steps, "Wartość expires_in z odpowiedzi", expires_in_raw)
-    if not ***REMOVED*** or not refresh_token:
+    if not access_token or not refresh_token:
         message = "Nieprawidłowa odpowiedź Allegro: brak tokenów."
         return {"ok": False, "message": message, "debug_steps": debug_steps}
 
@@ -205,7 +205,7 @@ def _process_oauth_response() -> dict[str, object]:
     _record_debug_step(debug_steps, "Metadane tokenu", metadata)
 
     try:
-        update_allegro_tokens(***REMOVED***, refresh_token, expires_in, metadata)
+        update_allegro_tokens(access_token, refresh_token, expires_in, metadata)
         agent.reload_config()
         _record_debug_step(debug_steps, "Wynik zapisu tokenów", "Sukces")
     except SettingsPersistenceError:

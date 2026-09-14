@@ -26,13 +26,13 @@ def is_manual_order(order: Order | str) -> bool:
     return str(order_id).startswith("manual_")
 
 
-def resolve_manual_courier_code(delivery_method: ***REMOVED***) -> ***REMOVED***:
+def resolve_manual_courier_code(delivery_method: Optional[str]) -> Optional[str]:
     if not delivery_method:
         return None
     return map_carrier_to_allegro(delivery_method)
 
 
-def _mark_manual_order_printed(db, order_id: str, *, tracking_number: str, courier_code: ***REMOVED***) -> None:
+def _mark_manual_order_printed(db, order_id: str, *, tracking_number: str, courier_code: Optional[str]) -> None:
     _print_storage.upsert_printed_order_record(
         order_id,
         {
@@ -55,7 +55,7 @@ def _refresh_manual_order_profit(db, order: Order) -> None:
     )
 
 
-def _current_status(db, order_id: str) -> ***REMOVED***:
+def _current_status(db, order_id: str) -> Optional[str]:
     latest = (
         db.query(OrderStatusLog)
         .filter(OrderStatusLog.order_id == order_id)
@@ -70,8 +70,8 @@ def apply_manual_tracking(
     order: Order,
     tracking_number: str,
     *,
-    courier_code: ***REMOVED*** = None,
-    notes: ***REMOVED*** = None,
+    courier_code: Optional[str] = None,
+    notes: Optional[str] = None,
     advance_status: bool = True,
 ) -> None:
     """Przypisz numer przesylki do zamowienia recznego i oznacz jako wydrukowane."""

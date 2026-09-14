@@ -35,7 +35,7 @@ def create_order_refund(
     woo_order_id: str | int,
     *,
     amount: Decimal | float | str,
-    reason: ***REMOVED*** = None,
+    reason: Optional[str] = None,
     line_items: Optional[list[dict]] = None,
     api_refund: bool = True,
     client: Optional[WooClient] = None,

@@ -3,7 +3,7 @@ from magazyn.models.users import User
 from magazyn.db import get_session
 
 def test_login_route_authenticates_user(client, app):
-    hashed = ***REMOVED***"secret")
+    hashed = generate_password_hash("secret")
     with app.app_context():
         with get_session() as db:
             # Use existing user or create if not exists (for production DB)
@@ -24,7 +24,7 @@ def test_login_route_authenticates_user(client, app):
         assert sess["username"] == "tester"
 
 def test_login_default_session_expiry(client, app):
-    hashed = ***REMOVED***"secret")
+    hashed = generate_password_hash("secret")
     with app.app_context():
         with get_session() as db:
             # Use existing user or update password

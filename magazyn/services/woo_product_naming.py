@@ -169,7 +169,7 @@ def product_family_key(product: Any) -> tuple[str, str, str, str]:
     )
 
 
-def canonical_woo_product_name(product: Any, *, fallback_title: ***REMOVED*** = None) -> str:
+def canonical_woo_product_name(product: Any, *, fallback_title: Optional[str] = None) -> str:
     """Nazwa rodzica variable: kategoria + marka + model + kolor — bez rozmiaru.
 
     1 Product magazynu = 1 kolor = 1 parent Woo; kolor jest w nazwie.

@@ -19,7 +19,7 @@ SYNC_HOUR = 8
 _scheduler_thread: Optional[threading.Thread] = None
 _runtime = BackgroundThreadRuntime(name="AllegroAdsScheduler", logger=logger)
 _stop_event = _runtime.stop_event
-_last_run_date: ***REMOVED*** = None
+_last_run_date: Optional[str] = None
 
 
 def _scheduler_worker(app) -> None:

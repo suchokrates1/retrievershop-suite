@@ -34,7 +34,7 @@ def _settings_decimal(key: str, default: Decimal) -> Decimal:
     return _to_decimal(raw, default)
 
 
-def classify_woo_payment_method(payment_method: ***REMOVED***) -> str:
+def classify_woo_payment_method(payment_method: Optional[str]) -> str:
     """Zwraca: cod | p24 | card | other."""
     text = (payment_method or "").strip().lower()
     if not text:
@@ -67,7 +67,7 @@ def classify_woo_payment_method(payment_method: ***REMOVED***) -> str:
 
 def estimate_woo_payment_fee(
     sale_price: Decimal,
-    payment_method: ***REMOVED*** = None,
+    payment_method: Optional[str] = None,
 ) -> Decimal:
     """Szacunek opłaty WooPayments z ustawień (fallback gdy brak API)."""
     kind = classify_woo_payment_method(payment_method)
@@ -96,7 +96,7 @@ def _minor_units_to_pln(value: Any) -> Decimal:
     return amount.quantize(TWOPLACES, rounding=ROUND_HALF_UP)
 
 
-def _sum_charge_fees(transactions: list[dict]) -> tuple[Decimal, ***REMOVED***]:
+def _sum_charge_fees(transactions: list[dict]) -> tuple[Decimal, Optional[str]]:
     total = Decimal("0.00")
     method = None
     for txn in transactions:
@@ -119,7 +119,7 @@ def get_order_payment_fees(
     woo_order_id: str | int,
     *,
     sale_price: Optional[Decimal] = None,
-    payment_method: ***REMOVED*** = None,
+    payment_method: Optional[str] = None,
     client: Optional[WooClient] = None,
 ) -> dict[str, Any]:
     """Pobierz opłaty WooPayments dla zamówienia WC.

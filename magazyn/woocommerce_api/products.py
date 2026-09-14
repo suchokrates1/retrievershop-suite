@@ -48,7 +48,7 @@ def create_or_update_variable_product(
     attributes: list[dict],
     category_ids: Optional[list[int]] = None,
     status: str = "publish",
-    short_description: ***REMOVED*** = None,
+    short_description: Optional[str] = None,
 ) -> dict:
     payload: dict[str, Any] = {
         "name": name,
@@ -106,7 +106,7 @@ def upsert_variation(
     regular_price: str,
     stock_quantity: int,
     size: str,
-    color: ***REMOVED*** = None,
+    color: Optional[str] = None,
     image_id: Optional[int] = None,
 ) -> dict:
     from .attributes import ensure_attribute

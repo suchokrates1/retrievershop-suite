@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def get_allegro_token() -> tuple[str, str]:
     """Pobierz aktualny token Allegro z settings_store."""
-    token = ***REMOVED***
+    token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     refresh = settings_store.get("ALLEGRO_REFRESH_TOKEN")
     if not token:
         raise RuntimeError("Brak tokenu Allegro - wymagana autoryzacja")
@@ -30,7 +30,7 @@ def refresh_allegro_token(current_refresh: str) -> str:
             "Nie udalo sie odswiezyc tokenu Allegro - wymagana ponowna autoryzacja"
         ) from exc
 
-    new_token = token_data.get("***REMOVED***")
+    new_token = token_data.get("access_token")
     if not new_token:
         raise RuntimeError("Brak tokenu po odswiezeniu - wymagana ponowna autoryzacja")
 

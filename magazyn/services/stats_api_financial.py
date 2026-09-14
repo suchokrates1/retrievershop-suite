@@ -301,13 +301,13 @@ def stats_profit():
     current_revenue = sum((_order_revenue(o, products_map) for o in orders), Decimal("0"))
     prev_revenue = sum((_order_revenue(o, prev_products) for o in prev_orders), Decimal("0"))
 
-    ***REMOVED*** = ***REMOVED***
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
     with get_session() as db2:
         calculator = FinancialCalculator(db2, settings_store)
         summary = calculator.get_period_summary(
             int(filters.date_from.timestamp()),
             int(filters.date_to.timestamp()),
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
             trace_label=trace_label,
         )
 
@@ -399,8 +399,8 @@ def stats_allegro_costs():
         cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
         return jsonify(cached)
 
-    ***REMOVED*** = ***REMOVED***
-    if not ***REMOVED***:
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not access_token:
         return _json_error(
             "ALLEGRO_TOKEN_MISSING",
             "Brak tokenu Allegro - nie mozna pobrac kosztow Allegro",
@@ -413,14 +413,14 @@ def stats_allegro_costs():
     date_to_iso = (filters.date_to - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     entries_data = fetch_billing_entries(
-        ***REMOVED***,
+        access_token,
         occurred_at_gte=date_from_iso,
         occurred_at_lte=date_to_iso,
         limit=100,
     )
     entries = entries_data.get("billingEntries", [])
 
-    types_data = fetch_billing_types(***REMOVED***)
+    types_data = fetch_billing_types(access_token)
     if isinstance(types_data, dict):
         types_list = types_data.get("billingTypes", [])
     else:
@@ -438,7 +438,7 @@ def stats_allegro_costs():
         if amount < 0:
             agg[t] += abs(amount)
 
-    ads_result = get_period_ads_cost(***REMOVED***, date_from_iso, date_to_iso)
+    ads_result = get_period_ads_cost(access_token, date_from_iso, date_to_iso)
     ads_total = Decimal(str(ads_result.get("total_cost") or 0))
 
     with get_session() as db:
@@ -519,8 +519,8 @@ def stats_ads_offer_analytics():
             cached["meta"]["telemetry"] = _telemetry_stats(endpoint, response_ms)
             return jsonify(cached)
 
-    ***REMOVED*** = ***REMOVED***
-    if not ***REMOVED***:
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not access_token:
         return _json_error(
             "ALLEGRO_TOKEN_MISSING",
             "Brak tokenu Allegro - nie mozna pobrac analityki reklam i ofert",
@@ -533,7 +533,7 @@ def stats_ads_offer_analytics():
     date_to_iso = (filters.date_to - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     entries_data = fetch_billing_entries(
-        ***REMOVED***,
+        access_token,
         occurred_at_gte=date_from_iso,
         occurred_at_lte=date_to_iso,
         limit=100,

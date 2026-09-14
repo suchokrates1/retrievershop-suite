@@ -9,14 +9,14 @@ from typing import Optional
 from .models.products import Product, ProductSize
 
 
-def format_decimal(value: Optional[Decimal]) -> ***REMOVED***:
+def format_decimal(value: Optional[Decimal]) -> Optional[str]:
     """Formatuj wartosc Decimal do wyswietlenia (2 miejsca po przecinku)."""
     if value is None:
         return None
     return f"{value:.2f}"
 
 
-def build_offer_label(product: Optional[Product], size: Optional[ProductSize]) -> ***REMOVED***:
+def build_offer_label(product: Optional[Product], size: Optional[ProductSize]) -> Optional[str]:
     """Zbuduj etykiete oferty na podstawie produktu i rozmiaru."""
     if not product:
         return None

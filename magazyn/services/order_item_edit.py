@@ -82,7 +82,7 @@ SWAP_MODE_MODEL = "model"
 SWAP_MODES = frozenset({SWAP_MODE_VARIANT, SWAP_MODE_MODEL})
 
 
-def _normalize_swap_mode(mode: ***REMOVED***) -> str:
+def _normalize_swap_mode(mode: Optional[str]) -> str:
     value = (mode or SWAP_MODE_VARIANT).strip().lower()
     return value if value in SWAP_MODES else SWAP_MODE_VARIANT
 

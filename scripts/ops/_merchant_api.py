@@ -22,7 +22,7 @@ def merchant_id() -> str:
     return bw.get_item(OAUTH_ITEM, "merchant_id") or DEFAULT_MERCHANT_ID
 
 
-def ***REMOVED***() -> str:
+def access_token() -> str:
     body = urllib.parse.urlencode(
         {
             "client_id": bw.get_item(OAUTH_ITEM, "client_id"),
@@ -37,7 +37,7 @@ def ***REMOVED***() -> str:
         method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    return json.loads(urllib.request.urlopen(request, timeout=30).read())["***REMOVED***"]
+    return json.loads(urllib.request.urlopen(request, timeout=30).read())["access_token"]
 
 
 def request_json(

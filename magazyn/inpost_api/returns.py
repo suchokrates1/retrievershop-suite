@@ -48,7 +48,7 @@ def _to_e164_pl(phone: str) -> str:
     raise InpostReturnsError("Nieprawidłowy numer telefonu (wymagane 9 cyfr PL)")
 
 
-def get_***REMOVED***() -> str:
+def get_access_token() -> str:
     client_id = (settings_store.get("INPOST_RETURNS_CLIENT_ID") or "").strip()
     client_secret = (settings_store.get("INPOST_RETURNS_CLIENT_SECRET") or "").strip()
     if not client_id or not client_secret:
@@ -69,9 +69,9 @@ def get_***REMOVED***() -> str:
             details=response.text[:500],
         )
     data = response.json() or {}
-    token = data.get("***REMOVED***")
+    token = data.get("access_token")
     if not token:
-        raise InpostReturnsError("OAuth response without ***REMOVED***", details=data)
+        raise InpostReturnsError("OAuth response without access_token", details=data)
     return str(token)
 
 
@@ -87,7 +87,7 @@ def create_return_ticket(
     description: str = "",
 ) -> Dict[str, Any]:
     """POST /v1/returns/tickets — oczekujemy pola code (paperless)."""
-    token = get_***REMOVED***()
+    token = get_access_token()
     phone = _to_e164_pl(sender_phone)
     size = (size or "A").upper()
     if size not in {"A", "B", "C"}:
@@ -136,6 +136,6 @@ def create_return_ticket(
 __all__ = [
     "InpostReturnsError",
     "create_return_ticket",
-    "get_***REMOVED***",
+    "get_access_token",
     "returns_credentials_configured",
 ]

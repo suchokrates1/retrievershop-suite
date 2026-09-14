@@ -12,8 +12,8 @@ from .shipment_waybills import extract_waybills_from_shipment_details
 def get_order_packages_from_shipment_management(
     order_id: str,
     *,
-    load_state_value: Callable[[str], ***REMOVED***],
-    save_state_value: Callable[[str, ***REMOVED***], None],
+    load_state_value: Callable[[str], Optional[str]],
+    save_state_value: Callable[[str, Optional[str]], None],
     get_shipment_details: Callable[[str], Dict[str, Any]],
     create_allegro_shipment: Callable[[str, str], List[Dict[str, Any]]],
     logger,
@@ -38,7 +38,7 @@ def get_order_packages_from_shipment_management(
     return create_allegro_shipment(order_id, checkout_form_id)
 
 
-def resolve_delivery_service_from_api(delivery_method: str, *, get_delivery_services, logger) -> ***REMOVED***:
+def resolve_delivery_service_from_api(delivery_method: str, *, get_delivery_services, logger) -> Optional[str]:
     """Pobierz uslugi dostawy Allegro i wybierz najlepszy deliveryMethodId."""
     if not delivery_method:
         return None

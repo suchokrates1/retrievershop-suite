@@ -30,14 +30,14 @@ class PrintShipmentCreator:
         logger: logging.Logger,
         settings_store: Any,
         fetch_order_detail: Callable[[str], Dict[str, Any]],
-        resolve_delivery_service_id: Callable[[str], ***REMOVED***],
-        resolve_carrier_id: Callable[[str], ***REMOVED***],
+        resolve_delivery_service_id: Callable[[str], Optional[str]],
+        resolve_carrier_id: Callable[[str], Optional[str]],
         create_shipment: Callable[..., Dict[str, Any]],
         wait_for_shipment_creation: Callable[[str], Dict[str, Any]],
         get_shipment_details: Callable[[str], Dict[str, Any]],
         add_shipment_tracking: Callable[..., Any],
         update_fulfillment_status: Callable[[str, str], Any],
-        save_state_value: Callable[[str, ***REMOVED***], None],
+        save_state_value: Callable[[str, Optional[str]], None],
     ):
         self.logger = logger
         self.settings_store = settings_store
@@ -108,7 +108,7 @@ class PrintShipmentCreator:
         checkout_form_id: str,
         delivery_method: str,
         order_data: Dict[str, Any],
-    ) -> tuple[***REMOVED***, str]:
+    ) -> tuple[Optional[str], str]:
         delivery_method_id = None
         try:
             allegro_detail = self.fetch_order_detail(checkout_form_id)
@@ -150,7 +150,7 @@ class PrintShipmentCreator:
         checkout_form_id: str,
         order_data: Dict[str, Any],
         delivery_method_id: str,
-        carrier_id: ***REMOVED***,
+        carrier_id: Optional[str],
     ) -> List[Dict[str, Any]]:
         packages, reference_number = build_packages(order_data.get("products", []))
         command_result = self.create_shipment(
@@ -217,7 +217,7 @@ class PrintShipmentCreator:
         self,
         checkout_form_id: str,
         order_id: str,
-        carrier_id: ***REMOVED***,
+        carrier_id: Optional[str],
         waybill: str,
     ) -> None:
         if waybill and carrier_id and carrier_id not in SKIP_MANUAL_TRACKING_CARRIER_IDS:

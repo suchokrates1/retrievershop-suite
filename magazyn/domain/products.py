@@ -38,7 +38,7 @@ def _to_decimal(value) -> Decimal:
         return Decimal("0.00")
 
 
-def _clean_barcode(value) -> ***REMOVED***:
+def _clean_barcode(value) -> Optional[str]:
     """Return cleaned barcode string or None for empty/NaN values."""
     if value is None or pd.isna(value):
         return None
@@ -50,7 +50,7 @@ def _clean_barcode(value) -> ***REMOVED***:
     return text
 
 
-def validate_ean(ean: ***REMOVED***) -> Tuple[bool, ***REMOVED***]:
+def validate_ean(ean: Optional[str]) -> Tuple[bool, Optional[str]]:
     """
     Walidacja EAN (European Article Number).
     
@@ -113,7 +113,7 @@ def _is_populated(quantity, barcode) -> bool:
 def validate_sizing(
     sizing_mode: str,
     quantities: Dict[str, int],
-    barcodes: Dict[str, ***REMOVED***],
+    barcodes: Dict[str, Optional[str]],
 ) -> None:
     """Reject any value or barcode outside the selected product size family."""
     allowed = set(applicable_sizes(sizing_mode))
@@ -132,10 +132,10 @@ def validate_sizing(
 def create_product(
     category: str,
     brand: str,
-    series: ***REMOVED***,
+    series: Optional[str],
     color: str,
     quantities: Dict[str, int],
-    barcodes: Dict[str, ***REMOVED***],
+    barcodes: Dict[str, Optional[str]],
     sizing_mode: str = SIZING_MODE_SIZED,
 ):
     """Create a product with sizes and return the Product instance."""
@@ -181,12 +181,12 @@ def update_product(
     product_id: int,
     category: str,
     brand: str,
-    series: ***REMOVED***,
+    series: Optional[str],
     color: str,
     quantities: Dict[str, int],
-    barcodes: Dict[str, ***REMOVED***],
+    barcodes: Dict[str, Optional[str]],
     purchase_prices: Optional[Dict[str, Optional[float]]] = None,
-    sizing_mode: ***REMOVED*** = None,
+    sizing_mode: Optional[str] = None,
 ):
     """Update product details and size information."""
     sizing_mode = sizing_mode or SIZING_MODE_SIZED

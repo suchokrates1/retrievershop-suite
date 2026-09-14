@@ -88,11 +88,11 @@ def _upsert_billing_types(db, billing_types: list[dict]) -> dict[str, str]:
     return {row.type_id: (row.name or row.type_id) for row in existing.values()}
 
 
-def sync_billing_types_dictionary(***REMOVED***: str) -> dict[str, int]:
+def sync_billing_types_dictionary(access_token: str) -> dict[str, int]:
     """Synchronizuje slownik billing types z Allegro do bazy danych."""
     from ..allegro_api import fetch_billing_types
 
-    types_data = fetch_billing_types(***REMOVED***)
+    types_data = fetch_billing_types(access_token)
     if isinstance(types_data, dict):
         types_list = types_data.get("billingTypes", [])
     else:

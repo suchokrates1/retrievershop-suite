@@ -312,7 +312,7 @@ class TestCalculateOrderProfit:
             with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
                 result = calc.calculate_order_profit(
                     order,
-                    ***REMOVED***="token",
+                    access_token="token",
                     prefetched_billing={
                         "success": True,
                         "total_fees": Decimal("25.50"),
@@ -340,7 +340,7 @@ class TestCalculateOrderProfit:
             with patch.object(calc, 'get_packaging_cost', return_value=Decimal("0.16")):
                 result = calc.calculate_order_profit(
                     order,
-                    ***REMOVED***="token",
+                    access_token="token",
                     prefetched_billing={
                         "success": True,
                         "total_fees": Decimal("20.00"),

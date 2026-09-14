@@ -85,11 +85,11 @@ def stats_billing_type_update(type_id: str):
 
 
 def stats_billing_types_sync():
-    ***REMOVED*** = ***REMOVED***
-    if not ***REMOVED***:
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+    if not access_token:
         return _json_error("ALLEGRO_TOKEN_MISSING", "Brak tokenu Allegro", 400)
 
-    result = sync_billing_types_dictionary(***REMOVED***)
+    result = sync_billing_types_dictionary(access_token)
     return jsonify(
         {
             "ok": True,

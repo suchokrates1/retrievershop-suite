@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash
 
 
 def test_nav_container_class(app_mod, client, login):
-    hashed = ***REMOVED***"secret")
+    hashed = generate_password_hash("secret")
     with app_mod.get_session() as db:
         db.add(User(username="tester", password=hashed))
     resp = client.get("/")

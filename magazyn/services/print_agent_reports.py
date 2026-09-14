@@ -77,14 +77,14 @@ class PrintAgentReportService:
             from ..domain.financial import FinancialCalculator
             from ..settings_store import settings_store
 
-            ***REMOVED*** = ***REMOVED***
+            access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
             with get_session() as db:
                 calculator = FinancialCalculator(db, settings_store)
                 summary = calculator.get_period_summary(
                     start_ts,
                     end_ts,
                     include_fixed_costs=include_fixed_costs,
-                    ***REMOVED***=***REMOVED***,
+                    access_token=access_token,
                 )
 
                 result = {

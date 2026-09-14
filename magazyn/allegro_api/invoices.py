@@ -24,7 +24,7 @@ def upload_invoice_to_allegro(
     invoice_number: str,
     pdf_data: bytes,
     *,
-    file_name: ***REMOVED*** = None,
+    file_name: Optional[str] = None,
 ) -> dict:
     """
     Upload faktury PDF do zamowienia Allegro.

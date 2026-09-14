@@ -7,7 +7,7 @@ import os
 from collections import defaultdict
 
 from _merchant_api import (
-    ***REMOVED***,
+    access_token,
     issue_servability,
     list_products,
     merchant_id,
@@ -18,7 +18,7 @@ from _merchant_api import (
 
 def main() -> int:
     mid = merchant_id()
-    products = list_products(***REMOVED***(), mid)
+    products = list_products(access_token(), mid)
 
     by_code: dict[str, list] = defaultdict(list)
     for product in products:

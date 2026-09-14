@@ -23,7 +23,7 @@ class ProductSizeInfo(NamedTuple):
     name: str
     color: str
     size: str
-    barcode: ***REMOVED***
+    barcode: Optional[str]
     quantity: int = 0
 
 
@@ -193,7 +193,7 @@ class ProductSizeRepository:
         product_id: int,
         size: str,
         quantity: int = 0,
-        barcode: ***REMOVED*** = None,
+        barcode: Optional[str] = None,
     ) -> ProductSize:
         """Utworz nowy rozmiar produktu."""
         ps = ProductSize(

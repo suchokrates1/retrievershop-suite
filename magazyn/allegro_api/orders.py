@@ -36,10 +36,10 @@ def fetch_allegro_orders(
     offset: int = 0,
     status: Optional[list[str]] = None,
     fulfillment_status: Optional[list[str]] = None,
-    bought_after: ***REMOVED*** = None,
-    bought_before: ***REMOVED*** = None,
-    updated_after: ***REMOVED*** = None,
-    updated_before: ***REMOVED*** = None,
+    bought_after: Optional[str] = None,
+    bought_before: Optional[str] = None,
+    updated_after: Optional[str] = None,
+    updated_before: Optional[str] = None,
 ) -> dict:
     """
     Pobierz liste zamowien z Allegro REST API.
@@ -168,8 +168,8 @@ def fetch_allegro_order_detail(order_id: str) -> dict:
 
 def fetch_all_allegro_orders(
     *,
-    bought_after: ***REMOVED*** = None,
-    bought_before: ***REMOVED*** = None,
+    bought_after: Optional[str] = None,
+    bought_before: Optional[str] = None,
     progress_callback=None,
 ) -> list[dict]:
     """

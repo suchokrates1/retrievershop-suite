@@ -55,7 +55,7 @@ def _env_int(name: str, default: int) -> int:
 @dataclass(frozen=True)
 class CupsPrinter:
     printer_name: str
-    cups_server: ***REMOVED*** = None
+    cups_server: Optional[str] = None
     cups_port: Optional[int] = None
     job_timeout_seconds: float = _DEFAULT_JOB_TIMEOUT_SECONDS
     poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS
@@ -67,7 +67,7 @@ class CupsPrinter:
         cls,
         *,
         printer_name: str,
-        cups_server: ***REMOVED*** = None,
+        cups_server: Optional[str] = None,
         cups_port: Optional[int] = None,
     ) -> "CupsPrinter":
         """Zbuduj drukarkę z opcjonalnymi progami z env."""
@@ -86,7 +86,7 @@ class CupsPrinter:
             ),
         )
 
-    def _host(self) -> ***REMOVED***:
+    def _host(self) -> Optional[str]:
         if not self.cups_server and not self.cups_port:
             return None
         server = self.cups_server or "localhost"

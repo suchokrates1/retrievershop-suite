@@ -6,14 +6,14 @@ import requests
 from .core import API_BASE_URL, _request_with_retry
 
 
-def fetch_parcel_tracking(***REMOVED***: str, carrier_id: str, waybills: list[str]) -> dict:
+def fetch_parcel_tracking(access_token: str, carrier_id: str, waybills: list[str]) -> dict:
     """
     Pobierz historię śledzenia przesyłek dla podanych numerów listów przewozowych.
     
     Endpoint: GET /order/carriers/{carrierId}/tracking
     
     Args:
-        ***REMOVED***: Token dostępu Allegro OAuth
+        access_token: Token dostępu Allegro OAuth
         carrier_id: Identyfikator przewoźnika (np. "ALLEGRO", "INPOST", "DPD", "POCZTA_POLSKA")
         waybills: Lista numerów listów przewozowych (max 20)
     
@@ -65,7 +65,7 @@ def fetch_parcel_tracking(***REMOVED***: str, carrier_id: str, waybills: list[st
         return {"carrierId": carrier_id, "waybills": []}
     
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     

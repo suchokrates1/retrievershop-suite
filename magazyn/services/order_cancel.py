@@ -95,12 +95,12 @@ def process_cancel_refund(order: Order, reason: str) -> tuple[bool, str]:
             "(przelew reczny) albo rozlicz zwrot osobno."
         )
 
-    ***REMOVED*** = settings_store.settings.ALLEGRO_ACCESS_TOKEN
-    if not ***REMOVED***:
+    access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+    if not access_token:
         return False, "Brak tokenu Allegro — zaloguj sie lub zaznacz „Zwrócono pieniądze”"
 
     success, message, _ = allegro_api.initiate_refund(
-        ***REMOVED***=***REMOVED***,
+        access_token=access_token,
         return_id=None,
         order_external_id=order.external_order_id,
         line_items=None,
@@ -162,7 +162,7 @@ def cancel_order(
         has_correction = bool(order.wfirma_correction_id)
 
     allegro_ok = True
-    allegro_error: ***REMOVED*** = None
+    allegro_error: Optional[str] = None
     if platform == "allegro" and external_order_id:
         try:
             from ..allegro_api.fulfillment import update_fulfillment_status

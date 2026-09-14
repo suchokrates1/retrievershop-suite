@@ -15,7 +15,7 @@ class OrderSyncCallbacks:
     sync_allegro_fulfillment: Callable[[Any], dict]
     process_pending_invoices: Callable[[], dict]
     cancel_stale_unpaid_orders: Callable[[], dict]
-    get_last_offer_sync_date: Callable[[], ***REMOVED***]
+    get_last_offer_sync_date: Callable[[], Optional[str]]
     set_last_offer_sync_date: Callable[[str], None]
 
 

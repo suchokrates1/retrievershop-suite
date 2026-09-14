@@ -133,7 +133,7 @@ def record_sale(
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
     sale_date=None,
-    order_id: ***REMOVED*** = None,
+    order_id: Optional[str] = None,
 ) -> Sale:
     """Zapisz sprzedaz w istniejacej sesji.
 
@@ -173,7 +173,7 @@ def consume_stock(
     sale_price=Decimal("0.00"),
     shipping_cost=Decimal("0.00"),
     commission_fee=Decimal("0.00"),
-    order_id: ***REMOVED*** = None,
+    order_id: Optional[str] = None,
 ) -> int:
     """Zdejmij stan magazynowy i zapisz sprzedaz z kosztem wg sredniej wazonej.
 

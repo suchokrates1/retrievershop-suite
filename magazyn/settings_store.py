@@ -37,7 +37,7 @@ class SettingsStore:
         self._namespace: Optional[SimpleNamespace] = None
         self._db_path: Path = _default_db_path()
         self._loaded = False
-        self._db_last_updated_at: ***REMOVED*** = None
+        self._db_last_updated_at: Optional[str] = None
         self._db_gateway = SettingsDatabaseGateway(
             logger=LOGGER,
             engine_factory=create_engine,
@@ -96,10 +96,10 @@ class SettingsStore:
 
     def _load_from_db(
         self, db_path: Path
-    ) -> Optional[tuple["OrderedDict[str, str]", ***REMOVED***]]:
+    ) -> Optional[tuple["OrderedDict[str, str]", Optional[str]]]:
         return self._db_gateway.load_from_db(db_path)
 
-    def _fetch_last_updated_at(self, db_path: Optional[Path] = None) -> ***REMOVED***:
+    def _fetch_last_updated_at(self, db_path: Optional[Path] = None) -> Optional[str]:
         return self._db_gateway.fetch_last_updated_at(db_path or self._db_path)
 
     def _persist_many(self, values: Mapping[str, str], db_path: Optional[Path] = None) -> bool:
@@ -254,7 +254,7 @@ class SettingsStore:
             self._namespace = self._build_namespace(self._values)
 
 
-    def get(self, key: str, default: ***REMOVED*** = None) -> ***REMOVED***:
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """Return a configuration value from the persistent store.
 
         Lookup order:

@@ -13,19 +13,19 @@ from .client import WFirmaClient, WFirmaError
 logger = logging.getLogger(__name__)
 
 
-def _normalize_nip(value: ***REMOVED***) -> str:
+def _normalize_nip(value: Optional[str]) -> str:
     return "".join(ch for ch in (value or "") if ch.isdigit())
 
 
-def _normalize_name(value: ***REMOVED***) -> str:
+def _normalize_name(value: Optional[str]) -> str:
     return " ".join((value or "").strip().lower().split())
 
 
 def find_contractor(
     client: WFirmaClient,
     *,
-    nip: ***REMOVED*** = None,
-    name: ***REMOVED*** = None,
+    nip: Optional[str] = None,
+    name: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Wyszukaj kontrahenta w wFirma po NIP lub nazwie.
@@ -110,9 +110,9 @@ def create_contractor(
     zip_code: str = "",
     city: str = "",
     country: str = "PL",
-    nip: ***REMOVED*** = None,
-    email: ***REMOVED*** = None,
-    phone: ***REMOVED*** = None,
+    nip: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
 ) -> dict:
     """
     Utworz kontrahenta w wFirma.
@@ -186,9 +186,9 @@ def find_or_create_contractor(
     zip_code: str = "",
     city: str = "",
     country: str = "PL",
-    nip: ***REMOVED*** = None,
-    email: ***REMOVED*** = None,
-    phone: ***REMOVED*** = None,
+    nip: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
 ) -> int:
     """
     Znajdz istniejacego kontrahenta lub utworz nowego.

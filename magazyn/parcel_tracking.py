@@ -49,7 +49,7 @@ UNCLAIMED_ISSUE_HINTS = (
 def _collect_tracking_statuses(waybill_data: Dict) -> List[Dict[str, str]]:
     statuses: List[Dict[str, str]] = []
 
-    def _append_status(status_code: ***REMOVED***, occurred_at: str, description: str) -> None:
+    def _append_status(status_code: Optional[str], occurred_at: str, description: str) -> None:
         if not status_code:
             return
         statuses.append(
@@ -126,7 +126,7 @@ def _ensure_not_collected_return(order: Order, description: str) -> None:
     )
 
 
-def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[***REMOVED***, str]:
+def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[Optional[str], str]:
     """
     Wyznacz najnowszy status trackingu z payloadu Allegro.
 
@@ -144,7 +144,7 @@ def _extract_latest_tracking_status(waybill_data: Dict) -> Tuple[***REMOVED***, 
     return latest["code"], latest["description"]
 
 
-def get_carrier_id(delivery_method: ***REMOVED***, waybill: ***REMOVED*** = None) -> ***REMOVED***:
+def get_carrier_id(delivery_method: Optional[str], waybill: Optional[str] = None) -> Optional[str]:
     """
     Mapuj nazwę metody dostawy na ID przewoźnika w Allegro API.
     
@@ -200,8 +200,8 @@ def sync_parcel_statuses() -> Dict[str, int]:
     
     try:
         # Pobierz token dostępu
-        ***REMOVED*** = ***REMOVED***
-        if not ***REMOVED***:
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        if not access_token:
             logger.error("Brak tokena dostępu Allegro - nie można zsynchronizować przesyłek")
             return stats
         
@@ -266,7 +266,7 @@ def sync_parcel_statuses() -> Dict[str, int]:
                     try:
                         # Pobierz statusy z API
                         tracking_data = allegro_api.fetch_parcel_tracking(
-                            ***REMOVED***, 
+                            access_token, 
                             carrier_id, 
                             waybills
                         )
@@ -357,8 +357,8 @@ def get_tracking_history(order_id: str) -> Optional[Dict]:
         Słownik z historią śledzenia lub None jeśli brak danych
     """
     try:
-        ***REMOVED*** = ***REMOVED***
-        if not ***REMOVED***:
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
+        if not access_token:
             logger.error("Brak tokena dostępu Allegro")
             return None
         
@@ -375,7 +375,7 @@ def get_tracking_history(order_id: str) -> Optional[Dict]:
                 return None
             
             tracking_data = allegro_api.fetch_parcel_tracking(
-                ***REMOVED***,
+                access_token,
                 carrier_id,
                 [order.delivery_package_nr]
             )

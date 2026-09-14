@@ -196,9 +196,9 @@ def _login(page: Page, port: int, app):
         with get_session() as db:
             user = db.query(User).filter_by(username="tester").first()
             if not user:
-                db.add(User(username="tester", password=***REMOVED***"secret")))
+                db.add(User(username="tester", password=generate_password_hash("secret")))
             else:
-                user.password = ***REMOVED***"secret")
+                user.password = generate_password_hash("secret")
 
     page.goto(f"http://127.0.0.1:{port}/login")
     page.fill('input[name="username"]', "tester")

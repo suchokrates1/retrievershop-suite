@@ -23,7 +23,7 @@ def _billing_types_worker(app):
     while not _stop_event.is_set():
         try:
             with app.app_context():
-                token = ***REMOVED***
+                token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
                 if not token:
                     logger.info("Billing types scheduler: brak tokenu Allegro, pomijam przebieg")
                 else:

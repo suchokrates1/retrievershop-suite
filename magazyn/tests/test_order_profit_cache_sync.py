@@ -28,7 +28,7 @@ def test_refresh_order_profit_cache_persists_incomplete_allegro_order(app, monke
         )
         monkeypatch.setattr(
             "magazyn.domain.financial.FinancialCalculator._prefetch_order_billing_summaries",
-            lambda self, orders, ***REMOVED***, trace_label=None: {
+            lambda self, orders, access_token, trace_label=None: {
                 "ext-cache-1": {
                     "success": True,
                     "total_fees": Decimal("20.00"),

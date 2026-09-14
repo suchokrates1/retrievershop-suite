@@ -141,7 +141,7 @@ def test_initiate_refund_normalizes_custom_reason_to_refund(monkeypatch):
 
     monkeypatch.setattr(
         "magazyn.allegro_api.refunds.get_checkout_form",
-        lambda ***REMOVED***, order_external_id: (checkout_form, None),
+        lambda access_token, order_external_id: (checkout_form, None),
     )
     monkeypatch.setattr(
         "magazyn.allegro_api.refunds._request_with_retry",
@@ -149,7 +149,7 @@ def test_initiate_refund_normalizes_custom_reason_to_refund(monkeypatch):
     )
 
     success, message, response_data = initiate_refund(
-        ***REMOVED***="token",
+        access_token="token",
         return_id=None,
         order_external_id="order-1",
         reason="Nie odebrano przesylki",
@@ -432,11 +432,11 @@ def test_initiate_refund_includes_delivery_when_requested(monkeypatch):
         captured["payload"] = kwargs["json"]
         return DummyResponse()
 
-    monkeypatch.setattr("magazyn.allegro_api.refunds.get_checkout_form", lambda ***REMOVED***, order_external_id: (checkout_form, None))
+    monkeypatch.setattr("magazyn.allegro_api.refunds.get_checkout_form", lambda access_token, order_external_id: (checkout_form, None))
     monkeypatch.setattr("magazyn.allegro_api.refunds._request_with_retry", fake_request_with_retry)
 
     success, message, _ = initiate_refund(
-        ***REMOVED***="token",
+        access_token="token",
         return_id=None,
         order_external_id="order-1",
         line_items=[{"id": "line-1", "type": "QUANTITY", "quantity": 1}],

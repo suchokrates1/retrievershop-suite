@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_billing_entries(
-    ***REMOVED***: str,
-    order_id: ***REMOVED*** = None,
-    offer_id: ***REMOVED*** = None,
+    access_token: str,
+    order_id: Optional[str] = None,
+    offer_id: Optional[str] = None,
     type_ids: Optional[list[str]] = None,
-    occurred_at_gte: ***REMOVED*** = None,
-    occurred_at_lte: ***REMOVED*** = None,
+    occurred_at_gte: Optional[str] = None,
+    occurred_at_lte: Optional[str] = None,
     limit: int = 100,
 ) -> dict:
     """
@@ -30,7 +30,7 @@ def fetch_billing_entries(
     Endpoint: GET /billing/billing-entries
     
     Args:
-        ***REMOVED***: Token dostepu Allegro OAuth
+        access_token: Token dostepu Allegro OAuth
         order_id: UUID zamowienia do filtrowania (opcjonalnie)
         offer_id: ID oferty do filtrowania (opcjonalnie)
         type_ids: Lista typow billingowych do filtrowania, np. ["SUC", "LIS"] (opcjonalnie)
@@ -65,7 +65,7 @@ def fetch_billing_entries(
         ...     print(f"{entry['type']['name']}: {entry['value']['amount']} PLN")
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     
@@ -99,14 +99,14 @@ def fetch_billing_entries(
     return response.json()
 
 
-def fetch_billing_types(***REMOVED***: str) -> list:
+def fetch_billing_types(access_token: str) -> list:
     """
     Pobierz liste wszystkich typow billingowych z Allegro API.
     
     Endpoint: GET /billing/billing-types
     
     Args:
-        ***REMOVED***: Token dostepu Allegro OAuth
+        access_token: Token dostepu Allegro OAuth
     
     Returns:
         list: Lista slownikow z typami billingowymi, kazdy zawiera:
@@ -119,7 +119,7 @@ def fetch_billing_types(***REMOVED***: str) -> list:
         ...     print(f"{t['id']}: {t['description']}")
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
         "Accept-Language": "pl-PL",
     }
@@ -182,9 +182,9 @@ LISTING_TYPES = {
 
 
 def get_order_billing_summary(
-    ***REMOVED***: str, 
+    access_token: str, 
     order_id: str,
-    delivery_method: ***REMOVED*** = None,
+    delivery_method: Optional[str] = None,
     order_value: Optional[Decimal] = None
 ) -> dict:
     """
@@ -195,7 +195,7 @@ def get_order_billing_summary(
     a podano delivery_method i order_value, szacuje koszt na podstawie tabeli Allegro Smart.
     
     Args:
-        ***REMOVED***: Token dostepu Allegro OAuth
+        access_token: Token dostepu Allegro OAuth
         order_id: UUID zamowienia (format: "29738e61-7f6a-11e8-ac45-09db60ede9d6")
         delivery_method: Opcjonalna nazwa metody dostawy do szacowania
         order_value: Opcjonalna wartosc zamowienia do szacowania
@@ -242,7 +242,7 @@ def get_order_billing_summary(
     started_at = time.perf_counter()
     
     try:
-        data = fetch_billing_entries(***REMOVED***, order_id=order_id)
+        data = fetch_billing_entries(access_token, order_id=order_id)
         entries = data.get("billingEntries", [])
         result["entries"] = entries
         
@@ -368,7 +368,7 @@ def get_order_billing_summary(
 
 
 def get_period_ads_cost(
-    ***REMOVED***: str,
+    access_token: str,
     occurred_at_gte: str,
     occurred_at_lte: str,
 ) -> dict:
@@ -379,7 +379,7 @@ def get_period_ads_cost(
     Jest naliczana na poziomie konta, wiec nie mozna jej przypisac do zamowien.
     
     Args:
-        ***REMOVED***: Token dostepu Allegro OAuth
+        access_token: Token dostepu Allegro OAuth
         occurred_at_gte: Data od (ISO 8601)
         occurred_at_lte: Data do (ISO 8601)
         
@@ -402,7 +402,7 @@ def get_period_ads_cost(
     
     try:
         data = fetch_billing_entries(
-            ***REMOVED***,
+            access_token,
             type_ids=["NSP"],
             occurred_at_gte=occurred_at_gte,
             occurred_at_lte=occurred_at_lte,

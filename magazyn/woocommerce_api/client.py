@@ -23,9 +23,9 @@ class WooClientError(RuntimeError):
 class WooClient:
     def __init__(
         self,
-        base_url: ***REMOVED*** = None,
-        consumer_key: ***REMOVED*** = None,
-        consumer_secret: ***REMOVED*** = None,
+        base_url: Optional[str] = None,
+        consumer_key: Optional[str] = None,
+        consumer_secret: Optional[str] = None,
         timeout: int = 45,
     ):
         self.base_url = (base_url or settings_store.get("WOO_URL") or "").rstrip("/") + "/"

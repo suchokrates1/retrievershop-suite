@@ -96,9 +96,9 @@ class AllegroTokenRefresher:
     # Internal helpers
     # ------------------------------------------------------------------
     def _seconds_until_refresh(self) -> Optional[float]:
-        ***REMOVED*** = ***REMOVED***
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
         refresh_token = settings_store.get("ALLEGRO_REFRESH_TOKEN")
-        if not ***REMOVED*** or not refresh_token:
+        if not access_token or not refresh_token:
             return None
 
         metadata_raw = settings_store.get("ALLEGRO_TOKEN_METADATA")
@@ -146,7 +146,7 @@ class AllegroTokenRefresher:
             return True
 
         try:
-            payload = ***REMOVED***
+            payload = allegro_api.refresh_token(refresh_token)
         except HTTPError as exc:
             status_code = getattr(getattr(exc, "response", None), "status_code", None)
             LOGGER.warning(
@@ -165,12 +165,12 @@ class AllegroTokenRefresher:
             ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="error").inc()
             return False
 
-        ***REMOVED*** = None
+        access_token = None
         new_refresh_token = refresh_token
         expires_in: Optional[int] = None
         metadata: dict[str, object] = {}
         if isinstance(payload, dict):
-            ***REMOVED*** = payload.get("***REMOVED***")
+            access_token = payload.get("access_token")
             new_refresh_raw = payload.get("refresh_token")
             if new_refresh_raw:
                 new_refresh_token = new_refresh_raw
@@ -180,13 +180,13 @@ class AllegroTokenRefresher:
             if payload.get("token_type"):
                 metadata["token_type"] = payload["token_type"]
 
-        if not ***REMOVED***:
+        if not access_token:
             LOGGER.error("Automatic Allegro token refresh returned no access token")
             ALLEGRO_TOKEN_REFRESH_ATTEMPTS_TOTAL.labels(result="error").inc()
             return False
 
         try:
-            update_allegro_tokens(***REMOVED***, new_refresh_token, expires_in, metadata)
+            update_allegro_tokens(access_token, new_refresh_token, expires_in, metadata)
         except SettingsPersistenceError:
             LOGGER.exception(
                 "Failed to persist refreshed Allegro tokens; the settings store might be read-only",

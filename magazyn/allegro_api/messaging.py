@@ -11,10 +11,10 @@ from .core import API_BASE_URL, _request_with_retry
 logger = logging.getLogger(__name__)
 
 
-def fetch_discussions(***REMOVED***: str) -> dict:
+def fetch_discussions(access_token: str) -> dict:
     """Pobierz wszystkie dyskusje z Allegro używając access tokenu."""
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
     }
     url = f"{API_BASE_URL}/sale/issues"
@@ -43,10 +43,10 @@ def fetch_discussions(***REMOVED***: str) -> dict:
     return {"issues": all_issues}
 
 
-def fetch_message_threads(***REMOVED***: str) -> dict:
+def fetch_message_threads(access_token: str) -> dict:
     """Pobierz wszystkie wątki wiadomości z Allegro."""
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     url = f"{API_BASE_URL}/messaging/threads"
@@ -75,10 +75,10 @@ def fetch_message_threads(***REMOVED***: str) -> dict:
     return {"threads": all_threads}
 
 
-def fetch_discussion_issues(***REMOVED***: str, limit: int = 100) -> dict:
+def fetch_discussion_issues(access_token: str, limit: int = 100) -> dict:
     """Pobierz wszystkie sprawy dyskusji (reklamacje i spory) z Allegro."""
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
     }
     
@@ -103,14 +103,14 @@ def fetch_discussion_issues(***REMOVED***: str, limit: int = 100) -> dict:
     return {"issues": all_issues[:limit]}
 
 
-def fetch_discussion_chat(***REMOVED***: str, issue_id: str, limit: int = 100) -> dict:
+def fetch_discussion_chat(access_token: str, issue_id: str, limit: int = 100) -> dict:
     """
     Pobierz wiadomości z dyskusji lub reklamacji (Issues API).
     
     Endpoint: GET /sale/issues/{issueId}/chat
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         issue_id: ID dyskusji/reklamacji
         limit: Maksymalna liczba wiadomości (1-100, Issues API akceptuje do 100)
     
@@ -118,7 +118,7 @@ def fetch_discussion_chat(***REMOVED***: str, issue_id: str, limit: int = 100) -
         dict: {"chat": [...]} - wiadomości w kolejności od najnowszej do najstarszej
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
     }
     params = {"limit": min(limit, 100)}
@@ -136,14 +136,14 @@ def fetch_discussion_chat(***REMOVED***: str, issue_id: str, limit: int = 100) -
     return data
 
 
-def fetch_thread_messages(***REMOVED***: str, thread_id: str, limit: int = 20) -> dict:
+def fetch_thread_messages(access_token: str, thread_id: str, limit: int = 20) -> dict:
     """
     Pobierz wiadomości dla konkretnego wątku.
     
     UWAGA: Messaging API akceptuje maksymalnie limit=20!
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     params = {"limit": min(limit, 20)}
@@ -162,7 +162,7 @@ def fetch_thread_messages(***REMOVED***: str, thread_id: str, limit: int = 20) -
 
 
 def send_new_message(
-    ***REMOVED***: str,
+    access_token: str,
     recipient_login: str,
     order_id: str,
     text: str,
@@ -174,7 +174,7 @@ def send_new_message(
     Wymagane: login kupującego oraz checkout-form id zamówienia.
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
         "Content-Type": "application/vnd.allegro.public.v1+json",
     }
@@ -199,7 +199,7 @@ def send_new_message(
     return response.json()
 
 
-def find_thread_id_for_login(***REMOVED***: str, buyer_login: str) -> ***REMOVED***:
+def find_thread_id_for_login(access_token: str, buyer_login: str) -> Optional[str]:
     """Znajdź wątek Centrum Wiadomości po loginie kupującego."""
     target = _normalize_buyer_login(buyer_login)
     if not target:
@@ -209,7 +209,7 @@ def find_thread_id_for_login(***REMOVED***: str, buyer_login: str) -> ***REMOVED
     limit = 20
     while offset < 200:
         headers = {
-            "Authorization": f"Bearer {***REMOVED***}",
+            "Authorization": f"Bearer {access_token}",
             "Accept": "application/vnd.allegro.public.v1+json",
         }
         url = f"{API_BASE_URL}/messaging/threads"
@@ -241,7 +241,7 @@ def _normalize_buyer_login(login: str) -> str:
 
 
 def send_thread_message(
-    ***REMOVED***: str, 
+    access_token: str, 
     thread_id: str, 
     text: str, 
     attachment_ids: Optional[list] = None
@@ -250,7 +250,7 @@ def send_thread_message(
     Wyślij wiadomość do wątku w Centrum Wiadomości Allegro.
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         thread_id: ID wątku
         text: Treść wiadomości (do 2000 znaków)
         attachment_ids: Lista ID załączników (opcjonalne)
@@ -259,7 +259,7 @@ def send_thread_message(
         dict: Odpowiedź API z danymi wysłanej wiadomości
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
         "Content-Type": "application/vnd.allegro.public.v1+json",
     }
@@ -279,7 +279,7 @@ def send_thread_message(
 
 
 def send_discussion_message(
-    ***REMOVED***: str, 
+    access_token: str, 
     issue_id: str, 
     text: str,
     attachment_ids: Optional[list] = None
@@ -288,7 +288,7 @@ def send_discussion_message(
     Wyślij wiadomość do dyskusji lub reklamacji (Issues API).
     
     Args:
-        ***REMOVED***: Token dostępu Allegro
+        access_token: Token dostępu Allegro
         issue_id: ID dyskusji/reklamacji
         text: Treść wiadomości
         attachment_ids: Lista ID załączników (opcjonalne)
@@ -297,7 +297,7 @@ def send_discussion_message(
         dict: Odpowiedź API z danymi wysłanej wiadomości
     """
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
         "Content-Type": "application/vnd.allegro.beta.v1+json",
     }

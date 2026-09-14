@@ -27,9 +27,9 @@ def _headers(token: str) -> dict[str, str]:
     }
 
 
-def fetch_ratings_snapshot(***REMOVED***: str | None = None) -> dict[str, Any]:
+def fetch_ratings_snapshot(access_token: str | None = None) -> dict[str, Any]:
     """Pobierz podsumowanie ocen z Allegro API."""
-    token = ***REMOVED*** or ***REMOVED***
+    token = access_token or settings_store.get("ALLEGRO_ACCESS_TOKEN")
     if not token:
         raise RuntimeError("missing ALLEGRO_ACCESS_TOKEN")
 

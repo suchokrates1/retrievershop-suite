@@ -106,7 +106,7 @@ class PromoStats:
     estimated_monthly_cost: float = 0.0
     renewing_tomorrow: List[Dict[str, Any]] = field(default_factory=list)
     active_promotions: List[Dict[str, Any]] = field(default_factory=list)
-    error: ***REMOVED*** = None
+    error: Optional[str] = None
 
 
 @dataclass
@@ -121,12 +121,12 @@ class TrendStats:
 @dataclass
 class SalesRecordsStats:
     """Rekordy sprzedazy i najlepszy miesiac realnego zysku."""
-    daily_date: ***REMOVED*** = None
+    daily_date: Optional[str] = None
     daily_quantity: int = 0
-    monthly_label: ***REMOVED*** = None
+    monthly_label: Optional[str] = None
     monthly_quantity: int = 0
     max_profit_amount: float = 0.0
-    max_profit_month: ***REMOVED*** = None
+    max_profit_month: Optional[str] = None
 
 
 class DashboardService:
@@ -208,18 +208,18 @@ class DashboardService:
             month=calc_revenue(tr.month_start_ts)
         )
     
-    def get_profit_stats(self, ***REMOVED***: ***REMOVED*** = None) -> Dict[str, Any]:
+    def get_profit_stats(self, access_token: Optional[str] = None) -> Dict[str, Any]:
         """Pobiera statystyki zysku uzywajac FinancialCalculator."""
         tr = self.time_ranges
         calculator = FinancialCalculator(self.db, self.settings)
         started_at = time.perf_counter()
         trace_label = f"dashboard-profit:{tr.month_start_ts}:{int(tr.now.timestamp())}"
         logger.info(
-            "Dashboard profit stats start: trace=%s month_start_ts=%s now_ts=%s ***REMOVED***=%s",
+            "Dashboard profit stats start: trace=%s month_start_ts=%s now_ts=%s access_token=%s",
             trace_label,
             tr.month_start_ts,
             int(tr.now.timestamp()),
-            bool(***REMOVED***),
+            bool(access_token),
         )
         
         now_ts = int(tr.now.timestamp())
@@ -227,14 +227,14 @@ class DashboardService:
             tr.month_start_ts,
             now_ts,
             include_fixed_costs=True,
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
             trace_label=trace_label,
         )
         
         # Pobierz koszty kampanii Ads (NSP) za biezacy miesiac
         ads_cost = Decimal("0")
         ads_daily = []
-        if ***REMOVED***:
+        if access_token:
             try:
                 from ..allegro_api import get_period_ads_cost
                 
@@ -244,7 +244,7 @@ class DashboardService:
                 now_iso = tr.now.strftime("%Y-%m-%dT%H:%M:%S") + "+01:00"
                 
                 ads_result = get_period_ads_cost(
-                    ***REMOVED***, 
+                    access_token, 
                     occurred_at_gte=month_start_iso,
                     occurred_at_lte=now_iso
                 )
@@ -563,7 +563,7 @@ class DashboardService:
     def _resolve_product_info(
         self, 
         order_name: str, 
-        ean: ***REMOVED***
+        ean: Optional[str]
     ) -> tuple:
         """Rozwiazuje informacje o produkcie na podstawie nazwy/EAN."""
         product_id = None
@@ -691,7 +691,7 @@ class DashboardService:
         cls,
         rows: List[tuple[str, Any]],
         format_key,
-    ) -> tuple[***REMOVED***, Any]:
+    ) -> tuple[Optional[str], Any]:
         """Wybiera rekord: max wartosc, najblizsza data/miesiac w przeszlosci, (N) przy remisie."""
         valid = [(key, value) for key, value in rows if key and value is not None and value > 0]
         if not valid:
@@ -914,13 +914,13 @@ class DashboardService:
             'trends': None,  # ladowane asynchronicznie
         }
     
-    def get_heavy_dashboard(self, ***REMOVED***: ***REMOVED*** = None) -> Dict[str, Any]:
+    def get_heavy_dashboard(self, access_token: Optional[str] = None) -> Dict[str, Any]:
         """
         Pobiera ciezkie dane dashboardu (API + zlozone zapytania).
         
         Wywolywane asynchronicznie z frontendu.
         """
-        profit_stats = self.get_profit_stats(***REMOVED***)
+        profit_stats = self.get_profit_stats(access_token)
         promo_stats = self.get_promo_stats()
         trends = self.get_trends()
         
@@ -954,19 +954,19 @@ class DashboardService:
             },
         }
 
-    def get_full_dashboard(self, ***REMOVED***: ***REMOVED*** = None) -> Dict[str, Any]:
+    def get_full_dashboard(self, access_token: Optional[str] = None) -> Dict[str, Any]:
         """
         Pobiera kompletne dane dashboardu.
         
         Args:
-            ***REMOVED***: Token Allegro do pobierania oplat
+            access_token: Token Allegro do pobierania oplat
             
         Returns:
             Slownik z wszystkimi danymi dashboardu
         """
         order_stats = self.get_order_stats()
         revenue_stats = self.get_revenue_stats()
-        profit_stats = self.get_profit_stats(***REMOVED***)
+        profit_stats = self.get_profit_stats(access_token)
         inventory_stats = self.get_inventory_stats()
         allegro_stats = self.get_allegro_stats()
         promo_stats = self.get_promo_stats()

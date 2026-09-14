@@ -35,7 +35,7 @@ ALLEGRO_REFUND_REASON_REFUND = "REFUND"
 ALLEGRO_REFUND_REASONS = {ALLEGRO_REFUND_REASON_REFUND}
 
 
-def _normalize_refund_reason(reason: ***REMOVED***) -> str:
+def _normalize_refund_reason(reason: Optional[str]) -> str:
     """Zwróć dozwolony kod reason dla Allegro payments/refunds."""
     normalized = (reason or "").strip().upper()
     if normalized in ALLEGRO_REFUND_REASONS:
@@ -43,18 +43,18 @@ def _normalize_refund_reason(reason: ***REMOVED***) -> str:
     return ALLEGRO_REFUND_REASON_REFUND
 
 
-def get_customer_return(***REMOVED***: str, return_id: str) -> Tuple[Optional[Dict[str, Any]], ***REMOVED***]:
+def get_customer_return(access_token: str, return_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Pobierz szczegoly zwrotu klienta z Allegro API.
     
     Args:
-        ***REMOVED***: Token dostepu Allegro
+        access_token: Token dostepu Allegro
         return_id: ID zwrotu w Allegro (customerReturnId)
     
     Returns:
         Tuple (dane_zwrotu, blad) - jesli blad to None, dane_zwrotu zawiera odpowiedz API
     """
-    if not ***REMOVED***:
+    if not access_token:
         return None, "Brak tokenu dostepu Allegro"
     
     if not return_id:
@@ -62,7 +62,7 @@ def get_customer_return(***REMOVED***: str, return_id: str) -> Tuple[Optional[Di
     
     url = f"{API_BASE_URL}/order/customer-returns/{return_id}"
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.beta.v1+json",
     }
     
@@ -159,13 +159,13 @@ def validate_return_for_refund(return_data: Dict[str, Any]) -> Tuple[bool, str]:
     return True, f"Zwrot gotowy do realizacji: {amount:.2f} {currency}"
 
 
-def get_checkout_form(***REMOVED***: str, order_external_id: str) -> Tuple[Optional[Dict[str, Any]], ***REMOVED***]:
+def get_checkout_form(access_token: str, order_external_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Pobierz dane checkout-form (platnosc, line items) z Allegro API.
     """
     url = f"{API_BASE_URL}/order/checkout-forms/{order_external_id}"
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     try:
@@ -181,18 +181,18 @@ def get_checkout_form(***REMOVED***: str, order_external_id: str) -> Tuple[Optio
 
 
 def get_payment_operations(
-    ***REMOVED***: str,
+    access_token: str,
     payment_id: str,
-) -> Tuple[List[Dict[str, Any]], ***REMOVED***]:
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """Pobierz historie operacji platnosci (np. zaksiegowanie pobrania na wallet)."""
-    if not ***REMOVED***:
+    if not access_token:
         return [], "Brak tokenu dostepu Allegro"
     if not payment_id:
         return [], "Brak payment.id"
 
     url = f"{API_BASE_URL}/payments/payment-operations"
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
     }
     try:
@@ -213,7 +213,7 @@ def get_payment_operations(
 
 
 def get_cod_settlement_status(
-    ***REMOVED***: str,
+    access_token: str,
     checkout_data: Dict[str, Any],
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """
@@ -238,7 +238,7 @@ def get_cod_settlement_status(
     if not payment_id:
         return "pending", {**base_details, "reason": "missing_payment_id"}
 
-    operations, error = get_payment_operations(***REMOVED***, payment_id)
+    operations, error = get_payment_operations(access_token, payment_id)
     if error:
         return "pending", {**base_details, "reason": error}
 
@@ -279,7 +279,7 @@ def _normalize_item_name(value: Any) -> str:
 def build_refund_line_items(
     return_items: List[Dict[str, Any]],
     checkout_data: Dict[str, Any],
-) -> Tuple[Optional[List[Dict[str, Any]]], float, str, ***REMOVED***]:
+) -> Tuple[Optional[List[Dict[str, Any]]], float, str, Optional[str]]:
     """
     Mapuj zwracane pozycje na payload lineItems dla POST /payments/refunds.
 
@@ -345,7 +345,7 @@ def build_partial_refund_details(
     checkout_data: Dict[str, Any],
     *,
     delivery_cost_covered: bool = False,
-) -> Tuple[Optional[Dict[str, Any]], ***REMOVED***]:
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Wylicz kwote i pozycje zwrotu na podstawie faktycznie zwracanych produktow."""
     line_items, total_amount, currency, error = build_refund_line_items(return_items, checkout_data)
     if error:
@@ -415,18 +415,18 @@ def build_checkout_refund_details(checkout_data: Dict[str, Any]) -> Dict[str, An
 
 
 def initiate_refund(
-    ***REMOVED***: str,
-    return_id: ***REMOVED***,
+    access_token: str,
+    return_id: Optional[str],
     order_external_id: str,
     line_items: Optional[List[Dict[str, Any]]] = None,
     delivery_cost_covered: bool = True,
-    reason: ***REMOVED*** = None,
+    reason: Optional[str] = None,
 ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """
     Inicjuj zwrot pieniedzy przez POST /payments/refunds.
 
     Args:
-        ***REMOVED***: Token dostepu Allegro
+        access_token: Token dostepu Allegro
         return_id: ID zwrotu w Allegro (customerReturnId) - do walidacji statusu
         order_external_id: external_order_id zamowienia (UUID z checkout-forms)
         line_items: Lista pozycji do zwrotu [{id, type, quantity}].
@@ -437,7 +437,7 @@ def initiate_refund(
     Returns:
         Tuple (sukces, komunikat, dane_odpowiedzi)
     """
-    if not ***REMOVED***:
+    if not access_token:
         return False, "Brak tokenu dostepu Allegro", None
 
     if not order_external_id:
@@ -445,7 +445,7 @@ def initiate_refund(
 
     if return_id:
         # Waliduj status zwrotu tylko dla Customer Returns
-        return_data, error = get_customer_return(***REMOVED***, return_id)
+        return_data, error = get_customer_return(access_token, return_id)
         if error:
             return False, error, None
 
@@ -454,7 +454,7 @@ def initiate_refund(
             return False, validation_msg, None
 
     # Pobierz dane platnosci z checkout-forms
-    checkout_data, cf_error = get_checkout_form(***REMOVED***, order_external_id)
+    checkout_data, cf_error = get_checkout_form(access_token, order_external_id)
     if cf_error:
         return False, f"Blad pobierania danych platnosci: {cf_error}", None
 
@@ -496,7 +496,7 @@ def initiate_refund(
 
     url = f"{API_BASE_URL}/payments/refunds"
     headers = {
-        "Authorization": f"Bearer {***REMOVED***}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.allegro.public.v1+json",
         "Content-Type": "application/vnd.allegro.public.v1+json",
     }
@@ -557,18 +557,18 @@ def initiate_refund(
         return False, f"Blad polaczenia z Allegro: {e}", None
 
 
-def get_refund_status(***REMOVED***: str, return_id: str) -> Tuple[***REMOVED***, Optional[Dict[str, Any]], ***REMOVED***]:
+def get_refund_status(access_token: str, return_id: str) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[str]]:
     """
     Sprawdz status zwrotu pieniedzy.
     
     Args:
-        ***REMOVED***: Token dostepu Allegro
+        access_token: Token dostepu Allegro
         return_id: ID zwrotu w Allegro
     
     Returns:
         Tuple (status, dane_refundu, blad)
     """
-    return_data, error = get_customer_return(***REMOVED***, return_id)
+    return_data, error = get_customer_return(access_token, return_id)
     if error:
         return None, None, error
     

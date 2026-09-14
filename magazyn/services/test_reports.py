@@ -36,7 +36,7 @@ def send_current_month_test_report(session_factory, settings_store, send_report)
     month_start_ts = int(month_start.timestamp())
     now_ts = int(now.timestamp())
     month_name = MONTH_NAMES[now.month - 1]
-    ***REMOVED*** = ***REMOVED***
+    access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
 
     with session_factory() as db:
         calculator = FinancialCalculator(db, settings_store)
@@ -44,7 +44,7 @@ def send_current_month_test_report(session_factory, settings_store, send_report)
             month_start_ts,
             now_ts,
             include_fixed_costs=False,
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
         )
 
     summary = {

@@ -15,7 +15,7 @@ def fetch_orders(
     client: WooClient,
     *,
     status: str = "processing,completed",
-    after: ***REMOVED*** = None,
+    after: Optional[str] = None,
     per_page: int = 50,
 ) -> list[dict]:
     params: dict[str, Any] = {"status": status, "per_page": per_page, "orderby": "date", "order": "desc"}
@@ -188,7 +188,7 @@ def parse_woo_order_to_data(order: dict) -> dict[str, Any]:
     }
 
 
-def _meta(order: dict, key: str) -> ***REMOVED***:
+def _meta(order: dict, key: str) -> Optional[str]:
     for meta in order.get("meta_data") or []:
         if meta.get("key") == key:
             value = meta.get("value")

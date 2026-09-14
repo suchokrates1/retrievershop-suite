@@ -22,7 +22,7 @@ DEFAULT_TIMEOUT = 10
 @dataclass
 class MessengerConfig:
     """Konfiguracja klienta Messenger."""
-    ***REMOVED***: str
+    access_token: str
     recipient_id: str
     timeout: int = DEFAULT_TIMEOUT
 
@@ -40,7 +40,7 @@ class MessengerClient:
     def __init__(self, config: MessengerConfig):
         self.config = config
         self._headers = {
-            "Authorization": f"Bearer {config.***REMOVED***}",
+            "Authorization": f"Bearer {config.access_token}",
             "Content-Type": "application/json"
         }
     

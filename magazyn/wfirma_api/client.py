@@ -25,7 +25,7 @@ MAX_BACKOFF = 30.0
 class WFirmaError(Exception):
     """Blad API wFirma."""
 
-    def __init__(self, message: str, code: ***REMOVED*** = None, details: Optional[dict] = None):
+    def __init__(self, message: str, code: Optional[str] = None, details: Optional[dict] = None):
         super().__init__(message)
         self.code = code
         self.details = details or {}
@@ -40,8 +40,8 @@ class WFirmaClient:
         self,
         access_key: str,
         secret_key: str,
-        app_key: ***REMOVED*** = None,
-        company_id: ***REMOVED*** = None,
+        app_key: Optional[str] = None,
+        company_id: Optional[str] = None,
     ):
         if not access_key or not secret_key:
             raise ValueError("wFirma: wymagane access_key i secret_key")

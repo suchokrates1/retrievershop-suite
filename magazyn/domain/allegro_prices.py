@@ -27,7 +27,7 @@ def _to_decimal(value) -> Decimal:
 def record_price_point(
     session: Session,
     *,
-    offer_id: ***REMOVED***,
+    offer_id: Optional[str],
     product_size_id: Optional[int],
     price,
     recorded_at: Optional[datetime | str] = None,
@@ -55,7 +55,7 @@ def generate_trend_report(
     session: Session,
     *,
     window_hours: int = 24,
-    offer_prefix: ***REMOVED*** = None,
+    offer_prefix: Optional[str] = None,
 ) -> list[dict]:
     """Return aggregated price trends for the requested time window."""
 

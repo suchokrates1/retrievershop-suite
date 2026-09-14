@@ -102,12 +102,12 @@ def _build_bank_transfer_title(order: Order, return_record: Return) -> str:
 
 
 def _fetch_allegro_return_data(
-    ***REMOVED***: ***REMOVED***,
+    access_token: Optional[str],
     return_record: Return,
 ) -> Optional[Dict[str, Any]]:
-    if not ***REMOVED*** or not return_record.allegro_return_id:
+    if not access_token or not return_record.allegro_return_id:
         return None
-    data, error = allegro_api.get_customer_return(***REMOVED***, return_record.allegro_return_id)
+    data, error = allegro_api.get_customer_return(access_token, return_record.allegro_return_id)
     if error:
         logger.warning(
             "Nie mozna pobrac zwrotu Allegro %s: %s",
@@ -184,19 +184,19 @@ def _cod_pending_details(settlement_details: Optional[Dict[str, Any]]) -> Dict[s
 
 
 def _check_cod_settlement(
-    ***REMOVED***: str,
+    access_token: str,
     order: Order,
-) -> Tuple[***REMOVED***, Optional[Dict[str, Any]]]:
+) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
     """Zwraca (pending_message, pending_details) gdy pobranie nie jest jeszcze zaksiegowane."""
     if not _is_cod_order(order) or not order.external_order_id:
         return None, None
 
-    checkout_data, cf_error = allegro_api.get_checkout_form(***REMOVED***, order.external_order_id)
+    checkout_data, cf_error = allegro_api.get_checkout_form(access_token, order.external_order_id)
     if cf_error:
         return f"Blad pobierania danych platnosci: {cf_error}", None
 
     settlement_status, settlement_details = allegro_api.get_cod_settlement_status(
-        ***REMOVED***,
+        access_token,
         checkout_data,
     )
     if settlement_status == "pending":
@@ -253,17 +253,17 @@ def _resolve_return_items(
 def _build_refund_execution(
     return_record: Return,
     order_external_id: str,
-    ***REMOVED***: str,
+    access_token: str,
     *,
     allegro_return_data: Optional[Dict[str, Any]] = None,
     delivery_cost_covered: bool = False,
-) -> Tuple[Optional[List[Dict[str, Any]]], ***REMOVED***]:
+) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
     """Przygotuj line_items dla Allegro payments/refunds."""
     return_items = _resolve_return_items(return_record, allegro_return_data)
     if not return_items:
         return None, None
 
-    checkout_data, cf_error = allegro_api.get_checkout_form(***REMOVED***, order_external_id)
+    checkout_data, cf_error = allegro_api.get_checkout_form(access_token, order_external_id)
     if cf_error:
         return None, f"Blad pobierania danych z Allegro: {cf_error}"
 
@@ -348,7 +348,7 @@ def _process_woo_refund(
     return_record: Return,
     *,
     delivery_cost_covered: bool,
-    reason: ***REMOVED***,
+    reason: Optional[str],
 ) -> Tuple[bool, str]:
     from ..woocommerce_api.payments import classify_woo_payment_method
     from ..woocommerce_api.refunds import create_order_refund
@@ -417,14 +417,14 @@ def _process_woo_refund(
 def _build_refund_eligibility_details(
     return_record: Return,
     order_external_id: str,
-    ***REMOVED***: str,
+    access_token: str,
     *,
     allegro_return_data: Optional[Dict[str, Any]] = None,
     allegro_status: str,
     message: str,
 ) -> Tuple[bool, str, Optional[Dict]]:
     return_items = _resolve_return_items(return_record, allegro_return_data)
-    checkout_data, cf_error = allegro_api.get_checkout_form(***REMOVED***, order_external_id)
+    checkout_data, cf_error = allegro_api.get_checkout_form(access_token, order_external_id)
     if cf_error:
         return False, f"Blad pobierania danych z Allegro: {cf_error}", None
 
@@ -497,11 +497,11 @@ def process_refund(
                 reason=reason,
             )
 
-        ***REMOVED*** = settings_store.settings.ALLEGRO_ACCESS_TOKEN
-        if not ***REMOVED***:
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        if not access_token:
             return False, "Brak tokenu Allegro - zaloguj sie do Allegro"
 
-        pending_message, pending_details = _check_cod_settlement(***REMOVED***, order_record)
+        pending_message, pending_details = _check_cod_settlement(access_token, order_record)
         if pending_message:
             _log_cod_pending_once(db, return_record)
             return False, pending_message
@@ -520,7 +520,7 @@ def process_refund(
         allegro_return_data = None
         if return_record.allegro_return_id and not _is_stock_restored_refund_override(return_record):
             allegro_return_data, allegro_error = allegro_api.get_customer_return(
-                ***REMOVED***,
+                access_token,
                 return_record.allegro_return_id,
             )
             if allegro_error:
@@ -529,7 +529,7 @@ def process_refund(
         line_items, build_error = _build_refund_execution(
             return_record,
             order_record.external_order_id,
-            ***REMOVED***,
+            access_token,
             allegro_return_data=allegro_return_data,
             delivery_cost_covered=delivery_cost_covered,
         )
@@ -537,7 +537,7 @@ def process_refund(
             return False, build_error
 
         success, message, _response_data = allegro_api.initiate_refund(
-            ***REMOVED***=***REMOVED***,
+            access_token=access_token,
             return_id=None if _is_stock_restored_refund_override(return_record) else return_record.allegro_return_id,
             order_external_id=order_record.external_order_id,
             line_items=line_items,
@@ -618,7 +618,7 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
                 f"Aktualny: {return_record.status}"
             ), None
 
-        ***REMOVED*** = settings_store.settings.ALLEGRO_ACCESS_TOKEN
+        access_token = settings_store.settings.ALLEGRO_ACCESS_TOKEN
         order_record = db.query(Order).filter(Order.order_id == order_id).first()
         if not order_record:
             return False, "Nie znaleziono zamowienia", None
@@ -627,7 +627,7 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
 
         allegro_return_data = None
         if not (is_woo_order(order_record) or _is_woo_return(return_record)):
-            allegro_return_data = _fetch_allegro_return_data(***REMOVED***, return_record)
+            allegro_return_data = _fetch_allegro_return_data(access_token, return_record)
 
         bank_transfer = _build_bank_transfer_details(
             order_record,
@@ -643,10 +643,10 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
                 bank_transfer=bank_transfer,
             )
 
-        if not ***REMOVED***:
+        if not access_token:
             return False, "Brak tokenu Allegro — dostepny zwrot przelewem", bank_transfer
 
-        pending_message, pending_details = _check_cod_settlement(***REMOVED***, order_record)
+        pending_message, pending_details = _check_cod_settlement(access_token, order_record)
         if pending_message:
             details = pending_details or {}
             details.update(bank_transfer)
@@ -665,7 +665,7 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
             ok, msg, details = _build_refund_eligibility_details(
                 return_record,
                 order_record.external_order_id,
-                ***REMOVED***,
+                access_token,
                 allegro_status=allegro_status,
                 message=message,
             )
@@ -680,7 +680,7 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
 
         if not allegro_return_data:
             return_data, error = allegro_api.get_customer_return(
-                ***REMOVED***, return_record.allegro_return_id
+                access_token, return_record.allegro_return_id
             )
             if error:
                 return False, f"Blad pobierania danych z Allegro: {error}", bank_transfer
@@ -696,7 +696,7 @@ def check_refund_eligibility(order_id: str) -> Tuple[bool, str, Optional[Dict]]:
         ok, msg, details = _build_refund_eligibility_details(
             return_record,
             order_record.external_order_id,
-            ***REMOVED***,
+            access_token,
             allegro_return_data=allegro_return_data,
             allegro_status=allegro_return_data.get("status"),
             message=validation_msg,

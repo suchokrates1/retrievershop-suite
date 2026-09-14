@@ -36,7 +36,7 @@ def apply_stock_adjustment(
     set_to: Optional[int] = None,
     delta: Optional[int] = None,
     unit_price=None,
-    reason: ***REMOVED*** = None,
+    reason: Optional[str] = None,
 ) -> Tuple[int, int]:
     """Rdzen korekty na juz zaladowanym ``ProductSize`` (bez otwierania sesji).
 
@@ -96,7 +96,7 @@ def adjust_stock(
     set_to: Optional[int] = None,
     delta: Optional[int] = None,
     unit_price=None,
-    reason: ***REMOVED*** = None,
+    reason: Optional[str] = None,
 ) -> Tuple[int, int]:
     """Skoryguj stan trzymajac spojnosc ``quantity`` i ``stock_value``.
 

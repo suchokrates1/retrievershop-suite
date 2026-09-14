@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 _sync_thread: Optional[threading.Thread] = None
 _runtime = BackgroundThreadRuntime(name="OrderSyncScheduler", logger=logger)
 _stop_event = _runtime.stop_event
-_last_offer_sync_date: ***REMOVED*** = None  # YYYY-MM-DD - data ostatniego syncu ofert
+_last_offer_sync_date: Optional[str] = None  # YYYY-MM-DD - data ostatniego syncu ofert
 
 
 def _is_http_status(exc: Exception, status_code: int) -> bool:
@@ -42,7 +42,7 @@ def _refresh_order_profit_cache(app):
     stats = {"checked": 0, "updated": 0, "finalized": 0, "pending": 0, "errors": 0}
 
     try:
-        ***REMOVED*** = ***REMOVED***
+        access_token = settings_store.get("ALLEGRO_ACCESS_TOKEN")
 
         with get_session() as db:
             calculator = FinancialCalculator(db, settings_store)
@@ -69,7 +69,7 @@ def _refresh_order_profit_cache(app):
 
             prefetched_billings = calculator._prefetch_order_billing_summaries(
                 allegro_orders,
-                ***REMOVED***,
+                access_token,
                 trace_label="scheduler-profit-cache",
             )
 
@@ -82,7 +82,7 @@ def _refresh_order_profit_cache(app):
                 try:
                     breakdown = calculator.refresh_order_profit_cache(
                         order,
-                        ***REMOVED***=***REMOVED***,
+                        access_token=access_token,
                         trace_label="scheduler-profit-cache",
                         prefetched_billing=prefetched_billings.get(order.external_order_id),
                     )
@@ -130,7 +130,7 @@ def _refresh_order_profit_cache(app):
                 try:
                     breakdown = calculator.refresh_order_profit_cache(
                         order,
-                        ***REMOVED***=None,
+                        access_token=None,
                         trace_label="scheduler-profit-cache-woo",
                     )
                     stats["checked"] += 1
