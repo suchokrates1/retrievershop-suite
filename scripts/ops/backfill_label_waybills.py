@@ -32,10 +32,14 @@ def _collect_waybills(package_ids: list[str], delivery_method: str) -> list[str]
     return list(dict.fromkeys(waybills))
 
 
-def backfill(*, dry_run: bool = False) -> int:
+def backfill(*, dry_run: bool = False, order_ids: list[str] | None = None) -> int:
     updated = 0
+    wanted = {value.strip() for value in (order_ids or []) if value.strip()}
     with get_session() as db:
-        for printed_order in db.query(PrintedOrder).all():
+        query = db.query(PrintedOrder)
+        if wanted:
+            query = query.filter(PrintedOrder.order_id.in_(wanted))
+        for printed_order in query.all():
             data = parse_last_order_data(printed_order.last_order_data)
             package_ids = [str(value) for value in (data.get("package_ids") or []) if value]
             if not package_ids:
@@ -74,11 +78,17 @@ def backfill(*, dry_run: bool = False) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--order-id",
+        action="append",
+        default=[],
+        help="Ogranicz backfill do wskazanych zamówień (można powtórzyć).",
+    )
     args = parser.parse_args()
 
     app = create_app()
     with app.app_context():
-        count = backfill(dry_run=args.dry_run)
+        count = backfill(dry_run=args.dry_run, order_ids=args.order_id)
     print(f"Updated {count} printed orders")
 
 

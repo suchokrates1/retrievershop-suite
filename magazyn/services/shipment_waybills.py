@@ -22,7 +22,7 @@ def expand_carrier_waybill_variants(waybill: str, carrier_id: str | None = None)
     """Zwróć numer przewoźnika bez syntetycznych wariantów JJD.
 
     DHL nadaje osobny license plate (JJD...) niezależny od 11-cyfrowego waybill.
-    Kody JJD/routing z PDF pobieramy tylko dla Automat DHL BOX 24/7 (label_barcode_extract).
+    Kody JJD/routing z PDF pobieramy dla etykiet DHL (Automat BOX i Kurier).
     """
     waybill = str(waybill or "").strip()
     return [waybill] if waybill else []

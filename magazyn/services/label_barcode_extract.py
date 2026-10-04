@@ -1,4 +1,4 @@
-"""Ekstrakcja kodów kreskowych z etykiet PDF — tylko Automat DHL BOX 24/7."""
+"""Ekstrakcja kodów kreskowych z etykiet PDF DHL (Automat BOX i Kurier)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
-DHL_BOX_DELIVERY_MARKER = "automat dhl box"
+# Ta sama fizyczna etykieta DHL: Automat BOX 24/7 i Kurier DHL.
+# Orlen ma inny układ kodów — nie wyciągamy z niego JJD/2L.
+DHL_LABEL_BARCODE_MARKERS = ("automat dhl box", "kurier dhl")
 
 # DHL license plate: (J) JD00 003 0230864 000435460935 → JJD000030230864000435460935
 DHL_JJD_TEXT_RE = re.compile(r"\(J\)\s*J\s*D\s*([\d\s]+)", re.IGNORECASE)
@@ -25,7 +27,10 @@ def needs_dhl_box_label_barcode_extraction(delivery_method: str | None) -> bool:
     """Czy po pobraniu etykiety trzeba wyciągnąć kody JJD/routing z PDF."""
     if not delivery_method:
         return False
-    return DHL_BOX_DELIVERY_MARKER in delivery_method.lower()
+    normalized = delivery_method.lower()
+    if "orlen" in normalized:
+        return False
+    return any(marker in normalized for marker in DHL_LABEL_BARCODE_MARKERS)
 
 
 def _normalize_jjd_from_text(digits_with_spaces: str) -> str | None:
@@ -79,7 +84,7 @@ def extract_dhl_box_barcodes_from_label_text(text: str) -> list[str]:
 
 
 def extract_dhl_box_barcodes_from_label_pdf(label_bytes: bytes) -> list[str]:
-    """Wyciągnij kody kreskowe z PDF etykiety Automat DHL BOX 24/7."""
+    """Wyciągnij kody kreskowe z PDF etykiety DHL (BOX lub Kurier)."""
     if not label_bytes:
         return []
 

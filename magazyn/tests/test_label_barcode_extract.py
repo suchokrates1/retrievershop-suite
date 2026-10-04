@@ -19,7 +19,10 @@ Numer Allegro :AD02MJHDL5
 
 def test_needs_dhl_box_label_barcode_extraction():
     assert needs_dhl_box_label_barcode_extraction("Allegro Automat DHL BOX 24/7 (AD)") is True
+    assert needs_dhl_box_label_barcode_extraction("Allegro Kurier DHL (AD)") is True
+    assert needs_dhl_box_label_barcode_extraction("Allegro Kurier DHL") is True
     assert needs_dhl_box_label_barcode_extraction("Allegro Automat ORLEN Paczka") is False
+    assert needs_dhl_box_label_barcode_extraction("Allegro Paczkomaty InPost") is False
     assert needs_dhl_box_label_barcode_extraction("") is False
 
 
