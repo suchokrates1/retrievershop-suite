@@ -2,7 +2,9 @@
 
 from magazyn.services.print_agent_shipments import (
     build_receiver,
+    build_sender,
     choose_package_dimensions,
+    ensure_polish_phone_prefix,
     hydrate_receiver_from_checkout,
     is_receiver_ready,
     receiver_phone_digits,
@@ -94,8 +96,25 @@ def test_build_receiver_uses_home_address_without_pickup_point():
         "city": "Warszawa",
         "countryCode": "PL",
         "email": "anna@test.pl",
-        "phone": "700222333",
+        "phone": "+48700222333",
     }
+
+
+def test_ensure_polish_phone_prefix_adds_plus_48_when_allegro_omits_it():
+    assert ensure_polish_phone_prefix("700222333") == "+48700222333"
+    assert ensure_polish_phone_prefix("48 500 600 700") == "+48500600700"
+    assert ensure_polish_phone_prefix("0048500600700") == "+48500600700"
+    assert ensure_polish_phone_prefix("+48 665 254 563") == "+48 665 254 563"
+    assert ensure_polish_phone_prefix("") == ""
+    assert ensure_polish_phone_prefix("123456789", country_code="DE") == "123456789"
+
+
+def test_build_sender_prefixes_local_phone():
+    class _Settings:
+        def get(self, key):
+            return {"SENDER_PHONE": "500600700"}.get(key)
+
+    assert build_sender(_Settings())["phone"] == "+48500600700"
 
 
 def test_receiver_phone_digits_strips_non_digits():

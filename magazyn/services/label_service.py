@@ -26,6 +26,7 @@ from ..allegro_api.fulfillment import (
     add_shipment_tracking,
 )
 from ..settings_store import settings_store
+from .print_agent_shipments import ensure_polish_phone_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _load_sender_data() -> dict:
         "city": settings_store.get("SENDER_CITY") or "",
         "zipCode": settings_store.get("SENDER_ZIPCODE") or "",
         "countryCode": settings_store.get("SENDER_COUNTRY_CODE") or "PL",
-        "phone": settings_store.get("SENDER_PHONE") or "",
+        "phone": ensure_polish_phone_prefix(settings_store.get("SENDER_PHONE") or ""),
         "email": settings_store.get("SENDER_EMAIL") or "",
     }
     company = settings_store.get("SENDER_COMPANY")
@@ -80,8 +81,11 @@ def _build_receiver(order_data: dict) -> dict:
         "city": city,
         "zipCode": zip_code,
         "countryCode": address.get("countryCode", "PL"),
-        "phone": address.get("phoneNumber")
-                 or order_data.get("buyer", {}).get("phoneNumber", ""),
+        "phone": ensure_polish_phone_prefix(
+            address.get("phoneNumber")
+            or order_data.get("buyer", {}).get("phoneNumber", ""),
+            country_code=address.get("countryCode") or "PL",
+        ),
         "email": order_data.get("buyer", {}).get("email", ""),
     }
 

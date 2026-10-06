@@ -71,7 +71,7 @@ def test_build_receiver_with_pickup():
     assert receiver["city"] == "Krakow"
     assert receiver["zipCode"] == "30-002"
     assert receiver["point"] == "KRA123"
-    assert receiver["phone"] == "600111222"
+    assert receiver["phone"] == "+48600111222"
     assert receiver["email"] == "jan@test.pl"
 
 
@@ -80,7 +80,7 @@ def test_build_receiver_no_pickup():
 
     assert receiver["name"] == "Anna Nowak"
     assert "point" not in receiver
-    assert receiver["phone"] == "700222333"
+    assert receiver["phone"] == "+48700222333"
 
 
 def test_build_receiver_empty_order():
@@ -109,6 +109,7 @@ def test_load_sender_data(mock_store):
     assert result["name"] == "Retriever Shop"
     assert result["city"] == "Poznan"
     assert result["zipCode"] == "60-001"
+    assert result["phone"] == "+48500000000"
 
 
 @patch("magazyn.services.label_service.settings_store")

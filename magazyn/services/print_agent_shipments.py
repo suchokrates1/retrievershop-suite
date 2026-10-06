@@ -63,7 +63,7 @@ def build_sender(settings_store: Any) -> Dict[str, str]:
         "postalCode": settings_store.get("SENDER_ZIPCODE") or "",
         "city": settings_store.get("SENDER_CITY") or "",
         "countryCode": "PL",
-        "phone": settings_store.get("SENDER_PHONE") or "",
+        "phone": ensure_polish_phone_prefix(settings_store.get("SENDER_PHONE") or ""),
         "email": settings_store.get("SENDER_EMAIL") or "",
     }
     sender_company = settings_store.get("SENDER_COMPANY") or "Retriever Shop"
@@ -75,6 +75,31 @@ def build_sender(settings_store: Any) -> Dict[str, str]:
 def receiver_phone_digits(phone: Any) -> str:
     """Wyciagnij same cyfry z numeru telefonu odbiorcy."""
     return re.sub(r"\D", "", str(phone or ""))
+
+
+def ensure_polish_phone_prefix(phone: Any, *, country_code: str | None = "PL") -> str:
+    """Dopisz +48, gdy numer z Allegro nie ma prefiksu miedzynarodowego.
+
+    Shipment Management odrzuca numer bez prefiksu. Checkout-form i ustawienia
+    nadawcy czasem maja same 9 cyfr. Numer zaczynajacy sie od + zostaje.
+    """
+    raw = str(phone or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("+"):
+        return raw
+
+    digits = receiver_phone_digits(raw)
+    if digits.startswith("00") and len(digits) > 4:
+        return f"+{digits[2:]}"
+
+    if (country_code or "PL").upper() != "PL":
+        return raw
+    if len(digits) == 9:
+        return f"+48{digits}"
+    if len(digits) == 11 and digits.startswith("48"):
+        return f"+{digits}"
+    return raw
 
 
 def is_receiver_ready(order_data: Dict[str, Any]) -> bool:
@@ -170,7 +195,10 @@ def build_receiver(order_data: Dict[str, Any]) -> Dict[str, str]:
         "city": city,
         "countryCode": order_data.get("delivery_country_code", "PL"),
         "email": order_data.get("email", ""),
-        "phone": order_data.get("phone", ""),
+        "phone": ensure_polish_phone_prefix(
+            order_data.get("phone", ""),
+            country_code=order_data.get("delivery_country_code") or "PL",
+        ),
     }
 
     company = (order_data.get("delivery_company") or "").strip()
@@ -265,6 +293,7 @@ __all__ = [
     "build_receiver",
     "build_sender",
     "choose_package_dimensions",
+    "ensure_polish_phone_prefix",
     "hydrate_receiver_from_checkout",
     "is_receiver_ready",
     "receiver_phone_digits",
