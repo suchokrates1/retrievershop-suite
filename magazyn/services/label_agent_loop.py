@@ -51,7 +51,8 @@ def process_queue(agent, queue: List[Dict[str, Any]], printed: Dict[str, Any]) -
         notify_messenger=agent._notify_messenger,
         retry=agent._retry,
         print_label=agent.print_label,
-        consume_order_stock=agent.consume_order_stock,
+        claim_print=agent.claim_physical_print,
+        release_print_claim=agent.release_physical_print,
         print_error_type=PrintError,
         errors_total=PRINT_LABEL_ERRORS_TOTAL,
         now=lambda: datetime.now(),
@@ -71,7 +72,6 @@ def order_processor(agent) -> PrintOrderProcessor:
         print_label=agent.print_label,
         mark_as_printed=agent.mark_as_printed,
         notify_messenger=agent._notify_messenger,
-        consume_order_stock=agent.consume_order_stock,
         should_send_error_notification=agent._should_send_error_notification,
         send_label_error_notification=agent._send_label_error_notification,
         increment_error_notification=agent.notifier.increment_error_notification,
@@ -118,8 +118,6 @@ def run_print_iteration(agent) -> None:
     printed = {entry["order_id"]: entry["printed_at"] for entry in printed_entries}
     queue = agent.load_queue()
     queue = agent._restore_in_progress(queue)
-    queue = agent._process_queue(queue, printed)
-    agent.save_queue(queue)
 
     try:
         try:
@@ -139,6 +137,8 @@ def run_print_iteration(agent) -> None:
         agent.logger.error("[BLAD PETLI ZAMOWIEN] %s", exc)
         PRINT_LABEL_ERRORS_TOTAL.labels(stage="loop").inc()
 
+    # Jedno miejsce druku: po dopisaniu nowych etykiet, z claimem na zamówienie.
+    queue = agent._process_queue(queue, printed)
     agent.save_queue(queue)
     duration = (datetime.now() - loop_start).total_seconds()
     PRINT_AGENT_ITERATION_SECONDS.observe(duration)

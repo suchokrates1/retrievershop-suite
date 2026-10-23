@@ -48,7 +48,6 @@ class PrintOrderProcessor:
         print_label: Callable[[str, str, str], None],
         mark_as_printed: Callable[[str, Dict[str, Any]], None],
         notify_messenger: Callable[[Dict[str, Any], bool], None],
-        consume_order_stock: Callable[..., None],
         should_send_error_notification: Callable[[str], bool],
         send_label_error_notification: Callable[[str], None],
         increment_error_notification: Callable[[str], None],
@@ -67,7 +66,6 @@ class PrintOrderProcessor:
         self.print_label = print_label
         self.mark_as_printed = mark_as_printed
         self.notify_messenger = notify_messenger
-        self.consume_order_stock = consume_order_stock
         self.should_send_error_notification = should_send_error_notification
         self.send_label_error_notification = send_label_error_notification
         self.increment_error_notification = increment_error_notification
@@ -110,7 +108,7 @@ class PrintOrderProcessor:
         )
 
         if collected_labels.labels:
-            self._handle_labels(order_id, last_order_data, collected_labels.labels, queue, printed)
+            self._enqueue_labels(order_id, last_order_data, collected_labels.labels, queue, printed)
         else:
             self._handle_missing_labels(order_id)
 
@@ -160,7 +158,7 @@ class PrintOrderProcessor:
             self._notify_label_error(order_id)
             return None
 
-    def _handle_labels(
+    def _enqueue_labels(
         self,
         order_id: str,
         last_order_data: Dict[str, Any],
@@ -168,25 +166,15 @@ class PrintOrderProcessor:
         queue: List[Dict[str, Any]],
         printed: Dict[str, Any],
     ) -> None:
-        if self.is_quiet_time():
-            self._queue_quiet_time_labels(order_id, last_order_data, labels, queue, printed)
-            return
+        """Dopisz etykiety do kolejki. Druk i Messenger robi tylko procesor kolejki.
 
-        self._print_labels_now(order_id, last_order_data, labels, queue, printed)
-
-    def _queue_quiet_time_labels(
-        self,
-        order_id: str,
-        last_order_data: Dict[str, Any],
-        labels: List[Tuple[str, str]],
-        queue: List[Dict[str, Any]],
-        printed: Dict[str, Any],
-    ) -> None:
+        Oznaczenie ``printed`` jest od razu, żeby następna iteracja nie tworzyła
+        drugiej przesyłki. Stan magazynu schodzi dopiero przy spakowaniu/wysyłce.
+        """
         for label_data, extension in labels:
             queue.append(
                 self._queue_entry(order_id, label_data, extension, last_order_data, "queued")
             )
-        self.notify_messenger(last_order_data, True)
         self.mark_as_printed(order_id, last_order_data)
         printed[order_id] = self.now()
 
@@ -216,7 +204,6 @@ class PrintOrderProcessor:
                     stage="print",
                     retry_exceptions=(self.print_error_type,),
                 )
-            self.consume_order_stock(last_order_data.get("products", []), order_id=order_id)
             self.mark_as_printed(order_id, last_order_data)
             printed[order_id] = self.now()
             for entry in entries:
@@ -232,7 +219,8 @@ class PrintOrderProcessor:
             self.logger.info("Retry za 60s dla %s", order_id)
             self.wait(60)
 
-        self.notify_messenger(last_order_data, print_success)
+        if print_success:
+            self.notify_messenger(last_order_data, True)
 
     def _handle_incomplete_receiver(
         self,

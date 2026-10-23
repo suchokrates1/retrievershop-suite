@@ -41,7 +41,6 @@ def _processor(**overrides) -> PrintOrderProcessor:
         "print_label": Mock(),
         "mark_as_printed": Mock(),
         "notify_messenger": Mock(),
-        "consume_order_stock": Mock(),
         "should_send_error_notification": Mock(return_value=True),
         "send_label_error_notification": Mock(),
         "increment_error_notification": Mock(),
@@ -136,3 +135,74 @@ def test_process_escalates_incomplete_receiver_after_timeout(monkeypatch):
     assert status_calls[0][0] == "allegro_y"
     assert "po 20 min" in status_calls[0][1]
     errors_total.labels.assert_called_with(stage="label")
+
+
+def test_enqueue_labels_does_not_print_or_take_stock():
+    print_label = Mock()
+    notify = Mock()
+    mark = Mock()
+    processor = _processor(
+        print_label=print_label,
+        notify_messenger=notify,
+        mark_as_printed=mark,
+    )
+    queue: list = []
+    printed: dict = {}
+
+    processor._enqueue_labels(
+        "allegro_ok",
+        {"products": [{"name": "Szelki", "quantity": 1}]},
+        [("bGFiZWw=", "pdf")],
+        queue,
+        printed,
+    )
+
+    print_label.assert_not_called()
+    notify.assert_not_called()
+    mark.assert_called_once()
+    assert queue[0]["status"] == "queued"
+    assert "allegro_ok" in printed
+
+
+def test_print_labels_now_notifies_messenger_only_after_success(monkeypatch):
+    notify = Mock()
+    processor = _processor(notify_messenger=notify)
+    printed: dict = {}
+    queue: list = []
+
+    processor._print_labels_now(
+        "allegro_ok",
+        {"products": []},
+        [("bGFiZWw=", "pdf")],
+        queue,
+        printed,
+    )
+
+    notify.assert_called_once_with({"products": []}, True)
+    assert "allegro_ok" in printed
+    assert queue == []
+
+
+def test_print_labels_now_skips_messenger_when_print_fails(monkeypatch):
+    notify = Mock()
+
+    def fail_print(*_args, **_kwargs):
+        raise RuntimeError("timeout")
+
+    processor = _processor(notify_messenger=notify, print_label=fail_print)
+    monkeypatch.setattr(
+        "magazyn.services.print_agent_order_processor.set_print_error_status",
+        lambda *_args, **_kwargs: None,
+    )
+    queue: list = []
+
+    processor._print_labels_now(
+        "allegro_fail",
+        {"products": []},
+        [("bGFiZWw=", "pdf")],
+        queue,
+        {},
+    )
+
+    notify.assert_not_called()
+    assert queue and queue[0]["status"] == "queued"

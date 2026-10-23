@@ -238,6 +238,15 @@ class LabelAgent:
     ) -> None:
         self.storage.mark_as_printed(order_id, last_order_data)
 
+    def claim_physical_print(self, order_id: str) -> bool:
+        return self.storage.claim_physical_print(str(order_id))
+
+    def claim_state_value(self, key: str, value: str) -> bool:
+        return self.storage.claim_state_value(key, value)
+
+    def release_physical_print(self, order_id: str) -> None:
+        self.storage.release_physical_print(str(order_id))
+
     def _load_state_value(self, key: str) -> Optional[str]:
         return self.storage.load_state_value(key)
 

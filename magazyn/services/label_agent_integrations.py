@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..allegro_api import fetch_allegro_order_detail
+from ..allegro_api.fulfillment import get_shipment_tracking_numbers
 from ..domain.order_platform import is_woo_order
 from ..settings_store import settings_store
 from .print_agent_errors import ApiError, PrintError
@@ -53,6 +54,8 @@ def get_order_packages(agent, order_id: str, *, get_shipment_details, create_all
         get_shipment_details=get_shipment_details,
         create_allegro_shipment=create_allegro_shipment,
         logger=agent.logger,
+        claim_shipment=agent.claim_state_value,
+        list_order_shipments=get_shipment_tracking_numbers,
     )
 
 

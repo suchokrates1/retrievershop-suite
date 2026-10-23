@@ -183,11 +183,8 @@ class HeartbeatFileLock:
                 pass
             self.lock_handle.close()
             self.lock_handle = None
-
-        try:
-            os.remove(self.lock_file)
-        except OSError:
-            pass
+        # Nie usuwaj pliku. flock trzyma i-węzeł; skasowanie ścieżki pozwala
+        # drugiemu procesowi założyć nowy plik i drugi agent drukuje równolegle.
 
 
 __all__ = ["BackgroundThreadRuntime", "HeartbeatFileLock"]

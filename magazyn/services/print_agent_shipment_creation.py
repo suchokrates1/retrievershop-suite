@@ -173,6 +173,10 @@ class PrintShipmentCreator:
             self.logger.error("Brak shipmentId po utworzeniu (commandId=%s)", command_id)
             return []
 
+        # Zapis od razu, zanim pobierzemy etykietę. Drugi proces widzi id
+        # i nie zakłada kolejnej przesyłki, nawet gdy dalszy krok padnie.
+        self.save_state_value(f"sm_shipment:{order_id}", shipment_id)
+
         waybill, waybills = self._load_waybills(shipment_id)
         self._sync_tracking_and_fulfillment(
             checkout_form_id,
@@ -180,7 +184,6 @@ class PrintShipmentCreator:
             carrier_id,
             waybill,
         )
-        self.save_state_value(f"sm_shipment:{order_id}", shipment_id)
 
         self.logger.info(
             "Utworzono przesylke %s (waybill: %s) dla zamowienia %s",

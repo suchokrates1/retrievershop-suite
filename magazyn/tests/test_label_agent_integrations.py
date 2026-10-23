@@ -62,3 +62,63 @@ def test_get_order_packages_clears_broken_mapping_and_falls_back_to_creation():
     assert result == [{"shipment_id": "ship-2"}]
     save_state_value.assert_called_once_with("sm_shipment:allegro_checkout-456", None)
     create_allegro_shipment.assert_called_once_with("allegro_checkout-456", "checkout-456")
+
+
+def test_second_claim_does_not_create_shipment():
+    create_allegro_shipment = Mock()
+    logger = Mock()
+
+    result = get_order_packages_from_shipment_management(
+        "allegro_checkout-789",
+        load_state_value=Mock(return_value=None),
+        save_state_value=Mock(),
+        get_shipment_details=Mock(),
+        create_allegro_shipment=create_allegro_shipment,
+        logger=logger,
+        claim_shipment=Mock(return_value=False),
+        list_order_shipments=Mock(return_value=[]),
+    )
+
+    assert result == []
+    create_allegro_shipment.assert_not_called()
+
+
+def test_existing_allegro_waybill_blocks_second_shipment():
+    save_state_value = Mock()
+    create_allegro_shipment = Mock()
+
+    result = get_order_packages_from_shipment_management(
+        "allegro_checkout-790",
+        load_state_value=Mock(return_value=None),
+        save_state_value=save_state_value,
+        get_shipment_details=Mock(),
+        create_allegro_shipment=create_allegro_shipment,
+        logger=Mock(),
+        claim_shipment=Mock(return_value=True),
+        list_order_shipments=Mock(return_value=[{"waybill": "6209991", "carrierId": "INPOST"}]),
+    )
+
+    assert result == []
+    create_allegro_shipment.assert_not_called()
+    save_state_value.assert_called_once_with("sm_shipment:allegro_checkout-790", "external:6209991")
+
+
+def test_fresh_pending_creation_is_left_alone():
+    from datetime import datetime
+
+    create_allegro_shipment = Mock()
+    now = datetime(2026, 10, 23, 12, 0, 0)
+
+    result = get_order_packages_from_shipment_management(
+        "allegro_checkout-791",
+        load_state_value=Mock(return_value="pending:2026-10-23T11:59:30"),
+        save_state_value=Mock(),
+        get_shipment_details=Mock(),
+        create_allegro_shipment=create_allegro_shipment,
+        logger=Mock(),
+        claim_shipment=Mock(return_value=True),
+        now=lambda: now,
+    )
+
+    assert result == []
+    create_allegro_shipment.assert_not_called()

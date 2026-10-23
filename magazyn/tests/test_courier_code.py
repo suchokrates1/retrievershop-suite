@@ -13,6 +13,8 @@ def test_agent_loop_stores_courier_code(monkeypatch):
     monkeypatch.setattr(agent, "save_queue", lambda q: None)
     monkeypatch.setattr(agent, "is_quiet_time", lambda: False)
     monkeypatch.setattr(agent, "consume_order_stock", lambda p, order_id=None: None)
+    monkeypatch.setattr(agent, "claim_physical_print", lambda order_id: True)
+    monkeypatch.setattr(agent, "release_physical_print", lambda order_id: None)
     monkeypatch.setattr(
         agent,
         "print_label",
@@ -61,6 +63,8 @@ def test_agent_loop_treats_pobranie_as_cod_with_zero_payment(monkeypatch):
     monkeypatch.setattr(agent, "save_queue", lambda q: None)
     monkeypatch.setattr(agent, "is_quiet_time", lambda: False)
     monkeypatch.setattr(agent, "consume_order_stock", lambda p, order_id=None: None)
+    monkeypatch.setattr(agent, "claim_physical_print", lambda order_id: True)
+    monkeypatch.setattr(agent, "release_physical_print", lambda order_id: None)
     monkeypatch.setattr(agent, "print_label", lambda d, e, o: None)
 
     captured = {}

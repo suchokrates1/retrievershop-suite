@@ -162,7 +162,38 @@ def add_order_status(
     if send_email:
         dispatch_email(db, order_id, status)
 
+    from ..domain.inventory import FULFILLMENT_STATUSES
+
+    if status in FULFILLMENT_STATUSES:
+        _schedule_stock_deduction(db, order_id)
+
     return log
+
+
+def _schedule_stock_deduction(db, order_id: str) -> None:
+    """Zdejmij stan po commicie statusu, raz na zamówienie.
+
+    Osobna sesja, więc nie koliduje z transakcją statusu. Drugi status
+    (np. wysłano po spakowano) nie dodaje drugiej sprzedaży.
+    """
+    from sqlalchemy import event
+
+    from ..domain.inventory import ensure_fulfilled_order_sale
+
+    pending = db.info.setdefault("fulfill_order_ids", set())
+    pending.add(order_id)
+    if db.info.get("fulfill_hook"):
+        return
+    db.info["fulfill_hook"] = True
+
+    @event.listens_for(db, "after_commit")
+    def _deduct(session) -> None:
+        order_ids = list(session.info.pop("fulfill_order_ids", ()))
+        for oid in order_ids:
+            try:
+                ensure_fulfilled_order_sale(oid)
+            except Exception:
+                logger.exception("Nie udalo sie zdjac stanu dla %s", oid)
 
 
 def latest_statuses_map(db, order_ids: Sequence[str]) -> dict[str, str]:

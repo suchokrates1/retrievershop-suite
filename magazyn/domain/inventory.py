@@ -191,7 +191,7 @@ def import_from_dataframe(df: pd.DataFrame):
 
 
 def consume_order_stock(products: List[dict], order_id: str | None = None):
-    """Consume stock for products from a printed order.
+    """Consume stock for products from a packed or shipped order.
 
     ``order_id`` jest przekazywany dalej do ``consume_stock``/``record_sale``,
     zeby powiazac powstale rekordy sprzedazy z konkretnym zamowieniem
@@ -313,6 +313,47 @@ def consume_order_stock(products: List[dict], order_id: str | None = None):
                 )
 
 
+FULFILLMENT_STATUSES = frozenset(
+    {"spakowano", "wyslano", "w_transporcie", "w_punkcie", "dostarczono"}
+)
+
+
+def ensure_fulfilled_order_sale(order_id: str) -> bool:
+    """Zdejmij stan raz, gdy zamówienie jest spakowane albo wysłane.
+
+    Wydruk sam tego nie robi. Jeśli sprzedaż dla zamówienia już jest
+    (także historyczna, z czasu gdy schodziła przy druku), nic nie dopisuj.
+    """
+    from sqlalchemy import func
+
+    from ..models.orders import OrderProduct
+    from ..models.products import Sale
+
+    with get_session() as db:
+        sold = (
+            db.query(func.coalesce(func.sum(Sale.quantity), 0))
+            .filter(Sale.order_id == order_id)
+            .scalar()
+        )
+        if int(sold or 0) > 0:
+            return False
+        rows = db.query(OrderProduct).filter(OrderProduct.order_id == order_id).all()
+        payload = [
+            {
+                "quantity": row.quantity,
+                "ean": row.ean,
+                "sku": row.sku,
+                "name": row.name,
+                "price_brutto": row.price_brutto,
+            }
+            for row in rows
+        ]
+    if not payload:
+        return False
+    consume_order_stock(payload, order_id=order_id)
+    return True
+
+
 __all__ = [
     "update_quantity",
     "get_products_for_delivery",
@@ -321,4 +362,6 @@ __all__ = [
     "get_product_sizes",
     "import_from_dataframe",
     "consume_order_stock",
+    "ensure_fulfilled_order_sale",
+    "FULFILLMENT_STATUSES",
 ]

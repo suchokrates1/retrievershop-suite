@@ -57,7 +57,7 @@ def test_print_label_base64_uses_cups_host_waits_and_cleans_temp_file(mock_run, 
 
     lpstat_calls = [c.args[0] for c in mock_run.call_args_list if c.args[0][0] == "lpstat"]
     assert lpstat_calls
-    assert lpstat_calls[0][:5] == ["lpstat", "-h", "cups.local:631", "-o", "Zebra"]
+    assert lpstat_calls[0][:6] == ["lpstat", "-h", "cups.local:631", "-l", "-o", "Zebra"]
 
 
 @patch("magazyn.services.printing.subprocess.run")
@@ -130,9 +130,40 @@ def test_timeout_recovers_and_retries_once(mock_run, _sleep):
     enable_cmds = [
         c.args[0] for c in mock_run.call_args_list if c.args[0][0] == "cupsenable"
     ]
-    assert cancel_cmds
+    assert ["cancel", "Zebra-1"] in cancel_cmds
+    assert all("-a" not in cmd for cmd in cancel_cmds)
     assert disable_cmds
     assert enable_cmds
+
+
+@patch("magazyn.services.printing.time.sleep", return_value=None)
+@patch("magazyn.services.printing.subprocess.run")
+def test_waiting_for_printer_counts_as_printed_without_retry(mock_run, _sleep):
+    def side_effect(args, **kwargs):
+        cmd = args[0]
+        if cmd == "lp":
+            return _proc(args, stdout=b"request id is Zebra-5 (1 file(s))\n")
+        if cmd == "lpstat":
+            return _proc(
+                args,
+                stdout=(
+                    b"Zebra-5 root 100\n"
+                    b"\tStatus: Waiting for printer to finish.\n"
+                    b"\tAlerts: job-printing\n"
+                ),
+            )
+        return _proc(args)
+
+    mock_run.side_effect = side_effect
+    printer = CupsPrinter(printer_name="Zebra", poll_interval_seconds=0.01)
+
+    printer.print_text("etykieta")
+
+    lp_cmds = [c.args[0] for c in mock_run.call_args_list if c.args[0][0] == "lp"]
+    cancel_cmds = [c.args[0] for c in mock_run.call_args_list if c.args[0][0] == "cancel"]
+    assert len(lp_cmds) == 1
+    assert cancel_cmds == [["cancel", "Zebra-5"]]
+    assert not any(c.args[0][0] == "cupsdisable" for c in mock_run.call_args_list)
 
 
 @patch("magazyn.services.printing.time.sleep", return_value=None)

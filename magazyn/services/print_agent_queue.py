@@ -20,7 +20,8 @@ class PrintQueueProcessor:
         notify_messenger: Callable[[Dict[str, Any], bool], None],
         retry: Callable[..., Any],
         print_label: Callable[[str, str, str], None],
-        consume_order_stock: Callable[..., None],
+        claim_print: Callable[[str], bool],
+        release_print_claim: Callable[[str], None],
         print_error_type: Type[Exception],
         errors_total: Any,
         now: Callable[[], datetime],
@@ -33,7 +34,8 @@ class PrintQueueProcessor:
         self.notify_messenger = notify_messenger
         self.retry = retry
         self.print_label = print_label
-        self.consume_order_stock = consume_order_stock
+        self.claim_print = claim_print
+        self.release_print_claim = release_print_claim
         self.print_error_type = print_error_type
         self.errors_total = errors_total
         self.now = now
@@ -54,14 +56,20 @@ class PrintQueueProcessor:
                 continue
 
             retry_count = items[0].get("retry_count", 0)
+            if not self.claim_print(order_id):
+                self.logger.info(
+                    "Zamowienie %s jest juz wyslane do drukarki - pomijam duplikat",
+                    order_id,
+                )
+                continue
             try:
                 self._print_items(queue, items)
                 last_order_data = items[0].get("last_order_data", {})
-                self.consume_order_stock(last_order_data.get("products", []), order_id=order_id)
                 self.mark_as_printed(order_id, last_order_data)
                 printed[order_id] = self.now()
                 self.notify_messenger(last_order_data, True)
             except Exception as exc:
+                self.release_print_claim(order_id)
                 self.logger.error(
                     "Blad przetwarzania z kolejki (proba %d/%d): %s",
                     retry_count + 1,

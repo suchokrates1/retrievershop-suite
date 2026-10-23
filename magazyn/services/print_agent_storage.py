@@ -229,6 +229,55 @@ class PrintAgentStorage:
                 return
             raise
 
+    def claim_state_value(self, key: str, value: str) -> bool:
+        """Wstaw klucz tylko gdy go nie ma. False znaczy, że ktoś już go zajął."""
+        self.ensure_db()
+        try:
+            with db_connect() as conn:
+                row = conn.execute(
+                    text(
+                        "INSERT INTO agent_state(key, value) VALUES (:k, :v) "
+                        "ON CONFLICT(key) DO NOTHING RETURNING key"
+                    ),
+                    {"k": key, "v": value},
+                ).fetchone()
+            return row is not None
+        except (DBAPIError, Exception) as exc:
+            if self._handle_readonly_error("claim_state_value", exc):
+                return False
+            raise
+
+    def claim_physical_print(self, order_id: str) -> bool:
+        """Jednorazowe prawo do wysłania etykiety. Drugi agent dostaje False."""
+        key = f"print-sent:{order_id}"
+        self.ensure_db()
+        try:
+            with db_connect() as conn:
+                row = conn.execute(
+                    text(
+                        "INSERT INTO agent_state(key, value) VALUES (:k, :v) "
+                        "ON CONFLICT(key) DO NOTHING RETURNING key"
+                    ),
+                    {"k": key, "v": self._now().isoformat()},
+                ).fetchone()
+            return row is not None
+        except (DBAPIError, Exception) as exc:
+            if self._handle_readonly_error("claim_physical_print", exc):
+                return False
+            raise
+
+    def release_physical_print(self, order_id: str) -> None:
+        """Oddaj claim, gdy druk się nie udał i wolno spróbować ponownie."""
+        key = f"print-sent:{order_id}"
+        self.ensure_db()
+        try:
+            with db_connect() as conn:
+                conn.execute(text("DELETE FROM agent_state WHERE key = :k"), {"k": key})
+        except (DBAPIError, Exception) as exc:
+            if self._handle_readonly_error("release_physical_print", exc):
+                return
+            raise
+
     def load_last_success_marker(self) -> SuccessMarker:
         return SuccessMarker(
             order_id=self.load_state_value("last_success_order_id"),

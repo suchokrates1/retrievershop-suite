@@ -188,8 +188,21 @@ class CupsPrinter:
             self.printer_name,
         )
         while time.monotonic() < deadline:
-            if not self._job_is_active(job_id):
+            state = self._job_state(job_id)
+            if state == "done":
                 logger.info("CUPS: job %s zakończony", job_id)
+                return
+            if state == "sent":
+                # Dane są już w drukarce. Xprinter nie zamyka portu 9100, więc
+                # CUPS wisi na "Waiting for printer to finish". Anulowanie tylko
+                # tego joba zamyka socket (drukarka drukuje to, co dostała).
+                # Brak retry — inaczej ta sama etykieta idzie drugi raz.
+                logger.info(
+                    "CUPS: job %s dostarczony, drukarka nie zamyka portu - "
+                    "zamykam job bez reprintu",
+                    job_id,
+                )
+                self._cancel_job(job_id)
                 return
             time.sleep(poll)
 
@@ -205,19 +218,55 @@ class CupsPrinter:
         )
 
     def _job_is_active(self, job_id: str) -> bool:
+        return self._job_state(job_id) != "done"
+
+    def _job_state(self, job_id: str) -> str:
+        """done = zniknął z kolejki, sent = bajty wysłane, active = jeszcze leci."""
         result = self._run(
-            self._with_host("lpstat", "-o", self.printer_name),
+            self._with_host("lpstat", "-l", "-o", self.printer_name),
             check=False,
         )
         output = result.stdout.decode(errors="replace")
-        # lpstat -o listuje aktywne joby; brak job_id = completed/cancelled.
-        return job_id in output
+        block = self._job_block(output, job_id)
+        if block is None:
+            return "done"
+        lowered = block.lower()
+        if (
+            "waiting for printer" in lowered
+            or "waiting-for-job-completed" in lowered
+        ):
+            return "sent"
+        return "active"
+
+    @staticmethod
+    def _job_block(output: str, job_id: str) -> str | None:
+        lines = output.splitlines()
+        start = None
+        for index, line in enumerate(lines):
+            head = line.split(" ", 1)[0] if line else ""
+            if head == job_id:
+                start = index
+                break
+        if start is None:
+            return None
+        block = [lines[start]]
+        for line in lines[start + 1 :]:
+            if line and not line[0].isspace():
+                break
+            block.append(line)
+        return "\n".join(block)
+
+    def _cancel_job(self, job_id: str) -> None:
+        self._run(self._with_host("cancel", job_id), check=False)
 
     def _recover_stuck_printer(self, job_id: str | None) -> None:
-        """Cancel joba i zrestartuj kolejkę (cupsdisable zabija wiszący backend socket)."""
+        """Cancel tylko tego joba i zrestartuj kolejkę.
+
+        cupsdisable zabija wiszący backend socket. Nie używamy `cancel -a`:
+        skasowanie cudzego joba znika z `lpstat` i drugi waiter uznaje to za sukces.
+        """
         if job_id:
-            self._run(self._with_host("cancel", job_id), check=False)
-        self._run(self._with_host("cancel", "-a", self.printer_name), check=False)
+            self._cancel_job(job_id)
         disable = self._run(
             self._with_host("cupsdisable", self.printer_name),
             check=False,
