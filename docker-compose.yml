@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - proxy
+      - magazyn-internal
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U magazyn"]
@@ -66,6 +66,7 @@ services:
       start_period: 10s
     networks:
       - proxy
+      - magazyn-internal
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.magazyn2.rule=Host(`magazyn.retrievershop.pl`)"
@@ -80,3 +81,6 @@ volumes:
 networks:
   proxy:
     external: true
+  magazyn-internal:
+    name: magazyn-internal
+    internal: true
