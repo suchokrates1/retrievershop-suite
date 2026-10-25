@@ -119,6 +119,9 @@ jobs:
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: 100.110.194.46
+          # Port 22 na interfejsie Tailscale obsluguje Tailscale SSH i odrzuca tag:ci.
+          # 2222 zostaje przy sshd i kluczu deploy.
+          port: 2222
           username: suchokrates1
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 2m
@@ -153,6 +156,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: 100.110.194.46
+          port: 2222
           username: suchokrates1
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 5m
@@ -169,6 +173,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: 100.110.194.46
+          port: 2222
           username: suchokrates1
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 3m
@@ -206,6 +211,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: 100.110.194.46
+          port: 2222
           username: suchokrates1
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 3m
