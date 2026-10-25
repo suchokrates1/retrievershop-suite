@@ -217,6 +217,5 @@ jobs:
           command_timeout: 3m
           script: |
             docker save ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:latest | gzip | \
-              ssh -p 10136 -i ~/.ssh/vps_mikrus -o StrictHostKeyChecking=no \
-              suchokrates1@robert136.mikrus.xyz \
+              tailscale ssh root@vps \
               'gunzip | docker load 2>&1 | tail -3 && echo "VPS image updated"'
