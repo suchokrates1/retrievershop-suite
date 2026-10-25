@@ -6,7 +6,7 @@ Wyodrebniony z app.py dla lepszej organizacji kodu.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..db import is_postgres
 from ..models.allegro import AllegroOffer
-from ..models.orders import Order, OrderProduct
+from ..models.orders import Order, OrderProduct, OrderStatusLog
 from ..models.products import Product, ProductSize, PurchaseBatch
 from ..models.returns import Return
 from .financial import FinancialCalculator
@@ -72,6 +72,7 @@ class OrderStats:
     week: int = 0
     month: int = 0
     pending: int = 0
+    month_daily_avg: float = 0.0
 
 
 @dataclass
@@ -144,44 +145,90 @@ class DashboardService:
         self.settings = settings_store
         self.time_ranges = TimeRanges.create()
     
+    def _unpaid_order_ids(self):
+        """ID zamowien, ktorych ostatni status to nieoplacone."""
+        ranked = (
+            select(
+                OrderStatusLog.order_id.label("order_id"),
+                OrderStatusLog.status.label("status"),
+                func.row_number()
+                .over(
+                    partition_by=OrderStatusLog.order_id,
+                    order_by=(
+                        desc(OrderStatusLog.timestamp),
+                        desc(OrderStatusLog.id),
+                    ),
+                )
+                .label("rn"),
+            )
+            .subquery()
+        )
+        return select(ranked.c.order_id).where(
+            ranked.c.rn == 1,
+            ranked.c.status == "nieoplacone",
+        )
+
+    def _countable_order_clause(self):
+        return ~Order.order_id.in_(self._unpaid_order_ids())
+
+    @staticmethod
+    def _daily_order_average(order_count: int, day_of_month: int) -> float:
+        """Srednia zamowien na dzien miesiaca, 1 miejsce po przecinku."""
+        if day_of_month <= 0:
+            return 0.0
+        averaged = (Decimal(order_count) / Decimal(day_of_month)).quantize(
+            Decimal("0.1"),
+            rounding=ROUND_HALF_UP,
+        )
+        return float(averaged)
+
     def get_order_stats(self) -> OrderStats:
-        """Pobiera statystyki zamowien."""
+        """Pobiera statystyki zamowien.
+
+        Zamowienia w statusie nieoplacone nie wchodza do licznikow.
+        """
         tr = self.time_ranges
         now_ts = int(tr.now.timestamp())
         
         orders_today = self.db.query(Order).filter(
             Order.date_add >= tr.today_start,
             Order.date_add <= now_ts,
+            self._countable_order_clause(),
         ).count()
         
         orders_week = self.db.query(Order).filter(
             Order.date_add >= tr.week_start_ts,
             Order.date_add <= now_ts,
+            self._countable_order_clause(),
         ).count()
         
         orders_month = self.db.query(Order).filter(
             Order.date_add >= tr.month_start_ts,
             Order.date_add <= now_ts,
+            self._countable_order_clause(),
         ).count()
         
         pending_orders = self.db.query(Order).filter(
             Order.delivery_package_nr.is_(None),
             Order.date_add >= tr.month_start_ts,
             Order.date_add <= now_ts,
+            self._countable_order_clause(),
         ).count()
         
         return OrderStats(
             today=orders_today,
             week=orders_week,
             month=orders_month,
-            pending=pending_orders
+            pending=pending_orders,
+            month_daily_avg=self._daily_order_average(orders_month, tr.now.day),
         )
     
     def get_revenue_stats(self) -> RevenueStats:
         """Pobiera statystyki przychodow.
         
         Uzywa payment_done (rzeczywiscie zaplacona kwota) zamiast price_brutto,
-        aby byc spojny z kalkulacja zysku. Wyklucza zwroty (completed).
+        aby byc spojny z kalkulacja zysku. Wyklucza zwroty (completed)
+        oraz zamowienia w statusie nieoplacone.
         """
         from sqlalchemy import select as sa_select
         tr = self.time_ranges
@@ -198,7 +245,8 @@ class DashboardService:
                 Order.date_add >= from_timestamp,
                 Order.date_add <= int(tr.now.timestamp()),
                 Order.payment_done > 0,
-                ~Order.order_id.in_(return_order_ids)
+                ~Order.order_id.in_(return_order_ids),
+                self._countable_order_clause(),
             ).scalar()
             return float(result or 0)
         
@@ -501,6 +549,7 @@ class DashboardService:
             func.count(func.distinct(OrderProduct.order_id)).label('order_count')
         ).join(Order).filter(
             OrderProduct.product_size_id.isnot(None),
+            self._countable_order_clause(),
             *date_filter
         ).group_by(OrderProduct.product_size_id).all()
 
@@ -542,6 +591,7 @@ class DashboardService:
             func.count(func.distinct(OrderProduct.order_id)).label('order_count')
         ).join(Order).filter(
             OrderProduct.product_size_id.is_(None),
+            self._countable_order_clause(),
             *date_filter
         ).group_by(OrderProduct.name, OrderProduct.ean).all()
 
@@ -620,7 +670,10 @@ class DashboardService:
             OrderProduct.ean,
             func.sum(OrderProduct.quantity).label('sold_qty')
         ).join(Order)\
-        .filter(Order.date_add >= tr.month_start_ts)\
+        .filter(
+            Order.date_add >= tr.month_start_ts,
+            self._countable_order_clause(),
+        )\
         .group_by(OrderProduct.ean)\
         .subquery()
         
@@ -709,11 +762,14 @@ class DashboardService:
         return_ids = self._completed_return_order_ids()
         day_bucket = self._day_bucket_expr()
         month_bucket = self._month_bucket_expr()
-        base_filters = (
-            Order.date_add.isnot(None),
-            self._paid_order_filter(),
-            ~Order.order_id.in_(return_ids),
-        )
+
+        def base_filters():
+            return (
+                Order.date_add.isnot(None),
+                self._paid_order_filter(),
+                ~Order.order_id.in_(return_ids),
+                self._countable_order_clause(),
+            )
 
         daily_rows = self.db.query(
             day_bucket.label('day_key'),
@@ -721,7 +777,7 @@ class DashboardService:
         ).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
-            *base_filters
+            *base_filters()
         ).group_by(
             day_bucket
         ).all()
@@ -732,7 +788,7 @@ class DashboardService:
         ).join(
             Order, Order.order_id == OrderProduct.order_id
         ).filter(
-            *base_filters
+            *base_filters()
         ).group_by(
             month_bucket
         ).all()
@@ -745,6 +801,7 @@ class DashboardService:
             Order.real_profit_amount.isnot(None),
             self._paid_order_filter(),
             ~Order.order_id.in_(return_ids),
+            self._countable_order_clause(),
         ).group_by(
             month_bucket
         ).all()
@@ -777,25 +834,29 @@ class DashboardService:
         
         prev_week_orders = self.db.query(Order).filter(
             Order.date_add >= tr.prev_week_start_ts,
-            Order.date_add < tr.week_start_ts
+            Order.date_add < tr.week_start_ts,
+            self._countable_order_clause(),
         ).count()
         
         prev_week_revenue = self.db.query(
             func.sum(OrderProduct.price_brutto * OrderProduct.quantity)
         ).join(Order).filter(
             Order.date_add >= tr.prev_week_start_ts,
-            Order.date_add < tr.week_start_ts
+            Order.date_add < tr.week_start_ts,
+            self._countable_order_clause(),
         ).scalar() or 0
         
         # Biezacy tydzien
         current_week_orders = self.db.query(Order).filter(
-            Order.date_add >= tr.week_start_ts
+            Order.date_add >= tr.week_start_ts,
+            self._countable_order_clause(),
         ).count()
         
         current_week_revenue = self.db.query(
             func.sum(OrderProduct.price_brutto * OrderProduct.quantity)
         ).join(Order).filter(
-            Order.date_add >= tr.week_start_ts
+            Order.date_add >= tr.week_start_ts,
+            self._countable_order_clause(),
         ).scalar() or 0
         
         orders_change = ((current_week_orders - prev_week_orders) / max(prev_week_orders, 1)) * 100
@@ -880,6 +941,7 @@ class DashboardService:
                 'week': order_stats.week,
                 'month': order_stats.month,
                 'pending': order_stats.pending,
+                'month_daily_avg': order_stats.month_daily_avg,
             },
             'revenue': {
                 'today': revenue_stats.today,
@@ -988,6 +1050,7 @@ class DashboardService:
                 'week': order_stats.week,
                 'month': order_stats.month,
                 'pending': order_stats.pending,
+                'month_daily_avg': order_stats.month_daily_avg,
             },
             'revenue': {
                 'today': revenue_stats.today,

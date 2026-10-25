@@ -2,8 +2,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from magazyn.db import get_session
-from magazyn.domain.dashboard import DashboardService
-from magazyn.models.orders import Order, OrderProduct
+from magazyn.domain.dashboard import DashboardService, TimeRanges
+from magazyn.models.orders import Order, OrderProduct, OrderStatusLog
 from magazyn.settings_store import settings_store
 
 
@@ -115,6 +115,71 @@ def test_resolve_tied_record_helpers():
     )
     assert single_value == 7
     assert single_label == "01.04.2026"
+
+
+def _status(db, order_id, status, when):
+    db.add(OrderStatusLog(order_id=order_id, status=status, timestamp=when))
+
+
+def test_order_stats_skip_unpaid_and_average_uses_day_of_month(app):
+    now = datetime(2026, 10, 25, 15, 0, 0)
+    today = int(datetime(2026, 10, 25, 9, 0, 0).timestamp())
+    week_day = int(datetime(2026, 10, 20, 11, 0, 0).timestamp())
+    earlier = int(datetime(2026, 10, 2, 11, 0, 0).timestamp())
+
+    with app.app_context():
+        with get_session() as db:
+            _add_order(db, "ord_paid_today", today, 1, payment_done=100.0)
+            _add_order(db, "ord_unpaid_today", today, 1, payment_done=80.0)
+            _add_order(db, "ord_paid_week", week_day, 1, payment_done=40.0)
+            _add_order(db, "ord_paid_month", earlier, 1, payment_done=200.0)
+            db.flush()
+            _status(db, "ord_paid_today", "pobrano", datetime(2026, 10, 25, 9, 5, 0))
+            _status(db, "ord_unpaid_today", "pobrano", datetime(2026, 10, 25, 9, 1, 0))
+            _status(db, "ord_unpaid_today", "nieoplacone", datetime(2026, 10, 25, 9, 6, 0))
+            _status(db, "ord_paid_week", "nieoplacone", datetime(2026, 10, 20, 11, 1, 0))
+            _status(db, "ord_paid_week", "pobrano", datetime(2026, 10, 20, 12, 0, 0))
+            _status(db, "ord_paid_month", "wydrukowano", datetime(2026, 10, 2, 12, 0, 0))
+            db.query(Order).filter(Order.order_id == "ord_paid_month").update(
+                {"delivery_package_nr": "PKG1"}
+            )
+
+        with get_session() as db:
+            service = DashboardService(db, settings_store)
+            service.time_ranges = TimeRanges(
+                now=now,
+                today_start=int(datetime(2026, 10, 25).timestamp()),
+                week_start_ts=int(datetime(2026, 10, 19).timestamp()),
+                month_start_ts=int(datetime(2026, 10, 1).timestamp()),
+                prev_week_start_ts=int(datetime(2026, 10, 12).timestamp()),
+                current_month_name="Pazdziernik",
+            )
+            stats = service.get_order_stats()
+            revenue = service.get_revenue_stats()
+
+    assert stats.today == 1
+    assert stats.week == 2
+    assert stats.month == 3
+    assert stats.pending == 2
+    assert stats.month_daily_avg == 0.1
+    assert revenue.today == 100.0
+    assert revenue.week == 140.0
+    assert revenue.month == 340.0
+
+
+def test_daily_order_average_rounds_half_up():
+    assert DashboardService._daily_order_average(2, 25) == 0.1
+    assert DashboardService._daily_order_average(58, 25) == 2.3
+    assert DashboardService._daily_order_average(13, 25) == 0.5
+    assert DashboardService._daily_order_average(0, 25) == 0.0
+
+
+def test_home_page_shows_daily_average_instead_of_order_label(client, login, app):
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Średnia:" in html
+    assert "Zamówień" not in html
 
 
 def test_home_page_renders_sales_records_module(client, login, app):

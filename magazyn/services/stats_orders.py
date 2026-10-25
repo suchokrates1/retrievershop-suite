@@ -59,7 +59,7 @@ def filter_orders_by_payment(orders: list[Order], payment_type: str) -> list[Ord
 
 
 def exclude_cancelled_orders(db: Any, orders: list[Order]) -> list[Order]:
-    """Pomin zamowienia w statusie anulowano (nie licza sie do statystyk)."""
+    """Pomin zamowienia w statusach anulowano i nieoplacone (poza KPI)."""
     if not orders:
         return orders
     latest = latest_statuses_map(db, [order.order_id for order in orders])

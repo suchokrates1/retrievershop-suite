@@ -214,5 +214,5 @@ STATUS_FILTER_GROUPS = {
     "problem": ["problem_z_dostawa", "zwrot", "nieodebrano", "anulowano"],
 }
 
-# Anulowane nie wchodza do KPI sprzedazy / zysku / logistyki.
-STATS_EXCLUDED_STATUSES = frozenset({"anulowano"})
+# Anulowane i nieoplacone nie wchodza do KPI sprzedazy / zysku.
+STATS_EXCLUDED_STATUSES = frozenset({"anulowano", "nieoplacone"})
