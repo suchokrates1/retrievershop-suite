@@ -27,6 +27,7 @@ from .services.print_agent_tracking import PrintAgentTrackingService
 from .services.printing import CupsPrinter
 from .services.runtime import BackgroundThreadRuntime, HeartbeatFileLock
 from .allegro_token_refresher import token_refresher
+from .status_config import ALLEGRO_TRACKING_MAP
 from .allegro_api.shipment_management import (
     cancel_shipment,
     create_shipment,
@@ -396,24 +397,15 @@ class LabelAgent:
     def send_messenger_message(self, data: Dict[str, Any], print_success: bool = True) -> None:
         self.notifier.send_messenger_message(data, print_success=print_success)
 
-    # ------------------------------------------------------------------
-    # Tracking status updates (Allegro API)
-    # ------------------------------------------------------------------
-    # Allegro tracking event type -> our internal status (imported from status_config)
-    from .status_config import ALLEGRO_TRACKING_MAP as ALLEGRO_TRACKING_STATUS_MAP
-
     def _check_tracking_statuses(self) -> None:
         """Sprawdz i zaktualizuj statusy przesylek przez Allegro Tracking API."""
         service = PrintAgentTrackingService(
             logger=self.logger,
             resolve_carrier_id=self._resolve_carrier_id,
-            tracking_map=self.ALLEGRO_TRACKING_STATUS_MAP,
+            tracking_map=ALLEGRO_TRACKING_MAP,
         )
         service.check_tracking_statuses()
 
-    # ------------------------------------------------------------------
-    # Agent loop
-    # ------------------------------------------------------------------
     def is_quiet_time(self) -> bool:
         now = datetime.now(ZoneInfo(self.config.timezone)).time()
         start = self.config.quiet_hours_start
