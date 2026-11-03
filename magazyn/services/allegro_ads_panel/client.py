@@ -108,7 +108,11 @@ class AllegroAdsPanelClient:
             params=params,
             timeout=45,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            detail = (response.text or "").strip().replace("\n", " ")[:400]
+            raise requests.HTTPError(f"{exc} body={detail}", response=response) from exc
         return response.json()
 
     def _table_body(
@@ -128,7 +132,9 @@ class AllegroAdsPanelClient:
             "filters": filters,
             "breakdown": "NONE",
             "sort": {"column": "NAME", "order": "ASC"},
-            "page": {"page": 0, "size": 50},
+            # Allegro (od 2026-10) wymaga `number`, stary klucz `page` daje 400
+            # HttpMessageNotReadableException i puste podsumowanie kampanii.
+            "page": {"number": 0, "size": 50},
         }
 
     def fetch_campaign_summary(

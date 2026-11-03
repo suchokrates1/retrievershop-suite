@@ -32,13 +32,22 @@ def _scheduler_worker(app) -> None:
             try:
                 with app.app_context():
                     result = sync_ads_panel_statistics(snapshot_date=now.date())
+                if result.get("error"):
+                    logger.error(
+                        "Allegro Ads sync failed: campaigns=%s sold=%s chart=%s error=%s",
+                        result.get("campaigns_synced"),
+                        result.get("sold_items_synced"),
+                        result.get("chart_points"),
+                        result.get("error"),
+                    )
+                else:
                     logger.info(
                         "Allegro Ads sync OK: campaigns=%s sold=%s chart=%s",
                         result.get("campaigns_synced"),
                         result.get("sold_items_synced"),
                         result.get("chart_points"),
                     )
-                _last_run_date = today
+                    _last_run_date = today
             except Exception as exc:
                 logger.error("Allegro Ads sync failed: %s", exc, exc_info=True)
             _stop_event.wait(3600)

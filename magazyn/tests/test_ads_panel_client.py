@@ -25,6 +25,23 @@ def _chart_response() -> dict:
     }
 
 
+def test_campaign_summary_page_uses_number():
+    session = MagicMock()
+    response = MagicMock()
+    response.json.return_value = {"summary": {}}
+    session.post.return_value = response
+
+    client = AllegroAdsPanelClient(session)
+    client.fetch_campaign_summary(
+        "NDc0MjA3MjAA",
+        period_start=date(2026, 10, 1),
+        period_end=date(2026, 10, 29),
+    )
+
+    body = session.post.call_args.kwargs["json"]
+    assert body["page"] == {"number": 0, "size": 50}
+
+
 def test_fetch_chart_omits_marketplace_header():
     session = MagicMock()
     response = MagicMock()
