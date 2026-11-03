@@ -35,13 +35,44 @@ add_filter('aioseo_title', static function ($title) {
 
 add_filter('aioseo_description', static function ($desc) {
     if (is_tax('product_cat', 'szelki')) {
-        return 'Szelki dla psa Truelove: Front Line, Premium, Security, Tropical, Lumen i inne. Dobierz kolor i rozmiar — wysyłka do 16:00 z Legnicy, InPost.';
+        return 'Szelki Truelove dla psa: Front Line Premium, Security, Tropical i Lumen. Rozmiar po obwodzie klatki, rozdziały dla psa do 5, 10, 15, 20, 30 i 50 kg. Wysyłka do 16:00 z Legnicy.';
     }
     if (is_tax('product_cat', 'smycze')) {
         return 'Smycze Truelove i akcesoria spacerowe — klasyczne, z amortyzatorem i materiałowe. Wysyłka do 16:00 z Legnicy.';
     }
     return $desc;
 }, 100);
+
+/**
+ * H1 kategorii to sama nazwa taksonomii („Szelki”). Fraza, na którą strona
+ * już się wyświetla, to „szelki truelove” — dopisz ją w nagłówku.
+ * Opis hero jest schowany na wąskim ekranie (ct-hidden-sm); tu ma być widoczny.
+ */
+add_action('template_redirect', static function () {
+    if (is_admin() || !is_tax('product_cat', 'szelki')) {
+        return;
+    }
+    ob_start(static function ($html) {
+        if (!is_string($html) || $html === '') {
+            return $html;
+        }
+        return preg_replace(
+            '/<h1 class="page-title" itemprop="headline">Szelki<\/h1>/',
+            '<h1 class="page-title" itemprop="headline">Szelki Truelove</h1>',
+            $html,
+            1
+        );
+    });
+}, 2);
+
+add_action('wp_footer', static function () {
+    if (!is_tax('product_cat', 'szelki')) {
+        return;
+    }
+    echo '<style id="rs-szelki-hero">'
+        . '@media (max-width:999px){body.tax-product_cat.term-szelki .hero-section .page-description{display:block!important}}'
+        . '</style>';
+}, 20);
 
 /** FAQPage JSON-LD on szelki category */
 add_action('wp_head', static function () {
