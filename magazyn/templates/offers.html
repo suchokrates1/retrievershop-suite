@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block page_vars %}
+{% set full_width = True %}
+{% endblock %}
+{% block content %}
+<div class="container mx-auto mt-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2>Oferty</h2>
+    </div>
+    <p class="text-base-content/70 mb-4">
+        Jedna oferta na produkt: tytuł, opis i zdjęcia. Stąd pójdą na kolejne marketplace’y.
+        Cena i stan zostają przy rozmiarze. Oferty Allegro to osobna lista kanału.
+    </p>
+    <form method="get" action="{{ url_for('products.offers') }}" class="mb-4">
+        <input type="text" name="search" value="{{ search }}" class="input input-bordered w-full max-w-md" placeholder="Szukaj produktu albo tytułu oferty">
+    </form>
+    <div class="overflow-x-auto bg-base-200 rounded-box">
+        <table class="table table-zebra">
+            <thead>
+                <tr>
+                    <th>Produkt</th>
+                    <th>Tytuł oferty</th>
+                    <th>Opis</th>
+                    <th>Zdjęcia</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for offer in offers %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('products.product_detail', product_id=offer.product_id) }}">{{ offer.product_name }}</a>
+                    </td>
+                    <td>{{ offer.title or "—" }}</td>
+                    <td>
+                        {% if offer.has_description %}
+                        <span class="badge badge-success">jest</span>
+                        {% else %}
+                        <span class="badge badge-warning">brak</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ offer.image_urls|length }}</td>
+                    <td>
+                        <a class="btn btn-sm btn-primary" href="{{ url_for('products.edit_offer', product_id=offer.product_id) }}">Edytuj</a>
+                    </td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-base-content/60">Brak produktów</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

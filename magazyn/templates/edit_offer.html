@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto mt-6 max-w-3xl">
+    <a href="{{ url_for('products.product_detail', product_id=offer.product_id) }}" class="btn btn-outline btn-sm mb-3">
+        <i class="bi bi-arrow-left"></i> {{ offer.product_name }}
+    </a>
+    <h2 class="mb-2">Oferta</h2>
+    <p class="text-base-content/70 mb-4">{{ offer.product_name }}</p>
+
+    <form method="post" action="{{ url_for('products.copy_offer_from_allegro', product_id=offer.product_id) }}" class="mb-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline">Uzupełnij z Allegro</button>
+    </form>
+
+    <form method="post" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-control w-full">
+            <span class="label-text">Tytuł</span>
+            <input type="text" name="title" value="{{ offer.title }}" class="input input-bordered w-full">
+        </label>
+        <label class="form-control w-full">
+            <span class="label-text">Opis HTML</span>
+            <textarea name="description_html" rows="12" class="textarea textarea-bordered w-full">{{ offer.description_html }}</textarea>
+        </label>
+        <label class="form-control w-full">
+            <span class="label-text">Adresy zdjęć, jeden w linii</span>
+            <textarea name="image_urls" rows="6" class="textarea textarea-bordered w-full">{{ offer.image_lines }}</textarea>
+        </label>
+        {% if offer.image_urls %}
+        <div class="flex flex-wrap gap-2">
+            {% for url in offer.image_urls %}
+            <img src="{{ url }}" alt="" class="h-24 w-auto rounded">
+            {% endfor %}
+        </div>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Zapisz</button>
+    </form>
+</div>
+{% endblock %}

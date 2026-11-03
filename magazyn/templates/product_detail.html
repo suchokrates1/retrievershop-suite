@@ -213,8 +213,33 @@
             </div>
         </div>
 
-        {# Right column - Allegro offers and Order history #}
+        {# Right column - catalog offer, Allegro listings and order history #}
         <div class="col-span-12 lg:col-span-6">
+            <div class="card bg-base-200 mb-3">
+                <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">
+                    <span><i class="bi bi-card-text"></i> Oferta</span>
+                    {% if catalog_offer.ready %}
+                    <span class="badge badge-success">Gotowa</span>
+                    {% else %}
+                    <span class="badge badge-warning">Do uzupełnienia</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if catalog_offer.image_urls %}
+                    <img src="{{ catalog_offer.image_urls[0] }}" alt="" class="h-32 w-auto mb-3 rounded">
+                    {% endif %}
+                    <p class="font-semibold mb-1">{{ catalog_offer.title or "Brak tytułu" }}</p>
+                    {% if catalog_offer.description_text %}
+                    <p class="text-sm text-base-content/70 mb-2">{{ catalog_offer.description_text|truncate(220) }}</p>
+                    {% else %}
+                    <p class="text-sm text-base-content/60 mb-2">Brak opisu. Zdjęć: {{ catalog_offer.image_urls|length }}.</p>
+                    {% endif %}
+                    <a href="{{ url_for('products.edit_offer', product_id=product.id) }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-pencil"></i> Edytuj ofertę
+                    </a>
+                </div>
+            </div>
+
             {# Allegro offers #}
             <div class="card bg-base-200 mb-3">
                 <div class="card-body border-b border-base-300 font-semibold py-3 flex justify-between items-center">

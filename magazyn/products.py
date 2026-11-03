@@ -44,6 +44,13 @@ from .services.product_detail import (
     build_product_detail_context,
     build_product_history_payload,
 )
+from .services.product_offers import (
+    copy_catalog_offer_from_allegro,
+    get_catalog_offer,
+    list_catalog_offers,
+    parse_image_urls,
+    save_catalog_offer,
+)
 from .services.product_listing import build_items_context
 from .services.product_taxonomy import edit_item_taxonomy_context, parse_product_form_taxonomy
 
@@ -205,6 +212,53 @@ def product_detail(product_id):
     if context is None:
         abort(404)
     return render_template("product_detail.html", **context)
+
+
+@bp.route("/oferty")
+@login_required
+def offers():
+    search = request.args.get("search", "").strip()
+    return render_template(
+        "offers.html",
+        offers=list_catalog_offers(search),
+        search=search,
+    )
+
+
+@bp.route("/product/<int:product_id>/oferta", methods=["GET", "POST"])
+@login_required
+def edit_offer(product_id):
+    if request.method == "POST":
+        saved = save_catalog_offer(
+            product_id,
+            title=request.form.get("title") or "",
+            description_html=request.form.get("description_html") or "",
+            image_urls=parse_image_urls(request.form.get("image_urls") or ""),
+        )
+        if not saved:
+            abort(404)
+        flash("Oferta zapisana", "success")
+        return redirect(url_for("products.edit_offer", product_id=product_id))
+
+    offer = get_catalog_offer(product_id)
+    if offer is None:
+        abort(404)
+    return render_template("edit_offer.html", offer=offer)
+
+
+@bp.route("/product/<int:product_id>/oferta/z-allegro", methods=["POST"])
+@login_required
+def copy_offer_from_allegro(product_id):
+    result = copy_catalog_offer_from_allegro(product_id)
+    if result == "missing_product":
+        abort(404)
+    if result == "no_allegro":
+        flash("Ten produkt nie ma powiązanej oferty Allegro", "error")
+    elif result == "no_content":
+        flash("Powiązana oferta Allegro nie ma jeszcze opisu ani zdjęć w magazynie", "error")
+    else:
+        flash("Oferta uzupełniona z Allegro. Tytuł może zawierać rozmiar, popraw go jeśli ma być wspólny.", "success")
+    return redirect(url_for("products.edit_offer", product_id=product_id))
 
 
 @bp.route("/items")

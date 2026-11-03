@@ -36,6 +36,12 @@ class Product(Base):
         back_populates="product",
         cascade="all, delete-orphan",
     )
+    offer = relationship(
+        "ProductOffer",
+        back_populates="product",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __init__(self, **kwargs):
         """Initialize Product with support for legacy 'name' parameter."""
@@ -96,6 +102,33 @@ class Product(Base):
     def short_name(self) -> str:
         """Return very short name."""
         return self.series or self.category or self._name or ""
+
+
+class ProductOffer(Base):
+    """Tresc oferty produktu, niezalezna od kanalu sprzedazy.
+
+    Jedna oferta na produkt: tytul, opis i zdjecia, z ktorych pozniej
+    powstaja oferty na Allegro, Ceneo i kolejnych marketplace'ach.
+    Cena i stan zostaja przy rozmiarze oraz przy ofercie kanalu.
+    """
+
+    __tablename__ = "product_offers"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    title = Column(String, nullable=False, default="")
+    description_html = Column(Text, nullable=True)
+    image_urls = Column(Text, nullable=True)
+    source = Column(String(16), nullable=False, default="manual")
+    allegro_offer_id = Column(String, nullable=True)
+    updated_at = Column(String, nullable=True)
+
+    product = relationship("Product", back_populates="offer")
 
 
 class ProductSize(Base):

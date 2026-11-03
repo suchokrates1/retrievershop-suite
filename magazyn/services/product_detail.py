@@ -11,6 +11,7 @@ from ..db import get_session
 from ..models.allegro import AllegroOffer
 from ..models.orders import OrderProduct
 from ..models.products import Product, PurchaseBatch
+from .product_offers import offer_view
 
 SIZE_ORDER = {"S": 1, "M": 2, "L": 3, "XL": 4, "2XL": 5}
 MAX_HISTORY_LIMIT = 200
@@ -69,6 +70,7 @@ def build_product_detail_context(product_id: int) -> dict[str, Any] | None:
             "total_delivered": sum(delivery["quantity"] for delivery in deliveries),
             "avg_purchase_price": avg_purchase_price,
             "allegro_offers": allegro_data,
+            "catalog_offer": offer_view(product.offer),
         }
 
 
