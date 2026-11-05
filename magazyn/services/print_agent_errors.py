@@ -19,6 +19,15 @@ class ShipmentExpiredError(ApiError):
         super().__init__(message or f"Przesylka {shipment_id} wygasla (403)")
 
 
+class ShipmentRejected(Exception):
+    """Allegro odrzuciło utworzenie przesyłki. ``reason`` jest po polsku."""
+
+    def __init__(self, order_id: str, reason: str):
+        self.order_id = order_id
+        self.reason = reason
+        super().__init__(f"{order_id}: {reason}")
+
+
 class IncompleteReceiverData(Exception):
     """Dane odbiorcy niekompletne - czekamy na Allegro zamiast blad_druku."""
 
@@ -28,4 +37,10 @@ class IncompleteReceiverData(Exception):
         super().__init__(f"Incomplete receiver data for {order_id}: {self.reason}")
 
 
-__all__ = ["ApiError", "PrintError", "ShipmentExpiredError", "IncompleteReceiverData"]
+__all__ = [
+    "ApiError",
+    "PrintError",
+    "ShipmentExpiredError",
+    "ShipmentRejected",
+    "IncompleteReceiverData",
+]

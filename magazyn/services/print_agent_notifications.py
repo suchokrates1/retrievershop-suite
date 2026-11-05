@@ -12,6 +12,15 @@ import requests
 MESSENGER_ENDPOINT = "https://graph.facebook.com/v17.0/me/messages"
 
 
+def build_label_error_message(order_id: str, reason: str | None = None) -> str:
+    """Tekst Messengera, gdy Allegro nie odda etykiety."""
+    message = f"Brak etykiety do zamówienia nr: {order_id}"
+    reason_text = (reason or "").strip()
+    if reason_text:
+        message = f"{message}\n{reason_text}"
+    return message
+
+
 def build_messenger_message(data: Dict[str, Any], print_success: bool = True) -> str:
     """Zbuduj tresc powiadomienia o zamowieniu i statusie etykiety."""
     label_status = "Etykieta gotowa" if print_success else "Blad drukowania etykiety"
@@ -67,11 +76,11 @@ class PrintAgentNotifier:
     def increment_error_notification(self, order_id: str) -> None:
         self.error_counts[order_id] = self.error_counts.get(order_id, 0) + 1
 
-    def send_label_error_notification(self, order_id: str) -> None:
+    def send_label_error_notification(self, order_id: str, reason: str | None = None) -> None:
         """Wyslij krotkie powiadomienie o braku etykiety."""
         try:
             config = self.config_provider()
-            message = f"Brak etykiety do zamowienia nr: {order_id}"
+            message = build_label_error_message(order_id, reason)
             response = self.http_post(
                 MESSENGER_ENDPOINT,
                 headers={
@@ -120,6 +129,7 @@ class PrintAgentNotifier:
 __all__ = [
     "MESSENGER_ENDPOINT",
     "PrintAgentNotifier",
+    "build_label_error_message",
     "build_messenger_message",
     "notify_messenger",
 ]

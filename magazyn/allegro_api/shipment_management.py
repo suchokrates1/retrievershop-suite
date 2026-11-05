@@ -25,6 +25,26 @@ from .tokens import get_allegro_token as _get_allegro_token, refresh_allegro_tok
 
 logger = logging.getLogger(__name__)
 
+
+class AllegroShipmentError(RuntimeError):
+    """Allegro zakończyło komendę tworzenia przesyłki statusem ERROR."""
+
+    def __init__(self, errors: list, *, command_id: str = ""):
+        self.errors = list(errors or [])
+        self.command_id = command_id
+        raw = "; ".join(
+            (
+                item.get("message")
+                or item.get("userMessage")
+                or str(item)
+            )
+            if isinstance(item, dict)
+            else str(item)
+            for item in self.errors
+        ) or "Nieznany blad"
+        super().__init__(f"Blad tworzenia przesylki: {raw}")
+
+
 _delivery_services_cache: Optional[dict] = None
 _delivery_services_cache_time: float = 0.0
 _CACHE_TTL = 86400  # 24 godziny
@@ -257,7 +277,7 @@ def wait_for_shipment_creation(command_id: str, *, timeout: float = 30.0,
     ------
     TimeoutError
         Gdy przekroczono timeout.
-    RuntimeError
+    AllegroShipmentError
         Gdy status ERROR.
     """
     start = time.monotonic()
@@ -285,7 +305,7 @@ def wait_for_shipment_creation(command_id: str, *, timeout: float = 30.0,
                 "Blad tworzenia przesylki (commandId=%s): %s [%s]",
                 command_id, error_msg, error_details,
             )
-            raise RuntimeError(f"Blad tworzenia przesylki: {error_msg}")
+            raise AllegroShipmentError(errors, command_id=command_id)
 
         elapsed = time.monotonic() - start
         if elapsed > timeout:

@@ -390,9 +390,9 @@ class LabelAgent:
         """Sprawdza czy należy wysłać powiadomienie o błędzie (przy próbie 1 i 10)."""
         return self.notifier.should_send_error_notification(order_id)
 
-    def _send_label_error_notification(self, order_id: str) -> None:
+    def _send_label_error_notification(self, order_id: str, reason: str | None = None) -> None:
         """Wysyła krótkie powiadomienie o braku etykiety."""
-        self.notifier.send_label_error_notification(order_id)
+        self.notifier.send_label_error_notification(order_id, reason)
 
     def send_messenger_message(self, data: Dict[str, Any], print_success: bool = True) -> None:
         self.notifier.send_messenger_message(data, print_success=print_success)

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Tuple, Type
 
 from .print_agent_config import is_cod_order
-from .print_agent_errors import ApiError, IncompleteReceiverData
+from .print_agent_errors import ApiError, IncompleteReceiverData, ShipmentRejected
 from .print_agent_order_data import apply_package_tracking, build_last_order_data
 from .print_agent_status import set_print_error_status
 
@@ -49,7 +49,7 @@ class PrintOrderProcessor:
         mark_as_printed: Callable[[str, Dict[str, Any]], None],
         notify_messenger: Callable[[Dict[str, Any], bool], None],
         should_send_error_notification: Callable[[str], bool],
-        send_label_error_notification: Callable[[str], None],
+        send_label_error_notification: Callable[..., None],
         increment_error_notification: Callable[[str], None],
         wait: Callable[[float], Any],
         errors_total: Any,
@@ -91,6 +91,9 @@ class PrintOrderProcessor:
             packages = self._load_packages(order_id)
         except IncompleteReceiverData as exc:
             self._handle_incomplete_receiver(order_id, order, exc)
+            return
+        except ShipmentRejected as exc:
+            self._handle_shipment_rejected(order_id, exc.reason)
             return
         if packages is None:
             return
@@ -150,7 +153,7 @@ class PrintOrderProcessor:
                 stage="packages",
                 retry_exceptions=(ApiError,),
             )
-        except IncompleteReceiverData:
+        except (IncompleteReceiverData, ShipmentRejected):
             raise
         except ApiError as exc:
             self.logger.error("Blad pobierania paczek dla %s: %s", order_id, exc)
@@ -253,6 +256,14 @@ class PrintOrderProcessor:
         self.logger.info("Retry za 60s dla %s", order_id)
         self.wait(60)
 
+    def _handle_shipment_rejected(self, order_id: str, reason: str) -> None:
+        self.logger.error("Allegro odrzucilo etykiete dla %s: %s", order_id, reason)
+        self.errors_total.labels(stage="label").inc()
+        set_print_error_status(order_id, reason, self.logger)
+        self._notify_label_error(order_id, reason)
+        self.logger.info("Retry za 60s dla %s", order_id)
+        self.wait(60)
+
     def _handle_missing_labels(self, order_id: str) -> None:
         self.logger.error(
             "Brak etykiety dla zamowienia %s (Allegro nie zwrocilo danych)",
@@ -268,9 +279,12 @@ class PrintOrderProcessor:
         self.logger.info("Retry za 60s dla %s", order_id)
         self.wait(60)
 
-    def _notify_label_error(self, order_id: str) -> None:
+    def _notify_label_error(self, order_id: str, reason: str | None = None) -> None:
         if self.should_send_error_notification(order_id):
-            self.send_label_error_notification(order_id)
+            if reason:
+                self.send_label_error_notification(order_id, reason)
+            else:
+                self.send_label_error_notification(order_id)
         else:
             self.increment_error_notification(order_id)
 

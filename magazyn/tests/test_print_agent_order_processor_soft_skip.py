@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
-from magazyn.services.print_agent_errors import IncompleteReceiverData
+from magazyn.services.print_agent_errors import IncompleteReceiverData, ShipmentRejected
 from magazyn.services.print_agent_order_processor import (
     PrintOrderProcessor,
     should_soft_skip_incomplete_receiver,
@@ -134,6 +134,42 @@ def test_process_escalates_incomplete_receiver_after_timeout(monkeypatch):
     assert len(status_calls) == 1
     assert status_calls[0][0] == "allegro_y"
     assert "po 20 min" in status_calls[0][1]
+    errors_total.labels.assert_called_with(stage="label")
+
+
+def test_process_writes_allegro_reason_to_status_and_messenger(monkeypatch):
+    reason = "Numer telefonu musi być polskim numerem komórkowym."
+    get_packages = Mock(side_effect=ShipmentRejected("allegro_phone", reason))
+    wait = Mock()
+    send_notify = Mock()
+    errors_total = Mock()
+    processor = _processor(
+        get_order_packages=get_packages,
+        wait=wait,
+        send_label_error_notification=send_notify,
+        errors_total=errors_total,
+    )
+    status_calls = []
+    monkeypatch.setattr(
+        "magazyn.services.print_agent_order_processor.set_print_error_status",
+        lambda *args, **kwargs: status_calls.append(args),
+    )
+
+    processor.process(
+        {
+            "order_id": "allegro_phone",
+            "payment_done": 58,
+            "payment_method_cod": "0",
+            "payment_method": "Przelew online",
+            "products": [],
+        },
+        queue=[],
+        printed={},
+    )
+
+    wait.assert_called_once_with(60)
+    send_notify.assert_called_once_with("allegro_phone", reason)
+    assert status_calls == [("allegro_phone", reason, processor.logger)]
     errors_total.labels.assert_called_with(stage="label")
 
 

@@ -4,7 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from magazyn.services.print_agent_errors import IncompleteReceiverData
+from magazyn.allegro_api.shipment_management import AllegroShipmentError
+from magazyn.services.print_agent_errors import IncompleteReceiverData, ShipmentRejected
 from magazyn.services.print_agent_shipment_creation import PrintShipmentCreator
 
 
@@ -181,3 +182,45 @@ def test_create_maps_receiver_validation_error_to_incomplete():
 
     with pytest.raises(IncompleteReceiverData):
         creator.create("allegro_order-1", "checkout-1", order_data)
+
+
+def test_create_raises_human_reason_when_allegro_rejects_phone():
+    order_data = _ready_order()
+    order_data["delivery_fullname"] = "Aleksandra Witkowska"
+    order_data["phone"] = "+436608227351"
+    fetch_detail = Mock(
+        return_value={
+            "delivery": {
+                "method": {"id": "delivery-method-1", "name": "Allegro miniKurier24 InPost"},
+                "address": {
+                    "firstName": "Aleksandra",
+                    "lastName": "Witkowska",
+                    "phoneNumber": "+436608227351",
+                    "street": "Testowa 1",
+                    "city": "Krakow",
+                    "zipCode": "30-001",
+                },
+            }
+        }
+    )
+    creator = _creator(
+        fetch_order_detail=fetch_detail,
+        create_shipment=Mock(return_value={"commandId": "cmd-phone"}),
+        wait_for_shipment_creation=Mock(
+            side_effect=AllegroShipmentError(
+                [
+                    {
+                        "path": "receiver.phone",
+                        "code": "INTERNAL_VALIDATION_ERROR",
+                        "message": "The contact number must be a Polish mobile number.",
+                    }
+                ],
+                command_id="cmd-phone",
+            )
+        ),
+    )
+
+    with pytest.raises(ShipmentRejected) as caught:
+        creator.create("allegro_order-1", "checkout-1", order_data)
+
+    assert caught.value.reason == "Numer telefonu musi być polskim numerem komórkowym."

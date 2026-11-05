@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from .print_agent_errors import IncompleteReceiverData
+from .allegro_error_text import human_reason_from_exception
+from .print_agent_errors import IncompleteReceiverData, ShipmentRejected
 from .print_agent_shipments import (
     build_additional_services,
     build_cod_payload,
@@ -99,7 +100,10 @@ class PrintShipmentCreator:
                     order_id,
                     "Allegro odrzucilo dane odbiorcy (VALIDATION_ERROR)",
                 ) from exc
+            human = human_reason_from_exception(exc)
             self._log_creation_error(order_id, exc)
+            if human:
+                raise ShipmentRejected(order_id, human) from exc
             return []
 
     def _resolve_delivery_method(
