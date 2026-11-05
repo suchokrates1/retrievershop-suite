@@ -70,7 +70,7 @@ jobs:
             --browser chromium \
             -q --tb=short
 
-  # Obraz multi-arch: amd64 (minipc, VPS Mikrus) + arm64 (Oracle Cloud A1).
+  # Obraz multi-arch: amd64 (minipc) + arm64 (Oracle, failover magazynu).
   # Kazda architektura budowana natywnie na wlasnym runnerze (bez QEMU), push po digescie,
   # potem build_image sklada jeden manifest z tagami.
   build_arch:
@@ -271,15 +271,16 @@ jobs:
             fi
             echo "Deploy OK - kontener healthy, /healthz i /login odpowiadaja"
 
-      - name: Sync image do VPS failover
+      - name: Sync image do Oracle failover
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: 100.110.194.46
           port: 2222
           username: suchokrates1
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 3m
+          command_timeout: 5m
           script: |
-            docker save ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:latest | gzip | \
-              tailscale ssh root@vps \
-              'gunzip | docker load 2>&1 | tail -3 && echo "VPS image updated"'
+            set -euo pipefail
+            # Oracle jest arm64 i sam sciaga manifest z GHCR, tak jak cron 01:30.
+            # docker save z minipc wyslalby obraz amd64; failover magazynu na Mikrusie jest wylaczony.
+            tailscale ssh root@oracle "docker pull -q ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:latest && docker image prune -f >/dev/null && docker image inspect ghcr.io/suchokrates1/retrievershop-suite-magazyn_app:latest --format '{{.Id}} {{.Architecture}} {{.Created}}'"
