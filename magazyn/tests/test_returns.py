@@ -286,5 +286,191 @@ class TestReturnNotificationFormat:
         assert "Produkt" in message
 
 
+def test_locked_return_items_survive_allegro_sync(app):
+    """Recznie zwezona lista pozycji nie wraca do pelnego formularza Allegro."""
+    import logging
+
+    from magazyn.db import get_session
+    from magazyn.models.orders import Order
+    from magazyn.models.returns import Return
+    from magazyn.services.return_allegro import _update_existing_return
+
+    kept = '[{"name": "L fioletowe", "quantity": 1}]'
+    allegro_payload = {
+        "items": [
+            {
+                "name": "L fioletowe",
+                "quantity": 1,
+                "offerId": "1",
+                "price": {"amount": "228", "currency": "PLN"},
+                "reason": {"type": "MISTAKE", "userComment": ""},
+            },
+            {
+                "name": "XL brazowe",
+                "quantity": 1,
+                "offerId": "2",
+                "price": {"amount": "216", "currency": "PLN"},
+                "reason": {"type": "MISTAKE", "userComment": ""},
+            },
+        ]
+    }
+
+    with app.app_context():
+        with get_session() as db:
+            db.add(Order(order_id="ord_lock", customer_name="Paulina"))
+            db.add(
+                Return(
+                    order_id="ord_lock",
+                    status="delivered",
+                    items_json=kept,
+                    notes="POZYCJE_ZABLOKOWANE: tylko L",
+                )
+            )
+            db.commit()
+
+        with get_session() as db:
+            existing = db.query(Return).filter(Return.order_id == "ord_lock").one()
+            updated = _update_existing_return(
+                db, existing, allegro_payload, "DELIVERED", logging.getLogger("test")
+            )
+            assert existing.items_json == kept
+            assert updated is False
+
+
+def test_unlocked_return_items_follow_allegro(app):
+    import logging
+
+    from magazyn.db import get_session
+    from magazyn.models.orders import Order
+    from magazyn.models.returns import Return
+    from magazyn.services.return_allegro import _update_existing_return
+
+    allegro_payload = {
+        "items": [
+            {
+                "name": "L fioletowe",
+                "quantity": 1,
+                "offerId": "1",
+                "price": {"amount": "228", "currency": "PLN"},
+                "reason": {"type": "MISTAKE", "userComment": ""},
+            }
+        ]
+    }
+
+    with app.app_context():
+        with get_session() as db:
+            db.add(Order(order_id="ord_open", customer_name="Paulina"))
+            db.add(
+                Return(
+                    order_id="ord_open",
+                    status="delivered",
+                    items_json="[]",
+                    notes="Allegro ref: X",
+                )
+            )
+            db.commit()
+
+        with get_session() as db:
+            existing = db.query(Return).filter(Return.order_id == "ord_open").one()
+            updated = _update_existing_return(
+                db, existing, allegro_payload, "DELIVERED", logging.getLogger("test")
+            )
+            assert updated is True
+            assert "L fioletowe" in existing.items_json
+
+
+def test_return_of_two_offers_restores_each_size(app):
+    """Pusty EAN nie moze zrzucic obu pozycji zwrotu na pierwszy rozmiar."""
+    import json
+
+    from magazyn.db import get_session
+    from magazyn.models.orders import Order, OrderProduct
+    from magazyn.models.products import Product, ProductSize
+    from magazyn.models.returns import Return
+    from magazyn.services.return_stock import restore_stock_for_return
+
+    with app.app_context():
+        with get_session() as db:
+            purple = Product(category="Szelki", brand="Truelove", color="fioletowy")
+            brown = Product(category="Szelki", brand="Truelove", color="brazowy")
+            db.add_all([purple, brown])
+            db.flush()
+            size_l = ProductSize(product_id=purple.id, size="L", quantity=4, stock_value=400, barcode="EAN-L")
+            size_xl = ProductSize(product_id=brown.id, size="XL", quantity=5, stock_value=500, barcode="EAN-XL")
+            db.add_all([size_l, size_xl])
+            db.flush()
+            db.add(Order(order_id="ord_two", platform="allegro", customer_name="Paulina"))
+            db.add_all([
+                OrderProduct(
+                    order_id="ord_two",
+                    name="Szelki L fioletowe",
+                    quantity=1,
+                    auction_id="18773386147",
+                    product_size_id=size_l.id,
+                ),
+                OrderProduct(
+                    order_id="ord_two",
+                    name="Szelki XL brazowe",
+                    quantity=1,
+                    auction_id="18646601330",
+                    product_size_id=size_xl.id,
+                ),
+            ])
+            ret = Return(
+                order_id="ord_two",
+                status="delivered",
+                items_json=json.dumps([
+                    {"name": "Szelki L fioletowe", "quantity": 1, "offerId": "18773386147"},
+                    {"name": "Szelki XL brazowe", "quantity": 1, "offerId": "18646601330"},
+                ]),
+            )
+            db.add(ret)
+            db.commit()
+            return_id = ret.id
+            l_id, xl_id = size_l.id, size_xl.id
+
+        assert restore_stock_for_return(return_id) is True
+
+        with get_session() as db:
+            restored_l = db.query(ProductSize).filter(ProductSize.id == l_id).one()
+            restored_xl = db.query(ProductSize).filter(ProductSize.id == xl_id).one()
+            assert restored_l.quantity == 5
+            assert restored_xl.quantity == 6
+
+
+def test_return_without_offer_does_not_hit_first_blank_ean(app):
+    from magazyn.db import get_session
+    from magazyn.models.orders import Order, OrderProduct
+    from magazyn.models.products import Product, ProductSize
+    from magazyn.models.returns import Return
+    from magazyn.services.return_stock import restore_stock_for_return
+
+    with app.app_context():
+        with get_session() as db:
+            product = Product(category="Szelki", brand="Truelove", color="fioletowy")
+            db.add(product)
+            db.flush()
+            size_l = ProductSize(product_id=product.id, size="L", quantity=4, stock_value=400, barcode="EAN-ONLY")
+            db.add(size_l)
+            db.flush()
+            db.add(Order(order_id="ord_blank", platform="allegro"))
+            db.add(OrderProduct(order_id="ord_blank", name="Szelki L", quantity=1, product_size_id=size_l.id))
+            ret = Return(
+                order_id="ord_blank",
+                status="delivered",
+                items_json='[{"name": "Inny produkt", "quantity": 1}]',
+            )
+            db.add(ret)
+            db.commit()
+            return_id = ret.id
+            size_id = size_l.id
+
+        assert restore_stock_for_return(return_id) is False
+
+        with get_session() as db:
+            size = db.query(ProductSize).filter(ProductSize.id == size_id).one()
+            assert size.quantity == 4
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

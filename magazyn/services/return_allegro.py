@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 # sa juz w bazie, wiec nie ma sensu pobierac calej historii.
 _CUSTOMER_RETURNS_FETCH_LIMIT = 100
 _CUSTOMER_RETURNS_URL = "https://api.allegro.pl/order/customer-returns"
+# Reczna korekta pozycji (np. klient zglosil 2 sztuki, fizycznie wrocila 1).
+# Sync Allegro nie moze wtedy nadpisac items_json pelna lista z formularza.
+_ITEMS_LOCK_MARKER = "POZYCJE_ZABLOKOWANE"
 
 
 def _fetch_recent_customer_returns(
@@ -160,6 +163,10 @@ def _serialize_allegro_return_items(items: list) -> list:
     ]
 
 
+def _return_items_locked(existing: Return) -> bool:
+    return _ITEMS_LOCK_MARKER in (existing.notes or "")
+
+
 def _update_existing_return(db, existing: Return, return_data: dict, allegro_status: str, log: logging.Logger) -> bool:
     updated = False
 
@@ -194,7 +201,12 @@ def _update_existing_return(db, existing: Return, return_data: dict, allegro_sta
         log.info("Zaktualizowano zwrot #%s: %s -> %s", existing.id, old_status, new_status)
 
     allegro_items = _serialize_allegro_return_items(return_data.get("items", []))
-    if allegro_items:
+    if allegro_items and _return_items_locked(existing):
+        log.info(
+            "Zwrot #%s: pomijam nadpisanie pozycji z Allegro (pozycje zablokowane recznie)",
+            existing.id,
+        )
+    elif allegro_items:
         new_items_json = json.dumps(allegro_items, ensure_ascii=False)
         if existing.items_json != new_items_json:
             existing.items_json = new_items_json

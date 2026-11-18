@@ -28,15 +28,31 @@ def _add_return_status_log(db, return_id: int, status: str, notes: str = None) -
     db.add(ReturnStatusLog(return_id=return_id, status=status, notes=notes))
 
 
+def _offer_id_from_return_item(item: dict) -> Optional[str]:
+    raw = item.get("offerId") or item.get("offer_id") or item.get("auction_id")
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
+def _product_size_by_id(db, product_size_id) -> Optional[ProductSize]:
+    if not product_size_id:
+        return None
+    return db.query(ProductSize).filter(ProductSize.id == product_size_id).first()
+
+
 def _find_product_size_for_return_item(db, return_record: Return, item: dict) -> Optional[ProductSize]:
-    ean = item.get("ean")
-    product_size_id = item.get("product_size_id")
+    """Dopasuj pozycje zwrotu do rozmiaru.
 
-    if product_size_id:
-        product_size = db.query(ProductSize).filter(ProductSize.id == product_size_id).first()
-        if product_size:
-            return product_size
+    EAN na pozycjach Allegro bywa pusty. Porownanie ``ean IS NULL`` bralo wtedy
+    pierwszy wiersz zamowienia i obie rozne sztuki wracaly na ten sam rozmiar.
+    """
+    product_size = _product_size_by_id(db, item.get("product_size_id"))
+    if product_size:
+        return product_size
 
+    ean = (item.get("ean") or "").strip()
     if ean:
         product_size = db.query(ProductSize).filter(ProductSize.barcode == ean).first()
         if product_size:
@@ -45,30 +61,54 @@ def _find_product_size_for_return_item(db, return_record: Return, item: dict) ->
     if not return_record.order_id:
         return None
 
-    order_product = db.query(OrderProduct).filter(
-        OrderProduct.order_id == return_record.order_id,
-        OrderProduct.ean == ean,
-    ).first()
-
-    if not order_product or not order_product.auction_id:
-        return None
-
-    allegro_offer = db.query(AllegroOffer).filter(
-        AllegroOffer.offer_id == order_product.auction_id,
-    ).first()
-    if not allegro_offer or not allegro_offer.product_size_id:
-        return None
-
-    product_size = db.query(ProductSize).filter(
-        ProductSize.id == allegro_offer.product_size_id,
-    ).first()
-    if product_size:
-        logger.info(
-            "Znaleziono ProductSize przez auction_id: %s -> %s",
-            order_product.auction_id,
-            product_size.id,
+    offer_id = _offer_id_from_return_item(item)
+    if offer_id:
+        order_product = (
+            db.query(OrderProduct)
+            .filter(
+                OrderProduct.order_id == return_record.order_id,
+                OrderProduct.auction_id == offer_id,
+            )
+            .first()
         )
-    return product_size
+        if order_product and order_product.product_size_id:
+            product_size = _product_size_by_id(db, order_product.product_size_id)
+            if product_size:
+                logger.info(
+                    "Znaleziono ProductSize przez oferte %s -> %s",
+                    offer_id,
+                    product_size.id,
+                )
+                return product_size
+
+        allegro_offer = (
+            db.query(AllegroOffer).filter(AllegroOffer.offer_id == offer_id).first()
+        )
+        if allegro_offer and allegro_offer.product_size_id:
+            product_size = _product_size_by_id(db, allegro_offer.product_size_id)
+            if product_size:
+                logger.info(
+                    "Znaleziono ProductSize przez AllegroOffer %s -> %s",
+                    offer_id,
+                    product_size.id,
+                )
+                return product_size
+
+    name = (item.get("name") or "").strip()
+    if name:
+        named = (
+            db.query(OrderProduct)
+            .filter(
+                OrderProduct.order_id == return_record.order_id,
+                OrderProduct.name == name,
+                OrderProduct.product_size_id.isnot(None),
+            )
+            .all()
+        )
+        if len(named) == 1:
+            return _product_size_by_id(db, named[0].product_size_id)
+
+    return None
 
 
 def _restore_stock_for_return_item(
@@ -219,9 +259,10 @@ def restore_stock_for_return(
                         )
                 else:
                     active_logger.warning(
-                        "Nie znaleziono produktu EAN=%s, product_size_id=%s",
+                        "Nie znaleziono produktu EAN=%s, product_size_id=%s, offerId=%s",
                         item.get("ean"),
                         item.get("product_size_id"),
+                        item.get("offerId") or item.get("offer_id") or item.get("auction_id"),
                     )
 
             if not restored_items:
